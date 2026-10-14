@@ -153,7 +153,7 @@ export type WidgetOut = WidgetHello | WidgetTree | WidgetPatch | WidgetCall | Wi
 export interface WidgetReady {
   kind: "ready";
   env: WidgetEnv;
-  /** This window's config values (secret fields left out: `cmd.secrets.get`). */
+  /** This window's config values. Secret fields are never here: a widget never holds a secret (net.fetch's `auth` names one). */
   config: Record<string, WireValue>;
   /** This window's stored state (`cmd.state`, `useStoredState`), so the first render has it. */
   state: Record<string, WireValue>;
@@ -168,6 +168,7 @@ export interface ApiError {
   message: string;
   /** "permission": `permission` names what to add to package.json; "unknown": a verb this core doesn't serve; "failed": it ran and failed. */
   code: "permission" | "unknown" | "invalid" | "failed";
+  /** What to add to package.json's `cmd.permissions`, as written there: `net: ["api.github.com"]`, `ai: ["complete"]`, `workspace: ["read"]`. */
   permission?: string;
 }
 
@@ -241,7 +242,8 @@ export const API_VERBS = [
   "state.get",
   "state.set",
   "state.history",
-  "secrets.get",
+  "net.fetch",
+  "ai.complete",
 ] as const;
 export type ApiVerb = (typeof API_VERBS)[number];
 
@@ -268,7 +270,8 @@ export interface ApiMethods {
   "state.get": { params: [key: string]; result: WireValue };
   "state.set": { params: [key: string, value: WireValue]; result: null };
   "state.history": { params: [key: string, value: number | null, max?: number]; result: number[] };
-  "secrets.get": { params: [key: string]; result: string | null };
+  "net.fetch": { params: [url: string, init?: ApiFetchInit]; result: ApiFetchResponse };
+  "ai.complete": { params: [req: ApiCompletionRequest]; result: ApiCompletion };
 }
 
 /** ApiMethods has exactly the verbs of API_VERBS (tsc fails here otherwise). */
@@ -419,6 +422,38 @@ export interface ApiAction {
   /** Running it asks first (a deploy, a push). */
   risky: boolean;
 }
+
+/** A request the core makes for the widget (the process has no network of its own). */
+export interface ApiFetchInit {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  /**
+   * A secret config field's key: the core attaches its value as the field's package.json
+   * binding says, and only to the host the field is bound to. The widget never sees it.
+   */
+  auth?: string;
+}
+
+/** The response, as text (clipped past the core's limit). */
+export interface ApiFetchResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+  clipped: boolean;
+}
+
+/** A completion from the person's AI, through cmd's AI service, with no tools. */
+export interface ApiCompletionRequest {
+  prompt: string;
+  system?: string;
+  /** A JSON Schema: the answer is an object of that shape instead of text. */
+  schema?: { [key: string]: WireValue };
+  maxTokens?: number;
+}
+
+/** Text, or an object when the request had a schema; with the tokens it used. */
+export type ApiCompletion = ({ text: string } | { object: WireValue }) & { usage: { input: number; output: number } };
 
 export interface ApiNotification {
   /** Notifications with the same key replace each other. */

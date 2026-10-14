@@ -45,6 +45,11 @@ describe("verbs", () => {
   });
 });
 
+it("a widget never holds a secret: no verb or namespace reads one", () => {
+  expect(API_VERBS.filter((v) => /secret/i.test(v))).toEqual([]);
+  expect(Object.keys(api.cmd).filter((k) => /secret/i.test(k))).toEqual([]);
+});
+
 describe("elements", () => {
   it("each element's props and events are the spec's (tsc)", () => {
     expectTypeOf<ElementsMatch>().toEqualTypeOf<{ [E in ApiElement]: true }>();

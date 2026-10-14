@@ -7,6 +7,10 @@
 import type {
   ApiAction,
   ApiAgent,
+  ApiCompletion,
+  ApiCompletionRequest,
+  ApiFetchInit,
+  ApiFetchResponse,
   ApiEvent,
   ApiEventQuery,
   ApiGitStatus,
@@ -34,7 +38,13 @@ export interface HostData {
   windows?: ApiWindow[];
   events?: ApiEvent[];
   config?: Record<string, WireValue>;
-  secrets?: Record<string, string>;
+  /**
+   * What `cmd.net.fetch` gets, by URL (a body that isn't a string is sent as JSON), or a
+   * function of the request. A URL with neither fails the call, naming it.
+   */
+  fetch?: Record<string, FetchFixture> | ((url: string, init: ApiFetchInit) => FetchFixture | Promise<FetchFixture>);
+  /** What `cmd.ai.complete` answers: an answer, or a function of the request. Without it the call fails. */
+  ai?: AiFixture | ((req: ApiCompletionRequest) => AiFixture | Promise<AiFixture>);
   /** The window's stored state at start. */
   state?: Record<string, WireValue>;
   git?: ApiGitStatus | null;
@@ -42,16 +52,26 @@ export interface HostData {
   worktrees?: ApiGitWorktree[];
   actions?: ApiAction[];
   env?: Partial<WidgetEnv>;
-  /** Verbs refused as a grant without them would be, with the permission they need. */
+  /** Verbs refused as a grant without them would be, with the permission they need (`'net: ["api.github.com"]'`). */
   deny?: Partial<Record<ApiVerb, string>>;
 }
 
-/** The verbs that act: recorded in `host.calls`, not done. */
-const ACTS = new Set<string>(["windows.open", "windows.select", "notify.send"]);
+/** A fake response: status 200 and no headers unless given. @since 1.0 */
+export interface FetchFixture {
+  status?: number;
+  headers?: Record<string, string>;
+  body?: WireValue;
+}
+
+/** A fake completion: text or an object; usage 0 unless given. @since 1.0 */
+export type AiFixture = ({ text: string } | { object: WireValue }) & { usage?: { input: number; output: number } };
+
+/** What `host.calls` records: the acts (not done), and what reaches outside (fetches, completions; served from fixtures). */
+const ACTS = new Set<string>(["windows.open", "windows.select", "notify.send", "net.fetch", "ai.complete"]);
 
 /** A fake core. @since 1.0 */
 export interface FakeHost {
-  /** The acts the widget made, in order: `["windows.select", "w-tours"]`. */
+  /** The acts, fetches and completions the widget made, in order: `["windows.select", "w-tours"]`. */
   readonly calls: [string, ...unknown[]][];
   /** Every call, reads too. */
   readonly requests: [string, ...unknown[]][];
@@ -90,6 +110,8 @@ export function createHost(data: HostData = {}): FakeHost {
   const messages: WidgetOut[] = [];
   const listeners = new Set<(m: WidgetIn) => void>();
   let inFlight = 0;
+  /** Calls being served (a fetch fixture may be async). */
+  let pending = 0;
   let opened = 0;
 
   const ws = (): ApiWorkspace => fixtureWorkspace(d.workspace);
@@ -115,6 +137,17 @@ export function createHost(data: HostData = {}): FakeHost {
       : topic === "git" ? (d.git ?? null)
       : (d.actions ?? []);
     return v as WireValue;
+  };
+
+  const fetchOf = async (url: string, init: ApiFetchInit): Promise<ApiFetchResponse> => {
+    const f = typeof d.fetch === "function" ? await d.fetch(url, init) : d.fetch?.[url];
+    if (!f) throw new Error(`No fetch fixture for ${init.method ?? "GET"} ${url}: give createHost({ fetch: { "${url}": { body } } })`);
+    return { status: f.status ?? 200, headers: f.headers ?? {}, body: typeof f.body === "string" ? f.body : f.body === undefined ? "" : JSON.stringify(f.body), clipped: false };
+  };
+  const aiOf = async (req: ApiCompletionRequest): Promise<ApiCompletion> => {
+    const a = typeof d.ai === "function" ? await d.ai(req) : d.ai;
+    if (!a) throw new Error("No AI answer: give createHost({ ai: { text } })");
+    return { ...a, usage: a.usage ?? { input: 0, output: 0 } };
   };
 
   const serve = (method: string, p: unknown[]): unknown => {
@@ -163,7 +196,8 @@ export function createHost(data: HostData = {}): FakeHost {
         histories.set(key, h);
         return h;
       }
-      case "secrets.get": return d.secrets?.[String(p[0])] ?? null;
+      case "net.fetch": return fetchOf(String(p[0]), (p[1] ?? {}) as ApiFetchInit);
+      case "ai.complete": return aiOf(p[0] as ApiCompletionRequest);
     }
     throw Object.assign(new Error(`This cmd doesn't serve ${method}.`), { code: "unknown" });
   };
@@ -179,12 +213,15 @@ export function createHost(data: HostData = {}): FakeHost {
         const denied = d.deny?.[m.method];
         if (denied) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "permission", permission: denied, message: `Add "${denied}" to the widget's permissions to use ${m.method}.` } });
         if (ACTS.has(m.method)) calls.push([m.method, ...m.params]);
-        try {
-          deliver({ kind: "result", id: m.id, ok: true, value: (serve(m.method, m.params) ?? null) as WireValue });
-        } catch (e) {
+        const fail = (e: unknown) => {
           const code = (e as { code?: string }).code === "unknown" ? "unknown" : "failed";
           deliver({ kind: "result", id: m.id, ok: false, error: { code, message: (e as Error).message } });
-        }
+        };
+        pending++;
+        Promise.resolve()
+          .then(() => serve(m.method, m.params))
+          .then((v) => deliver({ kind: "result", id: m.id, ok: true, value: (v ?? null) as WireValue }), fail)
+          .finally(() => pending--);
         return;
       }
       case "subscribe":
@@ -235,7 +272,7 @@ export function createHost(data: HostData = {}): FakeHost {
     },
     deliver,
     get inFlight() {
-      return inFlight;
+      return inFlight + pending;
     },
   };
 }

@@ -131,7 +131,7 @@ export class TreeRoot {
   }
 
   node(c: Child): TreeNode {
-    if (c.type === "#text") return { id: c.id, type: "#text", text: c.hidden ? "" : this.mask((c as TextInstance).text) };
+    if (c.type === "#text") return { id: c.id, type: "#text", text: c.hidden ? "" : (c as TextInstance).text };
     const i = c as Instance;
     const props = i.hidden ? { ...i.props, $hidden: true } : { ...i.props };
     return { id: i.id, type: i.type as never, props, children: i.children.map((ch) => this.node(ch)) };
@@ -163,7 +163,7 @@ export class TreeRoot {
     }
     if (v === null || typeof v === "boolean") return v;
     if (typeof v === "number") return Number.isFinite(v) ? v : null;
-    if (typeof v === "string") return this.mask(v);
+    if (typeof v === "string") return v;
     if (typeof v === "bigint") return Number(v);
     if (Array.isArray(v)) return v.map((x, n) => (x === undefined ? null : this.value(inst, x, `${path}.${n}`, seen)));
     if (typeof v === "object") {
@@ -174,12 +174,6 @@ export class TreeRoot {
       return o;
     }
     return null; // symbols, undefined
-  }
-
-  /** A secret read with cmd.secrets never reaches a tree. */
-  mask(s: string): string {
-    for (const secret of this.conn.secrets) if (secret.length >= 4 && s.includes(secret)) s = s.split(secret).join("••••");
-    return s;
   }
 
   free(c: Child): void {
@@ -231,7 +225,7 @@ function setHidden(c: Child, hidden: boolean): void {
   c.hidden = hidden;
   if (!c.parent) return;
   const root = rootOf(c.parent);
-  if (c.type === "#text") root.op(c.parent, { op: "text", id: c.id, text: hidden ? "" : root.mask((c as TextInstance).text) });
+  if (c.type === "#text") root.op(c.parent, { op: "text", id: c.id, text: hidden ? "" : (c as TextInstance).text });
   else root.op(c.parent, hidden ? { op: "props", id: c.id, set: { $hidden: true }, unset: [] } : { op: "props", id: c.id, set: {}, unset: ["$hidden"] });
 }
 
@@ -302,7 +296,7 @@ const reconciler = createReconciler<string, Props, Container, Instance, TextInst
     t.text = text;
     if (t.parent) {
       const root = rootOf(t.parent);
-      root.op(t.parent, { op: "text", id: t.id, text: root.mask(text) });
+      root.op(t.parent, { op: "text", id: t.id, text });
     }
   },
   resetTextContent: () => {},

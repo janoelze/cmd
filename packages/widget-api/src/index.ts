@@ -18,7 +18,7 @@ export * from "./elements.ts";
 export { cmd } from "./cmd.ts";
 export { fmt } from "./fmt.ts";
 export { ApiCallError } from "./connection.ts";
-export { useWorkspace, useAgents, useTerminals, useWindows, useEvents, useGit, useActions, useConfig, useEnv, useData, useStoredState, useNow, type DataState } from "./hooks.ts";
+export { useWorkspace, useAgents, useTerminals, useWindows, useEvents, useGit, useActions, useConfig, useEnv, useData, useStoredState, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
 export { WIDGET_API, WIDGET_API_MINOR } from "./version.ts";
 export type {
   ApiAgent as Agent,
@@ -35,6 +35,10 @@ export type {
   ApiAction as WorkspaceAction,
   ApiNotification as Notification,
   ApiScopeQuery as ScopeQuery,
+  ApiFetchInit as FetchInit,
+  ApiFetchResponse as FetchResponse,
+  ApiCompletionRequest as CompletionRequest,
+  ApiCompletion as Completion,
   WidgetEnv as Env,
   ApiVerb as Verb,
 } from "@cmd/protocol/widget-tree";

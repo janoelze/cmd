@@ -7,7 +7,7 @@
 import type { ApiMethods, ApiVerb, ApiEventQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { connection } from "./connection.ts";
 import { fmt } from "./fmt.ts";
-import { useActions, useAgents, useConfig, useEnv, useEvents, useGit, useTerminals, useWindows, useWorkspace } from "./hooks.ts";
+import { useActions, useAgents, useCompletion, useConfig, useEnv, useEvents, useGit, useTerminals, useWindows, useWorkspace } from "./hooks.ts";
 
 type Verbs = { [V in ApiVerb]: (...args: ApiMethods[V]["params"]) => Promise<ApiMethods[V]["result"]> };
 
@@ -42,11 +42,8 @@ const VERBS: Verbs = {
     return verb("state.set")(key, value);
   },
   "state.history": verb("state.history"),
-  "secrets.get": async (key) => {
-    const v = (await connection().call("secrets.get", [key])) as string | null;
-    if (v) connection().secrets.add(v);
-    return v;
-  },
+  "net.fetch": verb("net.fetch"),
+  "ai.complete": verb("ai.complete"),
 };
 
 /** The verbs as a map by name (tests check every verb of the protocol is here). */
@@ -136,12 +133,27 @@ export const cmd = {
     /** Sends a notification through cmd's notification center; one per `key` (a new one replaces it), muted with the window. @since 1.0 */
     send: VERBS["notify.send"],
   },
-  /** The network, within the hosts the widget declares in `net` (the sandbox enforces it). @since 1.0 */
+  /** The network, through the core: the widget process has none of its own. @since 1.0 */
   net: {
-    /** `fetch`, to a granted host. @since 1.0 */
-    fetch(url: string | URL, init?: RequestInit): Promise<Response> {
-      return globalThis.fetch(url, init);
-    },
+    /**
+     * Fetches `url` through the core, which checks its host against the widget's `net`
+     * grant (`net: ["api.github.com"]`). `init.auth` names a secret config field: the core
+     * attaches its value, only to the host that field is bound to, and the widget never
+     * sees it. The body comes back as text, clipped past the core's limit.
+     * @since 1.0
+     */
+    fetch: VERBS["net.fetch"],
+  },
+  /** The person's AI, through cmd's AI service. Needs `ai: ["complete"]`; counts against their usage. @since 1.0 */
+  ai: {
+    /**
+     * A completion with no tools: `{ text }`, or `{ object }` of the request's JSON Schema,
+     * with the tokens it used.
+     * @since 1.0
+     */
+    complete: VERBS["ai.complete"],
+    /** Live: the hook `useCompletion(request)`. @since 1.0 */
+    use: useCompletion,
   },
   /** This window's config (package.json's `config` fields, as the person set them). @since 1.0 */
   config: {
@@ -151,11 +163,6 @@ export const cmd = {
     },
     /** Live: the hook `useConfig()`. @since 1.0 */
     use: useConfig,
-  },
-  /** Secret config fields (`"secret": true`): read on demand, never shown in a tree. @since 1.0 */
-  secrets: {
-    /** A secret field's value, or null when it isn't set. @since 1.0 */
-    get: VERBS["secrets.get"],
   },
   /** Small values kept by the core for this window, across reloads and restarts. @since 1.0 */
   state: {

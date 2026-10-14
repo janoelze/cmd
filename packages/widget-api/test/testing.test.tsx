@@ -3,7 +3,7 @@
 
 import { describe, expect, it, test } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
-import { Stat, Inline, useData, cmd, defineWidget, View, Text, EmptyState, ApiCallError } from "@cmd/widget-api";
+import { Stat, Inline, useData, useCompletion, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
 import Widget from "../examples/v1/agents.tsx";
 
 test("waiting agents come first", async () => {
@@ -121,13 +121,63 @@ describe("the fake host", () => {
     expect(tree.text()).toBe("jan/other");
   });
 
-  it("keeps secrets out of the tree", async () => {
-    function Leaky() {
-      const { data } = useData(() => cmd.secrets.get("token"));
-      return <EmptyState title={`token ${data ?? ""}`} />;
+  it("fetches through the host, from fixtures, with auth named and never a secret", async () => {
+    const url = "https://api.github.com/repos/jan/cmd/actions/runs";
+    function Runs() {
+      const { data, error } = useData(async () => JSON.parse((await cmd.net.fetch(url, { auth: "token" })).body) as { total_count: number });
+      return <Stat label="Runs" value={error ? "error" : (data?.total_count ?? "–")} />;
     }
-    const tree = await render(<Leaky />, createHost({ secrets: { token: "s3cr3t-value" } }));
-    expect(tree.text()).toBe("token ••••");
+    const host = createHost({ fetch: { [url]: { body: { total_count: 7 } } } });
+    const tree = await render(<Runs />, host);
+    expect(tree).toHaveStat("Runs", 7);
+    expect(host.calls).toEqual([["net.fetch", url, { auth: "token" }]]);
+  });
+
+  it("serves fetches from a function, and fails one without a fixture, naming it", async () => {
+    const seen: string[] = [];
+    function Two() {
+      const a = useData(() => cmd.net.fetch("https://a.example/x"));
+      const b = useData(() => cmd.net.fetch("https://b.example/y"));
+      seen.push(String(a.data?.status), b.error?.message ?? "");
+      return null;
+    }
+    await render(<Two />, createHost({ fetch: (u) => (u.startsWith("https://a.") ? { status: 201 } : Promise.resolve(undefined as never)) }));
+    expect(seen.at(-2)).toBe("201");
+    expect(seen.at(-1)).toContain("No fetch fixture for GET https://b.example/y");
+  });
+
+  it("names the permission to add when the grant lacks it", async () => {
+    let error: ApiCallError | null = null;
+    function NoNet() {
+      const { error: e } = useData(() => cmd.net.fetch("https://api.github.com/"));
+      error = e as ApiCallError | null;
+      return null;
+    }
+    await render(<NoNet />, createHost({ deny: { "net.fetch": 'net: ["api.github.com"]' } }));
+    expect(error).toMatchObject({ code: "permission", permission: 'net: ["api.github.com"]' });
+  });
+
+  it("completes with the AI from fixtures: useCompletion asks once per request", async () => {
+    function Summary({ prompt }: { prompt: string }) {
+      const { data, loading } = useCompletion({ prompt, maxTokens: 50 });
+      return <Text>{loading ? "…" : data && "text" in data ? data.text : ""}</Text>;
+    }
+    const host = createHost({ ai: (req) => ({ text: `about ${req.prompt}`, usage: { input: 3, output: 2 } }) });
+    const tree = await render(<Summary prompt="CI" />, host);
+    expect(tree.text()).toBe("about CI");
+    expect(host.calls).toEqual([["ai.complete", { prompt: "CI", maxTokens: 50 }]]);
+    const answer = await cmd.ai.complete({ prompt: "x", schema: { type: "object" } });
+    expect(answer).toEqual({ text: "about x", usage: { input: 3, output: 2 } });
+  });
+
+  it("refuses the AI without its grant, naming it", async () => {
+    let error: unknown = null;
+    function Ask() {
+      error = useCompletion({ prompt: "hi" }).error;
+      return null;
+    }
+    await render(<Ask />, createHost({ ai: { text: "hello" }, deny: { "ai.complete": 'ai: ["complete"]' } }));
+    expect(error).toMatchObject({ code: "permission", permission: 'ai: ["complete"]' });
   });
 
   it("snapshots without ids", async () => {

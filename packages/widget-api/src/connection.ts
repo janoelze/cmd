@@ -33,8 +33,6 @@ export class Connection {
   config: Record<string, WireValue> = {};
   /** The window's stored state as last known here (sets apply locally at once). */
   readonly state = new Map<string, WireValue>();
-  /** Secrets read so far: never sent in a tree (the reconciler masks them). */
-  readonly secrets = new Set<string>();
   /** The handlers of the tree, by id (the reconciler fills it). */
   readonly handlers = new Map<number, (value?: unknown) => unknown>();
   /** Called on `resync` (the reconciler sends the whole tree again). */

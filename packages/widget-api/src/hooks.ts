@@ -1,10 +1,11 @@
 // The hooks (docs/56, "Writing the UI"): the API's reads as subscriptions. Each live hook
 // subscribes on mount, gets the current value at once and every change after, and
 // unsubscribes on unmount: a widget never polls cmd for what cmd can push. useData is for
-// the outside world (fetch, a CLI) on a timer, with the health the title bar shows.
+// the outside world (`cmd.net.fetch`) on a timer, with the health the title bar shows;
+// useCompletion asks the person's AI (`cmd.ai.complete`) once per request.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ApiAction, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiCompletion, ApiCompletionRequest, ApiAction, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { connection } from "./connection.ts";
 
 /** A topic's current value, live; `initial` until the core's first event. */
@@ -93,7 +94,7 @@ function usePushed<T>(read: () => T): T {
 
 /**
  * This window's config values (from package.json's `config` fields, as the person set
- * them), live. Secret fields are not here: read them with `cmd.secrets.get`.
+ * them), live. Secret fields are never here: a widget never holds a secret (`cmd.net.fetch`'s `auth` names one).
  * @since 1.0
  */
 export function useConfig<T extends Record<string, WireValue> = Record<string, WireValue>>(): T {
@@ -159,7 +160,7 @@ export interface DataState<T> {
 }
 
 /**
- * The outside world on a timer: runs `fn` (a fetch, a CLI) now and every `every`
+ * The outside world on a timer: runs `fn` (a `cmd.net.fetch`) now and every `every`
  * seconds (default 60), keeps the last good data through failures and says how fresh it
  * is. A run that throws keeps the old data with `stale` and `error` set.
  * @since 1.0
@@ -187,4 +188,42 @@ export function useData<T>(fn: () => Promise<T>, opts: { every?: number } = {}):
     };
   }, [every, run]);
   return { ...state, refresh: run };
+}
+
+/** What useCompletion returns. @since 1.0 */
+export interface CompletionState {
+  /** The answer, undefined until it comes (and while a new request runs). */
+  data: ApiCompletion | undefined;
+  /** Why it failed (no `ai` grant, the AI service unset or over budget). */
+  error: Error | null;
+  /** A request is in flight. */
+  loading: boolean;
+  /** Asks again. */
+  refresh: () => void;
+}
+
+/**
+ * Asks the person's AI once per distinct `request` (a new prompt asks again; null asks
+ * nothing): `cmd.ai.complete` as a hook. Needs `ai: ["complete"]`.
+ * @since 1.0
+ */
+export function useCompletion(request: ApiCompletionRequest | null): CompletionState {
+  const key = request ? JSON.stringify(request) : null;
+  const [state, setState] = useState<Omit<CompletionState, "refresh">>({ data: undefined, error: null, loading: !!request });
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => {
+    if (!key) return void setState({ data: undefined, error: null, loading: false });
+    let live = true;
+    setState({ data: undefined, error: null, loading: true });
+    connection()
+      .call("ai.complete", [JSON.parse(key) as ApiCompletionRequest])
+      .then(
+        (data) => live && setState({ data: data as ApiCompletion, error: null, loading: false }),
+        (e: unknown) => live && setState({ data: undefined, error: e instanceof Error ? e : new Error(String(e)), loading: false }),
+      );
+    return () => {
+      live = false;
+    };
+  }, [key, nonce]);
+  return { ...state, refresh: useCallback(() => setNonce((n) => n + 1), []) };
 }
