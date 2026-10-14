@@ -1,7 +1,7 @@
 // The top bar (docs/21-sidebars.md): the app window's drag region, full width,
 // over the sidebars and the board. The workspace switcher in the middle, like a
-// window title; at the right end Search (the palette's search), the view modes,
-// a divider, New… and Show Sidebars, as plain buttons like the footer's.
+// window title; at the right end Search (the palette's search), Show Sidebars, the
+// view modes, a divider and New…, as plain buttons like the footer's.
 
 import { ICON, IconButton } from "@cmd/ui";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
@@ -33,6 +33,14 @@ export function TopBar(p: Props) {
       <div className="topbar-center">{p.workspaceBar}</div>
       <div className="topbar-trail">
         <IconButton icon="magnifyingglass" label="Search" shortcut={prettyAccelerator(keys.bindings["view.search"]?.[0])} iconSize={ICON.bar} onClick={() => p.run("view.search")} />
+        <IconButton
+          icon="sidebar.left"
+          label={p.sidebars ? "Hide Sidebars" : "Show Sidebars"}
+          shortcut={prettyAccelerator(keys.bindings["view.sidebars"]?.[0])}
+          iconSize={ICON.bar}
+          pressed={p.sidebars}
+          onClick={() => p.run("view.sidebars")}
+        />
         <span className="bar-sep" aria-hidden />
         <div className="topbar-modes" role="group" aria-label="View">
           {MODES.map((m) => (
@@ -49,14 +57,6 @@ export function TopBar(p: Props) {
         </div>
         <span className="bar-sep" aria-hidden />
         <IconButton icon="plus" label="New…" shortcut={prettyAccelerator(keys.bindings["file.new"]?.[0])} iconSize={ICON.bar} onClick={p.onNew} />
-        <IconButton
-          icon="sidebar.left"
-          label={p.sidebars ? "Hide Sidebars" : "Show Sidebars"}
-          shortcut={prettyAccelerator(keys.bindings["view.sidebars"]?.[0])}
-          iconSize={ICON.bar}
-          pressed={p.sidebars}
-          onClick={() => p.run("view.sidebars")}
-        />
       </div>
     </header>
   );
