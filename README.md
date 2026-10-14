@@ -132,6 +132,7 @@ cmd data query --type git. --since 7d # what cmd recorded (also: stats, explain,
 cmd stats --range month              # how cmd was used; `cmd stats commands.runs --by command` for one stat
 cmd magic "how full is my disk"      # build a Magic widget without the app
 cmd widget list                      # the Widget Library; `cmd widget add <widget>` puts one on the board
+cmd widget new my-widget             # write a widget package; `cmd widget dev` puts it on the board and reloads it as you save
 ```
 
 `cmd` is on the PATH in cmd's terminals. To use it elsewhere, link `~/Library/Application Support/cmd/bin/cmd` onto your PATH, or run it from a checkout ([DEVELOPMENT.md](DEVELOPMENT.md)).
