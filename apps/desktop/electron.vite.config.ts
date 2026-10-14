@@ -43,6 +43,22 @@ function xtermScrollbarHide(): Plugin {
   };
 }
 
+// xterm refreshes the selection after every scroll, selected or not, and the DOM renderer
+// (terminals past the WebGL pool) answers each with a redraw of every row, measuring each
+// char's width: a terminal that streams output redrew its whole screen every frame. Nothing
+// selected before or now: nothing to redraw.
+const XTERM_DOM_SELECTION = "handleSelectionChanged(e,i,r){if(this._selectionContainer.replaceChildren(),";
+function xtermDomSelection(): Plugin {
+  return {
+    name: "xterm-dom-selection",
+    transform(code, id) {
+      if (!/@xterm[/+]xterm.*[/]lib[/]xterm\.mjs$/.test(id)) return;
+      if (!code.includes(XTERM_DOM_SELECTION)) throw new Error("xterm-dom-selection: the DOM renderer's handleSelectionChanged changed, update the patch");
+      return code.replace(XTERM_DOM_SELECTION, "handleSelectionChanged(e,i,r){if(!(e&&i)&&!this._hadSelection)return;if(this._hadSelection=!!(e&&i),this._selectionContainer.replaceChildren(),");
+    },
+  };
+}
+
 // The WebGL addon sizes its canvas to the cells' device pixels (cols × cell width, maybe
 // odd), its CSS size to that over the pixel ratio, rounded, and a ResizeObserver then sets
 // the canvas to the device pixels of that CSS size: one more when the first was odd. So
@@ -135,7 +151,7 @@ export default defineConfig({
   renderer: {
     define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
     // The UI Workbench's catalog (docs/48), dev server only.
-    plugins: [react(), xtermScaledCoords(), xtermScrollbarHide(), xtermWebglCanvasSize(), pdfjsAssets(), workbenchCatalog(resolve(import.meta.dirname, "../.."))],
+    plugins: [react(), xtermScaledCoords(), xtermScrollbarHide(), xtermDomSelection(), xtermWebglCanvasSize(), pdfjsAssets(), workbenchCatalog(resolve(import.meta.dirname, "../.."))],
     optimizeDeps: { exclude: ["@xterm/xterm", "@xterm/addon-webgl"] },
     build: {
       // CMD_NO_MINIFY=1: readable function names in profiles (e2e/latency.mjs --profile).

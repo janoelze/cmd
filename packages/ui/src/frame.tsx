@@ -101,7 +101,8 @@ export function ViewState({ state }: { state: ViewStateSpec }) {
  */
 export function View({ toolbar, footer, state, inset, scroll = true, focusable, bodyRef, onScroll, className, children }: { /** A hook for the app's scripts and tests, not for styles. */ className?: string; toolbar?: ReactNode; footer?: ReactNode; state?: ViewStateSpec | null; inset?: boolean; scroll?: boolean; /** The body takes keyboard focus (arrow keys and Page Down scroll it). */ focusable?: boolean; bodyRef?: Ref<HTMLDivElement>; onScroll?: (e: UIEvent<HTMLDivElement>) => void; children?: ReactNode }) {
   return (
-    <div className={className ? `ui-view ${className}` : "ui-view"}>
+    // data-toolbar / data-footer: a window's frame reads them (the app's tiles size their chrome by them)
+    <div className={className ? `ui-view ${className}` : "ui-view"} data-toolbar={toolbar ? "" : undefined} data-footer={footer ? "" : undefined}>
       {toolbar}
       <div ref={bodyRef} className="ui-view-body" tabIndex={focusable ? 0 : undefined} data-inset={(inset && !state) || undefined} data-scroll={scroll || undefined} onScroll={onScroll}>
         {state ? <ViewState state={state} /> : children}

@@ -462,6 +462,10 @@ kbd {
 .windows-track > .tile { transform-origin: 0 0; }
 /* Hidden by focus mode, once faded out. */
 .windows-track > .tile[data-hidden] { visibility: hidden; pointer-events: none; }
+/* Not drawn either: xterm pauses a screen its IntersectionObserver doesn't see (which
+   visibility doesn't change), and redraws it whole when it's shown again. A terminal
+   streaming output behind the focused one otherwise drew every frame, unseen. */
+.windows-track > .tile[data-hidden] .xterm-screen { display: none; }
 /* The selected window passes over the others while it glides (⌘↩ grows it over them). */
 .windows-track > .tile.sel[data-morphing] { z-index: 5; }
 /* Content held at one size while its window glides (laid out once, clipped by the window). */
@@ -488,8 +492,10 @@ kbd {
   transition: opacity var(--dur) var(--ease);
 }
 :is(.windows-track, .dock) > .tile:has(> .tile-body > .tile-title) { --chrome-h: var(--window-bar-h); --dim-top-r: 0px; }
-:is(.windows-track, .dock) > .tile:has(> .tile-body > .tile-title + * > .ui-tb:first-child) { --chrome-h: calc(var(--window-bar-h) + var(--toolbar-h)); }
-:is(.windows-track, .dock) > .tile:has(> .tile-body > .tile-title + * > .ui-view-footer:last-child) { --chrome-bottom: var(--footer-h); --dim-bottom-r: 0px; }
+/* By the view's attributes (View), not by its children: a :has() reaching through siblings or
+   at :first-child re-checks on every change inside the window (a terminal's rows, each frame). */
+:is(.windows-track, .dock) > .tile:has(> .tile-body > .tile-title):has(> .tile-body > .ui-view[data-toolbar]) { --chrome-h: calc(var(--window-bar-h) + var(--toolbar-h)); }
+:is(.windows-track, .dock) > .tile:has(> .tile-body > .tile-title):has(> .tile-body > .ui-view[data-footer]) { --chrome-bottom: var(--footer-h); --dim-bottom-r: 0px; }
 .windows-track > .tile.sel > .tile-frame::after,
 .windows-track > .tile.lifted > .tile-frame::after,
 :is(.windows-track, .dock) > .tile.needs > .tile-frame::after,

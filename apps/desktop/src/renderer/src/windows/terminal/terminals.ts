@@ -1,6 +1,6 @@
 // One xterm.js instance per pane, kept alive while the pane exists so switching
 // views never loses state. Views borrow the instance's element.
-// WebGL contexts are pooled (browsers keep ~16); others use the DOM renderer.
+// WebGL contexts are pooled (webgl.ts); others use the DOM renderer.
 // Also what xterm.js leaves to the app: find (⌘F), prompt marks (OSC 133:
 // ⌘↑/⌘↓, copy last output), OSC 52 copy, images, drag-and-drop, paste
 // protection, Option as Meta (option.ts), and the queries it doesn't answer
@@ -26,6 +26,7 @@ import type { FindRequest } from "../../lib/find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 import { registerDropTarget } from "../../lib/drops.ts";
 import { Replayer } from "@cmd/protocol/replay";
+import { WebglPool } from "./webgl.ts";
 import { FitQueue } from "./fits.ts";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
@@ -99,15 +100,12 @@ function searchOptions(o: FindOptions): ISearchOptions {
   };
 }
 
-// The WebGL addon loads only when the webgl renderer is used (not the default),
-// so it stays out of the startup bundle.
-let Webgl: typeof WebglAddon | null = null;
-let webglLoading: Promise<void> | null = null;
-
 class Terminals {
   #hosts = new Map<PaneId, Host>();
   /** Fits after a size change, spread over frames and idle time (fits.ts). */
   #fits = new FitQueue();
+  /** Who draws with WebGL (webgl.ts). */
+  #webgl = new WebglPool({ hosts: () => this.#hosts.values(), settings: () => this.#settings });
   #selectionVersion = 0;
   #selectionListeners = new Set<() => void>();
   /** Terminals a remote device sizes to its screen (see setOverride). */
@@ -160,7 +158,7 @@ class Terminals {
         // Only into free pool slots. Evicting one terminal to upgrade the next, for every
         // terminal in turn, recreated contexts on each settings change; past Chromium's
         // limit of 16 per page it loses live terminals' contexts, which go blank.
-        this.#ensureWebgl(h, false);
+        this.#webgl.ensure(h, false);
       }
       if (s["terminal.images"] !== !!h.images) this.#setImages(h, s["terminal.images"]);
       if (fontChanged || s["font.code"] !== prev["font.code"] || s["font.codeSize"] !== prev["font.codeSize"]) {
@@ -170,7 +168,7 @@ class Terminals {
     }
     // A smaller pool: hand the least recently used terminals back to the DOM renderer.
     const live = [...this.#hosts.values()].filter((h) => h.webgl).sort((a, b) => b.lastUsed - a.lastUsed);
-    for (const h of live.slice(Math.max(0, s["terminal.webglPool"]))) this.#dropWebgl(h);
+    for (const h of live.slice(Math.max(0, s["terminal.webglPool"]))) this.#webgl.drop(h);
   }
 
   #options() {
@@ -329,7 +327,7 @@ class Terminals {
       h.term.open(h.el);
       h.opened = true;
     }
-    this.#ensureWebgl(h);
+    this.#webgl.queue(h);
     // Not fitted here: the window around a terminal attached in a commit is sized after it
     // (TileMotion, in its parent's layout effect), so this would fit it to no size (6×1)
     // and back, reflowing it and telling its program twice. The ResizeObserver's first
@@ -555,52 +553,10 @@ class Terminals {
     // ("reading 'dimensions'") on every later drag, so end the drag first.
     if (h.opened && h.term.modes.mouseTrackingMode !== "none") document.dispatchEvent(new MouseEvent("mouseup"));
     h.undrop();
-    this.#dropWebgl(h);
+    this.#webgl.drop(h);
     h.term.dispose();
     h.el.remove();
     this.#hosts.delete(paneId);
-  }
-
-  /** Draw this terminal with WebGL; with the pool full, in place of the least recently used one (`evict`), else not. */
-  #ensureWebgl(h: Host, evict = true): void {
-    const pool = this.#settings["terminal.webglPool"];
-    if (h.webgl || pool <= 0 || this.#settings["terminal.renderer"] !== "webgl") return;
-    if (!Webgl) {
-      webglLoading ??= import("@xterm/addon-webgl").then((m) => void (Webgl = m.WebglAddon));
-      // Once loaded, upgrade this terminal unless it was disposed meanwhile.
-      void webglLoading.then(() => [...this.#hosts.values()].includes(h) && this.#ensureWebgl(h, evict));
-      return;
-    }
-    const live = [...this.#hosts.values()].filter((x) => x.webgl);
-    if (live.length >= pool) {
-      if (!evict) return;
-      // Evict the least recently used terminal back to the DOM renderer.
-      this.#dropWebgl(live.sort((a, b) => a.lastUsed - b.lastUsed)[0]!);
-    }
-    try {
-      const addon = new Webgl();
-      addon.onContextLoss(() => h.webgl === addon && this.#dropWebgl(h));
-      h.term.loadAddon(addon);
-      h.webgl = addon;
-    } catch {
-      h.webgl = null;
-    }
-  }
-
-  /** Back to the DOM renderer, releasing the GL context: the addon's dispose removes its canvas
-   *  but the context lives on until GC, and Chromium counts it towards its limit. */
-  #dropWebgl(h: Host): void {
-    const addon = h.webgl;
-    if (!addon) return;
-    h.webgl = null;
-    const canvases = [...h.el.querySelectorAll("canvas")];
-    addon.dispose();
-    for (const c of canvases) {
-      if (c.isConnected) continue; // another addon's (images)
-      try {
-        c.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext();
-      } catch {}
-    }
   }
 
   applyTheme(): void {
