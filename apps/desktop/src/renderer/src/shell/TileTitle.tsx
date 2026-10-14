@@ -10,7 +10,7 @@ import { fieldsOf, windowIdOf, type SidebarRow, type WindowFields } from "../lib
 import { stateStr, typeFor, viewFor } from "../windows/registry.ts";
 import { showContextMenu } from "../lib/context.ts";
 import { WindowBar, WindowBarMenu } from "@cmd/ui";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { editTitle, useTitleEdit, useWindowStatus, type TitleEdit } from "../lib/windowActions.ts";
 import { DirtyDot, Mark, Slot } from "../components/Slot.tsx";
 import { RemoteBadge } from "../components/Remote.tsx";
@@ -39,7 +39,23 @@ export function useFields(row: SidebarRow | undefined, now = Date.now()): Window
   return row ? fieldsOf(row, live, now) : undefined;
 }
 
-export function TileTitle({
+/** One clock for every title: ages in a status ("Done 3m ago") move on while nothing else changes. */
+const AGE_TICK_MS = 30_000;
+let ageNow = Date.now();
+const ageListeners = new Set<() => void>();
+let ageTimer: ReturnType<typeof setInterval> | null = null;
+function subscribeAge(fn: () => void): () => void {
+  ageListeners.add(fn);
+  ageTimer ??= setInterval(() => ((ageNow = Date.now()), ageListeners.forEach((l) => l())), AGE_TICK_MS);
+  return () => {
+    ageListeners.delete(fn);
+    if (!ageListeners.size && ageTimer) clearInterval(ageTimer), (ageTimer = null);
+  };
+}
+const useAgeClock = () => useSyncExternalStore(subscribeAge, () => ageNow);
+
+/** Memoised: a board glide re-renders WindowsView every few frames, which needn't touch its titles. */
+export const TileTitle = memo(function TileTitle({
   row,
   onPointerDown,
   onContextMenu,
@@ -56,6 +72,7 @@ export function TileTitle({
   title?: string;
 }) {
   countRender("TileTitle");
+  useAgeClock();
   const f = useFields(row)!;
   // A status can be a button ("Updated 12s ago" refreshes); presses on it don't start a drag.
   const action = useWindowStatus(row.win?.id ?? null)?.action;
@@ -120,7 +137,7 @@ export function TileTitle({
       )}
     </WindowBar>
   );
-}
+});
 
 /** The name as an input (windowActions.ts → editTitle): ⏎ submits, Esc (or leaving it empty) closes it. */
 function TitleInput({ id, edit }: { id: string; edit: TitleEdit }) {

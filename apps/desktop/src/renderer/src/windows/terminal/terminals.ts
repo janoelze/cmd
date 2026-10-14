@@ -8,7 +8,7 @@
 
 import { MAC_KEYMAP } from "../../../../shared/commands.ts";
 import { isAppShortcut } from "../../lib/keybindings.ts";
-import { Terminal, type IBufferCellPosition, type IDisposable, type ILink, type IMarker, type ITheme } from "@xterm/xterm";
+import { Terminal, type IDisposable, type IMarker, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
@@ -17,14 +17,16 @@ import type { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneId, Settings } from "@cmd/protocol";
 import { DEFAULT_SETTINGS } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
+import { countRender } from "../../lib/perf.ts";
 import { currentTheme, onThemeChange, terminalColors } from "@cmd/ui/themes";
-import { lineLinks, pickPaths, type CellLink, type Row } from "./links.ts";
+import { linkProvider, openTarget } from "./linkProvider.ts";
 import { optionIsMeta } from "./option.ts";
 import { scrolled, type FindOptions, type FindResults } from "@cmd/ui";
 import type { FindRequest } from "../../lib/find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 import { registerDropTarget } from "../../lib/drops.ts";
 import { Replayer } from "@cmd/protocol/replay";
+import { IdleFits } from "./fits.ts";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
 const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
@@ -98,95 +100,6 @@ function searchOptions(o: FindOptions): ISearchOptions {
 }
 
 
-// ⌘-click links (URLs, existing file paths). xterm asks the provider only for
-// the line under the mouse, when the mouse moves onto it, and caches the reply
-// for that line, so cost doesn't grow with output or scrollback: one regex pass
-// over a capped line, plus one batched existence check (cached) for path-like
-// tokens. Detection runs on hover either way; ⌘ only decides whether the link
-// is underlined and opens on click (plain clicks stay selection / the app's).
-const LINK_MAX_ROWS = 8; // rows read on each side of the hovered one
-const LINK_MAX_CHARS = 2000;
-const RESOLVE_TTL = 5000;
-const resolved = new Map<string, { at: number; abs: Promise<string | null> }>();
-let hovered: ILink | null = null;
-let metaDown = false;
-const showLinks = (on: boolean): void => {
-  metaDown = on;
-  // xterm tracks these properties (not the object) on the link under the mouse.
-  if (hovered?.decorations) (hovered.decorations.underline = on), (hovered.decorations.pointerCursor = on);
-};
-window.addEventListener("keydown", (e) => e.key === "Meta" && showLinks(true), true);
-window.addEventListener("keyup", (e) => e.key === "Meta" && showLinks(false), true);
-window.addEventListener("blur", () => showLinks(false));
-
-/** Absolute paths of those that exist (relative to cwd), cached briefly; one RPC for the misses. */
-function resolvePaths(paths: string[], cwd: string): Promise<(string | null)[]> {
-  const now = Date.now();
-  if (resolved.size > 500) for (const [k, v] of resolved) if (now - v.at > RESOLVE_TTL) resolved.delete(k);
-  const miss = paths.filter((p) => !((resolved.get(`${cwd}\0${p}`)?.at ?? 0) > now - RESOLVE_TTL));
-  if (miss.length) {
-    const call = cmd.call("fs.resolve", { paths: miss, cwd }).catch(() => miss.map(() => null));
-    miss.forEach((p, i) => resolved.set(`${cwd}\0${p}`, { at: now, abs: call.then((r) => r[i] ?? null) }));
-  }
-  return Promise.all(paths.map((p) => resolved.get(`${cwd}\0${p}`)!.abs));
-}
-
-async function openTarget(kind: "url" | "path", target: string): Promise<void> {
-  const { openLink, openPath } = await import("../../lib/actions.ts");
-  if (kind === "url") openLink(target);
-  else void openPath(target, "content");
-}
-
-function linkProvider(term: Terminal, paneId: PaneId) {
-  return {
-    provideLinks(y: number, done: (links: ILink[] | undefined) => void): void {
-      // The logical line around row y (1-based), from the rows on either side:
-      // soft wraps and URLs or paths wrapped by the program (lineLinks), with
-      // each character's cell, so wide characters and wraps map back exactly.
-      const buf = term.buffer.active;
-      const rows: Row[] = [];
-      const first = Math.max(0, y - 1 - LINK_MAX_ROWS);
-      for (let row = first; row < y + LINK_MAX_ROWS; row++) {
-        const line = buf.getLine(row);
-        if (!line) break;
-        let text = "";
-        const cells: IBufferCellPosition[] = [];
-        const cell = line.getCell(0);
-        for (let x = 0; x < line.length; x++) {
-          const c = line.getCell(x, cell);
-          const ch = c?.getChars() ?? "";
-          if (!c || c.getWidth() === 0) continue; // right half of a wide char
-          text += ch || " ";
-          for (let i = 0; i < (ch.length || 1); i++) cells.push({ x: x + 1, y: row + 1 });
-        }
-        rows.push({ text, cells, wrapped: line.isWrapped });
-      }
-      const { urls, paths } = lineLinks(rows, y - 1 - first, term.cols, LINK_MAX_CHARS);
-      if (!urls.length && !paths.length) return done(undefined);
-      const make = (l: CellLink, open: () => void): ILink => ({
-        range: { start: l.start, end: l.end },
-        text: l.text,
-        decorations: { underline: metaDown, pointerCursor: metaDown },
-        activate: (e) => e.metaKey && open(),
-        hover(this: ILink) {
-          hovered = this;
-        },
-        leave(this: ILink) {
-          if (hovered === this) hovered = null;
-        },
-      });
-      const urlLinks = urls.map((l) => make(l, () => void openTarget("url", l.target)));
-      if (!paths.length) return done(urlLinks);
-      void import("../../lib/store.ts").then(async ({ getState }) => {
-        const cwd = getState().panes.get(paneId)?.cwd;
-        const abs = cwd ? await resolvePaths(paths.map((l) => l.target), cwd) : [];
-        const links = pickPaths(paths, abs).map(({ link, abs }) => make(link, () => void openTarget("path", abs)));
-        done([...urlLinks, ...links].sort((a, b) => a.range.start.y - b.range.start.y || a.range.start.x - b.range.start.x));
-      });
-    },
-  };
-}
-
 // The WebGL addon loads only when the webgl renderer is used (not the default),
 // so it stays out of the startup bundle.
 let Webgl: typeof WebglAddon | null = null;
@@ -194,6 +107,8 @@ let webglLoading: Promise<void> | null = null;
 
 class Terminals {
   #hosts = new Map<PaneId, Host>();
+  /** Fits of terminals out of sight, waiting for an idle moment. */
+  #idleFits = new IdleFits();
   #selectionVersion = 0;
   #selectionListeners = new Set<() => void>();
   /** Terminals a remote device sizes to its screen (see setOverride). */
@@ -399,6 +314,7 @@ class Terminals {
     term.onWriteParsed(scrollable);
     term.buffer.onBufferChange(scrollable);
     term.onResize(scrollable);
+    term.onResize(() => countRender("TerminalResize"));
     // xterm scrolls without DOM scroll events: tell the kit, so the bar fades like every other.
     term.onScroll(() => scrolled(el));
     this.#hosts.set(paneId, h);
@@ -414,7 +330,10 @@ class Terminals {
       h.opened = true;
     }
     this.#ensureWebgl(h);
-    this.fit(paneId);
+    // Not fitted here: the window around a terminal attached in a commit is sized after it
+    // (TileMotion, in its parent's layout effect), so this would fit it to no size (6×1)
+    // and back, reflowing it and telling its program twice. The ResizeObserver's first
+    // report (TerminalView) fits it once the window has its size.
   }
 
   detach(paneId: PaneId, container: HTMLElement): void {
@@ -458,14 +377,15 @@ class Terminals {
   resized(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
     if (!h || h.replays.busy) return;
+    const wait = h.fitTimer ? Infinity : h.fittedAt + FIT_INTERVAL - performance.now();
+    // Fitting now: one resize for rows and columns (each resize redraws the whole terminal).
+    if (wait <= 0) return this.#idleFits.fit(h.el, paneId, () => this.fit(paneId));
     if (h.opened && h.el.isConnected && !this.#overrides.has(paneId)) {
       const d = h.fit.proposeDimensions();
       // Rows never wait for columns: a new width is the throttled fit's below.
       if (d && d.rows > 0 && d.rows !== h.term.rows) h.term.resize(h.term.cols, d.rows);
     }
     if (h.fitTimer) return;
-    const wait = h.fittedAt + FIT_INTERVAL - performance.now();
-    if (wait <= 0) return this.fit(paneId);
     h.fitTimer = setTimeout(() => this.fit(paneId), wait);
   }
 
@@ -628,6 +548,7 @@ class Terminals {
     if (!h) return;
     if (h.fitTimer) clearTimeout(h.fitTimer);
     if (h.ptyTimer) clearTimeout(h.ptyTimer);
+    this.#idleFits.delete(paneId);
     // With mouse reporting on (Claude Code, vim), a mousedown adds mousemove/mouseup
     // listeners on the document that only a mouseup removes, and dispose doesn't.
     // Closing the pane mid-drag would leave them calling into the disposed renderer

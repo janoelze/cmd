@@ -31,6 +31,7 @@ import { arrangeTiles, labelOf, needsYou, windowIdOf, type SidebarRow } from "..
 import { viewFor } from "../../windows/registry.ts";
 import { brokenView, useBrokenView } from "../../windows/break.ts";
 import { useStoreValue } from "../../lib/store.ts";
+import { useTitleHandlers } from "./titles.ts";
 import {
   arrange,
   bounds,
@@ -459,6 +460,7 @@ export function WindowsView(p: Props) {
    * Scroll the strip at once: windows stay where they are on screen and glide on (see
    * jumpTrack); rendered now, so TileMotion hears of it before the frame is painted.
    */
+  const measureVp = useRef<(() => void) | null>(null);
   const jumpScroll = (o: number) => {
     jumpTrack();
     stopScroll();
@@ -477,7 +479,10 @@ export function WindowsView(p: Props) {
     let done: ReturnType<typeof setTimeout> | null = null;
     let win = { w: window.innerWidth, h: window.innerHeight };
     let at = el.getBoundingClientRect();
-    const ro = new ResizeObserver(() => {
+    let size = { w: el.clientWidth, h: el.clientHeight };
+    const measure = (sync: boolean) => {
+      if (el.clientWidth === size.w && el.clientHeight === size.h) return;
+      size = { w: el.clientWidth, h: el.clientHeight };
       const now = performance.now();
       const resized = window.innerWidth !== win.w || window.innerHeight !== win.h;
       win = { w: window.innerWidth, h: window.innerHeight };
@@ -489,19 +494,23 @@ export function WindowsView(p: Props) {
       done = setTimeout(() => setLiveResize(false), LIVE_RESIZE_MS);
       // Before this frame is painted: the windows take the new size in the same frame
       // as the board (else for a frame they sit at the old place in the new box).
-      flushSync(() => {
-        if (resized || now - last < LIVE_RESIZE_MS) setLiveResize(true);
-        setVp({ w: el.clientWidth, h: el.clientHeight });
-      });
+      const apply = () => (resized || now - last < LIVE_RESIZE_MS ? setLiveResize(true) : undefined, setVp(size));
+      if (sync) flushSync(apply);
+      else apply();
       last = now;
-    });
+    };
+    measureVp.current = () => measure(false);
+    const ro = new ResizeObserver(() => measure(true));
     ro.observe(el);
-    setVp({ w: el.clientWidth, h: el.clientHeight });
+    setVp(size);
     return () => {
       ro.disconnect();
       if (done) clearTimeout(done);
     };
   }, []);
+  // A commit that resized the board (a mode switch hides a sidebar): its size now, before any
+  // ResizeObserver, or each terminal is fitted for the old size first, then again.
+  useLayoutEffect(() => measureVp.current?.());
 
   useEffect(() => {
     if (!entering || !vp.w) return;
@@ -845,6 +854,7 @@ export function WindowsView(p: Props) {
   // Where each window goes, filled in while rendering them; TileMotion takes it from there.
   const targets = new Map<string, TileTarget>();
   const tileMotion = useRef<TileMotion | null>(null);
+  const [titleHandlers, titleActions] = useTitleHandlers();
   tileMotion.current ??= new TileMotion();
   const motionMode = useRef(mode);
   useLayoutEffect(() => {
@@ -898,6 +908,8 @@ export function WindowsView(p: Props) {
     });
   });
   useEffect(() => () => tileMotion.current?.dispose(), []);
+  const menuOf = (e: React.MouseEvent, id: PaneId) => (e.preventDefault(), onSelect(id), p.onTitleMenu?.(p.rows.find((x) => idOf(x) === id)!));
+  titleActions.current = { down: startDrag, double: (id) => canvas && lay.rects.has(id) && animateCam(frame(lay.rects.get(id)!, vp, 1)), menu: menuOf };
   return (
     <main
       ref={rootRef}
@@ -950,19 +962,7 @@ export function WindowsView(p: Props) {
               ? z >= MOTION_MIN_ZOOM &&
                 x + rect.w > cam.x && x < cam.x + vp.w / z && y + rect.h > cam.y && y < cam.y + vp.h / z
               : x + rect.w > offset && x < offset + vp.w);
-          const title = (
-            <TileTitle
-              row={r}
-              onPointerDown={(e) => startDrag(e, id)}
-              onDoubleClick={() => canvas && animateCam(frame(rect, vp, 1))}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                onSelect(id);
-                p.onTitleMenu?.(r);
-              }}
-              data-tip={canvas ? "Drag to move · double-click to zoom to this window" : "Drag to move"}
-            />
-          );
+          const title = <TileTitle row={r} {...titleHandlers(id)} />;
           return (
             <Window
               key={id}

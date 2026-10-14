@@ -149,13 +149,10 @@ await measure("flood", {
     win.evaluate(
       ([paneId, file]) =>
         new Promise((resolve) => {
-          let tail = "";
-          const off = window.cmd.onEvent((e) => {
-            if (e.type !== "pane.output" || e.paneId !== paneId) return;
-            tail = (tail + e.data).slice(-200);
-            if (tail.includes("FLOOD-DONE")) off(), setTimeout(resolve, 300);
-          });
-          void window.cmd.call("pane.write", { paneId, data: `cat ${file}; printf '%s\\n' FLOOD"-"DONE\r` });
+          // Done when this window's terminal shows the marker: a window that falls behind
+          // gets the end from a snapshot (pane.resync), not as pane.output.
+          const check = () => (window.__cmdTermScreen(paneId).includes("FLOOD-DONE") ? setTimeout(resolve, 300) : requestAnimationFrame(check));
+          void window.cmd.call("pane.write", { paneId, data: `cat ${file}; printf '%s\\n' FLOOD"-"DONE\r` }).then(() => requestAnimationFrame(check));
         }),
       [target, flood],
     ),
