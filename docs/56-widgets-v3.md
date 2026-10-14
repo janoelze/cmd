@@ -337,16 +337,133 @@ The tree makes view-scope widgets work in the phone client without a frame: `win
 
 ## Phases
 
-One worktree per phase; each ends green and visible. Sizes as in the review: S (days), M (a week or two), L (more).
+One worktree per phase (`git -C ~/src/cmd worktree add ~/src/cmd-widgets-v3-<n> -b widgets-v3-<n> master`); each ends green and visible, and leaves the previous path working. Sizes as in the review: S (days), M (a week or two), L (more). Each phase below has its scope, its acceptance criteria as checkboxes, and how to confirm them. An agent reports a phase done only when every box is ticked with the evidence named beside it (a test name, a command's output, a screenshot path); a box it can't tick is reported as open, with why.
 
-1. **A package runs, and Agent Activity is one** (L). `packages/widget-api` (the d.ts for API 1 read verbs plus `notify`, `windows.open/select`, `state`, `config`; the components; `testing`); `package.json` parsing (`widgets/package.ts`); `~/.cmd/widgets` and `CMD_WIDGETS_HOME`; the widget process (`widgets/host/`: Deno, the long-lived connection, hello, lifecycle, limits); the adapter `widgets/api/v1.ts` and its capability table; the reconciler and tree protocol; `PackageWidgetView` drawing a first allow-list of components (View, Toolbar, Stack, Inline, List and rows, Stat, Text, Badge, StatusDot, Button, EmptyState, Callout, Progress); the grants file and the sheet; `cmd widget link|list|add|check`. Agent Activity rewritten as `packages/widgets/agents` and listed in the Library in place of the native one behind the `widgets.developer` setting until it matches. cmd:2 widgets untouched, running as before. **Visible:** a 60-line React widget linked from a folder, live with your agents, hot-reloaded on save, in every theme, on the phone.
-2. **Magic makes packages** (M). The prompt and examples rewritten; the tools write packages; `check`/`test`/`preview` as the build's verify; the permission step in the build view; git-backed revisions (confirm first); fixtures and a story per build; the cmd:2 adapter in `widgets/legacy/` behind the same grants sheet; Move to V3 in the Library; `MagicService` split along the lines above. **Visible:** ⇧⌘M builds a kit widget; an old widget moves up with one click.
-3. **The developer loop** (M). `cmd widget new|dev|test|preview`, the template, `@cmd/widget-api/testing` matchers and fixtures, stories in the Workbench and the Library's hover preview, the generated API reference, `CLAUDE.md` in the template so coding agents write widgets too. **Visible:** `cmd widget new` to a widget on the board in a minute, tests green in CI without Electron.
-4. **Acting** (M). The act verbs (`agents.start/send/stop`, `terminals.type/open`, `actions.run`, `windows.close`) through `confirm` rows and docs/55's approvals with remembered grants per package and workspace; `cmd.run` through the core's policy and `--allow-run` removed; the acting mark on the window acted on, naming the widget. Commands and Timer rewritten as packages (Run Again is `terminals.open`; the Timer rings through `notify`). **Visible:** CI's Rerun runs for real after one approval, remembered.
-5. **Distribution** (M). `pack`, `install` from a path, a tarball and a GitHub release with hash checks, `update`, the index repository with its CI, the Community tab, the permission-diff sheet on updates, `publish`. **Visible:** install a widget from a link in the Library; publish yours.
-6. **Built-ins and the sunset** (M). Notifications and Resources as packages where they fit; `background` as a permission; signing; the cmd:2 adapter removed two releases after phase 2 shipped, with the final offer in the Library; `kits/`, `host.js`, `kit.css` and `view.d.ts` deleted with it; docs/14 and docs/16's "Under the hood" marked superseded.
+### Rules for every phase
+
+Before handing back, in the phase's worktree:
+
+- [ ] `git rebase master`, then `pnpm typecheck && pnpm test` pass, and `pnpm e2e` passes (docs/41: no fixed waits; a flaky scenario is a bug in the scenario).
+- [ ] New files are where CLAUDE.md says (core files in a feature folder, renderer views under `windows/<kind>/`, dev tooling under `tools/`); `test/layout.test.ts`, `test/imports.test.ts`, `test/registries.test.ts` and `design-css.test.ts` pass without raising a debt baseline (`pnpm layout-debt` and `pnpm design-debt` only lower).
+- [ ] Every new RPC method has its row in `TOOL_ACCESS` and `REMOTE_ACCESS` (tsc fails otherwise) and a caller (`registries.test.ts`); every new setting is placed in `settings/layout.ts`; every new command is in `shared/commands.ts` with `registerCommands`.
+- [ ] After changing the core: the log has no `[lag]` lines over 100 ms caused by widgets while twenty are on the board (`tail -f $CMD_HOME/logs/core.log | grep lag`), and `scripts/perf/stress-core.mjs` is unchanged or better when the phase touched how the core reads or writes the log.
+- [ ] After changing anything that appears, moves or disappears (a sheet, a window's cover state): `pnpm e2e:motion` passes (the `motion` skill).
+- [ ] User-facing strings follow the `copywriting` skill; the Status line of this doc and of docs/14 and docs/16 say what is built; DEVELOPMENT.md's "what's done or next" names the phase; a changelog draft for the phase is in this doc's "Release notes" section (the `changelog` skill writes the real one at release).
+- [ ] cmd:2 widgets from Jan's library still open and refresh: `pnpm cmd widget list` shows them, and `e2e/smoke.mjs`'s `magic` scenario passes.
+
+### Phase 1: a package runs, and Agent Activity is one (L)
+
+**Scope.** `packages/widget-api` (the d.ts for API 1's read verbs plus `notify`, `windows.open/select`, `state`, `config`; the elements; `testing`); `package.json` parsing (`widgets/package.ts`); `~/.cmd/widgets` and `CMD_WIDGETS_HOME`; the widget process (`widgets/host/`: Deno, the long-lived connection, hello, lifecycle, limits); the adapter `widgets/api/v1.ts` and its capability table `widgets/api/access.ts`; the reconciler and tree protocol (`widget-runtime/react.ts`, protocol `widget-tree.ts`); `windows/package/` in the renderer drawing a first allow-list of elements (Window, View, WindowToolbar and its items, Stack, Inline, Tiles, Hide, List and rows, Chip, Stat, Sparkline, Text, Badge, StatusDot, Button, EmptyState, Callout, Progress); the grants file and the sheet; `cmd widget link|list|add|check`. Agent Activity rewritten as `packages/widgets/agents`, listed in the Library beside the native one behind `widgets.developer` until it matches, then in its place. cmd:2 widgets untouched.
+
+**Acceptance criteria.**
+
+- [ ] **The package format.** `widgets/package.ts` parses `package.json` (`name`, `version`, `engines.cmd`, `cmd.api`, `cmd.widgets[]`, `cmd.permissions`) and refuses, with a message naming the field: a missing `cmd.api`, an unknown major, `engines.cmd` newer than the running cmd, a widget `main` outside the package, a `run` naming a shell or interpreter (today's `ESCAPES`), `read: ["~"]`. Tests in `packages/core/test/widget-package.test.ts`, one per refusal.
+- [ ] **Where packages live.** Packages under `~/.cmd/widgets/<name>/` (or `$CMD_WIDGETS_HOME`) are listed by `widget.list` with `source: "package"`, `name`, `version`, each widget's `kind` as `pkg:<name>/<id>`; the folder is watched, and a package added, removed or changed by hand shows in the Library within a second (`widget.library` event). Per-instance state is under `$CMD_HOME/widgets/<name>/` and nothing is written into the package folder by the core (test: the folder's mtime and listing are unchanged after open, refresh, close).
+- [ ] **The process.** Opening a package widget starts one Deno process per window with flags from the grant and under the sandbox profile; its hello carries `{ api: 1, package, version, widget }`; the core logs `widget <name> started (api 1)`. Closing the last window stops it within 60 s; a crash restarts it (three in five minutes stops it with "Stopped · crashed" and Restart in the window); a stalled loop (20 s) and the memory limit kill it with the reason shown. Tests with a fake runtime in `widget-host.test.ts`; one real Deno test (`skipIf(!DENO)`) for the hello and a subscription.
+- [ ] **The API, read side.** `cmd.workspace.get/windows/selected`, `cmd.agents.list/get`, `cmd.terminals.list/read/waitFor`, `cmd.windows.list`, `cmd.events.query/stats`, `cmd.git.status/diff`, `cmd.actions.list`, `cmd.config`, `cmd.secrets`, `cmd.state.get/set/history`, `cmd.env.*`, plus `use()`/`subscribe` for workspace, agents, terminals, windows and events, `cmd.notify.send`, `cmd.windows.open/select`: each has a row in `widgets/api/access.ts` (tsc fails on a missing one), each is implemented in `v1.ts`, and `widget-api.test.ts` calls every verb against a `Core` with fixtures and checks the result shape against the d.ts (`expectTypeOf`). A verb called without its permission fails with the message that names the permission to add, and the process keeps running (test per namespace).
+- [ ] **Subscriptions are pushes.** With a widget subscribed to agents, an `agent.updated` reaches it in one message without a query (test counts calls on the fake connection); unsubscribing on unmount stops them (test); a widget that never subscribes causes no `events.subscribe` on the core (test).
+- [ ] **Policy holds.** A widget in workspace A sees no agents, panes, windows or events of workspace B unless its grant has `workspace: ["all"]`; `events` are clamped by `data/policy.ts` as today (`widget-data-policy.test.ts` extended); a terminal's screen comes back clipped and marked untrusted (test).
+- [ ] **The tree.** The reconciler sends a full tree once and patches after; an element not in the renderer's allow-list, a prop that is a function, an `http:` URL, or markup in a string is dropped on the renderer side with a console warning naming the element (test in `apps/desktop/test/widget-tree.test.ts`); a render error shows as a `Callout` with the stack and the process stays up (test). A thousand `ListRow`s render under 50 ms of renderer time after the first tree (measured with `e2e/perf.mjs`, noted in the PR).
+- [ ] **Elements.** Every element of the phase's allow-list is drawn by its kit component with props translated in `windows/package/elements.tsx`; a story per element in `packages/widget-api/stories/` renders in the Workbench and in `apps/desktop/test/stories.test.ts` (the test that every story renders) under every theme; `pnpm workbench widgets/elements shot --themes all` produces shots with no console error.
+- [ ] **Grants.** Adding, linking or opening a package widget whose declared permissions exceed `$CMD_HOME/widgets/<name>/grants.json` shows the approval sheet (docs/55) naming the package, version and each permission in words; Allow on Return; Decline leaves the previous grant; the process starts only after the answer, with `declared ∩ granted`. `grants.json` is not in the package folder and is not among the files Magic's tools can write (test: `write_file` on it is refused). A new version asking for more shows the sheet again; the same permissions don't (test). e2e: a scenario `widget-grants` that links a fixture package, sees the sheet, allows, and sees the widget's first row.
+- [ ] **Agent Activity as a package.** `packages/widgets/agents` passes `cmd widget check` and `cmd widget test` (its own tests with the fake host: waiting first, subagents under hosts, a click selects the host's pane, the scope menu); on a board with the fixture agents it shows the same rows, in the same order, with the same status line as the native one (e2e: open both, compare `look` output); it is under 120 lines of JSX. The native one is removed from `builtin.tsx` once the comparison passes, or left behind `widgets.developer` with a note in this doc saying what differs.
+- [ ] **CLI.** `cmd widget link <dir>` symlinks into `~/.cmd/widgets` and prints the Library entry; `cmd widget list` shows packages with their version and API; `cmd widget add pkg:agents/agents` puts one on the board; `cmd widget check <dir>` exits 0 on the agents package and 2 with the field named on each fixture in `packages/cli/test/fixtures/widgets/bad-*/`. Hot reload: a save in a linked package restarts its process and redraws within a second (e2e: edit a fixture's title, wait for the title bar to change, no fixed wait).
+- [ ] **Remote.** The phone client (`e2e/remote.mjs`) shows a package widget's tree in view scope with no handlers; a control-scope device's press on a row reaches the Mac (test in `remote-policy.test.ts`: trees to view scope carry no handler ids).
+- [ ] **Docs.** `packages/widget-api/README.md` has the API 1 reference generated from the d.ts (`pnpm widget-api:docs`; a test fails when stale); this doc's Status says phase 1 is built; `docs/16-widgets.md` "Under the hood" points here.
+
+**How to confirm.** From the worktree with `CMD_HOME=$PWD/.cmd-dev`: `pnpm typecheck && pnpm test` (the new test files above run and are not skipped: `pnpm vitest run packages/core/test/widget-host.test.ts --reporter verbose` lists the Deno test as passed, not skipped, on a Mac with Deno); `pnpm e2e` with the `widget-grants` and `widget-agents` scenarios; `pnpm dev`, then `pnpm cmd widget link packages/widgets/agents`, allow the sheet, start an agent in a terminal, and watch the row appear without a refresh; edit the package's title and see the title bar follow; `pnpm workbench widgets/agents shot --themes all` and look at the shots; `tail $CMD_HOME/logs/core.log` for `widget … started (api 1)` and no `[lag]`; `pnpm cmd widget list` still lists the cmd:2 widgets and one of them refreshes.
+
+### Phase 2: Magic makes packages (M)
+
+**Scope.** The prompt and the nine examples rewritten for V3 (`magic/prompt/`); the agent's tools write packages (`magic/widget-tools.ts`: `write_file` on `src/`, `fixtures/`, `package.json` only; `check`, `test`, `preview`); the permission step in the build view; git-backed revisions (confirm first; else keep `revisions/NNNN/`); the cmd:2 adapter in `widgets/legacy/` behind the grants sheet; Move to V3 in the Library; `MagicService` split (builds in `magic/`, running in `widgets/host/`, the library in `widgets/library.ts`).
+
+**Acceptance criteria.**
+
+- [ ] **Builds produce packages.** `cmd magic "the latest CI runs of this repo"` writes `~/.cmd/widgets/<slug>/` with `package.json`, `src/<id>.tsx`, a test, a story and fixtures, passing `cmd widget check` and `test`; the window shows it drawn by the kit (no iframe for a non-frame widget: e2e asserts no `iframe` in the window). The nine prompt examples are packages and `widgets.test.ts` runs `check` and `test` on each (CI runs them: Deno pinned per AR1-11-04).
+- [ ] **Evals hold.** `cmd magic eval` runs the existing cases against the new prompt; the pass rate is at or above the last recorded run in `magic/evals/baseline.json` (write the baseline on master first), the `security` cases pass, and each report records the prompt hash (AR1-11-07).
+- [ ] **Permissions in the build.** When the agent writes a `package.json` asking for more than granted, the build view shows the permissions with Allow before `test` runs against the real host; until then `test` runs on fixtures and `cmd.net`/`cmd.run` are refused (test with a fake backend that asks for `net: ["api.github.com"]`: the sheet's text, then the grant file after Allow). autoFix and a hand edit never widen a grant (test).
+- [ ] **Frame widgets.** A request that is visual ("a shader", "play this radio") yields `"surface": "frame"` with `view.html`, drawn in the one frame host; Jam and the Visualizer use the same host (`grep -c "opaque origins all say" apps/desktop/src/renderer/src` is 0; AR1-11-05's gesture rule holds: an `open-url` posted on load opens nothing, after a click one window).
+- [ ] **Revisions.** Each build is a commit (or a numbered revision if git was rejected: say which in this doc); Restore checks out a version and the window redraws; hand edits appear as a version named "Edited by hand"; the edit view's Changes lists them with screenshots. Test in `widgets.test.ts`.
+- [ ] **Old widgets.** Every cmd:2 widget in Jan's library opens and refreshes through `widgets/legacy/` and shows "Older format" in the Library; its grants sheet shows the manifest's permissions once; Move to V3 rebuilds it as a package with the old files in the agent's context and leaves the old folder until the new one renders; a Change on an old widget does the same. e2e: a fixture cmd:2 widget moved to V3 with a fake backend.
+- [ ] **The split.** `wc -l packages/core/src/magic/service.ts` < 350; `widgets/host/`, `widgets/library.ts` and the adapter have their own tests and no import of `magic/`; `kernel/features.ts` lists `widgetsFeature` and `magicFeature`.
+- [ ] **Cost.** A build stops at a token ceiling with a clear message (AR1-11-06's first step; test with a backend that never stops).
+
+**How to confirm.** With a key in `.env`: `pnpm cmd magic "how many agents are waiting in this workspace"` from a terminal in the worktree's app, watch the steps, see a kit-drawn widget; ⌘E shows versions; Restore the first; `pnpm cmd magic eval --tag security` passes; open an old widget from the dev library, Move to V3, compare; `pnpm test` with Deno installed runs the example packages; `pnpm e2e` passes the `magic` and `widget-migrate` scenarios.
+
+### Phase 3: the developer loop (M)
+
+**Scope.** `cmd widget new|dev|test|preview`, the template (`packages/cli/templates/widget/`), `@cmd/widget-api/testing` matchers and fixtures, `cmd-env.d.ts` generation, stories in the Workbench and the Library's hover preview, the generated API reference on the docs site, `CLAUDE.md`/`AGENTS.md` in the template.
+
+**Acceptance criteria.**
+
+- [ ] `cmd widget new my-widget` in an empty folder writes a package that passes `check` and `test` at once, has a story, a `README.md`, a `LICENSE` placeholder and a `CLAUDE.md` that points at the API reference and the window-design rules; `cmd widget dev` links it, opens it on the board and prints the process's console; Ctrl-C unlinks nothing (the link stays; `cmd widget remove` removes).
+- [ ] `cmd widget test` runs vitest with `@cmd/widget-api/testing`: `createHost` serves fixture workspaces, agents, terminals, events and config; `render` returns a tree with `toHaveSection`, `toHaveRow`, `toHaveTitle`, `toHaveStat`, `toShowState`, `rows()`, `press()`, `change()`; acts are recorded in `host.calls`. The matchers have their own tests in `packages/widget-api/test/`.
+- [ ] `cmd-env.d.ts` is written by `check` and `dev` from `package.json`'s config; `useConfig()` is typed by it; a renamed field fails `check` with the file and line (test).
+- [ ] A package's `*.story.tsx` shows in `pnpm workbench widgets/<name>` with the fake host, in the reference size matrix and every theme; `shot` works on it; the Library's card shows the first story's shot on hover.
+- [ ] `cmd widget preview <dir> --themes all --sizes all` writes shots and reports overflow, empty states and console errors, exit 2 on any (the previewer of docs/14, over trees).
+- [ ] The API reference is generated from the d.ts into `website/` (every namespace, every verb with its permission and `@since`, every element with its props) and a test fails when it is stale; the template's `CLAUDE.md` links it.
+- [ ] A coding agent can do it: a Claude Code session in the template folder, asked for "a widget listing the commands that failed today", produces a package that passes `check` and `test` without a human edit (run it once and keep the transcript's summary in the PR).
+
+**How to confirm.** In a scratch folder: `pnpm cmd widget new demo && cd demo && pnpm cmd widget dev`; edit the title, see it follow; `pnpm cmd widget test` green; `pnpm workbench widgets/demo shot --themes all`; `pnpm cmd widget preview . --sizes all` exits 0; break the config key and see `check` name the line.
+
+### Phase 4: acting (M)
+
+**Scope.** The act verbs (`agents.start/send/stop`, `terminals.type/open`, `actions.run`, `windows.close`) through `confirm` rows and docs/55's approvals with remembered grants per package and workspace; `cmd.run` through the core's policy and `--allow-run` removed; the acting mark naming the widget; Commands and Timer as packages.
+
+**Acceptance criteria.**
+
+- [ ] Each act verb has a `confirm` or `act` row in `widgets/api/access.ts` and asks through `tools/approvals.ts` with the package's name and version in the sheet ("ci-runs wants to run `test` here"); "Always allow … here" remembers per package and workspace; `approvals.list` shows it and `approvals.forget` removes it (tests per verb; e2e: one approval, remembered, then the next press runs without a sheet).
+- [ ] The deny-list and risky actions are refused before any approval (`tools/deny.ts`, `actions/classify.ts`; tests); typed text always asks (never remembered), as docs/51's guardrail says.
+- [ ] `grep -n "allow-run" packages/core/src/widgets` returns nothing; `cmd.run("docker", ["run", …])` and `cmd.run("git", ["-c", "alias.x=!…"])` fail with `magic/policy.ts`'s reason (tests); `run: ["gh"]` still runs `gh run list` (Deno test).
+- [ ] The window acted on shows the acting mark with the widget's name while the call runs (e2e screenshot).
+- [ ] Commands and Timer are packages in `packages/widgets/` matching the native ones (e2e comparison as in phase 1); Run Again is `terminals.open` typed, not run; the Timer rings through `cmd.notify` on time while its window is in another workspace (test with a fake clock); the native views are removed.
+- [ ] Remote: act verbs are `never` for view-scope devices and confirm on the Mac for control scope (`remote-policy.test.ts`).
+
+**How to confirm.** Link the CI example, press Rerun, see the sheet, allow and remember, press again: no sheet; Settings → Agents → Permissions lists it; `pnpm vitest run -t "allow-run"`; start the Timer in workspace A, switch to B, hear it ring and see the notification.
+
+### Phase 5: distribution (M)
+
+**Scope.** `pack`, `install` from a path, a tarball and a GitHub release with hash checks, `update`, the index repository with its CI, the Community tab, the permission-diff sheet on updates, `publish`.
+
+**Acceptance criteria.**
+
+- [ ] `cmd widget pack` writes `widget.tgz` from `files` with `dist/` bundled by esbuild and no `node_modules`, plus `widget.tgz.sha256`; the tarball installs with `cmd widget install ./widget.tgz` and runs; a tarball with a `main` outside `dist/` or a dependency resolved at run time is refused (tests).
+- [ ] `cmd widget install github.com/<owner>/<repo>` downloads the release's `widget.tgz` and `package.json`, checks the hash against the index entry (or, for an unindexed repo, shows "unverified" in the sheet and asks), installs under `~/.cmd/widgets/<name>/`, and shows the grant sheet with the source and version. A hash mismatch refuses with the two hashes (test with a local server).
+- [ ] The index repository exists (`cmd-widgets/index`, `index.json`: name, repo, description, versions with hashes and permissions); its CI runs `check`, `test` and `preview` on every PR and refuses `experimental`, `*` hosts, shells, or a hash that doesn't match the release; the review checklist is in its README.
+- [ ] The Library's Community tab searches the index, shows each package's permissions in words before install, and Install goes through the same path as the CLI (e2e against a fixture index served locally).
+- [ ] `update` checks daily (a startup job, docs/34), installs a version with the same permissions at next launch, holds one with more until the sheet is answered, and the Library shows an Updates row (tests with a fixture index that bumps a version).
+- [ ] `cmd widget publish` creates the GitHub release with the two assets (through `gh`) and opens the index PR with the entry filled in; a dry run prints both.
+
+**How to confirm.** Publish the agents package from a fork to a test index; install it on a clean `CMD_WIDGETS_HOME` from the Community tab; bump its permissions in a new release and see the update wait for the sheet; corrupt the tarball and see the hash refusal.
+
+### Phase 6: built-ins and the sunset (M)
+
+**Scope.** Notifications and Resources as packages where they fit; `background` as a permission; signing; the cmd:2 adapter removed two releases after phase 2 shipped, with the final offer in the Library; `kits/`, `host.js`, `kit.css` and `view.d.ts` deleted with it; docs/14 and docs/16's "Under the hood" marked superseded.
+
+**Acceptance criteria.**
+
+- [ ] Notifications and Resources are packages matching the native ones (e2e comparison), or this doc says which stays native and why (Resources' process tree may need an `experimental` verb first).
+- [ ] `background: true` is a permission in the sheet; a widget with it keeps its process while off every board and notifies; without it, the process stops as in phase 1 (tests).
+- [ ] Releases in the index are signed (Sigstore or minisign: decide and record here) and `install` verifies before the hash check; an unsigned indexed release is refused.
+- [ ] Every cmd:2 widget in the fixtures and in Jan's library has been moved or offered the final sheet; `widgets/legacy/`, `magic/prompt/kits/`, `host.js`, `kit.css`, `view.d.ts`, `kits.test.ts` are deleted; `grep -rn "cmd-widget://frame" apps packages` finds only the frame surface; docs/14's Status is "superseded by 56".
+- [ ] The example package per supported API major in `packages/widget-api/examples/` renders in CI (`widget-api.test.ts`), and `SUPPORTED_API` in `packages/protocol` is what `core.hello` reports.
+
+**How to confirm.** `pnpm test` with the legacy suites gone and the examples running; the Library shows no "Older format" entries on a migrated dev library; `pnpm cmd widget install` of a signed release passes and of a stripped signature fails.
 
 Phase 1 is the one that proves the three sentences and is where the time goes; phases 2 and 3 are what people and agents touch; 4 to 6 can follow at the pace the registry needs. The order is chosen so that nothing in phases 2–6 changes the contract of phase 1: the d.ts grows, the table gets rows, the adapter gets verbs.
+
+## Release notes (drafts)
+
+For whoever cuts the release with a phase in it; the `changelog` skill writes the real entry.
+
+```markdown
+### New
+- **Widgets are packages.** Write a widget in TypeScript and React with cmd's own components, link it from a folder, and it shows up in the Widget Library, live with your agents and terminals. `cmd widget new` makes one.
+- **Widgets ask before they reach out.** A widget says which sites, programs and parts of your workspace it wants, and cmd asks you once, in words.
+
+### Improved
+- Magic builds widgets with cmd's own components, so they look and behave like the built-in ones, and work on your phone.
+```
 
 ## Decisions, so they don't get re-decided
 
