@@ -4,7 +4,7 @@
 // Props are data (strings, numbers, tones, steps of the spacing scale); handlers are
 // functions the reconciler turns into ids. There is no className, style or ref: a look
 // is a prop, or a kit change. The allow-list with each element's props is the
-// protocol's API_ELEMENTS; test/elements.test.ts holds these types to it.
+// protocol's API_ELEMENTS; test/contract.test.ts holds these types to it.
 
 import type { ReactElement, ReactNode } from "react";
 import type { ApiElement, ApiLight, ApiTone } from "@cmd/protocol/widget-tree";
