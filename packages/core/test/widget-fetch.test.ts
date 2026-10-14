@@ -32,10 +32,10 @@ beforeAll(async () => {
   B = `127.0.0.1:${(b.address() as AddressInfo).port}`;
   a = await serve((req, res) => {
     seen.push({ url: `A${req.url}`, auth: req.headers.authorization, key: req.headers["x-api-key"] as string | undefined });
-    if (req.url === "/big") return res.end("x".repeat(FETCH_BODY_MAX + 5000));
-    if (req.url === "/away") return res.writeHead(302, { location: `http://${B}/landed` }).end();
-    if (req.url === "/here") return res.writeHead(302, { location: "/landed" }).end();
-    if (req.url === "/echo") return res.end(`you sent ${req.headers.authorization}`);
+    if (req.url === "/big") return void res.end("x".repeat(FETCH_BODY_MAX + 5000));
+    if (req.url === "/away") return void res.writeHead(302, { location: `http://${B}/landed` }).end();
+    if (req.url === "/here") return void res.writeHead(302, { location: "/landed" }).end();
+    if (req.url === "/echo") return void res.end(`you sent ${req.headers.authorization}`);
     res.setHeader("set-cookie", "s=1");
     res.end(JSON.stringify({ ok: true, path: req.url }));
   });

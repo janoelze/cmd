@@ -221,7 +221,7 @@ describe("API 1", () => {
     const api = adapter({ ...noPermissions(), workspace: ["read"] });
     for (let i = 0; i < 40; i++) ptys[0]!.output(`line ${i} ${"x".repeat(60)}\r\n`);
     await until(async () => (await core.panes.read(paneA, 5)).includes("line 39"), "the lines");
-    const r = (await api.call("terminals.read", [paneA, { lines: 5 }])) as ApiMethods["terminals.read"]["result"];
+    const r = (await api.call("terminals.read", [paneA, { lines: 5 }])) as unknown as ApiMethods["terminals.read"]["result"];
     expect(r.untrusted).toBe(true);
     expect(r.clipped).toBe(true);
     expect(r.text).toContain("line 39");
