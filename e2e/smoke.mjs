@@ -1532,7 +1532,7 @@ await scenario("magic", async () => {
     await win.waitForSelector(".widget-library .wl-card", { timeout: 10_000 });
     const card = await until(() => win.locator(".widget-library .wl-card", { hasText: "shop · changes" }).textContent().catch(() => ""), (t) => t.includes("Made with Magic"), 5000);
     await menu("file.close");
-    await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).catch(() => {});
+    await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).catch(expired(".widget-library to close"));
     check(entry?.magic?.request === "git changes" && card.includes("Made with Magic"), `the Library lists the package under Your Widgets, made with Magic (${JSON.stringify(card)})`);
     // Deleted from the Library: its window and its folder go (the checks below expect the library as it was).
     await call("widget.delete", { ref: "pkg:git-changes/changes" });
