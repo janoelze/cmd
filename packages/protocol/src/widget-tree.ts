@@ -17,8 +17,6 @@
 export const WIDGET_API = 1;
 /** The minor served within it; a minor only adds. */
 export const WIDGET_API_MINOR = 0;
-/** The majors this cmd runs (core.hello reports it; the Library reads it). */
-export const SUPPORTED_API = { min: 1, max: 1 } as const;
 
 // ── the tree ────────────────────────────────────────────
 
