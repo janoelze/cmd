@@ -210,6 +210,10 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
   overflow-wrap: anywhere;
 }
 .ui-doc > :first-child { margin-top: 0; }
+/* A long document (data-long): blocks out of view aren't laid out or painted until they
+   scroll near, so opening one costs a screenful, not the whole. Text blocks only: tables
+   and media may overflow, which the containment this brings would clip. */
+.ui-doc[data-long] > :is(p, h1, h2, h3, h4, h5, h6, ul, ol, pre, blockquote) { content-visibility: auto; contain-intrinsic-block-size: auto 3lh; }
 .ui-doc h1, .ui-doc h2, .ui-doc h3, .ui-doc h4 { line-height: 1.25; margin: 1.6em 0 0.6em; font-weight: 600; scroll-margin-top: var(--space-4); }
 .ui-doc h1 { font-size: 2em; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
 .ui-doc h2 { font-size: 1.43em; padding-bottom: 0.3em; border-bottom: 1px solid var(--separator); }

@@ -25,6 +25,9 @@ export function audioContext(): AudioContext {
   return ctx;
 }
 
+/** The context's sample rate if there is one yet: making one takes ~70 ms of the main thread (Core Audio). */
+export const audioRate = (): number | undefined => ctx?.sampleRate;
+
 // ── sources windows publish ─────────────────────────────
 
 /** A window's sound: its latest samples, and whether anyone wants them. */
