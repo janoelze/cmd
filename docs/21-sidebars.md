@@ -47,7 +47,7 @@ Today's sidebar becomes a built-in widget, the **Navigator** (working name), doc
 | Where | What |
 |---|---|
 | Title bar menu of a board window | **Attach as Sidebar ▸ Left / Right**. If that side already holds a window, that window goes back to the board. |
-| Title bar menu of a sidebar | **Attach as Sidebar ▸ Left / Right** (its side ticked), **Detach Sidebar** |
+| Title bar menu of a sidebar | **Detach Sidebar** (the Window menu's Attach as Left/Right Sidebar still moves it to the other side) |
 | Window menu | The same items, for the selected window (every shortcut needs a real menu item) |
 | View menu | **Show Left Sidebar** (⌃⌘S, the `view.sidebar` command today) and **Show Right Sidebar**: these hide and show a side, they don't close its window |
 | View menu, top bar | **Show Sidebars** (⌥⌘S, `view.sidebars`; the top bar's rightmost button): hides every side at once for an undistracted board, and brings back the same ones. Per workspace, like the rest of the sidebars |
