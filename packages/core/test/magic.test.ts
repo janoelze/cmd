@@ -8,7 +8,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { classify, credentialsFor, credentialsForPrograms, redact, sandboxProfile, execCommand, fastCommand, runTool, sandboxAvailable } from "../src/magic/index.ts";
 import { nonPublic, type Lookup } from "../src/magic/fetch.ts";
 import { magicDenyPaths, magicPrivatePaths, realPathOf } from "../src/lib/paths-deny.ts";
-import { widgetCsp } from "@cmd/protocol";
 import { needs } from "../../../test/system.ts";
 
 const home = "/Users/test";
@@ -91,16 +90,6 @@ describe("logged-in CLIs", () => {
     expect(out).not.toMatch(/gho_|glpat-|supersecret/);
     expect(out).toContain("ok");
     expect(redact("run 12345 succeeded on main")).toBe("run 12345 succeeded on main");
-  });
-});
-
-describe("widget frame CSP", () => {
-  it("builds the frame CSP from allowed media origins", () => {
-    expect(widgetCsp()).toContain("media-src data:;");
-    const csp = widgetCsp(["https://a.example/x", "http://b.example", "javascript:alert(1)"]);
-    expect(csp).toContain("media-src data: https://a.example;");
-    expect(csp).toContain("img-src data: https://a.example;");
-    expect(csp).toContain("connect-src 'none'");
   });
 });
 

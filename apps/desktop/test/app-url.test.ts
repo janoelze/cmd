@@ -42,6 +42,6 @@ describe("allowedAppUrl", () => {
   });
 
   it("refuses other schemes", () => {
-    for (const u of ["javascript:alert(1)", "data:text/html,<p>x</p>", "about:blank", "cmd-widget://frame/", "not a url", ""]) expect(allowedAppUrl(u, dev)).toBe(false);
+    for (const u of ["javascript:alert(1)", "data:text/html,<p>x</p>", "about:blank", "cmd-widget://package/x/", "not a url", ""]) expect(allowedAppUrl(u, dev)).toBe(false);
   });
 });

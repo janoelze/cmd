@@ -293,8 +293,6 @@ const api = {
   confirm: (o: { message: string; detail?: string; confirm: string }): Promise<boolean> => ipcRenderer.invoke("confirm", o),
   /** Native sheet with only OK: something couldn't be done, and why. */
   alert: (o: { message: string; detail?: string }): Promise<void> => ipcRenderer.invoke("alert", o),
-  /** The URL of a Magic widget frame whose CSP allows media from these origins (cmd-widget://, main process). */
-  widgetFrame: (media: string[], kit?: number): Promise<string> => ipcRenderer.invoke("widget-frame", media, kit),
   /** The URL of a frame widget's page (cmd-widget://package/, main/package-frames.ts): its package folder, served with these first values. */
   packageFrame: (req: PackageFrameRequest): Promise<string> => ipcRenderer.invoke("package-frame", req),
   /** A frame widget's page no view shows any more: main stops serving it. */

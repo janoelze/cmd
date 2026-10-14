@@ -31,7 +31,7 @@ describe("browser session permissions", () => {
   it("ask only for http(s) pages", () => {
     expect(siteOf("https://meet.example.com/room?x=1")).toBe(SITE);
     expect(siteOf("http://localhost:5173/a")).toBe("http://localhost:5173");
-    for (const u of ["file:///tmp/a.html", "about:blank", "data:text/html,x", "cmd-widget://frame/", "", undefined]) expect(siteOf(u)).toBeNull();
+    for (const u of ["file:///tmp/a.html", "about:blank", "data:text/html,x", "cmd-widget://package/x/", "", undefined]) expect(siteOf(u)).toBeNull();
     expect(permissionVerdict("media", siteOf("file:///tmp/a.html"), {})).toBe("deny");
   });
 

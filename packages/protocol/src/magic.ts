@@ -1,9 +1,7 @@
 // Magic (docs/56, "Magic on V3"): a Magic window's state while it makes a widget package (or
-// ends with a command to run), the progress the core streams, the edit view's versions, what
-// the previewer is asked and answers, and the frame's vocabulary (its kit files, theme tokens
-// and CSP) that the app's frame host still uses.
+// ends with a command to run), the progress the core streams, the edit view's versions, and
+// what the previewer is asked and answers.
 
-import { DEFAULT_SETTINGS } from "./settings.ts";
 import type { MagicPackageBuild, MagicPreviewTree } from "./magic-package.ts";
 export type { MagicPackageMethods, MagicPackageInfo } from "./magic-package.ts";
 
@@ -104,37 +102,6 @@ export type MagicProgress =
   | { type: "error"; message: string };
 
 /**
- * The CSS a frame loads by kit version: the app's frame host (main/index.ts, cmd-widget://)
- * still serves frames by these; the frame host of docs/56 phase 2b replaces it.
- */
-export const KIT_FILES: Readonly<Record<number, readonly string[]>> = { 1: ["kits/1.css"], 2: ["kits/2.css"], 3: ["tokens.css", "kit.css"] };
-/** A known kit version, else 1. */
-export const kitVersion = (v: unknown): number => (typeof v === "number" && v in KIT_FILES ? v : 1);
-
-/** A theme as a widget's frame needs it: its appearance and the variables it sets on the app's :root (themeVars, light themes' overrides included). */
-export interface ThemeLike {
-  appearance: "dark" | "light";
-  vars: Readonly<Record<string, string>>;
-}
-
-/**
- * What the host sets on a widget's :root: the theme's variables, as the app sets them on
- * its own, and the person's fonts. The frame's tokens.css (generated from the app's
- * tokens, packages/ui/tokens) derives everything else from them, so widgets share the
- * app's vocabulary. `--bg` stays the frame's own: inside a widget it is the window's
- * background (--well), not the board.
- */
-export function widgetTokens(t: ThemeLike, fonts: { text?: string; mono?: string } = {}): Record<string, string> {
-  const out: Record<string, string> = { "color-scheme": t.appearance };
-  for (const [k, v] of Object.entries(t.vars)) if (k !== "--bg") out[k] = v;
-  // The app passes the font.text / font.code settings; the defaults are theirs.
-  const text = fonts.text || DEFAULT_SETTINGS["font.text"];
-  if (text) out["--font-ui"] = text;
-  out["--font-mono"] = fonts.mono || DEFAULT_SETTINGS["font.code"];
-  return out;
-}
-
-/**
  * Evaluated in a rendered widget page (previews) once it settled: visible text,
  * elements, whether something was drawn, its scroll size, script errors host.js
  * caught, and `box`: the bounds of everything visible (text, controls, drawings,
@@ -167,24 +134,3 @@ export const WIDGET_MEASURE = `(() => {
   const box = top === Infinity ? null : { top: Math.round(top), left: Math.round(left), bottom: Math.round(bottom), right: Math.round(right) };
   return { text: b.innerText.trim().length, nodes: b.querySelectorAll("*").length, drawn, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight, box, errors: (window.__CMD_ERRORS__ || []).map((e) => e.message) };
 })()`;
-
-/** Widget size hints → the viewport the model is told about. */
-export const MAGIC_SIZES = { s: [320, 200], m: [480, 320], l: [720, 480], wide: [960, 280] } as const;
-
-/** The frame's CSP: no network, no navigation, no plugins; only its own inline code, plus media from allowed origins. */
-export function widgetCsp(media: string[] = []): string {
-  const extra = media.map(mediaOrigin).filter((o): o is string => !!o).map((o) => " " + o).join("");
-  return `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:${extra}; media-src data:${extra}; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'`;
-}
-export const WIDGET_CSP = widgetCsp();
-
-/** An https URL or origin → its origin ("https://host[:port]"); null for anything else. */
-export function mediaOrigin(u: unknown): string | null {
-  if (typeof u !== "string") return null;
-  try {
-    const url = new URL(u.includes("://") ? u : `https://${u}`);
-    return url.protocol === "https:" && url.hostname && !url.username && !url.password ? url.origin : null;
-  } catch {
-    return null;
-  }
-}

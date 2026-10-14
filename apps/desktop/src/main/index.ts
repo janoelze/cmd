@@ -6,14 +6,13 @@ performance.mark("boot:main-script");
 import { background } from "./background.ts";
 import { servePreviews } from "./preview.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net as electronNet, Notification, protocol, session, shell, systemPreferences, webContents, type WebContents } from "electron";
-import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { isCurrentCore, KIT_FILES, PROTOCOL, SETTINGS_TEMPLATE, SYSTEM_SOUNDS, kitVersion, mediaOrigin, widgetCsp } from "@cmd/protocol";
+import { isCurrentCore, PROTOCOL, SETTINGS_TEMPLATE, SYSTEM_SOUNDS } from "@cmd/protocol";
 import { cmdHome, connect, CORE_REFUSED_EXIT, coreLocked, coreRefusal, coreSocketPath, enterInstance, foreignHome, foreignHomeText, hasDevMarker, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { contextTemplate } from "./menu-template.ts";
@@ -105,11 +104,7 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // cmd-file://local/?path=<abs path> — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images) and PDFs (the PDF window fetches them). Registered on the default
 // session only; browser windows use their own session and can't reach it.
-// cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-widgets.md): the kit and
-// the `cmd` runtime, under a CSP header that allows only inline code and no network; the renderer
-// posts the widget, theme and data into it. Sandboxed (no allow-same-origin): opaque origins.
-// cmd-widget://frame/<token> — the same page whose CSP also lets media load from origins the person
-// allowed for that window (tokens never guessed). cmd-widget://package/: frame widgets (./package-frames.ts).
+// cmd-widget://package/ — frame widgets' pages (./package-frames.ts); the cmd:2 widgets' frame went with their runtime.
 // cmd-visualizer://frame/, cmd-jam://frame/ — the pages Visualizer and Jam windows run in (./frames.ts).
 protocol.registerSchemesAsPrivileged([
   // corsEnabled: the app's page (file://) fetches PDFs from it.
@@ -846,18 +841,6 @@ ipcMain.handle("confirm", async (e, o: { message: string; detail?: string; confi
   return r.response === 0;
 });
 
-const widgetFrames = new Map<string, string[]>(); // token → allowed media origins
-/** A widget frame's URL: cmd-widget://frame/<kit>/<token>; the kit picks its CSS, the token its CSP. */
-ipcMain.handle("widget-frame", (_e, media: unknown, kit: unknown) => {
-  const base = `cmd-widget://frame/${kitVersion(kit)}/`;
-  const origins = [...new Set((Array.isArray(media) ? media : []).map(mediaOrigin).filter((o): o is string => !!o))].sort();
-  if (!origins.length) return base;
-  const key = origins.join(" ");
-  let token = [...widgetFrames].find(([, v]) => v.join(" ") === key)?.[0];
-  if (!token) widgetFrames.set((token = randomUUID()), origins);
-  return base + token;
-});
-
 ipcMain.handle("context-menu", (e, items: ContextItem[]) => {
   return new Promise<string | null>((resolve) => {
     let chosen: string | null = null;
@@ -891,15 +874,7 @@ app.whenReady().then(async () => {
     website: "https://github.com/janoelze/cmd",
     iconPath: devIcon,
   });
-  protocol.handle("cmd-widget", (req) => {
-    if (req.url.startsWith(PACKAGE_FRAME_BASE)) return packageFrameResponse(req);
-    const dir = path.join(repoRoot, "packages/core/src/magic/prompt");
-    const read = (f: string) => fs.readFileSync(path.join(dir, f), "utf8");
-    const [kit, token = ""] = new URL(req.url).pathname.split("/").filter(Boolean);
-    const css = KIT_FILES[kitVersion(Number(kit))]!.map(read).join("\n");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style><script>${read("host.js")}</script></head><body></body></html>`;
-    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": widgetCsp(widgetFrames.get(token) ?? []), "cache-control": "no-store" } });
-  });
+  protocol.handle("cmd-widget", (req) => (req.url.startsWith(PACKAGE_FRAME_BASE) ? packageFrameResponse(req) : new Response("", { status: 404 })));
   for (const scheme of FRAME_SCHEMES) protocol.handle(scheme, frameHandler(scheme));
   // The Visualizer's System Audio source (renderer/src/lib/audio.ts): getDisplayMedia from the app's
   // own page gets the Mac's output (a Core Audio tap, macOS 14.2+). The video it must come with
