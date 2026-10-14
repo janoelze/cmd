@@ -33,7 +33,7 @@ Every doc says under its title what it is: **research**, a **proposal**, **partl
 | 11 | [Workspaces](11-workspaces.md) | partly built | A workspace per folder: identity, placement, matching, the switcher and pickers, one workspace per app window, `cmd .` |
 | 12 | [Magic widgets](12-magic-widgets.md) | superseded by 14 | V1: a request in, a live widget out; research, agent, security |
 | 13 | [Remote access](13-remote-access.md) | partly built | Your workspaces from a phone's browser: Noise over WebCrypto, the relay, pairing with approval, devices, the policy table, the web client |
-| 14 | [Magic widgets v2](14-magic-v2.md) | built | Widgets as typed apps: Deno data.ts, checked views, previews, revisions, health, the edit view; toward a store |
+| 14 | [Magic widgets v2](14-magic-v2.md) | superseded by 56 | Widgets as typed apps: Deno data.ts, checked views, previews, revisions, health, the edit view; toward a store |
 | 15 | [Positioning and voice](15-positioning.md) | reference | The story, the category (a software workbench), pillars, voice, copy bank, naming, visual direction |
 | 16 | [Widgets](16-widgets.md) | built | Widgets apart from windows: the Widget Library, Magic as how you make one, built-in widgets, how they stay windows underneath |
 | 17 | [AI providers and onboarding](17-ai.md) | partly built | One AI service for every feature: providers, tiers, models that pick themselves; the first-launch wizard |

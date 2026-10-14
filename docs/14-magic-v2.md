@@ -1,6 +1,6 @@
 # Magic widgets v2: widgets that keep working
 
-**Status:** built: Deno data.ts, revisions and checks; the library and store continue in 16. [56-widgets-v3.md](56-widgets-v3.md) proposes replacing this format (the folder, `manifest.json`, the frame kit) with packages on a versioned API.
+**Status:** superseded by 56: widgets are packages on a versioned API since phase 2b of [56-widgets-v3.md](56-widgets-v3.md), which deleted this format's runtime (the folder, `manifest.json`, `data.ts`, the frame kit and its versions); a person's old widgets were moved to `$CMD_HOME/widgets-old` once.
 
 > Status (2026-10-04), branch `magic-v2`: built as described here. Not yet: a widget library and store (see "Toward a store"), images sent to models that don't take them, and pausing refreshes while a window is hidden. [12-magic-widgets.md](12-magic-widgets.md) is the v1 design; this replaces its output contract, data sources and data model.
 
