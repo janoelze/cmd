@@ -27,6 +27,23 @@ export const PERMISSION_KEYS = ["net", "run", "read", "workspace", "events", "ac
 
 export const noPermissions = (): WidgetPermissions => ({ net: [], run: [], read: [], workspace: [], events: [], act: [], ai: [] });
 
+/**
+ * A config field of a package's widget (`cmd.widgets[].config`), as the app's Configure sheet
+ * shows it: a secret field says only the host it is sent to, never its value.
+ */
+export interface WidgetConfigField {
+  key: string;
+  title: string;
+  type: "string" | "number" | "boolean" | "enum";
+  default?: string | number | boolean;
+  options?: string[];
+  description?: string;
+  /** Kept in cmd's secrets, set with widget.secret; the widget never gets it. */
+  secret?: boolean;
+  /** A secret's host: the only one it is sent to. */
+  host?: string;
+}
+
 /** The window kind of a package's widget: "pkg:<package>/<widget>". */
 export const packageKind = (name: string, widget: string): string => `pkg:${name}/${widget}`;
 

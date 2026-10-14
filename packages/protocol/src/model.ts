@@ -3,7 +3,7 @@
 import type { AgentTurn } from "./activity.ts";
 import type { NameSource } from "./names.ts";
 import type { SettingKey } from "./settings.ts";
-import type { WidgetPermissions } from "./widget-package.ts";
+import type { WidgetConfigField, WidgetPermissions } from "./widget-package.ts";
 
 export type PaneId = string;
 export type AgentId = string;
@@ -364,6 +364,9 @@ export interface WidgetEntry {
   ask?: { granted: WidgetPermissions | null };
   /** Packages: ships with cmd (packages/widgets), listed under Built-in and granted what it declares. */
   builtin?: boolean;
+  /** Packages: the widget's config fields (its Configure sheet), and which of its secret fields are set (keys only). */
+  config?: WidgetConfigField[];
+  secrets?: string[];
 }
 
 export interface FileEntry {

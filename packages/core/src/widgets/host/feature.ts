@@ -2,7 +2,8 @@
 // Library's (`core.library.host`, made beside the packages it runs), started once the packages
 // are read, stopped with the core. Its methods are what a package widget's window calls (the
 // person's interactions, a resync, where it is drawn, Restart), the grant (the grants sheet,
-// `cmd widget grant`) and asking for one (widget.ask: `cmd widget link`, the sheet's Decline).
+// `cmd widget grant`), asking for one (widget.ask: `cmd widget link`, the sheet's Decline), and
+// a window's config and its package's secrets (the Configure sheet; widgets/config.ts).
 
 import os from "node:os";
 import path from "node:path";
@@ -35,6 +36,9 @@ const handlers = (core: CoreContext) =>
     "widget.restart": (p) => (core.library.host.restart(p.windowId), null),
     "widget.ask": (p) => (core.library.host.ask(p.name, !!p.decline), null),
     "widget.grant": (p) => core.library.host.grant(p.name, p.permissions),
+    "widget.config": (p) => (core.library.host.config.set(p.windowId, p.values), null),
+    "widget.secret": (p) => (core.library.host.config.setSecret(p.name, p.widget, p.key, p.value), null),
+    "widget.secrets": (p) => ({ set: core.library.host.config.secretsSet(p.name, p.widget) }),
   });
 
 export const widgetHostFeature = {

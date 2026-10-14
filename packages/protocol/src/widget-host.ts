@@ -37,6 +37,17 @@ export interface WidgetHostMethods {
    */
   "widget.ask": { params: { name: string; decline?: boolean }; result: null };
   "widget.grant": { params: { name: string; permissions?: WidgetPermissions }; result: { version: string; permissions: WidgetPermissions } };
+  /**
+   * Set a package widget window's config values (its `config` fields, not secrets): merged into
+   * the window's, checked against the fields (an unknown key refused, a number or switch taken
+   * from text, an enum one of its options); null or "" goes back to the default. The process
+   * gets the new `config`.
+   */
+  "widget.config": { params: { windowId: WindowId; values: Record<string, unknown> }; result: null };
+  /** Set (or with null, remove) a secret field of a package's widget, kept by cmd per package and widget; the value is never sent back. */
+  "widget.secret": { params: { name: string; widget: string; key: string; value: string | null }; result: null };
+  /** Which secret fields of a package's widget are set (their keys, never their values). */
+  "widget.secrets": { params: { name: string; widget: string }; result: { set: string[] } };
 }
 
 /** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window. */

@@ -147,6 +147,9 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "widget.restart": "never",
   "widget.ask": "never", // the person is asked, by the person
   "widget.grant": "never", // a person's answer, never a tool's or a device's
+  "widget.config": "never", // the Mac's Configure sheet
+  "widget.secret": "never", // secrets are typed on the Mac
+  "widget.secrets": "never",
   "fs.list": "view",
   "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within workspaces later
   "fs.read": "view",

@@ -13,9 +13,8 @@
 // waiting for a grant is asked once, not per window (asking(), widget.ask: the grants sheet).
 
 import { SUPPORTED_API, WIDGET_API, WIDGET_API_MINOR, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
-import { logger, widgetPackageData } from "@cmd/protocol/node";
+import { logger } from "@cmd/protocol/node";
 import fs from "node:fs";
-import path from "node:path";
 import type { CoreContext } from "../../kernel/context.ts";
 import { ApiRefusal } from "../api/access.ts";
 import { AiUsage } from "../api/ai.ts";
@@ -23,7 +22,7 @@ import { apiV1, type ApiAdapter } from "../api/v1.ts";
 import { effective, needsGrant, readGrants, writeGrants, type Grants } from "../grants.ts";
 import { cmdVersion, type PackageWidget, type WidgetPackage } from "../package.ts";
 import type { WidgetPackages } from "../packages.ts";
-import { WidgetSecrets } from "../secrets.ts";
+import { PackageConfig } from "../config.ts";
 import { HostConnection, type ConnectionTimes } from "./connection.ts";
 import type { ExitInfo, RuntimeProcess, WidgetRuntime } from "./runtime.ts";
 import { TreeState } from "./tree.ts";
@@ -55,7 +54,7 @@ export interface HostOptions {
   packages: WidgetPackages;
   runtime: WidgetRuntime | null;
   times?: Partial<HostTimes>;
-  /** What the person is asked changed (a package started or stopped waiting for a grant): the Library's entries say it. */
+  /** What the Library's entries say changed (a package started or stopped waiting for a grant, a secret was set). */
   onAsk?: () => void;
 }
 
@@ -99,12 +98,15 @@ export class WidgetHost {
   #disposed = false;
   /** Tests: what net.fetch uses. */
   fetchImpl: typeof fetch | undefined;
+  /** Its windows' config values and its packages' secrets (widget.config, widget.secret). */
+  readonly config: PackageConfig;
 
   constructor(core: HostCore, o: HostOptions) {
     this.#core = core;
     this.#o = o;
     this.#t = { ...HOST_TIMES, ...o.times };
     this.#aiUsage = new AiUsage(o.stateDir);
+    this.config = new PackageConfig({ windows: core.windows, packages: o.packages, stateDir: o.stateDir, onChange: () => o.onAsk?.() });
   }
 
   /** Swap the runtime (tests: a fake one; or tighter times). */
@@ -390,7 +392,7 @@ export class WidgetHost {
       widget: inst.widget!,
       permissions: inst.permissions!,
       pressedAt: () => inst.pressedAt,
-      secret: (key) => this.#secrets(pkg.name).get(inst.widget!.id)[key] ?? null,
+      secret: (key) => this.config.secrets(pkg.name).get(inst.widget!.id)[key] ?? null,
       aiUsage: this.#aiUsage,
       fetchImpl: this.fetchImpl,
     });
@@ -542,10 +544,6 @@ export class WidgetHost {
       else if (f.default !== undefined) out[f.key] = f.default;
     }
     return out;
-  }
-
-  #secrets(name: string): WidgetSecrets {
-    return new WidgetSecrets(this.#o.stateDir ? path.join(widgetPackageData(this.#o.stateDir, name), "secrets.json") : null);
   }
 
   #must(id: WindowId): Instance {

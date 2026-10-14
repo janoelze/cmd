@@ -126,6 +126,9 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "widget.restart": "never",
   "widget.ask": "never", // the person is asked, by the person
   "widget.grant": "never", // a person's answer, never a tool's or a device's
+  "widget.config": "never", // the person's Configure sheet
+  "widget.secret": "never", // a secret is typed by the person, never by a tool
+  "widget.secrets": "never",
   "fs.list": "read",
   "fs.resolve": "never",
   "fs.read": "read",
