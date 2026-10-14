@@ -1196,6 +1196,10 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 /* The approval sheet (approval.tsx, docs/55), a window sheet: who asks in its title bar, what in its title, why in their words, exactly what in code, how long a yes holds. */
 .ui-approval-content { display: flex; flex-direction: column; gap: var(--space-3); }
 .ui-approval-why { color: var(--text-dim); }
+.ui-approval-list { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.ui-approval-list > li { display: flex; align-items: center; gap: var(--list-icon-gap); }
+.ui-approval-list-icon { display: inline-flex; flex: none; color: var(--text-dim); }
+.ui-approval-list-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .ui-approval-choice { display: flex; align-items: center; gap: var(--space-3); }
 .ui-approval-choice-label { flex: none; font-size: var(--text-sm); color: var(--text-dim); }
 .ui-approval-choice > .ui-seg { flex: 1; min-width: 0; }

@@ -33,6 +33,8 @@ export interface TreeSnapshot {
   /** What the process is doing, as the last status message said (a tree doesn't change it). */
   status: WidgetHostStatus["state"];
   reason: string | undefined;
+  /** More about a stop (a load failure's error). */
+  detail: string | undefined;
 }
 
 export interface TreeStoreOptions {
@@ -246,7 +248,7 @@ class Lost extends Error {}
 
 /** One window's tree. */
 export class TreeStore {
-  private snap: TreeSnapshot = { nodes: [], rev: 0, loaded: false, status: "starting", reason: undefined };
+  private snap: TreeSnapshot = { nodes: [], rev: 0, loaded: false, status: "starting", reason: undefined, detail: undefined };
   private byId = new Map<number, TreeNode>();
   private parentOf = new Map<number, number>();
   /** Ids dropped by the sanitiser (and their subtrees as sent): later ops on them are ignored, not a reason to resync. */
@@ -281,7 +283,7 @@ export class TreeStore {
 
   apply(m: TreeMessage): void {
     if (m.kind === "status") {
-      this.set({ status: m.state, reason: m.reason });
+      this.set({ status: m.state, reason: m.reason, detail: m.detail });
     } else if (m.kind === "tree") {
       this.byId.clear();
       this.parentOf.clear();

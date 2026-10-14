@@ -19,17 +19,20 @@ export interface WidgetLink {
   resync(): void;
   /** Start a stopped process again (Restart). */
   restart(): void;
+  /** Ask the person again for what the widget's package wants (Allow… while it waits). */
+  ask(): void;
   env(place: WidgetPlace): void;
 }
 
 const quiet = (p: Promise<unknown>) => void p.catch((err) => console.warn(`widget: ${err instanceof Error ? err.message : String(err)}`));
 
-/** A window's link through the core. */
-export function rpcLink(windowId: WindowId): WidgetLink {
+/** A window's link through the core; `name` is its package's. */
+export function rpcLink(windowId: WindowId, name: string): WidgetLink {
   return {
     interact: (handler, event, value) => quiet(cmd.call("widget.interact", { windowId, handler, event, ...(value === undefined ? {} : { value }) })),
     resync: () => quiet(cmd.call("widget.resync", { windowId })),
     restart: () => quiet(cmd.call("widget.restart", { windowId })),
+    ask: () => quiet(cmd.call("widget.ask", { name })),
     env: (place) => quiet(cmd.call("widget.env", { windowId, ...place })),
   };
 }

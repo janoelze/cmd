@@ -143,3 +143,21 @@ export const LongSite = () => (
     onAnswer={noop}
   />
 );
+
+/** A widget package asking for what it wants (docs/56): a line per permission, the new ones marked, a plain yes or no. */
+export const WidgetPackage = () => (
+  <ApprovalSheet
+    who={{ icon: "checkmark.seal", name: "CI", context: "ci-runs 1.3.0" }}
+    title="Allow “CI” 1.3.0 to use more?"
+    why="Linked from ~/src/ci-runs"
+    list={[
+      { icon: "globe", label: "Reach api.github.com" },
+      { icon: "terminal", label: "Run gh" },
+      { icon: "rectangle.3.group", label: "See the agents, terminals and windows of this workspace" },
+      { icon: "bolt", label: "Run Workspace Actions, asking first", tag: "New" },
+    ]}
+    deny="Decline"
+    askWhy={false}
+    onAnswer={noop}
+  />
+);

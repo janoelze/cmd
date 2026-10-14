@@ -8,8 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WidgetEntry } from "@cmd/protocol";
-import { Core } from "../../core/src/kernel/core.ts";
-import { fakeFactory } from "../../core/test/fake-pty.ts";
+import { Core, type PtyFactory } from "@cmd/core";
 import { widgetCommand } from "../src/widget.ts";
 
 const fixtures = path.join(import.meta.dirname, "fixtures", "widgets");
@@ -102,10 +101,15 @@ describe("cmd widget link without a core", () => {
   });
 });
 
+/** This core opens no terminals. */
+const noTerminals: PtyFactory = () => {
+  throw new Error("no terminals here");
+};
+
 describe("cmd widget link with a core", () => {
   it("waits for the Library to list it, asks for its permissions, prints the entry; unlink takes it out", async () => {
     const socketPath = path.join(scratch, "core.sock");
-    const core = new Core({ socketPath, dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0, stateDir: fs.mkdtempSync(path.join(scratch, "state-")) });
+    const core = new Core({ socketPath, dbPath: null, settingsPath: null, terminals: noTerminals, pollMs: 0, stateDir: fs.mkdtempSync(path.join(scratch, "state-")) });
     try {
       await core.listen();
       core.start();

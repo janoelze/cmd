@@ -1,7 +1,9 @@
 // A widget package's window (docs/56, "The view: React, drawn by the app"): the tree its
 // process sends, drawn with the kit through the element table (elements.tsx), presses
 // and typing sent back as interactions. Around it: the process's state when there is no
-// tree to show (starting, stopped with Restart, waiting for the person's permission),
+// tree to show (starting, stopped with Restart, waiting for the person's permission, with
+// Allow… to ask again); a stopped process with a tree drawn before keeps it, under a banner
+// saying why (a save that didn't load: its error) with Restart;
 // an error boundary so a tree that can't be drawn shows a Callout and not a broken
 // board, and `widget.env` whenever the window's theme, size class or placement changes.
 
@@ -14,7 +16,8 @@ import { closeTree, openTree, rpcLink, type WidgetLink, type WidgetPlace } from 
 import type { TreeSnapshot, TreeStore } from "./tree.ts";
 
 export function PackageView({ win }: WindowViewProps) {
-  const link = useMemo(() => rpcLink(win.id), [win.id]);
+  const name = typeof win.state.package === "string" ? win.state.package : "";
+  const link = useMemo(() => rpcLink(win.id, name), [win.id, name]);
   const [store, setStore] = useState<TreeStore | null>(null);
   useEffect(() => {
     setStore(openTree(win.id, link));
@@ -42,9 +45,16 @@ export function PackageWidget({ windowId, store, link }: { windowId: WindowId; s
       {cover ? (
         <View state={cover} />
       ) : (
-        <TreeBoundary rev={snap.rev}>
-          <Tree nodes={snap.nodes} ctx={ctx} />
-        </TreeBoundary>
+        <>
+          {snap.status === "stopped" && (
+            <Callout tone="danger" banner title={stoppedTitle(snap)} actions={<Button size="sm" icon="arrow.clockwise" onClick={() => link.restart()}>Restart</Button>}>
+              {snap.detail}
+            </Callout>
+          )}
+          <TreeBoundary rev={snap.rev}>
+            <Tree nodes={snap.nodes} ctx={ctx} />
+          </TreeBoundary>
+        </>
       )}
     </>
   );
@@ -52,12 +62,15 @@ export function PackageWidget({ windowId, store, link }: { windowId: WindowId; s
 
 /** What replaces the tree: the process's state, unless it is running or restarting with a tree to keep on screen. */
 function coverOf(snap: TreeSnapshot, link: WidgetLink): ViewStateSpec | null {
-  if (snap.status === "waiting-grant") return { kind: "empty", icon: "lock", title: "Waiting for permission", text: "This widget runs once you allow what it asks for." };
-  if (snap.status === "stopped")
-    return { kind: "error", title: snap.reason ? `Stopped · ${snap.reason}` : "Stopped", action: <Button icon="arrow.clockwise" onClick={() => link.restart()}>Restart</Button> };
+  if (snap.status === "waiting-grant")
+    return { kind: "empty", icon: "lock", title: "Waiting for permission", text: "This widget runs once you allow what it asks for.", action: <Button onClick={() => link.ask()}>Allow…</Button> };
+  if (snap.status === "stopped" && !snap.loaded)
+    return { kind: "error", title: stoppedTitle(snap), ...(snap.detail ? { text: snap.detail } : {}), action: <Button icon="arrow.clockwise" onClick={() => link.restart()}>Restart</Button> };
   if (!snap.loaded) return STARTING;
   return null;
 }
+
+const stoppedTitle = (snap: TreeSnapshot) => (snap.reason ? `Stopped · ${snap.reason}` : "Stopped");
 
 /** The top of the tree: a widget's own View (in its Window or not) draws the frame; anything else gets one. */
 function Tree({ nodes, ctx }: { nodes: readonly TreeNode[]; ctx: DrawContext }) {

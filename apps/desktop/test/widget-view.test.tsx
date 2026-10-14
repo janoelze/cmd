@@ -2,7 +2,8 @@
 // A package widget's view (windows/package/PackageView.tsx, docs/56): the example widget's
 // tree, made by the real widget runtime against the fake host, drawn with the kit; a click
 // on a row reaches the process as the right interaction; a props patch redraws one row;
-// an element outside API 1 doesn't stop the rest; a tree that throws shows a Callout.
+// an element outside API 1 doesn't stop the rest; a tree that throws shows a Callout; a save
+// that doesn't load keeps the last tree under a banner; a waiting widget's Allow… asks again.
 // Also times a thousand rows' first draw (the number is in the report of docs/56 item D).
 import { act, type ComponentType } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -29,7 +30,7 @@ afterEach(async () => {
 });
 
 function link(over: Partial<Link> = {}): Link & { interact: ReturnType<typeof vi.fn> } {
-  return { interact: vi.fn(), resync: vi.fn(), restart: vi.fn(), env: vi.fn(), ...over } as never;
+  return { interact: vi.fn(), resync: vi.fn(), restart: vi.fn(), ask: vi.fn(), env: vi.fn(), ...over } as never;
 }
 
 async function draw(store: InstanceType<typeof TreeStore>, l: Link = link()) {
@@ -136,12 +137,46 @@ describe("the package view", () => {
     expect(l.env).toHaveBeenCalledWith({ theme: "dark", size: "regular", placement: "board" });
     await act(async () => store.apply({ kind: "status", state: "waiting-grant" }));
     expect(el.textContent).toContain("Waiting for permission");
-    expect(el.querySelector("button")).toBeNull();
+    await act(async () => [...el.querySelectorAll("button")].find((b) => b.textContent === "Allow…")!.click());
+    expect(l.ask).toHaveBeenCalledTimes(1); // the grants sheet again
     await act(async () => store.apply({ kind: "status", state: "stopped", reason: "crashed" }));
     expect(el.textContent).toContain("Stopped · crashed");
     await act(async () => [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("Restart"))!.click());
     expect(l.restart).toHaveBeenCalledTimes(1);
     expect(l.resync).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last tree when a save doesn't load, under a banner with the error and Restart; the next tree clears it", async () => {
+    const store = new TreeStore({ resync: () => {} });
+    const l = link();
+    const tree = (rev: number, text: string): TreeNode[] => [{ id: rev * 10, type: "View", props: {}, children: [{ id: rev * 10 + 1, type: "Text", props: {}, children: [{ id: rev * 10 + 2, type: "#text", text }] }] }];
+    store.apply({ kind: "status", state: "running" });
+    store.apply({ kind: "tree", rev: 1, nodes: tree(1, "3 rows") });
+    await draw(store, l);
+    await act(async () => store.apply({ kind: "status", state: "starting" })); // a save restarts it
+    expect(el.textContent).toContain("3 rows");
+    const detail = "The module's source code could not be parsed: Expected ';' at file:///w/src/main.tsx:2:9";
+    await act(async () => store.apply({ kind: "status", state: "stopped", reason: "didn't load", detail }));
+    expect(el.textContent).toContain("3 rows"); // the tree stays
+    const callout = el.querySelector(".ui-callout[data-tone=danger]");
+    expect(callout?.textContent).toContain("Stopped · didn't load");
+    expect(callout?.textContent).toContain("Expected ';'");
+    await act(async () => [...callout!.querySelectorAll("button")].find((b) => b.textContent?.includes("Restart"))!.click());
+    expect(l.restart).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      store.apply({ kind: "status", state: "running" });
+      store.apply({ kind: "tree", rev: 1, nodes: tree(2, "4 rows") });
+    });
+    expect(el.querySelector(".ui-callout")).toBeNull();
+    expect(el.textContent).toContain("4 rows");
+  });
+
+  it("says why a widget without a tree didn't load", async () => {
+    const store = new TreeStore({ resync: () => {} });
+    await draw(store);
+    await act(async () => store.apply({ kind: "status", state: "stopped", reason: "didn't load", detail: "Expected ';'" }));
+    expect(el.textContent).toContain("Stopped · didn't load");
+    expect(el.textContent).toContain("Expected ';'");
   });
 
   it("draws a thousand rows: a window's worth first, then the rest", async () => {

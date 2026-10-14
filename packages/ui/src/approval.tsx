@@ -9,6 +9,8 @@ import { Segmented } from "./choice.tsx";
 import { TextField } from "./fields.tsx";
 import { CodeBlock } from "./layout.tsx";
 import { Dialog, Menu } from "./overlay.tsx";
+import { ICON, iconNode } from "./icon.tsx";
+import { Badge } from "./status.tsx";
 
 /** How long a Return right after the sheet appears is ignored: an Enter already being typed into a terminal mustn't approve unread. */
 const GUARD_MS = 300;
@@ -34,6 +36,8 @@ export interface ApprovalAnswer<S extends string = string, C extends string = st
  *
  * Return allows from anywhere in the sheet but the reason field, except in its first 300 ms;
  * Esc and the scrim deny. Deny's menu has "Deny and Say Why…": a field whose text goes with the no.
+ * `list` is what a yes allows when it is several things, each a line with its icon (a widget
+ * package's permissions: "Reach api.github.com", "Run gh"), `tag` marking some ("New").
  * `danger` makes Allow the danger button (a deploy). `position` says "1 of 3" when more wait;
  * `expiresAt` counts down to when the asker gives up.
  */
@@ -43,6 +47,7 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
   title,
   why,
   exact,
+  list,
   scopes,
   choices,
   allow = "Allow",
@@ -63,6 +68,8 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
   title: ReactNode;
   why?: ReactNode;
   exact?: ReactNode;
+  /** What a yes allows, line by line: an SF Symbol name, the words, and a tag for some ("New"). */
+  list?: readonly { icon?: string; label: ReactNode; tag?: string }[];
   /** How long a yes may hold, as a switch in the footer (short labels; `detail`, what each covers, is its tooltip); the first is chosen at first. */
   scopes?: readonly { value: S; label: string; detail?: string }[];
   /** What a yes allows, when there is more than one way to (a device: Control or View only), shown as a switch beside Allow; the first is chosen at first. */
@@ -165,6 +172,17 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
       <div ref={content} className="ui-approval-content">
         {why != null && <div className="ui-approval-why">{why}</div>}
         {exact != null && (typeof exact === "string" ? <CodeBlock tone={danger ? "danger" : undefined}>{exact}</CodeBlock> : <div className="ui-approval-exact" style={{ maxHeight: 220 }}>{exact}</div>)}
+        {list && list.length > 0 && (
+          <ul className="ui-approval-list">
+            {list.map((x, i) => (
+              <li key={i}>
+                <span className="ui-approval-list-icon">{iconNode(x.icon ?? "checkmark", ICON.row)}</span>
+                <span className="ui-approval-list-label">{x.label}</span>
+                {x.tag && <Badge tone="accent">{x.tag}</Badge>}
+              </li>
+            ))}
+          </ul>
+        )}
         {choices && choices.length > 1 && choice !== undefined && reason === null && (
           <div className="ui-approval-choice">
             <span className="ui-approval-choice-label">{allow}</span>
