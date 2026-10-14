@@ -2,8 +2,9 @@
 // pinned one widgets/deno.ts finds, under lib/sandbox.ts's sandbox-exec profile (writes and the
 // network denied but the widgets socket), with Deno's own permissions from the grant: reads of
 // the package, the vendored @cmd/widget-api and the granted folders only; the widgets socket;
-// no --allow-net, --allow-run or --allow-write beyond the socket; no remote or npm imports; a
-// heap limit. The entry is widget-runtime/package-main.ts. Tests use a fake WidgetRuntime.
+// no network, no programs (a widget's `cmd.run` asks the core, api/run.ts) and no writes beyond the
+// socket; no remote or npm imports; a heap limit. The entry is widget-runtime/package-main.ts.
+// Tests use a fake WidgetRuntime.
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";

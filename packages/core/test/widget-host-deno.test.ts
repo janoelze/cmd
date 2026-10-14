@@ -5,6 +5,7 @@
 // press on its Button reaches its handler, whose cmd.windows.select the core carries out; the
 // process stops after its window closes. Under sandbox-exec where this Mac can apply it.
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -19,6 +20,13 @@ import { needs, SYSTEM_TIMEOUT, until } from "../../../test/system.ts";
 
 const DENO = findDeno();
 const noDeno = needs(DENO, "Deno (on PATH, or ~/.deno/bin; `brew install deno`)");
+const GH = (() => {
+  try {
+    return execFileSync("/bin/sh", ["-lc", "command -v gh"], { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+})();
 
 const MAIN = `import { View, Text, Button, useAgents, cmd } from "@cmd/widget-api";
 
@@ -28,6 +36,25 @@ export default function Live() {
     <View>
       <Text>{\`\${agents.length} agents\`}</Text>
       <Button onClick={() => void cmd.windows.select(agents[0]?.windowId ?? "none")}>Go</Button>
+    </View>
+  );
+}
+`;
+
+const RUNS = `import { useEffect, useState } from "react";
+import { View, Text, Button, cmd } from "@cmd/widget-api";
+
+export default function Runs() {
+  const [lines, setLines] = useState<string[]>([]);
+  const say = (l: string) => setLines((x) => [...x, l]);
+  useEffect(() => {
+    cmd.run("gh", ["run", "list", "-L", "1", "-R", "cli/cli"]).then((r) => say(\`gh exited \${r.code}\`), (e) => say(\`gh refused: \${e.message}\`));
+    cmd.run("docker", ["run", "-v", "/:/h", "alpine"]).then(() => say("docker ran"), (e) => say(\`docker refused: \${e.message}\`));
+  }, []);
+  return (
+    <View>
+      {lines.map((l) => <Text key={l}>{l}</Text>)}
+      <Button onClick={() => void cmd.terminals.open({ command: "gh run rerun 1" }).then((r) => say(\`opened \${typeof r.id}\`), (e) => say(\`not opened: \${e.message}\`))}>Rerun</Button>
     </View>
   );
 }
@@ -118,6 +145,68 @@ describe.skipIf(noDeno)("a package widget in Deno", () => {
       expect(core.library.host.running()).toBe(1);
       core.windows.close(w.id);
       await until("the process stopped", () => core.library.host.running() === 0);
+    },
+    3 * SYSTEM_TIMEOUT,
+  );
+
+  // API 1.1 in a real process: cmd.run("gh", ["run", "list"]) runs gh through the core (Deno itself
+  // may run nothing: no --allow-run), docker run is refused with the policy's reason, and a press
+  // on a Button whose handler opens a terminal asks the person (tool.acting) before anything opens.
+  it.skipIf(!GH)(
+    "runs gh run list through the core with no allow-run, and an act asks before it runs",
+    async () => {
+      const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cwr-")));
+      cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+      const home = path.join(dir, "widgets");
+      const pkg = path.join(home, "ci");
+      fs.mkdirSync(path.join(pkg, "src"), { recursive: true });
+      fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ name: "ci", version: "1.1.0", cmd: { api: 1, widgets: [{ id: "main", title: "CI", main: "src/main.tsx" }], permissions: { run: ["gh", "docker"], act: ["terminals.open"], workspace: ["read"] } } }));
+      fs.writeFileSync(path.join(pkg, "src", "main.tsx"), RUNS);
+
+      process.env.CMD_WIDGETS_HOME = home;
+      const unsandboxed = process.env.CMD_MAGIC_UNSANDBOXED;
+      if (!sandboxAvailable()) process.env.CMD_MAGIC_UNSANDBOXED = "1";
+      cleanup.push(() => (unsandboxed === undefined ? delete process.env.CMD_MAGIC_UNSANDBOXED : (process.env.CMD_MAGIC_UNSANDBOXED = unsandboxed)));
+      const socketPath = path.join(dir, "core.sock");
+      const core = new Core({ socketPath, dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0, stateDir: path.join(dir, "state") });
+      delete process.env.CMD_WIDGETS_HOME;
+      cleanup.push(() => core.close());
+      await core.listen();
+      await core.scheduler.idle();
+      const conn: Connection = await connect(socketPath);
+      cleanup.push(() => conn.close());
+      const events: CoreEvent[] = [];
+      conn.client.onEvent((e) => void events.push(e));
+      await conn.client.call("events.subscribe", { types: ["widget.tree", "tool.acting"] });
+      await conn.client.call("widget.grant", { name: "ci" });
+      const ws = core.workspaces.open(process.cwd()).workspace;
+      const w = await conn.client.call("widget.add", { ref: "pkg:ci/main", workspaceId: ws.id });
+      const mine = () => events.filter((e): e is Extract<CoreEvent, { type: "widget.tree" }> => e.type === "widget.tree" && e.windowId === w.id).map((e) => e.message);
+      const says = async (what: RegExp) => {
+        let last = "";
+        await until(`the window to say ${what}`, async () => {
+          await conn.client.call("widget.resync", { windowId: w.id });
+          const t = mine().filter((m) => m.kind === "tree").at(-1);
+          last = t?.kind === "tree" ? texts(t.nodes).join(" | ") : "";
+          return what.test(last);
+        });
+        return last;
+      };
+      // gh ran (an exit code, whatever the network said); docker run was refused, with why.
+      const shown = await says(/gh exited \d+/);
+      expect(shown).toMatch(/docker refused: .*docker only read-only docker commands/);
+
+      // The Button's handler opens a terminal with a command typed: it waits for the person.
+      const tree = mine().filter((m) => m.kind === "tree").at(-1)!;
+      const handler = (find(tree.kind === "tree" ? tree.nodes : [], "Button")!.props.onClick as { $handler: number }).$handler;
+      await conn.client.call("widget.interact", { windowId: w.id, handler, event: "onClick" });
+      await until("the ask", () => events.some((e) => e.type === "tool.acting" && e.call.state === "waiting"));
+      const ask = events.find((e): e is Extract<CoreEvent, { type: "tool.acting" }> => e.type === "tool.acting" && e.call.state === "waiting")!.call;
+      expect(ask).toMatchObject({ caller: "CI", callerKind: "widget", tool: "terminals.open", approval: { permission: "show", exact: "gh run rerun 1", widget: { name: "ci", version: "1.1.0" } } });
+      expect(core.panes.list().filter((p) => p.workspaceId === ws.id)).toHaveLength(0);
+      await conn.client.call("approvals.answer", { workspaceId: ws.id, itemId: ask.id, allow: true });
+      await says(/opened string/);
+      expect(core.panes.list().filter((p) => p.workspaceId === ws.id)).toHaveLength(1);
     },
     3 * SYSTEM_TIMEOUT,
   );

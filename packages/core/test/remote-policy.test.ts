@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import type { CoreEvent, Method } from "@cmd/protocol";
+import { API_VERBS, type CoreEvent, type Method } from "@cmd/protocol";
+import { API_ACCESS } from "../src/widgets/api/access.ts";
 import { Core } from "../src/kernel/core.ts";
 import { checkRemoteCall, MAX_WATCHES, NO_ARGS, REMOTE_ACCESS, RemoteDenied, remoteEvent, remoteEventVisible, remoteResult, scopeAllows, type PolicyContext } from "../src/remote/policy.ts";
 import { fakeFactory } from "./fake-pty.ts";
@@ -279,5 +280,25 @@ describe("widget trees to devices (docs/56, Remote)", () => {
     expect(JSON.stringify(remoteEvent(tree, ctx, new Set(["w1"]), [], "control"))).toContain("$handler");
     expect(REMOTE_ACCESS["widget.interact"]).toBe("control");
     expect(denied("widget.interact", { windowId: "w1", handler: 8, event: "onClick" }, "view")).toMatch(/needs control/);
+  });
+
+  // API 1.1's acts (widgets/api/act.ts): a widget acts only after a press, and a device's press is
+  // widget.interact. View scope has none to make (never); control scope's press is marked as a
+  // device's, so the act it leads to asks on the Mac every time, Once only, whatever was kept.
+  it("leaves act verbs never for view scope and confirm on the Mac for control scope", () => {
+    const acts = API_VERBS.filter((v) => API_ACCESS[v].mode === "confirm");
+    expect(acts.length).toBe(7);
+    for (const v of acts) expect(API_ACCESS[v].remote, v).toBe("confirm");
+    expect(scopeAllows("view", REMOTE_ACCESS["widget.interact"])).toBe(false);
+    const seen: boolean[] = [];
+    const real = core.library.host.interact.bind(core.library.host);
+    core.library.host.interact = (_w, _h, _e, _v, remote = false) => void seen.push(remote);
+    try {
+      core.handlers["widget.interact"]({ windowId: "w1", handler: 8, event: "onClick" }, { conn: { access: "control", deviceId: "phone", send: () => {}, close: () => {} } });
+      core.handlers["widget.interact"]({ windowId: "w1", handler: 8, event: "onClick" }, { conn: { access: "local", send: () => {}, close: () => {} } });
+    } finally {
+      core.library.host.interact = real;
+    }
+    expect(seen).toEqual([true, false]);
   });
 });

@@ -141,14 +141,19 @@ export function apiV1(core: AdapterCore, scope: WidgetScope): ApiAdapter {
     return w;
   };
   const kv = () => ({ ...((win().state.kv as Record<string, WireValue> | undefined) ?? {}) });
-  let pressTaken = 0;
+  // An act takes the press it came after: the host forgets it (takePress); without a host (tests), it is kept here.
+  let pressTaken = -1;
   const acts = widgetActs(core, {
     windowId: scope.windowId,
     workspaceId: own,
     pkg: scope.pkg,
     widget: scope.widget,
     permissions: perms,
-    press: { at: () => (scope.pressedAt() > pressTaken ? scope.pressedAt() : 0), remote: () => scope.pressedRemote?.() ?? false, take: () => ((pressTaken = scope.pressedAt()), scope.takePress?.()) },
+    press: {
+      at: () => (scope.takePress || scope.pressedAt() !== pressTaken ? scope.pressedAt() : 0),
+      remote: () => scope.pressedRemote?.() ?? false,
+      take: () => (scope.takePress ? scope.takePress() : (pressTaken = scope.pressedAt())),
+    },
     deps: () => scope.acts?.() ?? null,
   });
   const run = widgetRunner({ permissions: perms, root: () => core.workspaces.get(own())?.root ?? null, exec: scope.exec });

@@ -22,6 +22,8 @@ fs.writeFileSync(path.join(out, ".checkout"), root + "\n");
 // widget-runtime: the Deno side of Magic widgets (cmd.ts, runner.ts), run by Deno from there.
 for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packages/core/${p}`, `packages/core/${p}`);
 // @cmd/widget-api vendored for Deno (scripts/widget-api-bundle.mjs): package widgets' processes import it (widgets/host/runtime.ts).
+// Built again first when the API changed since (a pull without an install would ship the old verbs).
+await (await import("./widget-api-bundle.mjs")).bundleWidgetApi({ ifStale: true });
 copy("packages/widget-api/dist/deno", "packages/widget-api/dist/deno");
 // Its README's generated reference is what Magic's agent reads of the API (magic/package/prompt.ts).
 copy("packages/widget-api/README.md", "packages/widget-api/README.md");

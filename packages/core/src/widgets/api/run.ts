@@ -1,4 +1,4 @@
-// cmd.run (API 1.1, docs/56 "The runtime": `--allow-run` goes away): a widget runs a program
+// cmd.run (API 1.1, docs/56 "The runtime": Deno gets no permission to run programs): a widget runs a program
 // through the core, never itself. The program must be one the grant names (`run: ["gh"]`), by
 // its bare name; its arguments reach it as they are (execArgv, no shell between), judged by
 // lib/policy.ts's rules for one simple command, so only read-only commands run (`gh run list`

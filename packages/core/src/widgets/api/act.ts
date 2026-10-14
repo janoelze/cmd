@@ -269,7 +269,9 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
         end("denied");
         throw new ApiRefusal({ code: "denied", message: `The person said no${answer.reason ? `: ${answer.reason}` : ""}.` });
       }
-      deps.approvals.grantWidget(session, ws.id, a, scope.pkg.name, answer.scope as "once" | "session" | "always" | undefined);
+      // Kept only as long as was offered: an answer can't keep typed text, or a device's press, for always.
+      const held = d.ask.includes(answer.scope as never) ? (answer.scope as "once" | "session" | "always") : "once";
+      deps.approvals.grantWidget(session, ws.id, a, scope.pkg.name, held);
     }
     deps.show({ ...shown, state: "running" });
     try {
