@@ -1,5 +1,6 @@
 // The UI Workbench's catalog, read from the sources (docs/48): every component the kit
 // exports (packages/ui/src/index.ts) and every component a renderer story sits beside,
+// plus the widget packages' stories (packages/widgets/<name>/src/*.story.tsx, docs/56),
 // with its props (kind, union values, required, default, doc) from the TypeScript
 // checker; every *.story.tsx with its header comment and its exports' doc comments,
 // parsed without the checker. Node only: plugin.ts runs it in the Workbench's dev server.
@@ -15,10 +16,12 @@ export interface CatalogRoots {
   kit: string;
   /** apps/desktop/src/renderer/src */
   renderer: string;
+  /** packages/widgets: the built-in widget packages, whose stories are "widgets/<name>". */
+  widgets: string;
 }
 
 export function catalogRoots(repo: string): CatalogRoots {
-  return { repo, kit: path.join(repo, "packages/ui/src"), renderer: path.join(repo, "apps/desktop/src/renderer/src") };
+  return { repo, kit: path.join(repo, "packages/ui/src"), renderer: path.join(repo, "apps/desktop/src/renderer/src"), widgets: path.join(repo, "packages/widgets") };
 }
 
 /** Props that come from DOM or React types but matter for a component's states (children: only where the implementation takes them by name; an <input> passes them on in ...rest). */
@@ -27,7 +30,15 @@ const INHERITED = new Set(["children", "disabled", "placeholder"]);
 const SKIPPED = new Set(["key", "ref", "className", "style"]);
 
 export function storyFiles(roots: CatalogRoots): string[] {
-  return [roots.kit, roots.renderer].flatMap((dir) => walk(dir).filter((f) => f.endsWith(".story.tsx"))).sort();
+  const widgets = fs.existsSync(roots.widgets) ? walk(roots.widgets).filter((f) => /[\\/]src[\\/][^\\/]+\.story\.tsx$/.test(f)) : [];
+  return [...[roots.kit, roots.renderer].flatMap((dir) => walk(dir).filter((f) => f.endsWith(".story.tsx"))), ...widgets].sort();
+}
+
+/** A widget package's story: its package's name, and whether the package has more than this one. */
+export function widgetStoryOf(file: string, roots: CatalogRoots): { pkg: string; only: boolean } | null {
+  if (!file.startsWith(roots.widgets + path.sep)) return null;
+  const pkg = path.relative(roots.widgets, file).split(path.sep)[0]!;
+  return { pkg, only: fs.readdirSync(path.dirname(file)).filter((f) => f.endsWith(".story.tsx")).length === 1 };
 }
 
 function walk(dir: string): string[] {
@@ -76,7 +87,8 @@ export function extractCatalog(roots: CatalogRoots, cache = new SourceCache()): 
   const start = performance.now();
   const stories = storyFiles(roots);
   const kitIndex = path.join(roots.kit, "index.ts");
-  const beside = stories.map(besideOf).filter((f): f is string => !!f && !f.startsWith(roots.kit));
+  // A widget package's components are the widget API's elements, not the kit's: nothing to read beside them.
+  const beside = stories.map(besideOf).filter((f): f is string => !!f && !f.startsWith(roots.kit) && !f.startsWith(roots.widgets));
   const options: ts.CompilerOptions = {
     target: ts.ScriptTarget.ES2023,
     module: ts.ModuleKind.NodeNext,
@@ -263,12 +275,13 @@ function story(file: string, roots: CatalogRoots, byFile: Map<string, ComponentI
   const kit = file.startsWith(roots.kit);
   const inside = path.relative(kit ? roots.kit : roots.renderer, file).split(path.sep).join("/");
   const base = path.basename(file, ".story.tsx");
+  const pkg = widgetStoryOf(file, roots);
   // Kit files are named in lower case (button.tsx): their stories' titles aren't.
-  const title = kit ? base.replace(/^./, (c) => c.toUpperCase()) : base;
+  const title = kit ? base.replace(/^./, (c) => c.toUpperCase()) : pkg ? pkg.pkg : base;
   const folder = path.posix.dirname(inside);
-  // Widget packages' stories (docs/56) are "widgets/…": the package view's, and later each package's.
-  const group = kit ? (folder === "." ? "ui" : `ui/${folder}`) : folder === "." ? "app" : folder === "windows/package" ? "widgets" : folder;
-  const id = `${group}/${base.toLowerCase()}`;
+  // Widget packages' stories (docs/56) are "widgets/…": the package view's, and each package's ("widgets/agents").
+  const group = kit ? (folder === "." ? "ui" : `ui/${folder}`) : pkg ? "widgets" : folder === "." ? "app" : folder === "windows/package" ? "widgets" : folder;
+  const id = pkg ? (pkg.only ? `widgets/${pkg.pkg}` : `widgets/${pkg.pkg}/${base.toLowerCase()}`) : `${group}/${base.toLowerCase()}`;
   const src = fs.readFileSync(file, "utf8");
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   // Imported from the kit (@cmd/ui, or a kit file beside a kit story), not a local namesake.

@@ -3,7 +3,10 @@
 // variant per element of API 1, and every variant renders in every built-in theme with no
 // error and no warning (a warning is something the allow-list dropped from a story's tree).
 // The kit's own stories render in Chromium (packages/ui/test/stories.test.ts); these need
-// the renderer's modules, so they render here.
+// the renderer's modules, so they render here. So do the widget packages' stories
+// (packages/widgets/*/src/*.story.tsx, drawn through workbench/widgetStory.tsx).
+import fs from "node:fs";
+import path from "node:path";
 import { act, createElement, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { afterAll, describe, expect, it, vi } from "vitest";
@@ -49,6 +52,49 @@ describe("widget element stories", () => {
         await act(async () => root.unmount());
         el.remove();
       }
+    }
+    expect(broken).toEqual([]);
+  }, 60_000);
+});
+
+describe("widget package stories", () => {
+  const root = path.resolve(import.meta.dirname, "../../../packages/widgets");
+  const files = fs.readdirSync(root).flatMap((p) => (fs.existsSync(path.join(root, p, "src")) ? fs.readdirSync(path.join(root, p, "src")).filter((f) => f.endsWith(".story.tsx")).map((f) => path.join(root, p, "src", f)) : []));
+
+  it("has the built-in packages' stories", () => {
+    expect(files.map((f) => path.relative(root, f))).toContain(path.join("agents", "src", "activity.story.tsx"));
+  });
+
+  it("renders every variant in every theme without an error", async () => {
+    const { widgetStory } = await import("../src/renderer/src/workbench/widgetStory.tsx");
+    const errors: string[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation((...a) => void errors.push(`warn: ${a.join(" ")}`));
+    const error = vi.spyOn(console, "error").mockImplementation((...a) => void errors.push(`error: ${a.join(" ")}`));
+    const broken: string[] = [];
+    try {
+      for (const file of files) {
+        const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(path.dirname(file)), "package.json"), "utf8"));
+        const variants = widgetStory(await import(file), pkg, path.basename(file, ".story.tsx"));
+        expect(Object.keys(variants).length).toBeGreaterThan(0);
+        for (const theme of allThemes()) {
+          applyTheme(theme);
+          for (const [name, Story] of Object.entries(variants)) {
+            const el = document.createElement("div");
+            document.body.append(el);
+            const root = createRoot(el, { onCaughtError: (e) => void errors.push(`caught: ${String(e)}`), onUncaughtError: (e) => void errors.push(`uncaught: ${String(e)}`) });
+            errors.length = 0;
+            await act(async () => root.render(createElement(Story)));
+            // The widget runs, then its tree is drawn (inside act: the still arrives after the first render): a row or the empty state.
+            await act(async () => void (await vi.waitFor(() => expect(el.querySelector(".ui-list-row, .ui-viewstate-title"), `${name} (${theme.id}) drew no rows`).not.toBeNull())));
+            if (errors.length) broken.push(`${path.basename(file)} ${name} (${theme.id}): ${errors[0]}`);
+            await act(async () => root.unmount());
+            el.remove();
+          }
+        }
+      }
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
     }
     expect(broken).toEqual([]);
   }, 60_000);

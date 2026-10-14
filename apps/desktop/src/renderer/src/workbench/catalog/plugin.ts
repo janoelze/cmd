@@ -20,10 +20,16 @@ export function workbenchCatalog(repo: string): Plugin {
 
   const build = () => {
     const catalog = x!.extractCatalog(roots!, cache);
-    const loaders = catalog.stories.map((s) => `  ${JSON.stringify(s.id)}: () => import(${JSON.stringify("/@fs" + path.join(repo, s.file))}),`);
+    const fsPath = (f: string) => JSON.stringify("/@fs" + path.join(repo, f));
+    // A widget package's story is its widget and the fake host's data per variant: widgetStory.tsx makes them components.
+    const load = (s: { id: string; file: string }) =>
+      x!.widgetStoryOf(path.join(repo, s.file), roots!)
+        ? `Promise.all([import(${fsPath(s.file)}), import(${fsPath(path.join(path.dirname(path.dirname(s.file)), "package.json"))}), import(${fsPath("apps/desktop/src/renderer/src/workbench/widgetStory.tsx")})]).then(([m, p, w]) => w.widgetStory(m, p.default, ${JSON.stringify(path.basename(s.file, ".story.tsx"))}))`
+        : `import(${fsPath(s.file)})`;
+    const loaders = catalog.stories.map((s) => `  ${JSON.stringify(s.id)}: () => ${load(s)},`);
     return `export const catalog = ${JSON.stringify(catalog)};\nexport const loaders = {\n${loaders.join("\n")}\n};\n`;
   };
-  const relevant = (file: string) => !!roots && /\.tsx?$/.test(file) && (file.startsWith(roots.kit) || file.startsWith(roots.renderer));
+  const relevant = (file: string) => !!roots && /\.tsx?$/.test(file) && (file.startsWith(roots.kit) || file.startsWith(roots.renderer) || file.startsWith(roots.widgets));
 
   const changed = (server: ViteDevServer, file: string) => {
     if (!relevant(file)) return;
@@ -72,6 +78,7 @@ export function workbenchCatalog(repo: string): Plugin {
     configureServer(server) {
       // The kit is outside the renderer's root: watch it for new story files too.
       server.watcher.add(path.join(repo, "packages/ui/src"));
+      server.watcher.add(path.join(repo, "packages/widgets"));
       server.middlewares.use("/__workbench/hmr", (_req, res) => (res.setHeader("Content-Type", "application/json"), res.end(JSON.stringify(hmr))));
       for (const ev of ["add", "change", "unlink"] as const) server.watcher.on(ev, (file) => changed(server, file));
     },
