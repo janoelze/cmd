@@ -7,7 +7,7 @@
 
 import { useEffect, useRef } from "react";
 import type { AppWindow } from "@cmd/protocol";
-import { audioContext, publishedSources, tap } from "../../lib/audio.ts";
+import { audioContext, audioRate, publishedSources, tap } from "../../lib/audio.ts";
 import type { MenuEntry } from "../../lib/context.ts";
 import { handleEmbedMessage } from "../../lib/embed.ts";
 import { setWidgetState } from "../../lib/widgets.ts";
@@ -89,7 +89,8 @@ export function VisualizerView({ win }: WindowViewProps) {
       if (m.type === "ready") {
         if (Array.isArray(m.presets)) presetNames = m.presets.filter((n): n is string => typeof n === "string");
         ready.current = true;
-        post({ type: "init", sampleRate: audioContext().sampleRate });
+        // No sound to listen to: no audio context yet (the frame assumes 48 kHz).
+        post({ type: "init", sampleRate: sourceOf(win) === "none" ? audioRate() : audioContext().sampleRate });
         show(presetRef.current);
       } else if (m.type === "preset" && typeof m.name === "string") {
         if (history.current.at(-1) !== m.name) history.current = [...history.current.slice(-49), m.name];

@@ -80,6 +80,9 @@ async function highlightBlock(code: HTMLElement): Promise<void> {
   code.replaceChildren(frag);
 }
 
+/** Blocks from which a document lays out only what's near the view. */
+const LONG_DOC = 200;
+
 export function MarkdownView({ win, focused }: WindowViewProps) {
   const file = stateStr(win, "path") ?? "";
   const base = dirOf(file);
@@ -116,6 +119,7 @@ export function MarkdownView({ win, focused }: WindowViewProps) {
     const el = body.current;
     if (!el) return;
     el.innerHTML = html;
+    el.toggleAttribute("data-long", el.childElementCount > LONG_DOC); // only what's in view is laid out (frame.css)
     for (const h of el.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6")) if (!h.id) h.id = slug(h.textContent ?? "");
     for (const img of el.querySelectorAll<HTMLImageElement>("img")) {
       const src = img.getAttribute("src") ?? "";
