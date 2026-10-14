@@ -3,7 +3,7 @@
 // Navigator's ListSections.
 
 import { Chip, Highlight, IconButton, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, Text, Twisty, TwistySpace } from "@cmd/ui";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type { ClosedWindow, PaneId, SearchHit, WindowId } from "@cmd/protocol";
 import { usePersisted, useStoreValue } from "../lib/store.ts";
 import { ICON } from "./Symbol.tsx";
@@ -17,7 +17,8 @@ import { countRender } from "../lib/perf.ts";
 /** "2h ago" → "2h": the column is narrow. */
 export const shortAgo = (ts: number, now: number) => ago(ts, now).replace(/ ago$/, "");
 
-export function SessionRow(props: {
+/** Memoised: the Navigator re-renders with every store change, its rows only when theirs does. */
+export const SessionRow = memo(function SessionRow(props: {
   row: SidebarRow;
   depth: number;
   now: number;
@@ -121,7 +122,7 @@ export function SessionRow(props: {
         ))}
     </>
   );
-}
+});
 
 /** A past session from the transcript index; click switches to it or resumes it. */
 export function HistoryRow(p: { hit: SearchHit; now: number; onOpen: (h: SearchHit) => void; active?: boolean; rich?: boolean }) {

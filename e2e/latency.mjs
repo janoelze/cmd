@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { _electron as electron } from "playwright";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
+import { startProfile } from "./profile.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : null);
@@ -52,8 +53,6 @@ await win.waitForSelector(".statusbar .core-status");
 await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 900));
 
 const cdp = await win.context().newCDPSession(win);
-await cdp.send("Profiler.enable");
-await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const menu = (id) =>
   app.evaluate(({ Menu }, id) => {
@@ -170,47 +169,14 @@ async function scenario(name, run, { runs = RUNS, setup, teardown } = {}) {
   if (only && !only.includes(name)) return;
   const results = [];
   const rendersBefore = await win.evaluate(() => ({ ...window.__cmdPerf.renders }));
-  if (PROFILE) await cdp.send("Profiler.start");
+  const stopProfile = PROFILE ? await startProfile(cdp) : null;
   for (let i = 0; i < runs; i++) {
     if (setup) await setup(i);
     results.push(await run(i).catch((e) => (console.log(`  ${name}: ${e.message.split("\n")[0]}`), { respond: null, settle: null, timedOut: true, dropped: 0, worstFrame: 0, loafs: [] })));
     if (teardown) await teardown(i);
     await sleep(150);
   }
-  if (PROFILE) {
-    const { profile } = await cdp.send("Profiler.stop");
-    const dt = new Map(profile.nodes.map((n) => [n.id, 0]));
-    profile.samples.forEach((id, i) => dt.set(id, dt.get(id) + (profile.timeDeltas[i] ?? 0)));
-    const self = new Map();
-    for (const n of profile.nodes) {
-      const f = n.callFrame;
-      if (["(idle)", "(program)", "(root)"].includes(f.functionName)) continue;
-      const key = `${f.functionName || "(anon)"} ${f.url.split("/").pop()}:${f.lineNumber + 1}`;
-      self.set(key, (self.get(key) ?? 0) + dt.get(n.id) / 1000);
-    }
-    const total = [...self.values()].reduce((a, b) => a + b, 0);
-    console.log(`  profile ${name}: ${Math.round(total / runs)} ms of script per run`);
-    const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, 18);
-    for (const [k, ms] of top) console.log(`    ${(ms / runs).toFixed(1).padStart(6)} ms  ${k}`);
-    // Who called the top three: their callers, five frames up, by time.
-    const byId = new Map(profile.nodes.map((n) => [n.id, n]));
-    const parent = new Map();
-    for (const n of profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
-    const nameOf = (n) => `${n.callFrame.functionName || "(anon)"}:${n.callFrame.lineNumber + 1}`;
-    for (const [k] of top.slice(0, 3)) {
-      const chains = new Map();
-      for (const n of profile.nodes) {
-        const f = n.callFrame;
-        if (`${f.functionName || "(anon)"} ${f.url.split("/").pop()}:${f.lineNumber + 1}` !== k) continue;
-        const up = [];
-        for (let id = parent.get(n.id); id && up.length < 5; id = parent.get(id)) up.push(nameOf(byId.get(id)));
-        const key = up.join(" < ");
-        chains.set(key, (chains.get(key) ?? 0) + dt.get(n.id) / 1000);
-      }
-      console.log(`    ${k} called from:`);
-      for (const [c, ms] of [...chains].sort((a, b) => b[1] - a[1]).slice(0, 3)) console.log(`      ${(ms / runs).toFixed(1).padStart(6)} ms  ${c}`);
-    }
-  }
+  if (stopProfile) await stopProfile(name, runs);
   const rendersAfter = await win.evaluate(() => ({ ...window.__cmdPerf.renders }));
   const renders = Object.fromEntries(Object.entries(rendersAfter).map(([k, v]) => [k, Math.round(((v - (rendersBefore[k] ?? 0)) / runs) * 10) / 10]).filter(([, v]) => v > 0));
   const r = stats(results.map((x) => x.respond));

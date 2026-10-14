@@ -85,19 +85,26 @@ export function scrollbarsMoved(doc: Document = document): void {
   doc.dispatchEvent(new Event("cmd-scrollbars-moved"));
 }
 
-const holds = new Map<Element, ReturnType<typeof setTimeout>>();
+/** Until when each element is held as scrolling. */
+const holds = new Map<Element, number>();
 
-/** Marks `el` as scrolling (.cmd-scrolling) until SCROLLBAR_HOLD ms after the last call. */
+/**
+ * Marks `el` as scrolling (.cmd-scrolling) until SCROLLBAR_HOLD ms after the last call.
+ * Called for every line a busy terminal scrolls: one timer per hold, which looks again
+ * when it fires, rather than a timer replaced on every call.
+ */
 export function scrolled(el: Element): void {
+  const held = holds.has(el);
+  holds.set(el, performance.now() + SCROLLBAR_HOLD);
+  if (held) return;
   el.classList.add("cmd-scrolling");
-  clearTimeout(holds.get(el));
-  holds.set(
-    el,
-    setTimeout(() => {
-      el.classList.remove("cmd-scrolling");
-      holds.delete(el);
-    }, SCROLLBAR_HOLD),
-  );
+  const check = () => {
+    const left = (holds.get(el) ?? 0) - performance.now();
+    if (left > 0) return void setTimeout(check, left);
+    el.classList.remove("cmd-scrolling");
+    holds.delete(el);
+  };
+  setTimeout(check, SCROLLBAR_HOLD);
 }
 
 /**

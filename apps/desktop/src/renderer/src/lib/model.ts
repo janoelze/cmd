@@ -81,7 +81,31 @@ export function under(root: string, p: string): boolean {
   return p === root || p.startsWith(root.endsWith("/") ? root : root + "/");
 }
 
+/** The last build's rows by key (see intern). */
+let lastRows = new Map<string, SidebarRow>();
+
+/**
+ * The previous build's row for this key when it's made of the same objects (pane, window,
+ * agent, children, urgent), else this one: a store change rebuilds every row, and an
+ * unchanged row that stays the same object lets memoised views (TileTitle) skip it.
+ */
+function intern(r: SidebarRow, next: Map<string, SidebarRow>): SidebarRow {
+  const old = lastRows.get(r.key);
+  const same =
+    old && old.pane === r.pane && old.win === r.win && old.agent === r.agent && old.urgent === r.urgent && old.children.length === r.children.length && old.children.every((c, i) => c === r.children[i]);
+  const row = same ? old : r;
+  next.set(r.key, row);
+  return row;
+}
+
 export function buildRows(s: State): SidebarRow[] {
+  const next = new Map<string, SidebarRow>();
+  const rows = buildRowsOf(s, (r) => intern(r, next));
+  lastRows = next;
+  return rows;
+}
+
+function buildRowsOf(s: State, intern: (r: SidebarRow) => SidebarRow): SidebarRow[] {
   const agents = [...s.agents.values()];
   const childrenOf = new Map<string, Agent[]>();
   for (const a of agents) if (a.parentId && s.agents.has(a.parentId)) {
@@ -96,7 +120,7 @@ export function buildRows(s: State): SidebarRow[] {
     for (const c of children) {
       if (c.urgent && (!urgent || RANK[bucketOf(c.urgent)] < RANK[bucketOf(urgent)])) urgent = c.urgent;
     }
-    return { key: agent?.id ?? pane!.id, pane, win: null, agent, children, urgent };
+    return intern({ key: agent?.id ?? pane!.id, pane, win: null, agent, children, urgent });
   };
 
   const isChild = (a: Agent | null) => !!a?.parentId && s.agents.has(a.parentId);
@@ -109,7 +133,7 @@ export function buildRows(s: State): SidebarRow[] {
   for (const a of agents) if (!a.paneId && !isChild(a)) roots.push(toRow(null, a));
 
   for (const w of s.windows.values()) {
-    roots.push({ key: w.id, pane: null, win: w, agent: null, children: [], urgent: null });
+    roots.push(intern({ key: w.id, pane: null, win: w, agent: null, children: [], urgent: null }));
   }
 
   // By sidebar section; within one, needs-input first (longest wait first), then
