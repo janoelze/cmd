@@ -188,6 +188,78 @@ export default defineWidget(() => {
 
 Rejected: React in the iframe with a copy of the kit (two kits again, no core access, no phone, no tree tests); plain HTML with a stricter kit (the same box, nicer); widgets as React code loaded into the renderer (Obsidian's model: full access, no boundary, impossible to grant).
 
+### Writing the UI: what the author sees
+
+The target is one sentence: **a widget's view reads like a built-in's view.** Agent Activity today (`windows/agents/AgentActivity.tsx`, 154 lines) is `View`, `List`, `ListRow`, `ListRowIcon`, `ListRowContent`, `ListRowEnd`, `Stack`, `Text`, `Button` from `@cmd/ui`, the renderer's store for the agents, and `useWidgetStatus` for the title bar. The same widget as a package is the same JSX with the store swapped for a hook. The five reference windows (`reference/*.story.tsx`, docs/40) are the spec for widgets as they are for windows, and the `window-design` skill applies to both without a translation.
+
+```tsx
+// src/agents.tsx
+import { Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, Button,
+         useAgents, useWorkspace, useStoredState, useNow, fmt, cmd } from "@cmd/widget-api";
+
+export default function AgentActivity() {
+  const [scope, setScope] = useStoredState<"workspace" | "all">("scope", "workspace");   // kept by the core per window
+  const agents = useAgents({ scope });                                                   // live; re-renders on agent.updated
+  const now = useNow(15_000);
+  const waiting = agents.filter((a) => a.bucket === "needs");
+  const working = agents.filter((a) => a.state === "working");
+
+  return (
+    <Window
+      status={[waiting.length && `${waiting.length} waiting for you`, working.length && `${working.length} working`].filter(Boolean).join(" · ") || null}
+      menu={[{ label: "This Workspace", checked: scope === "workspace", run: () => setScope("workspace") },
+             { label: "All Workspaces", checked: scope === "all", run: () => setScope("all") }]}
+    >
+      <View state={agents.length ? undefined : { icon: "person.2", title: "No agents", text: "Start one with ⌥⌘N.", action: { label: "New Claude Session", run: () => cmd.agents.start({ kind: "claude" }) } }}>
+        <List>
+          <ListSection title="Waiting for you" count={waiting.length}>
+            {waiting.map((a) => (
+              <ListRow key={a.id} onClick={() => cmd.windows.select(a.windowId)} menu={[{ label: "Mark Seen", run: () => cmd.agents.markSeen(a.id) }]}>
+                <ListRowIcon icon={a.icon} light={a.light} />
+                <ListRowContent title={a.name} place={a.place} detail={a.statusLine} tone="needs" />
+                <ListRowEnd><Chip>{fmt.ago(a.stateSince, now)}</Chip></ListRowEnd>
+              </ListRow>
+            ))}
+          </ListSection>
+          …
+        </List>
+      </View>
+    </Window>
+  );
+}
+```
+
+What the author gets without writing it:
+
+- **The window.** The title bar, its icon and name from the manifest, the status line from `Window status`, the title menu from `Window menu` (the scope switch, as built-ins have through `titleMenu`), the context menu from `Window actions` and a row's `menu`, "Updated 12 s ago" and "Stale · HTTP 403" from `useData` (below), Refresh Now, Mute, Remove from Board. A widget never draws chrome, a refresh button or an "updated" line, which is the rule Magic's prompt spends a paragraph on today.
+- **Layout and look.** `View` scrolls, insets (`inset`), hosts a toolbar and the cover states; `Stack`, `Inline`, `Tiles`, `Panes` lay out in steps of the scale (`gap={2}`, typed); `Hide below="narrow"` drops what doesn't fit; `List` virtualises, keeps the keyboard's row and the selection; `DataGrid` drops columns as space runs out. Tones, not colours (`tone="needs"`, `deltaTone="warning"`); sizes, not pixels; SF Symbol names for icons (`cmd widget check` knows the catalogue). There is no `className`, `style` or CSS: a look is a prop, or it is a kit change.
+- **Data, with health.** The hooks are the API's reads as subscriptions: `useWorkspace()`, `useAgents()`, `useTerminals()`, `useWindows()`, `useEvents(query)`, `useGit()`, `useActions()`, `useConfig()`, `useEnv()` (theme, size class, placement). For the outside world, `useData(fn, { every: 60 })` runs `fn` (a `cmd.net.fetch`, a `cmd.run("gh", …)`) on the manifest's schedule and returns `{ data, error, stale, refreshing, refresh }`; the title bar's health, backoff and `Retry-After` come from it, the last good data stays on screen, and the error line under the widget is drawn by the app, exactly what `data.ts` gets today, in a hook. `useStoredState(key, initial)` is `cmd.state`: kept by the core per window across reloads and restarts. `useNow(ms)` for ages.
+- **Interaction without the DOM.** Handlers are `onClick`, `onDoubleClick`, `onChange`, `onSubmit`, `onSelect`; the renderer owns the events and sends the values. Context menus are data (`menu={[{ label, run, checked, submenu }]}`), as the kit's `MenuEntry` is. Overlays are elements the kit already has (`Menu`, `Popover`, `ConfirmDialog`, `toast()`), never a portal. Text fields keep their caret in the renderer and report the value debounced; `autoFocus` is the one focus control.
+- **States as data.** `View state={…}` is the kit's `ViewStateSpec`: empty, loading, error, each with an icon, a title, a line and one action. A render error is caught by the reconciler's boundary and shown as a `Callout` with the stack in the window and in `cmd widget dev`'s terminal; the process lives on, and the next save redraws.
+- **Typed config.** `cmd widget check` and `dev` write `cmd-env.d.ts` from `package.json` (Raycast writes `raycast-env.d.ts` the same way), so `useConfig()` is `{ repo: string; token: string }` and a renamed field is a type error, not a runtime surprise. Secrets are in `useConfig()` too and never in a tree.
+
+What the author cannot do, by design: reach the DOM, measure, style, load a font, embed a page or an image from a host the grant doesn't name, open a window the person didn't ask for (acts confirm), or draw outside the kit. A widget that needs pixels declares the `frame` surface and gives up the rest.
+
+The elements of API 1, mirroring the kit's window pieces with the kit's own props minus the DOM's (`className`, `style`, `ref`, HTML attributes): `Window`; `View`, `Split`, `Stack`, `Inline`, `Tiles`, `Panes`/`Pane`, `Hide`, `Spacer`, `Separator`; `WindowToolbar` with `ToolbarButton`, `ToolbarField`, `ToolbarSearchField`, `ToolbarSegmented`, `ToolbarMenu`, `ToolbarText`, `ToolbarSpacer`; `List`, `ListSection`, `ListGroup`, `ListRow` with `ListRowIcon`, `ListRowContent`, `ListRowEnd`, `ListRowActions`, `Twisty`, `Chip`, `ListValue`, `Mark`; `DataGrid`; `Stat`, `StatusLine`, `Sparkline`, `Chart`, `TimeSeries`, `TimeBars`, `Ranking`, `Distribution`, `Meter`, `Delta`, `Proportion`, `Dial`, `Progress`, `ProgressRing`; `Text`, `KeyValue`, `CodeBlock`, `Prose`, `Callout`, `Card`, `EmptyState`, `Badge`, `StatusDot`, `Kbd`, `Spinner`, `Picture`; `Button`, `IconButton`, `ButtonGroup`, `Segmented`, `Tabs`, `Select`, `Switch`, `Checkbox`, `TextField`, `SearchField`, `NumberField`, `TextArea`; `FormSection`, `FormRow`; `Menu`, `Popover`, `ConfirmDialog`, `toast`. Anything the kit gains later is an API minor once its props are settled; anything the kit renames is a line in the element table.
+
+**The loop.** `cmd widget new agents` writes the package with this view, a story and a test. `cmd widget dev` links it, puts it on the board and prints the process's console; a save restarts the process in under a second with `useStoredState` intact, so the window redraws where it was. `pnpm workbench widgets/agents` shows its stories beside the kit's, with the fake host's fixtures, in the reference windows' size matrix and every theme. The test:
+
+```tsx
+import { render, createHost, fixtures } from "@cmd/widget-api/testing";
+import Widget from "./agents.tsx";
+
+test("waiting agents come first", async () => {
+  const host = createHost({ agents: [fixtures.agent({ name: "Tours", state: "waiting" }), fixtures.agent({ name: "Perf", state: "working" })] });
+  const tree = await render(<Widget />, host);
+  expect(tree).toHaveSection("Waiting for you", { count: 1 });
+  expect(tree.rows()[0]).toHaveTitle("Tours");
+  await tree.press(tree.rows()[0]);
+  expect(host.calls).toEqual([["windows.select", "w-tours"]]);
+});
+```
+
+No browser, no Electron, no Deno: the tree is data and the host is a fake. The same `render` is what Magic's `preview` draws through the app for its screenshot.
+
 ### Capabilities and grants
 
 The manifest asks; the person grants; the core enforces `declared ∩ granted` (AR1-11-01 §1–2).
