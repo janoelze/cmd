@@ -29,7 +29,8 @@ export function newItems(library: WidgetEntry[], bindings: Keybindings, run: (id
     run: () => run(id),
   }));
   const used = (e: WidgetEntry) => e.usedAt ?? e.createdAt ?? 0;
-  const yours = library.filter((e) => e.source === "yours").sort((a, b) => used(b) - used(a));
+  // Yours: made with Magic, before packages and as packages (docs/56).
+  const yours = library.filter((e) => e.source === "yours" || (e.source === "package" && e.magic && !e.problem)).sort((a, b) => used(b) - used(a));
   const widgets = [...yours, ...library.filter((e) => e.source === "builtin")].map((e) => ({
     id: e.ref,
     group: "Widgets",

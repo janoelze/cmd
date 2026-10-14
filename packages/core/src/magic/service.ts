@@ -1,15 +1,13 @@
-// Magic widgets in the core (docs/14-magic-v2.md, docs/16-widgets.md). A
-// widget is a folder ($CMD_HOME/widgets/<widget id>) with an id of its own:
-// the agent builds it there (buildWidget), every build and hand edit is kept
-// as a revision, and it stays in the library when its windows close. Windows
-// are copies of a widget: each has its own config, cmd.state and data runs,
-// and its state holds what it needs to draw (the composed view, the last
-// data, health); a change to the widget reaches every copy. The core then runs the widget's data.ts on its interval,
-// validated against its schema, and streams the data to the UI (magic.data);
-// failures keep the last good data on screen, are shown with their reason,
-// and wait as long as the server asks. The agent is never involved in a
-// refresh. v1 windows (a source in their state) keep refreshing that source
-// until they are changed, which rebuilds them as widgets.
+// Magic widgets in the core (docs/14-magic-v2.md, docs/16-widgets.md). A widget is a folder
+// ($CMD_HOME/widgets/<widget id>) with an id of its own: the agent builds it there (buildWidget),
+// every build and hand edit is kept as a revision, and it stays in the library when its windows
+// close. Windows are copies of a widget: each has its own config, cmd.state and data runs, and its
+// state holds what it needs to draw (the composed view, the last data, health); a change to the
+// widget reaches every copy. The core then runs the widget's data.ts on its interval, validated
+// against its schema, and streams the data to the UI (magic.data); failures keep the last good
+// data on screen, are shown with their reason, and wait as long as the server asks. The agent is
+// never involved in a refresh. v1 windows (a source in their state) keep refreshing that source
+// until they are changed, which rebuilds them as widgets. New requests are packages (package/).
 
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";

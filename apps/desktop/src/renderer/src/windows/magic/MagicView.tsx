@@ -128,7 +128,9 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
   }, [building, widget, s.phase]);
 
   if (s.phase === "empty" || (s.phase === "error" && !s.html && !s.command && !edit)) {
-    return <PromptPane focused={focused} error={s.phase === "error" ? s.error : undefined} initial={s.prompt} onSubmit={run} />;
+    // Edit with Magic on a package's window: what should change (the package keeps its name and windows).
+    const change = s.pkg?.editing ? win.title : undefined;
+    return <PromptPane focused={focused} error={s.phase === "error" ? s.error : undefined} initial={change ? "" : s.prompt} onSubmit={run} change={change} />;
   }
   if (edit) return <MagicEditor win={win} live={live} onRun={run} onClose={() => setEditing(win.id, false)} />;
 
@@ -148,7 +150,7 @@ export function MagicView({ win, focused }: { win: AppWindow; focused: boolean }
         ) : widget ? (
           <WidgetFrame win={win} active={focused} html={s.html!} data={live.data?.data ?? s.lastData?.data} kv={s.kv} media={allowed} kit={s.kit} onPainted={setPainted} />
         ) : building ? (
-          <Building live={live} showSteps={showSteps} onStop={working ? stop : undefined} />
+          <Building live={live} showSteps={showSteps} onStop={working ? stop : undefined} onAllow={working && s.pkg?.asking ? () => void cmd.call("widget.ask", { name: s.pkg!.name }) : undefined} />
         ) : null}
       </WebStage>
       {!building && (s.error || problems || broken) && (
@@ -194,7 +196,7 @@ function useNow(every: number): number {
 /** The core's error for a run without a provider (ai/service.ts AiNotConfigured): the setup callout says it better. */
 const NO_PROVIDER = /^No AI provider is set up/;
 
-function PromptPane({ focused, error, initial, onSubmit }: { focused: boolean; error?: string; initial: string; onSubmit: (p: string) => void }) {
+function PromptPane({ focused, error, initial, onSubmit, change }: { focused: boolean; error?: string; initial: string; onSubmit: (p: string) => void; change?: string }) {
   const [text, setText] = useState(initial);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -211,18 +213,18 @@ function PromptPane({ focused, error, initial, onSubmit }: { focused: boolean; e
     if (ai?.ready) onSubmit(pending);
   }, [pending, setup, ai?.ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const ask = (p: string) => (needsAi ? (showSetup(["ai"]), setPending(p)) : onSubmit(p));
-  return <Ask text={text} onText={setText} onAsk={ask} error={error && !NO_PROVIDER.test(error) ? error : undefined} needsAi={needsAi} autoFocus={focused} />;
+  return <Ask text={text} onText={setText} onAsk={ask} error={error && !NO_PROVIDER.test(error) ? error : undefined} needsAi={needsAi} autoFocus={focused} change={change} />;
 }
 
 /** The empty window, drawn: what it's for, the field, the examples (MagicView.story.tsx). */
-export function Ask(p: { text: string; onText: (t: string) => void; onAsk: (prompt: string) => void; error?: string; needsAi: boolean; autoFocus?: boolean }) {
+export function Ask(p: { text: string; onText: (t: string) => void; onAsk: (prompt: string) => void; error?: string; needsAi: boolean; autoFocus?: boolean; change?: string }) {
   return (
     <View
       state={{
         kind: "empty",
         icon: "sparkles",
-        title: "New Widget",
-        text: "Ask for something to keep an eye on: a question, a URL, some JSON, a command.",
+        title: p.change ? `Change “${p.change}”` : "New Widget",
+        text: p.change ? "Say what should change. Its window shows the new version when it's ready." : "Ask for something to keep an eye on: a question, a URL, some JSON, a command.",
         action: (
           <Stack gap={2}>
             <AiField
@@ -232,7 +234,7 @@ export function Ask(p: { text: string; onText: (t: string) => void; onAsk: (prom
               onSubmit={p.onAsk}
               state={p.error ? "error" : undefined}
               error={p.error}
-              placeholder="What do you want to see?"
+              placeholder={p.change ? "What should change?" : "What do you want to see?"}
               autoFocus={p.autoFocus}
               aria-label="Ask for a widget"
             />
@@ -251,7 +253,7 @@ export function Ask(p: { text: string; onText: (t: string) => void; onAsk: (prom
               </Callout>
             )}
             <List>
-              {EXAMPLES.map((x) => (
+              {(p.change ? [] : EXAMPLES).map((x) => (
                 <ListRow
                   key={x}
                   onClick={() => p.onAsk(x)}
@@ -280,8 +282,11 @@ function messagesOf(live: MagicLive): string[] {
   return out;
 }
 
-/** A first build: the current step in the middle, Stop, every step under it with magic.showSteps. */
-export function Building({ live, showSteps, onStop }: { live: MagicLive; showSteps: boolean; onStop?: () => void }) {
+/**
+ * A first build: the current step in the middle, Stop, every step under it with magic.showSteps.
+ * A package asking for permissions (its step: "Wants to reach api.github.com"): Allow… brings the grants sheet back.
+ */
+export function Building({ live, showSteps, onStop, onAllow }: { live: MagicLive; showSteps: boolean; onStop?: () => void; onAllow?: () => void }) {
   const current = messagesOf(live).at(-1)!;
   return (
     <Stack gap={0} grow>
@@ -291,11 +296,18 @@ export function Building({ live, showSteps, onStop }: { live: MagicLive; showSte
           title: (
             <Stack gap={2} align="center">
               <span aria-live="polite">{current}</span>
-              {onStop && (
-                <Button size="sm" data-tip-key="⌘." onClick={onStop}>
-                  Stop
-                </Button>
-              )}
+              <Inline gap={1.5}>
+                {onAllow && (
+                  <Button size="sm" variant="primary" onClick={onAllow}>
+                    Allow…
+                  </Button>
+                )}
+                {onStop && (
+                  <Button size="sm" data-tip-key="⌘." onClick={onStop}>
+                    Stop
+                  </Button>
+                )}
+              </Inline>
             </Stack>
           ),
         }}

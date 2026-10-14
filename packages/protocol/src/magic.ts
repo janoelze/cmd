@@ -5,6 +5,7 @@
 import { DEFAULT_SETTINGS } from "./settings.ts";
 import type { Attention } from "./model.ts";
 import type { MagicPackageBuild, MagicPreviewTree } from "./magic-package.ts";
+export type { MagicPackageMethods } from "./magic-package.ts";
 
 export type MagicSource = { type: "fetch"; url: string; headers?: Record<string, string> } | { type: "command"; command: string; cwd?: string };
 

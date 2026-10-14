@@ -448,6 +448,8 @@ describe.skipIf(noDeno)("Magic widgets in the core", () => {
     const { Core } = await import("../src/kernel/core.ts");
     const { fakeFactory } = await import("./fake-pty.ts");
     const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => backend, magicPreviewer: fakePreviewer, magicDeno: DENO, stateDir });
+    // These build widgets of the format before packages (magic/package/service.ts builds packages).
+    (await import("../src/magic/package/service.ts")).buildCmd2Widgets(core.magic);
     const events: { type: string; id?: string; data?: unknown; error?: string }[] = [];
     core.serve({ access: "local", send: (line) => {
       const m = JSON.parse(line) as { method?: string; params?: { type: string } };

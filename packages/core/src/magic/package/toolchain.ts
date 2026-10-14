@@ -114,10 +114,11 @@ const TSCONFIG = {
 };
 
 /** Renders each widget against its story's states (else its fixtures, else an empty host) and writes the trees to CMD_TREES_OUT. */
+const API = "@cmd/widget-api"; // named once: the harness is text, run in the package's copy
 const TREES_HARNESS = `import fs from "node:fs";
 import path from "node:path";
 import { it } from "vitest";
-import { render, createHost } from "@cmd/widget-api/testing";
+import { render, createHost } from "${API}/testing";
 
 const root = process.cwd();
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));

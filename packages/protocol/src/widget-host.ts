@@ -57,5 +57,7 @@ export type WidgetHostEvent = { type: "widget.tree"; windowId: WindowId; message
 export const WIDGET_SETTINGS = {
   "widgets.developer": { title: "Developer widgets", type: "boolean", default: false, description: "Offer widgets that show what cmd records and does.", details: "Like the Event Stream. Safe to use; mostly useful when working on cmd or reporting a problem." },
   "notifications.widgets": { title: "Widgets report something", type: "boolean", default: true, description: "When a Magic widget reports news." },
+  // A Magic build's token ceiling (magic/package/build.ts), placed with Magic's other build settings.
+  "magic.maxTokens": { title: "Tokens per build", type: "number", unit: "tokens", default: 3000000, min: 0, step: 100000, description: "A build that uses more stops. 0: no limit.", details: "Counts what the model reads and writes, cached reads too." },
   "widgets.aiBudget": { title: "AI budget per widget", type: "number", unit: "tokens a day", default: 200000, min: 0, step: 10000, description: "How much of your AI one widget may use a day. 0: no limit." },
 } as const satisfies Record<string, Def>;

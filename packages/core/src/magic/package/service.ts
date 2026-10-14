@@ -68,6 +68,10 @@ function detailOf(tool: string, input: Record<string, unknown>): string {
   return String(v).replace(/\s+/g, " ").slice(0, 160) || tool;
 }
 
+/** Cores whose new requests build widgets of the format before packages, as MagicService did: the tests of that path, until phase 2b removes it. */
+const cmd2 = new WeakSet<object>();
+export const buildCmd2Widgets = (magic: object): void => void cmd2.add(magic);
+
 export class MagicPackages {
   #c: Ctx;
   #o: MagicPackagesOptions;
@@ -93,7 +97,8 @@ export class MagicPackages {
   /** Whether a Magic window's request is a package build: not a fast path, not a change to a widget made before packages. */
   takes(id: WindowId, prompt: string): boolean {
     const w = this.#window(id);
-    if (!w || w.kind !== "magic") return false;
+    // A core without a state folder (tests) has nowhere to keep a package's grant and versions: it writes no package.
+    if (cmd2.has(this.#c.magic) || !this.#c.magic.made().stateDir || !w || w.kind !== "magic") return false;
     const s = stateOf(w);
     if (s.pkg) return true;
     const changing = !!s.prompt && (s.phase === "ready" || s.phase === "error") && !!(s.widgetId || s.html || s.command);
@@ -317,7 +322,7 @@ export class MagicPackages {
     const fix = o.fix ? `Fix the widget.${status?.state === "stopped" ? ` It stopped: ${status.reason ?? "stopped"}${status.detail ? `: ${status.detail}` : ""}.` : ""} Check, test and preview it, and fix anything that doesn't work.` : undefined;
     const ws = this.#c.workspaces.get(target.workspaceId);
     const w = this.#c.opened(this.#c.windows.open("magic", {}, ws ?? this.#c.workspaces.home()));
-    this.#c.windows.update(w.id, { title: target.title, state: { prompt: entry.pkg.magic.request, phase: "ready", icon: entry.pkg.widgets[0]?.icon, history: [entry.pkg.magic.request], pkg: { name: ref.name, editing: windowId } } });
+    this.#c.windows.update(w.id, { title: target.title, state: { prompt: entry.pkg.magic.request, phase: "empty", icon: entry.pkg.widgets[0]?.icon, history: [entry.pkg.magic.request], pkg: { name: ref.name, editing: windowId } } });
     const request = o.prompt?.trim() || fix;
     if (request) this.run(w.id, request);
     return this.#window(w.id) ?? w;

@@ -1,8 +1,9 @@
-// `cmd magic`: the Magic widget prompt lab (docs/14-magic-v2.md). Builds a
-// widget from a request in this process (no core needed), printing the agent's
-// steps, into a widget folder you can open, check and change with `cmd widget`.
-// The system prompt is read from packages/core/src/magic/prompt/ on every run,
-// so edits apply immediately.
+// `cmd magic`: make a widget package from a request (docs/56, "Magic on V3"). In a cmd
+// terminal the app makes it (magic-app.ts: a Magic window beside, its steps here, the grants
+// sheet there); elsewhere, or with --lab, the prompt lab builds it in this process (no core
+// needed), printing the agent's steps, into a package folder you can check and change with
+// `cmd widget`. The system prompt is read from packages/core/src/magic/prompt/ on every
+// run, so edits apply immediately.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -12,34 +13,44 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { DEFAULT_SETTINGS, isAiProvider, parseJsonc, resolveSettings, type Settings } from "@cmd/protocol";
 import { cmdHome, configDir } from "@cmd/protocol/node";
+import { connect } from "@cmd/protocol/node";
 import {
   AiService,
-  buildWidget,
+  buildPackage,
+  checkoutToolchain,
   findDeno,
   playwrightPreviewer,
   SecretsService,
   sandboxAvailable,
+  slugOf,
+  wantsText,
   WidgetStore,
   type Backend,
   type BuildEvent,
   type BuildResult,
+  type PackageBuildResult,
   type VerifyContext,
 } from "@cmd/core/magic";
 
-export const MAGIC_HELP = `cmd magic — build a live widget (or a terminal command) from a request
+export const MAGIC_HELP = `cmd magic — make a widget package (or a terminal command) from a request
 
 usage: cmd magic <request…> [options]
-       cmd magic eval [case…]        run the eval cases against prompt variants (see --help)
-       cmd widget …                  check, run and preview a widget folder (cmd widget --help)
+       cmd magic eval [case…]        run the eval cases against the prompt (see --help)
+       cmd widget …                  check, link and add a widget package (cmd widget --help)
+
+In a cmd terminal the app makes it: a Magic window opens beside you, asks for what
+the widget wants, and becomes the widget; the package's folder is printed. Elsewhere
+(or with --lab) it is built here, into --out.
 
   --provider P      anthropic | openai (default: ai.provider in your settings)
   --model M         default: that provider's model (ai.<provider>.model; auto picks the newest)
   --effort E        low | medium | high, for models that take it (default low)
   --system FILE     use FILE instead of prompt/prompt.md (prompt variants)
   --no-explore      don't let the agent look around this Mac
-  --no-fast         always use the agent (skip the JSON / command fast paths)
   --max-steps N     tool calls in the first turn (default 40)
-  --out DIR         the widget folder (default $CMD_HOME/magic/runs/<time>-<request>/widget)
+  --lab             build here, not in the app
+  --out DIR         the package folder (default $CMD_HOME/magic/runs/<time>-<request>/<name>)
+  --decline         the lab declines what the package asks for (it allows it otherwise)
   --open            open the preview screenshot
   --json            print events as NDJSON instead of the trace
   --unsandboxed     run commands without sandbox-exec (only the policy and Deno's permissions guard them)
@@ -161,9 +172,10 @@ export async function magicCommand(argv: string[]): Promise<number> {
       effort: { type: "string" },
       system: { type: "string" },
       "no-explore": { type: "boolean" },
-      "no-fast": { type: "boolean" },
       "max-steps": { type: "string" },
       out: { type: "string" },
+      lab: { type: "boolean" },
+      decline: { type: "boolean" },
       open: { type: "boolean" },
       json: { type: "boolean" },
       unsandboxed: { type: "boolean" },
@@ -175,6 +187,17 @@ export async function magicCommand(argv: string[]): Promise<number> {
     console.log(MAGIC_HELP);
     return prompt || o.help ? 0 : 1;
   }
+  // In a cmd terminal, the app makes it (a window, its steps, the grants sheet), unless asked for the lab.
+  if (!o.lab && !o.out && !o.system && process.env.CMD_PANE_ID) {
+    const conn = await connect().catch(() => null);
+    if (conn) {
+      try {
+        return await (await import("./magic-app.ts")).magicInApp(conn.client, prompt, { json: !!o.json });
+      } finally {
+        conn.close();
+      }
+    }
+  }
   const unsandboxed = !!o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
   sandboxNote(unsandboxed);
   let backend: Backend;
@@ -184,29 +207,42 @@ export async function magicCommand(argv: string[]): Promise<number> {
     process.stderr.write(red(`  ✗ ${(e as Error).message}\n`));
     return 1;
   }
-  const dir = path.resolve(o.out ?? path.join(cmdHome(), "magic", "runs", `${stamp()}-${slug(prompt)}`, "widget"));
-  const ctx = await widgetContext(dir, { unsandboxed });
-  if (!ctx.deno) process.stderr.write(red("  ✗ Deno isn't installed: widgets' data.ts can't run (brew install deno)\n"));
-  if (!ctx.previewer) process.stderr.write(dim("  note: Playwright isn't available, so widgets aren't rendered\n"));
+  const name = slugOf(prompt);
+  const dir = path.resolve(o.out ?? path.join(cmdHome(), "magic", "runs", `${stamp()}-${slug(prompt)}`, name));
+  const toolchain = checkoutToolchain();
+  if (!toolchain) process.stderr.write(red("  ✗ this cmd has no TypeScript and Vitest to check packages with (a checkout's pnpm install has)\n"));
+  const previewer = await playwrightPreviewer();
+  if (!previewer) process.stderr.write(dim("  note: Playwright isn't available, so widgets aren't drawn\n"));
 
   const events: BuildEvent[] = [];
   const print = o.json ? (e: BuildEvent) => console.log(JSON.stringify(e)) : printer();
   const ac = new AbortController();
   process.once("SIGINT", () => ac.abort());
   if (!o.json) process.stderr.write(`${bold("✦")} ${prompt} ${dim(`· ${backend.name} ${backend.model}`)}\n`);
-  let r: BuildResult;
+  let r: PackageBuildResult;
   try {
-    r = await buildWidget({
+    r = await buildPackage({
       prompt,
       backend,
-      widget: ctx,
+      dir,
+      name: path.basename(dir),
+      cwd: process.cwd(),
       // Run from a project folder, it is the workspace, as a window's workspace is in the app.
       workspace: process.cwd() !== os.homedir() ? { name: path.basename(process.cwd()), root: process.cwd() } : null,
       explore: !o["no-explore"],
-      noFast: o["no-fast"],
       maxSteps: o["max-steps"] ? Number(o["max-steps"]) : undefined,
+      maxTokens: userSettings()["magic.maxTokens"] || undefined,
       sandbox: unsandboxed ? "off" : "required",
       systemFile: o.system ? path.resolve(o.system) : undefined,
+      toolchain,
+      previewer: async () => previewer,
+      // The lab is the person at the terminal: what the package asks for is allowed (in the app, the grants sheet asks).
+      ask: async (pkg) => {
+        const allow = !o.decline;
+        if (!o.json) process.stderr.write(`  ${allow ? green("✓") : red("✗")} ${wantsText(pkg.permissions)} ${dim(allow ? "(allowed: the app asks the person)" : "(--decline)")}\n`);
+        return { allow };
+      },
+      granted: () => null,
       signal: ac.signal,
       onEvent: (e) => {
         events.push(e);
@@ -220,41 +256,58 @@ export async function magicCommand(argv: string[]): Promise<number> {
   const runDir = path.dirname(dir);
   writeRun(runDir, r, { prompt, provider: backend.name, model: backend.model, effort: o.effort ?? null, system: o.system ?? null, explore: !o["no-explore"], at: new Date().toISOString(), cwd: process.cwd() }, events);
   if (o.json) {
-    console.log(JSON.stringify({ type: "result", dir, ok: r.ok, usable: r.verdict.usable, problems: r.verdict.problems, warnings: r.verdict.warnings, timings: r.timings, usage: r.usage }));
+    console.log(JSON.stringify({ type: "result", dir, ok: r.ok, usable: r.verdict.usable, ending: r.ending, stopped: r.stopped ?? null, problems: r.verdict.problems, warnings: r.verdict.warnings, timings: r.timings, usage: r.usage, promptHash: r.promptHash }));
   } else {
     const u = r.usage;
     const tokens = u.input || u.output ? ` · ${k(u.input + u.cacheRead + u.cacheWrite)} in (${k(u.cacheRead)} cached) / ${k(u.output)} out` : "";
-    process.stderr.write(`  ${secs(r.timings.done)} · ${r.trace.length} steps${r.repairs.length ? ` · ${r.repairs.length} repair` : ""}${tokens}\n`);
-    printVerdict(r.verdict);
+    process.stderr.write(`  ${secs(r.timings.done)} · ${r.trace.length} steps${r.repairs.length ? ` · ${r.repairs.length} repair` : ""}${tokens} · prompt ${r.promptHash}\n`);
+    if (r.fast) process.stderr.write(dim(`  fast path (${r.fast.route}): the app makes it as a widget of its own; the lab makes packages\n`));
+    else printPackageVerdict(r);
     if (r.summary) process.stderr.write(`  ${dim(r.summary)}\n`);
-    console.log(r.verdict.manifest?.kind === "terminal" ? r.verdict.manifest.command : dir);
+    console.log(r.ending?.kind === "terminal" ? r.ending.command : r.verdict.pkg ? dir : "");
   }
   const shot = path.join(runDir, "preview.png");
   if (o.open && fs.existsSync(shot)) spawn("open", [shot], { stdio: "ignore", detached: true }).unref();
   return r.ok ? 0 : 1;
 }
 
-/** Next to the widget folder: what was asked, the events, the trace, metrics and the preview screenshot. */
-export function writeRun(dir: string, r: BuildResult, request: unknown, events: BuildEvent[]): void {
+/** A package build's outcome as lines on stderr. */
+export function printPackageVerdict(r: PackageBuildResult): void {
+  const v = r.verdict;
+  if (r.ending?.kind === "terminal") return void process.stderr.write(`  ${green("✓")} a terminal: ${r.ending.command}\n`);
+  if (r.ending?.kind === "needs-program") return void process.stderr.write(`  ${yellow("!")} no widget: ${r.ending.reason} ${dim(`(needs ${r.ending.programs.join(", ")})`)}\n`);
+  if (r.stopped) process.stderr.write(`  ${red("✗")} ${r.stopped}\n`);
+  if (v.ok) process.stderr.write(`  ${green("✓")} check, test and preview passed${v.tests ? dim(` (${v.tests.passed} tests)`) : ""}${v.warnings.length ? dim(` (${v.warnings.length} warning${v.warnings.length > 1 ? "s" : ""})`) : ""}\n`);
+  else if (!r.stopped) process.stderr.write(`  ${v.usable ? yellow("!") : red("✗")} ${v.usable ? "usable, but" : "doesn't work:"}\n`);
+  for (const p of v.problems) process.stderr.write(red(`    ${p.split("\n")[0]!.slice(0, 200)}\n`));
+  for (const w of v.warnings) process.stderr.write(dim(`    ${w.split("\n")[0]!.slice(0, 200)}\n`));
+}
+
+/** Next to the package folder: what was asked, the events, the trace, metrics and the preview screenshot. */
+export function writeRun(dir: string, r: PackageBuildResult, request: unknown, events: BuildEvent[]): void {
   fs.mkdirSync(dir, { recursive: true });
   const w = (f: string, s: string) => fs.writeFileSync(path.join(dir, f), s);
   w("request.json", JSON.stringify(request, null, 2) + "\n");
   w("events.ndjson", events.map((e) => JSON.stringify(e)).join("\n") + "\n");
   w("trace.json", JSON.stringify(r.trace, null, 2) + "\n");
   const v = r.verdict;
+  const widget = v.pkg?.widgets[0];
   const metrics = {
     ok: r.ok,
     usable: v.usable,
     route: r.route,
-    kind: v.manifest?.kind ?? null,
-    title: v.manifest?.title ?? null,
-    size: v.manifest?.size ?? null,
-    refresh: v.manifest?.refresh ?? 0,
-    permissions: v.manifest?.permissions ?? null,
-    command: v.manifest?.command ?? null,
+    kind: r.ending?.kind ?? (v.pkg ? "widget" : null),
+    name: v.pkg?.name ?? null,
+    title: widget?.title ?? (r.ending?.kind === "terminal" ? r.ending.title : null),
+    size: widget?.size ?? null,
+    surface: widget?.surface ?? null,
+    permissions: v.pkg?.permissions ?? null,
+    ending: r.ending,
+    stopped: r.stopped ?? null,
     steps: r.trace.length,
     explored: r.trace.some((s) => ["run", "read", "list"].includes(s.tool)),
-    checksRun: { check: r.trace.some((s) => s.tool === "check"), run_data: r.trace.some((s) => s.tool === "run_data"), preview: r.trace.some((s) => s.tool === "preview") },
+    checksRun: { check: r.trace.some((s) => s.tool === "check"), test: r.trace.some((s) => s.tool === "test"), preview: r.trace.some((s) => s.tool === "preview") },
+    tests: v.tests ?? null,
     toolErrors: r.trace.filter((s) => s.isError).length,
     repairs: r.repairs.length,
     problems: v.problems,
@@ -263,6 +316,7 @@ export function writeRun(dir: string, r: BuildResult, request: unknown, events: 
     usage: r.usage,
     model: r.model,
     backend: r.backend,
+    promptHash: r.promptHash,
     summary: r.summary,
   };
   w("metrics.json", JSON.stringify(metrics, null, 2) + "\n");

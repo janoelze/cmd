@@ -49,6 +49,7 @@ magic.autoFix
 magic.baseUrl
 magic.deno
 magic.explore
+magic.maxTokens
 magic.model
 magic.openai.model
 magic.provider

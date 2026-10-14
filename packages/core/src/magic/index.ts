@@ -15,5 +15,5 @@ export { buildPackage, verifyPackage, type PackageBuildOptions, type PackageBuil
 export { checkoutToolchain, type Toolchain } from "./package/toolchain.ts";
 export { buildPackageSystem, buildPackageRequest, promptHash, examples, exampleFiles } from "./package/prompt.ts";
 export { scriptedBackend, type Script, type ScriptTurn } from "./package/scripted.ts";
-export { slugOf } from "./package/service.ts";
+export { slugOf, wantsText } from "./package/service.ts";
 export { PACKAGE_TOOL_SPECS } from "./package/tools.ts";

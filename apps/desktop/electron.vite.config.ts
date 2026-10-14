@@ -146,7 +146,7 @@ export default defineConfig({
     },
   },
   // electron-vite leaves minification off; the renderer bundle is parsed on every launch.
-  // Two pages: the app (index.html) and the Settings window (settings.html).
+  // Three pages: the app (index.html), the Settings window (settings.html) and Magic's previews (preview.html).
   // The app's version for What's New.
   renderer: {
     define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
@@ -157,7 +157,8 @@ export default defineConfig({
       // CMD_NO_MINIFY=1: readable function names in profiles (e2e/latency.mjs --profile).
       minify: !process.env.CMD_NO_MINIFY,
       rollupOptions: {
-        input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html") },
+        // Magic's previews of widget packages (src/preview, main/preview.ts) are a page of their own.
+        input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html"), preview: resolve(import.meta.dirname, "src/renderer/preview.html") },
       },
     },
   },

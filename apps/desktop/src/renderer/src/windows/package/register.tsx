@@ -9,6 +9,7 @@ import { getState } from "../../lib/store.ts";
 import { PackageView } from "./PackageView.tsx";
 import { registerWindowView } from "../registry.ts";
 import { chromeOf, menuEntries, menuLabel } from "./chrome.ts";
+import { magicPackageActions } from "../magic/package-actions.ts";
 import { configurable, configure } from "./ConfigSheet.tsx";
 
 /** Configure… when the window's widget has config fields, after a line when the tree's entries come first. */
@@ -32,6 +33,6 @@ registerWindowView({
   },
   actions: (w) => {
     const c = chromeOf(w.id);
-    return configureEntry(w, c ? menuEntries(c.actions, c.send) : []);
+    return [...magicPackageActions(w), ...configureEntry(w, c ? menuEntries(c.actions, c.send) : [])];
   },
 });

@@ -16,7 +16,7 @@
   "lines in packages/core/src/actions/sources.ts": 692,
   "lines in packages/core/src/agents/tracker.ts": 937,
   "lines in packages/core/src/data/store.ts": 658,
-  "lines in packages/core/src/magic/service.ts": 936,
+  "lines in packages/core/src/magic/service.ts": 935,
   "lines in packages/core/src/terminals/panes.ts": 854,
   "lines in packages/core/src/windows/builtin.ts": 733,
   "lines in packages/ui/src/overlay.tsx": 689,

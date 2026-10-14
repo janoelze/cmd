@@ -16,6 +16,8 @@ const BASELINE = path.join(import.meta.dirname, "imports-debt.json");
 const PARTS: [string, string][] = [
   ["packages/protocol/", "protocol"],
   ["packages/remote-crypto/", "remote-crypto"],
+  // The Magic prompt's example packages (data the agent reads, docs/56): widget packages like packages/widgets'.
+  ["packages/core/src/magic/prompt/examples/", "widgets"],
   ["packages/core/", "core"],
   ["packages/cli/", "cli"],
   ["packages/ui/", "ui"],

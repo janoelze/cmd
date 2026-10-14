@@ -17,7 +17,9 @@ import "./library.css";
 
 /** "Weather · Lisbon" → "W": the first letter or digit. */
 const initial = (title: string) => (/[\p{L}\p{N}]/u.exec(title)?.[0] ?? "✦").toUpperCase();
-const sourceOf = (e: WidgetEntry) => (e.source === "builtin" ? "Built-in" : e.source === "package" ? (e.problem ? "Can't run" : `${e.builtin ? "Built-in · " : ""}${e.name} ${e.version}`) : "Made with Magic");
+const sourceOf = (e: WidgetEntry) => (e.source === "builtin" ? "Built-in" : e.source === "package" && !e.magic ? (e.problem ? "Can't run" : `${e.builtin ? "Built-in · " : ""}${e.name} ${e.version}`) : "Made with Magic");
+/** Made with Magic: the widgets of before (source "yours") and packages Magic made (docs/56). */
+const madeWithMagic = (e: WidgetEntry) => e.source === "yours" || (e.source === "package" && !!e.magic);
 
 function matches(e: WidgetEntry, query: string): boolean {
   const hay = [e.title, e.description, e.request].filter(Boolean).join(" ").toLowerCase();
@@ -39,9 +41,9 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
   useEffect(() => void cmd.call("widget.list", {}).then(setLibrary, () => {}), []);
 
   const shown = useMemo(() => library.filter((e) => matches(e, query)), [library, query]);
-  const yours = shown.filter((e) => e.source === "yours");
+  const yours = shown.filter(madeWithMagic);
   // Built-in packages (packages/widgets, docs/56) sit with the built-ins, not under Packages.
-  const packages = shown.filter((e) => e.source === "package" && !e.builtin);
+  const packages = shown.filter((e) => e.source === "package" && !e.builtin && !e.magic);
   const dev = (e: WidgetEntry) => !!e.tags?.includes("developer");
   const builtin = shown.filter((e) => (e.source === "builtin" || (e.source === "package" && e.builtin)) && !dev(e));
   // Shown only with Settings → Magic Widgets → Developer widgets on (the core leaves them out otherwise).
@@ -80,7 +82,9 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
     void showContextMenu(
       e.source === "builtin"
         ? [{ label: "Add to Workspace", run: () => void add(e) }]
-        : e.source === "package"
+        : e.source === "package" && e.magic
+          ? [{ label: "Add to Workspace", run: () => void add(e), enabled: !e.problem }, { label: "Show in Finder", run: () => e.dir && cmd.revealPath(e.dir), enabled: !!e.dir }, "-", { label: "Delete…", run: () => void remove(e) }]
+          : e.source === "package"
           ? [{ label: "Add to Workspace", run: () => void add(e), enabled: !e.problem }, { label: "Show in Finder", run: () => e.dir && cmd.revealPath(e.dir), enabled: !!e.dir }]
           : [
             { label: "Add to Workspace", run: () => void add(e) },

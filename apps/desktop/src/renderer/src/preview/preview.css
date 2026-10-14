@@ -1,0 +1,22 @@
+/* Magic's preview page (main.tsx): one widget window filling the viewport, as on the board. */
+body.tree-preview {
+  overflow: hidden;
+}
+
+.tree-preview-window {
+  position: absolute;
+  inset: 0;
+}
+
+.tree-preview-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tree-preview-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}

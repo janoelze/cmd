@@ -92,6 +92,8 @@ describe("a build on a Mac without Deno", () => {
     const installer = (dir: string) => (installs.push(dir), new Promise<string>((res) => (finish = () => res(bundledDeno(dir)))));
     const stateDir = fs.mkdtempSync(path.join(tmp, "core-"));
     const core = new Core({ socketPath: "", dbPath: null, terminals: fakeFactory().factory, pollMs: 0, magicBackend: () => backend, magicPreviewer: null, magicDeno: null, magicInstallDeno: installer, stateDir });
+    // These build widgets of the format before packages (magic/package/service.ts builds packages).
+    (await import("../src/magic/package/service.ts")).buildCmd2Widgets(core.magic);
     const steps: string[] = [];
     core.serve({ access: "local", send: (line) => {
       const m = JSON.parse(line) as { method?: string; params?: { type: string; progress?: { type: string; step?: { tool: string } } } };

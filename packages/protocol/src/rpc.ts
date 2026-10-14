@@ -5,7 +5,7 @@ import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow,
 import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent, SessionInfo, TurnRow, ViewQuery } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
-import type { MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
+import type { MagicPackageMethods, MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
 import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
 import type { JournalMethods } from "./journal.ts";
@@ -20,7 +20,6 @@ import type { ArrangeEvent, ArrangeMethods } from "./arrange.ts";
 import type { RemoteMethods } from "./remote.ts";
 import type { CoreHello } from "./version.ts";
 import type { WidgetHostEvent, WidgetHostMethods } from "./widget-host.ts";
-import type { MagicPackageMethods } from "./magic-package.ts";
 
 export interface CoreInfo {
   pid: number;
