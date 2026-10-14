@@ -211,4 +211,19 @@ describe("subscriptions", () => {
     expect(rt.last.got("event")).toHaveLength(0);
     expect(rt.last.killed).toBe(false);
   });
+
+  it("keeps a widget's console to about 50 lines a second, and says how many it dropped", async () => {
+    const { rt, events, open, isStatus } = await setup();
+    const w = await open();
+    await until(isStatus(w.id, "running"), "running");
+    for (let i = 0; i < 10_000; i++) rt.last.send({ kind: "log", level: "info", message: `tick ${i}` });
+    await until(() => events.some((e) => e.type === "widget.log" && / lines dropped/.test(e.message)), "the line saying what was dropped");
+    const logs = events.filter((e): e is Extract<CoreEvent, { type: "widget.log" }> => e.type === "widget.log" && e.windowId === w.id);
+    expect(logs.length).toBeLessThan(250); // the burst, a second's worth, the drop line
+    expect(logs[0]!.message).toBe("tick 0");
+    const dropped = logs.find((e) => / lines dropped/.test(e.message))!;
+    const n = Number(/… (\d+) lines dropped/.exec(dropped.message)![1]);
+    expect(n + logs.filter((e) => e.message.startsWith("tick ")).length).toBe(10_000);
+    expect(dropped.level).toBe("warn");
+  });
 });

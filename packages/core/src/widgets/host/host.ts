@@ -25,6 +25,7 @@ import type { WidgetPackages } from "../packages.ts";
 import { PackageConfig } from "../config.ts";
 import { HostConnection, type ConnectionTimes } from "./connection.ts";
 import type { ExitInfo, RuntimeProcess, WidgetRuntime } from "./runtime.ts";
+import { LogLimit } from "./log-limit.ts";
 import { TreeState } from "./tree.ts";
 
 const log = logger("widgets");
@@ -80,6 +81,8 @@ interface Instance {
   permissions: WidgetPermissions | null;
   /** The widget's error before it said hello (its main didn't import): an exit then is a load failure, not a crash. */
   loadError: string | null;
+  /** Its console as `widget.log`, about 50 lines a second at most (log-limit.ts). */
+  logs: LogLimit;
 }
 
 export class WidgetHost {
@@ -293,6 +296,7 @@ export class WidgetHost {
       pressedAt: 0,
       permissions: null,
       loadError: null,
+      logs: new LogLimit((l) => this.#core.broadcast({ type: "widget.log", windowId: w.id, ...l })),
     };
     this.#all.set(w.id, inst);
     this.#launch(inst);
@@ -386,10 +390,10 @@ export class WidgetHost {
         inst.subs.delete(m.id);
         return;
       case "log":
-        this.#core.broadcast({ type: "widget.log", windowId: inst.windowId, level: m.level, message: String(m.message).slice(0, 2000) });
+        if (!inst.logs.push({ level: m.level, message: String(m.message).slice(0, 2000) })) return;
         return log[m.level === "error" ? "warn" : m.level === "warn" ? "info" : "debug"](`widget ${inst.pkg?.name}/${inst.widget?.id}: ${String(m.message).slice(0, 2000)}`);
       case "error":
-        this.#core.broadcast({ type: "widget.log", windowId: inst.windowId, level: "error", message: String(m.message).slice(0, 2000), stack: [m.stack, m.componentStack].filter(Boolean).join("\n").slice(0, 4000) || null });
+        if (!inst.logs.push({ level: "error", message: String(m.message).slice(0, 2000), stack: [m.stack, m.componentStack].filter(Boolean).join("\n").slice(0, 4000) || null })) return;
         return log.warn(`widget ${inst.pkg?.name}/${inst.widget?.id} error: ${String(m.message).slice(0, 500)}`, { stack: m.stack?.slice(0, 2000) });
     }
   }

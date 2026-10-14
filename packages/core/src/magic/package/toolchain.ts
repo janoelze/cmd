@@ -104,7 +104,8 @@ function modules(repo: string): Record<string, string> | null {
  * checkout's @cmd/widget-api, React, Vitest, TypeScript and types, and their commands in
  * node_modules/.bin, so `npm test`, an editor and `tsc` work in the folder as they would after
  * an install (@cmd/widget-api isn't on npm yet). A module already there (a real install, the
- * person's own) is left alone. Returns what it linked, or null when this cmd has no checkout.
+ * person's own) is left alone, and so is a live link; a dangling one is linked again. Returns
+ * what it linked, or null when this cmd has no checkout.
  */
 export function linkDevModules(dir: string, repo = REPO): string[] | null {
   const mods = modules(repo);
@@ -112,13 +113,17 @@ export function linkDevModules(dir: string, repo = REPO): string[] | null {
   if (!mods || !exists(ts)) return null;
   const all: Record<string, string> = { ...mods, typescript: real(ts) };
   const linked: string[] = [];
+  // There: a real install, the person's own, or a live link. A link into a checkout that's gone
+  // (a removed worktree, a moved app) is replaced, or npm test would never find the module again.
   const there = (p: string) => {
     try {
-      fs.lstatSync(p);
-      return true;
+      if (!fs.lstatSync(p).isSymbolicLink()) return true;
     } catch {
       return false;
     }
+    if (fs.existsSync(p)) return true;
+    fs.unlinkSync(p);
+    return false;
   };
   for (const [name, target] of Object.entries(all)) {
     const at = path.join(dir, "node_modules", name);
