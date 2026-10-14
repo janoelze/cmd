@@ -19,6 +19,19 @@ import type { PagesEvent, PagesMethods } from "./pages.ts";
 import type { ArrangeEvent, ArrangeMethods } from "./arrange.ts";
 import type { RemoteMethods } from "./remote.ts";
 import type { CoreHello } from "./version.ts";
+import type { WidgetEnv, WidgetPatch, WidgetTree } from "./widget-tree.ts";
+import type { WidgetPermissions } from "./widget-package.ts";
+
+/**
+ * A package widget's process as its window shows it (docs/56, "The runtime"): starting,
+ * running, stopped (with why: "crashed", "stalled", "out of memory", "Made for a newer cmd")
+ * or waiting for the person to grant what it asks.
+ */
+export interface WidgetHostStatus {
+  kind: "status";
+  state: "starting" | "running" | "stopped" | "waiting-grant";
+  reason?: string;
+}
 
 export interface CoreInfo {
   pid: number;
@@ -359,6 +372,18 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   /** Delete a widget made with Magic: its folder, revisions and secrets. Refused while a window shows it. */
   "widget.delete": { params: { ref: string }; result: null };
 
+  // widget packages (docs/56)
+  /** The person acted on an element of a package widget's tree (`handler` from a HandlerRef, `event` the prop's name). */
+  "widget.interact": { params: { windowId: WindowId; handler: number; event: string; value?: unknown }; result: null };
+  /** Send this window's tree again (a widget.tree with the whole tree, and its status): a view opened late, or a rev skipped. */
+  "widget.resync": { params: { windowId: WindowId }; result: null };
+  /** Where a package widget's window is drawn (theme, size class, placement); the process gets it as `env`. */
+  "widget.env": { params: { windowId: WindowId } & Pick<WidgetEnv, "theme" | "size" | "placement">; result: null };
+  /** Start a stopped package widget's process again (Restart, after "Stopped · crashed"). */
+  "widget.restart": { params: { windowId: WindowId }; result: null };
+  /** Grant a package what it asks (`permissions` omitted: everything it declares); its waiting windows start. */
+  "widget.grant": { params: { name: string; permissions?: WidgetPermissions }; result: { version: string; permissions: WidgetPermissions } };
+
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
   /** Which of these paths exist, resolved against `cwd` (~ expanded): the absolute path, or null. For terminal links. */
@@ -494,6 +519,9 @@ export type CoreEvent =
   | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
   /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a workspace). */
   | { type: "widget.library"; entries: WidgetEntry[] }
+  // widget packages (docs/56)
+  /** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window. */
+  | { type: "widget.tree"; windowId: WindowId; message: WidgetTree | WidgetPatch | WidgetHostStatus }
   | ActionsEvent
   | StatsEvent
   | NowPlayingEvent

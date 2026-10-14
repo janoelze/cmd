@@ -139,6 +139,12 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "widget.rename": "never",
   "widget.duplicate": "never",
   "widget.delete": "never",
+  // widget packages (docs/56): the app's window and the CLI; remote draws trees later (phase 1, Remote)
+  "widget.interact": "never",
+  "widget.resync": "never",
+  "widget.env": "never",
+  "widget.restart": "never",
+  "widget.grant": "never", // a person's answer, never a tool's or a device's
   "fs.list": "view",
   "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within workspaces later
   "fs.read": "view",
@@ -542,6 +548,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.pairEnded":
     case "remote.input":
     case "widget.library":
+    case "widget.tree": // the phone draws trees later (docs/56, phase 1's Remote)
     case "window.closedChanged": // window.closed and window.reopen aren't remote
     case "actions.changed":
     case "stats.changed":

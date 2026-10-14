@@ -119,6 +119,12 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "widget.rename": "never",
   "widget.duplicate": "never",
   "widget.delete": "never",
+  // widget packages (docs/56): the app's window and the CLI; remote draws trees later (phase 1, Remote)
+  "widget.interact": "never",
+  "widget.resync": "never",
+  "widget.env": "never",
+  "widget.restart": "never",
+  "widget.grant": "never", // a person's answer, never a tool's or a device's
   "fs.list": "read",
   "fs.resolve": "never",
   "fs.read": "read",
