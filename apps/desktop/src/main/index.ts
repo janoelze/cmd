@@ -22,7 +22,7 @@ import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { buildInstance, readFlavor } from "./flavor.ts";
 import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
-import { savedAppearance, setAppearance, type Appearance } from "./appearance.ts";
+import { savedAppearance, setAppearance, themeQuery, type Appearance } from "./appearance.ts";
 import { setDockIcon, startDockIcon } from "./dock-icon.ts";
 import { WorkspaceWindows, type Bounds } from "./workspaces.ts";
 import { handleCertificates } from "./certificates.ts";
@@ -515,9 +515,9 @@ function createWindow(workspaceId: string, b: Bounds): BrowserWindow {
   });
   performance.mark("boot:window-created");
   win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));
-  // The renderer reads its workspace from the URL before the core answers.
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?workspace=${encodeURIComponent(workspaceId)}`);
-  else win.loadFile(path.join(here, "../renderer/index.html"), { query: { workspace: workspaceId } });
+  const query = new URLSearchParams({ workspace: workspaceId, ...themeQuery() }).toString(); // read before the core answers
+  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?${query}`);
+  else win.loadFile(path.join(here, "../renderer/index.html"), { search: query });
   return win;
 }
 
@@ -561,7 +561,7 @@ function openUtility(page: UtilityPage, o: { title: string; width: number; heigh
   win.on("closed", () => utility.get(page) === win && utility.delete(page));
   // `pnpm workbench --headless`: an agent drives it without taking over the screen (no window, no Dock icon: whenReady).
   win.once("ready-to-show", () => (page !== "workbench" || !process.env.CMD_WORKBENCH_HIDDEN) && win.show());
-  const search = at ? `?${page === "workbench" ? "story" : "page"}=${encodeURIComponent(at)}` : "";
+  const search = `?${new URLSearchParams({ ...(at ? { [page === "workbench" ? "story" : "page"]: at } : {}), ...themeQuery() })}`;
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html${search}`);
   else win.loadFile(path.join(here, `../renderer/${page}.html`), { search });
   return win;
