@@ -47,9 +47,12 @@ export class WidgetLibrary {
   readonly building = new Set<string>();
   /** A Magic package's last screenshot, by name (magic/package/service.ts sets it). */
   shotOf: (name: string) => string | undefined = () => undefined;
+  /** The instance's state folder ($CMD_HOME); null in tests without one. */
+  readonly stateDir: string | null;
 
   constructor(core: CoreContext, o: LibraryOptions = {}) {
     this.#core = core;
+    this.stateDir = o.stateDir ?? null;
     this.packages = createPackages(core, () => {
       this.changed();
       this.reloader?.sync(this.packages.list());
