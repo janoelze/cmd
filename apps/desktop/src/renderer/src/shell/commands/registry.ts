@@ -180,6 +180,12 @@ export function useMenuState(): void {
   }, [state, actions, ai, textSelected, focus, recent]);
 }
 
+/** useMenuState in a component of its own: what it follows changes often (focus, a window's actions), and the shell needn't render for it. */
+export function MenuStateSync(): null {
+  useMenuState();
+  return null;
+}
+
 /** A window's own shortcuts (CommandSpec.scope "window"): run here while they apply, not by the menu, so other windows keep the keys. */
 export function useWindowShortcuts(): void {
   useEffect(() => {

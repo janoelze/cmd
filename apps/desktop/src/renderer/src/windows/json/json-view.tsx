@@ -116,7 +116,8 @@ export function JsonView({ win, focused }: WindowViewProps) {
   }, [text, flavor, read?.truncated]);
   // The last version that parsed, shown while the file doesn't (being written).
   const good = useRef<{ root: JsonNode; starts: number[]; invalid: number } | null>(null);
-  if (parsed?.root) good.current = { root: parsed.root, starts: parsed.starts, invalid: parsed.invalid };
+  // Replaced only by a new parse: what derives from it (lineFor, the window's actions) stays put while scrolling.
+  if (parsed?.root && good.current?.root !== parsed.root) good.current = { root: parsed.root, starts: parsed.starts, invalid: parsed.invalid };
   useEffect(() => void (good.current = null), [file]);
   const shown = parsed ? good.current : null;
   const root = shown?.root ?? null;

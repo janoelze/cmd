@@ -24,7 +24,7 @@ import { MainView } from "./board/MainView.tsx";
 import { useFirstNavigator, useSliding } from "./board/sidebars.ts";
 import { setDocks, setStripWidth } from "./board/view.ts";
 import { reopenClosed, useRememberClosed } from "./closed.ts";
-import { commandContext, runCommand, useMenuState, useWindowShortcuts } from "./commands/registry.ts";
+import { commandContext, runCommand, MenuStateSync, useWindowShortcuts } from "./commands/registry.ts";
 import { Feedback } from "./Feedback.tsx";
 import { useLaunch } from "./launch.ts";
 import { homeOf, rowMenu, terminalMenu, workspaceMenu } from "./menus.ts";
@@ -91,7 +91,6 @@ export function App() {
   useRememberClosed(board, s.connected);
   useNotifications(selected, s);
   useDock();
-  useMenuState();
   useWindowShortcuts();
   useFirstNavigator(all.workspaceId, !!workspace && s.connected, board.storedDocks === null, { hidden: !sidebarOpen, width: sidebarWidth });
   const winWidth = useWindowWidth();
@@ -212,6 +211,7 @@ export function App() {
       <Presence when={sheet?.kind === "whatsNew" && sheet.releases}>{(releases, open) => <WhatsNew open={open} releases={releases} onClose={closeSheet} onLink={(url) => (closeSheet(), openLink(url))} />}</Presence>
       <Presence when={boot}>{(report, open) => <BootSheet open={open} report={report} />}</Presence>
       <Presence when={all.pairRequests[0]}>{(request, open) => <PairSheet key={request.requestId} open={open} request={request} />}</Presence>
+      <MenuStateSync />
       <SitePermissionSheet />
       <Approvals />
     </div>
