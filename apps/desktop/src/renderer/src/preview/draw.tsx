@@ -8,7 +8,7 @@ import "../styles.css";
 import "./preview.css";
 import { UIProvider, Window as Frame, WindowBar, WindowBody, WindowFrame } from "@cmd/ui";
 import "@cmd/ui/themes/builtin";
-import { applyTheme, themeFor } from "@cmd/ui/themes";
+import { allThemes, applyTheme, themeFor } from "@cmd/ui/themes";
 import type { MagicPreviewTree } from "@cmd/protocol";
 import { useWindowStatus } from "../lib/windowActions.ts";
 import { useWindowChrome } from "../windows/registry.ts";
@@ -19,6 +19,8 @@ import { TreeStore } from "../windows/package/tree.ts";
 declare global {
   interface Window {
     __cmdPreview(tree: MagicPreviewTree): Promise<Measured>;
+    /** Every theme's id, in the Settings order (`cmd widget preview --themes all`). */
+    __cmdPreviewThemes(): string[];
   }
 }
 
@@ -51,6 +53,8 @@ function Bar({ title, icon }: { title: string; icon: string }) {
 
 const root = createRoot(document.getElementById("root")!);
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+window.__cmdPreviewThemes = () => allThemes().map((t) => t.id);
 
 window.__cmdPreview = async (tree) => {
   errors.length = 0;

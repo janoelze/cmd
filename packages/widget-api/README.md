@@ -143,7 +143,7 @@ This window's config (package.json's `config` fields, as the person set them).
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.config.get<T extends Record<string, WireValue> = Record<string, WireValue>>() => T` | 1.0 | none | The values now. |
-| `cmd.config.use<T extends Record<string, WireValue> = Record<string, WireValue>>() => T` | 1.0 | none | Live: the hook `useConfig()`. |
+| `cmd.config.use<T extends ConfigShape<T> = Record<string, WireValue>>() => T` | 1.0 | none | Live: the hook `useConfig()`. |
 
 #### `cmd.state`
 
@@ -188,7 +188,7 @@ The reads as subscriptions: each gets the current value at once and every change
 | `useActions(): ApiAction[]` | 1.0 | The workspace's Actions (docs/36), live. |
 | `useAgents(query?: ApiScopeQuery): ApiAgent[]` | 1.0 | The agents of this workspace (or every workspace with `{ scope: "all" }`), live: a row updates when an agent's state, name or line changes. Empty until they arrive. Needs `workspace: ["read"]` (`["all"]` for every workspace). |
 | `useCompletion(request: ApiCompletionRequest \| null): CompletionState` | 1.0 | Asks the person's AI once per distinct `request` (a new prompt asks again; null asks nothing): `cmd.ai.complete` as a hook. Needs `ai: ["complete"]`. |
-| `useConfig<T extends Record<string, WireValue> = Record<string, WireValue>>() => T` | 1.0 | This window's config values (from package.json's `config` fields, as the person set them), live. Secret fields are never here: a widget never holds a secret (`cmd.net.fetch`'s `auth` names one). |
+| `useConfig<T extends ConfigShape<T> = Record<string, WireValue>>() => T` | 1.0 | This window's config values (from package.json's `config` fields, as the person set them, else their defaults), live, typed by `cmd-env.d.ts`. Secret fields are never here: a widget never holds a secret (`cmd.net.fetch`'s `auth` names one). |
 | `useData<T>(fn: (): Promise<T>, opts?: { every?: number \| undefined; }) => DataState<T>` | 1.0 | The outside world on a timer: runs `fn` (a `cmd.net.fetch`) now and every `every` seconds (default 60), keeps the last good data through failures and says how fresh it is. A run that throws keeps the old data with `stale` and `error` set. |
 | `useEnv(): WidgetEnv` | 1.0 | Where the widget runs: cmd's version, the API served, the theme, the size class and the placement (board or sidebar), live. |
 | `useEvents(query?: ApiEventQuery): ApiEvent[]` | 1.0 | Events from the log matching `query`, newest last: the query's result first, then each new one as it happens; at most `query.limit` (default 200) are kept. Needs `events: [<class>]` for each class of events it reads. |
@@ -199,7 +199,7 @@ The reads as subscriptions: each gets the current value at once and every change
 | `useWindows(query?: ApiScopeQuery): ApiWindow[]` | 1.0 | The windows of this workspace (or all), live, with which is selected. |
 | `useWorkspace(): ApiWorkspace \| null` | 1.0 | The widget's workspace (id, name, folder, branch), live; null until it arrives. Needs `workspace: ["read"]`. |
 
-`defineWidget<Config extends Record<string, WireValue> = Record<string, WireValue>>(render: (props: { config: Config; }) => ReactNode) => Widget`: Declares a widget: `render` is its view, called with this window's config (live). The module's default export is what cmd runs; a plain component works too. export default defineWidget<{ repo: string }>(({ config }) => <Text>{config.repo}</Text>);
+`defineWidget<Config extends ConfigShape<Config> = Record<string, WireValue>>(render: (props: { config: Config; }) => ReactNode) => Widget`: Declares a widget: `render` is its view, called with this window's config (live). The module's default export is what cmd runs; a plain component works too. export default defineWidget<{ repo: string }>(({ config }) => <Text>{config.repo}</Text>);
 
 ### Elements
 

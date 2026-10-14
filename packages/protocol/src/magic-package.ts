@@ -66,5 +66,10 @@ export interface MagicPreviewTree {
   messages: (WidgetTree | WidgetPatch)[];
   title: string;
   icon: string;
-  theme: "dark" | "light";
+  /** A theme's id ("dark", "light", "gruvbox-dark"). */
+  theme: string;
 }
+
+/** The reference window sizes (the reference windows' matrix, docs/40): what previews and the Workbench draw widgets at. */
+export const PREVIEW_SIZES = { narrow: [320, 520], regular: [560, 460], wide: [900, 560] } as const;
+export type PreviewSize = keyof typeof PREVIEW_SIZES;

@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { widgetsHome } from "@cmd/protocol/node";
 import type { Catalog, ComponentInfo, PropInfo, PropKind, StoryInfo, VariantInfo } from "./types.ts";
 
 export interface CatalogRoots {
@@ -18,10 +19,28 @@ export interface CatalogRoots {
   renderer: string;
   /** packages/widgets: the built-in widget packages, whose stories are "widgets/<name>". */
   widgets: string;
+  /** The person's packages folder (~/.cmd/widgets, or $CMD_WIDGETS_HOME): its packages' stories are "widgets/<name>" too, linked ones read from their own folder. */
+  home: string | null;
 }
 
-export function catalogRoots(repo: string): CatalogRoots {
-  return { repo, kit: path.join(repo, "packages/ui/src"), renderer: path.join(repo, "apps/desktop/src/renderer/src"), widgets: path.join(repo, "packages/widgets") };
+export function catalogRoots(repo: string, home: string | null = widgetsHome()): CatalogRoots {
+  return { repo, kit: path.join(repo, "packages/ui/src"), renderer: path.join(repo, "apps/desktop/src/renderer/src"), widgets: path.join(repo, "packages/widgets"), home };
+}
+
+/** Every widget package by name, at its real folder: the built-in ones, then the person's (a link is its target's folder), which win over a built-in of the same name, as in the core. */
+export function widgetPackages(roots: CatalogRoots): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const root of [roots.widgets, roots.home]) {
+    if (!root || !fs.existsSync(root)) continue;
+    for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+      if (e.name.startsWith(".") || e.name === "node_modules") continue;
+      try {
+        const dir = fs.realpathSync(path.join(root, e.name));
+        if (fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, "package.json"))) out.set(e.name, dir);
+      } catch {}
+    }
+  }
+  return out;
 }
 
 /** Props that come from DOM or React types but matter for a component's states (children: only where the implementation takes them by name; an <input> passes them on in ...rest). */
@@ -30,15 +49,19 @@ const INHERITED = new Set(["children", "disabled", "placeholder"]);
 const SKIPPED = new Set(["key", "ref", "className", "style"]);
 
 export function storyFiles(roots: CatalogRoots): string[] {
-  const widgets = fs.existsSync(roots.widgets) ? walk(roots.widgets).filter((f) => /[\\/]src[\\/][^\\/]+\.story\.tsx$/.test(f)) : [];
+  const widgets = [...widgetPackages(roots).values()].flatMap((dir) => {
+    const src = path.join(dir, "src");
+    return fs.existsSync(src) ? fs.readdirSync(src).filter((f) => f.endsWith(".story.tsx")).map((f) => path.join(src, f)) : [];
+  });
   return [...[roots.kit, roots.renderer].flatMap((dir) => walk(dir).filter((f) => f.endsWith(".story.tsx"))), ...widgets].sort();
 }
 
 /** A widget package's story: its package's name, and whether the package has more than this one. */
 export function widgetStoryOf(file: string, roots: CatalogRoots): { pkg: string; only: boolean } | null {
-  if (!file.startsWith(roots.widgets + path.sep)) return null;
-  const pkg = path.relative(roots.widgets, file).split(path.sep)[0]!;
-  return { pkg, only: fs.readdirSync(path.dirname(file)).filter((f) => f.endsWith(".story.tsx")).length === 1 };
+  if (!file.endsWith(".story.tsx")) return null;
+  for (const [pkg, dir] of widgetPackages(roots))
+    if (path.dirname(file) === path.join(dir, "src")) return { pkg, only: fs.readdirSync(path.dirname(file)).filter((f) => f.endsWith(".story.tsx")).length === 1 };
+  return null;
 }
 
 function walk(dir: string): string[] {
@@ -88,7 +111,7 @@ export function extractCatalog(roots: CatalogRoots, cache = new SourceCache()): 
   const stories = storyFiles(roots);
   const kitIndex = path.join(roots.kit, "index.ts");
   // A widget package's components are the widget API's elements, not the kit's: nothing to read beside them.
-  const beside = stories.map(besideOf).filter((f): f is string => !!f && !f.startsWith(roots.kit) && !f.startsWith(roots.widgets));
+  const beside = stories.filter((f) => !widgetStoryOf(f, roots)).map(besideOf).filter((f): f is string => !!f && !f.startsWith(roots.kit));
   const options: ts.CompilerOptions = {
     target: ts.ScriptTarget.ES2023,
     module: ts.ModuleKind.NodeNext,
@@ -331,6 +354,8 @@ function story(file: string, roots: CatalogRoots, byFile: Map<string, ComponentI
   const rank = (id: string) => (own.has(id) ? 0 : id === named ? 1 : 2);
   const components = [...new Set(variants.flatMap((v) => v.components ?? []))].sort((a, b) => rank(a) - rank(b));
   const doc = headerOf(src);
+  // A widget package's story gets its first state at every reference size (widgetStory.tsx draws it).
+  if (pkg && variants.length) variants.push({ name: "Sizes", doc: `${variants[0]!.name} at the reference sizes: narrow, regular and wide.`, components: [] });
   const info: StoryInfo = { id, title, group, file: path.relative(roots.repo, file), variants, components };
   if (doc) info.doc = doc;
   return info;

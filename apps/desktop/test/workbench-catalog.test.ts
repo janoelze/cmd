@@ -6,7 +6,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { catalogRoots, extractCatalog, headerOf } from "../src/renderer/src/workbench/catalog/extract.ts";
+import os from "node:os";
+import { catalogRoots, extractCatalog, headerOf, storyFiles, widgetStoryOf } from "../src/renderer/src/workbench/catalog/extract.ts";
 import type { Catalog, ComponentInfo } from "../src/renderer/src/workbench/catalog/types.ts";
 import { argsFor, matrixOf } from "../src/renderer/src/workbench/args.ts";
 
@@ -16,7 +17,8 @@ const kit = (name: string): ComponentInfo => catalog.components.find((c) => c.id
 const prop = (c: string, p: string) => kit(c).props.find((x) => x.name === p);
 
 beforeAll(() => {
-  catalog = extractCatalog(catalogRoots(repo));
+  // The repo's own: not the packages of whoever runs the tests (~/.cmd/widgets).
+  catalog = extractCatalog(catalogRoots(repo, null));
 }, 30_000);
 
 describe("components", () => {
@@ -46,6 +48,29 @@ describe("components", () => {
     expect(prop("Button", "children")).toBeDefined();
     expect(prop("TextField", "children")).toBeUndefined();
     expect(prop("TextField", "disabled")).toBeDefined();
+  });
+});
+
+describe("widget packages' stories", () => {
+  it("are widgets/<name> with a Sizes variant, the person's packages too, linked ones from their folder", () => {
+    const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-wb-home-")));
+    const away = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-wb-pkg-")));
+    try {
+      fs.mkdirSync(path.join(away, "src"));
+      fs.writeFileSync(path.join(away, "package.json"), "{}");
+      fs.writeFileSync(path.join(away, "src/mine.story.tsx"), "// Mine.\nexport default () => null;\n/** Busy. */\nexport const Busy = {};\n");
+      fs.symlinkSync(away, path.join(home, "mine"));
+      const roots = catalogRoots(repo, home);
+      const file = path.join(away, "src/mine.story.tsx");
+      expect(storyFiles(roots)).toContain(file);
+      expect(widgetStoryOf(file, roots)).toEqual({ pkg: "mine", only: true });
+      const mine = extractCatalog(roots).stories.find((s) => s.id === "widgets/mine")!;
+      expect(mine.variants.map((v) => v.name)).toEqual(["Busy", "Sizes"]);
+      expect(catalog.stories.find((s) => s.id === "widgets/agents")!.variants.at(-1)!.name).toBe("Sizes");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(away, { recursive: true, force: true });
+    }
   });
 });
 

@@ -6,8 +6,10 @@
 
 import { Window, WindowBar, WindowBody, WindowFrame } from "@cmd/ui";
 import type { ReactNode } from "react";
+import { PREVIEW_SIZES } from "@cmd/protocol";
 
-export const SIZES = { narrow: [320, 520], regular: [560, 460], wide: [900, 560] } as const;
+/** The reference sizes (protocol's, so `cmd widget preview` draws widgets at the same ones). */
+export const SIZES = PREVIEW_SIZES;
 export type SizeName = keyof typeof SIZES;
 
 export function RefWindow({ icon, name, size = "wide", children }: { icon: string; name: string; size?: SizeName | readonly [number, number]; children: ReactNode }) {

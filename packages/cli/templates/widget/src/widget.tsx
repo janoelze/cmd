@@ -21,7 +21,7 @@ export function visible(terminals: Terminal[], query: string, show: Show): Termi
 
 export default function Terminals() {
   const terminals = useTerminals();
-  const { showFolders } = useConfig(); // typed from package.json's config (cmd-env.d.ts)
+  const { showFolders = true } = useConfig(); // typed from package.json's config (cmd-env.d.ts); cmd fills in the default, a test's fake host doesn't
   const [show, setShow] = useStoredState<Show>("show", "all"); // kept per window, across restarts
   const [query, setQuery] = useStoredState<string>("query", "");
   const list = visible(terminals, query, show);
@@ -55,7 +55,7 @@ export default function Terminals() {
         <List>
           {list.map((t) => (
             <ListRow key={t.id} onClick={() => t.windowId && void cmd.windows.select(t.windowId).catch(() => {})}>
-              <ListRowIcon icon={t.agentId ? "sparkle" : "terminal"} tone={t.command ? undefined : "dim"} />
+              <ListRowIcon icon="terminal" tone={t.command ? undefined : "dim"} />
               <ListRowContent title={t.title} place={showFolders ? folderOf(t.cwd) : undefined} />
               <ListRowEnd>{t.command ? <Chip>{t.command}</Chip> : null}</ListRowEnd>
             </ListRow>

@@ -22,7 +22,7 @@ function rich(string $s): string
 
 function page_start(string $title, string $description, string $current): void
 {
-    $nav = ['' => 'cmd', 'releases/' => 'Releases', 'usage/' => 'Usage'];
+    $nav = ['' => 'cmd', 'releases/' => 'Releases', 'widgets/' => 'Widgets', 'usage/' => 'Usage'];
     $GLOBALS['site_root'] = str_repeat('../', substr_count($current, '/')); // relative, so it works under /cmd/ and locally
     $url = SITE_URL . $current;
     ?><!doctype html>

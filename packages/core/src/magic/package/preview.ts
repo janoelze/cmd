@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { PREVIEW_SIZES, type PreviewSize } from "@cmd/protocol";
 import type { PreviewRequest, Previewer, PreviewShot } from "../previewer.ts";
 import { STRIP, WIDE } from "../previewer.ts";
 import type { TreeVariant } from "./toolchain.ts";
@@ -91,4 +92,82 @@ export async function previewTrees(previewer: Previewer | null, variants: TreeVa
     if (s.scrollW > c.size[0] + 2) warnings.push(`${c.label}: content is ${s.scrollW}px wide in a ${c.size[0]}px window`);
   });
   return { ok: !problems.length, problems, warnings, shots: pngs };
+}
+
+// ── every theme and size (cmd widget preview) ───────────────
+
+export interface MatrixOptions {
+  /** Theme ids, or "all" (every theme the preview page has). */
+  themes: string[] | "all";
+  /** Reference sizes; null: each state at its story's size, else regular. */
+  sizes: PreviewSize[] | null;
+  /** Where the shots go (created); none: no files. */
+  out?: string;
+}
+
+export interface MatrixShot {
+  variant: string;
+  widget: string;
+  theme: string;
+  size: PreviewSize;
+  /** The PNG's path, when written. */
+  file?: string;
+  /** What's wrong with this render: overflow, an empty state where the state has data, console errors. */
+  problems: string[];
+}
+
+const fileSafe = (s: string) => s.replace(/[^\w.-]+/g, "-");
+
+/**
+ * Each state × theme × size drawn by the built preview page in Playwright's Chromium (one page per
+ * size, redrawn per theme), each checked: content wider than the window, an empty state where the
+ * story gives data, and errors in the console, the page or the widget's own render.
+ */
+export async function previewMatrix(variants: TreeVariant[], widgets: Map<string, { title: string; icon: string }>, o: MatrixOptions): Promise<MatrixShot[]> {
+  let chromium: typeof import("playwright").chromium;
+  try {
+    ({ chromium } = await import("playwright"));
+  } catch {
+    throw new Error("Playwright isn't installed here, so nothing can be drawn (a checkout's pnpm install has it)");
+  }
+  const served = await servePreviewPage();
+  const browser = await chromium.launch();
+  const out: MatrixShot[] = [];
+  try {
+    if (o.out) fs.mkdirSync(o.out, { recursive: true });
+    const page = await browser.newPage({ viewport: { width: 560, height: 460 }, deviceScaleFactor: 2 });
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (m) => m.type() === "error" && !/Content Security Policy/.test(m.text()) && errors.push(m.text()));
+    await page.route("**/*", (route) => (route.request().url().startsWith(served.origin + "/") ? route.continue() : route.abort()));
+    await page.goto(served.url, { waitUntil: "load" });
+    await page.waitForFunction(() => typeof (window as unknown as { __cmdPreview?: unknown }).__cmdPreview === "function");
+    const themes = o.themes === "all" ? await page.evaluate(() => (window as unknown as { __cmdPreviewThemes(): string[] }).__cmdPreviewThemes()) : o.themes;
+    for (const v of variants) {
+      const w = widgets.get(v.widget) ?? { title: v.widget, icon: "puzzlepiece.extension" };
+      const own = v.size && v.size in PREVIEW_SIZES ? (v.size as PreviewSize) : "regular";
+      for (const size of o.sizes ?? [own]) {
+        const [width, height] = PREVIEW_SIZES[size];
+        await page.setViewportSize({ width, height });
+        for (const theme of themes) {
+          errors.length = 0;
+          const m = (await page.evaluate(drawTree({ messages: v.messages, title: w.title, icon: w.icon, theme }))) as Omit<PreviewShot, "png">;
+          const problems = [...new Set([...v.errors, ...m.errors, ...errors])];
+          if (m.scrollW > width + 2) problems.push(`content is ${m.scrollW}px wide in a ${width}px window`);
+          if (v.empty && v.data && !/empty|none|nothing|blank/i.test(v.name)) problems.push("shows its empty state, though this state gives it data");
+          if (m.text === 0 && m.nodes < 3) problems.push("draws nothing");
+          let file: string | undefined;
+          if (o.out) {
+            file = path.join(o.out, `${fileSafe(variants.some((x) => x.widget !== v.widget) ? `${v.widget}-${v.name}` : v.name)}-${size}-${fileSafe(theme)}.png`);
+            await page.screenshot({ path: file });
+          }
+          out.push({ variant: v.name, widget: v.widget, theme, size, file, problems });
+        }
+      }
+    }
+  } finally {
+    served.close();
+    await browser.close();
+  }
+  return out;
 }

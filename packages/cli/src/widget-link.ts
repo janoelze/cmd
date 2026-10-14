@@ -17,8 +17,9 @@ export const LINK_SUBS = ["link", "unlink", "remove"];
 
 export const WIDGET_LINK_HELP = `       cmd widget link [dir]        add a widget package to the Widget Library from its folder (a link in
                                    ~/.cmd/widgets); cmd asks for what it wants, and saves reload it
-       cmd widget unlink <name>     take a linked package out of the Widget Library (also: remove;
-                                   --force removes a package that isn't a link, folder and all)`;
+       cmd widget unlink <name>     take a linked package out of the Widget Library
+       cmd widget remove <name>     the same; --force removes a package that isn't a link,
+                                   folder and all`;
 
 /** How long to wait for the Library to list (or drop) a package. */
 const LIBRARY_MS = 5000;

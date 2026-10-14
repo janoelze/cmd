@@ -29,7 +29,10 @@ export function workbenchCatalog(repo: string): Plugin {
     const loaders = catalog.stories.map((s) => `  ${JSON.stringify(s.id)}: () => ${load(s)},`);
     return `export const catalog = ${JSON.stringify(catalog)};\nexport const loaders = {\n${loaders.join("\n")}\n};\n`;
   };
-  const relevant = (file: string) => !!roots && /\.tsx?$/.test(file) && (file.startsWith(roots.kit) || file.startsWith(roots.renderer) || file.startsWith(roots.widgets));
+  const outside = () => (roots ? [...x!.widgetPackages(roots).values()].filter((d) => !d.startsWith(repo + path.sep)) : []);
+  const relevant = (file: string) => !!roots && /\.tsx?$/.test(file) && (file.startsWith(roots.kit) || file.startsWith(roots.renderer) || file.startsWith(roots.widgets) || outside().some((d) => file.startsWith(d + path.sep)));
+  /** The person's widget packages outside the checkout (~/.cmd/widgets, linked folders), found when the server starts. */
+  let theirs: string[] = [];
 
   const changed = (server: ViteDevServer, file: string) => {
     if (!relevant(file)) return;
@@ -64,14 +67,28 @@ export function workbenchCatalog(repo: string): Plugin {
       if (modules.length) hmr.sent = hmr.heard;
     },
     apply: "serve",
-    resolveId: (id) => (id === ID ? RESOLVED : undefined),
+    // The person's packages (cmd widget dev, docs/56) live outside the checkout: the dev server may
+    // serve them, and what they import of the widget API and React is the checkout's, as in the
+    // widget process (an installed package has no node_modules of its own).
+    async config(_config, env) {
+      if (env.command !== "serve") return;
+      x ??= await import("./extract.ts");
+      roots ??= x.catalogRoots(repo);
+      cache ??= new x.SourceCache();
+      theirs = outside();
+      return theirs.length ? { server: { fs: { allow: [repo, ...theirs] } } } : undefined;
+    },
+    async resolveId(id, importer) {
+      if (id === ID) return RESOLVED;
+      if (!importer || !theirs.some((d) => importer.startsWith(d + path.sep))) return undefined;
+      if (/^(@cmd\/widget-api|react)(\/|$)/.test(id)) return this.resolve(id, path.join(repo, "packages/widget-api/src/index.ts"), { skipSelf: true });
+      return undefined;
+    },
     async load(id) {
       if (id !== RESOLVED) return undefined;
-      if (!x) {
-        x = await import("./extract.ts");
-        roots = x.catalogRoots(repo);
-        cache = new x.SourceCache();
-      }
+      x ??= await import("./extract.ts");
+      roots ??= x.catalogRoots(repo);
+      cache ??= new x.SourceCache();
       code ??= build();
       return code;
     },
@@ -79,6 +96,7 @@ export function workbenchCatalog(repo: string): Plugin {
       // The kit is outside the renderer's root: watch it for new story files too.
       server.watcher.add(path.join(repo, "packages/ui/src"));
       server.watcher.add(path.join(repo, "packages/widgets"));
+      for (const d of theirs) server.watcher.add(path.join(d, "src"));
       server.middlewares.use("/__workbench/hmr", (_req, res) => (res.setHeader("Content-Type", "application/json"), res.end(JSON.stringify(hmr))));
       for (const ev of ["add", "change", "unlink"] as const) server.watcher.on(ev, (file) => changed(server, file));
     },

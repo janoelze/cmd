@@ -56,6 +56,12 @@ export interface TreeVariant {
   outline: string;
   /** Errors and warnings the widget logged, and a render that failed. */
   errors: string[];
+  /** It shows its empty state (a View's state of kind empty, or an EmptyState). */
+  empty?: boolean;
+  /** The state gives it data (agents, terminals, events, fetches, …): an empty state there is a bug. */
+  data?: boolean;
+  /** The story's size for it ("narrow"), if it says one. */
+  size?: string;
 }
 
 export interface TreesResult {
@@ -157,9 +163,10 @@ const API = "@cmd/widget-api"; // named once: the harness is text, run in the pa
 const TREES_HARNESS = `import fs from "node:fs";
 import path from "node:path";
 import { it } from "vitest";
-import { render, createHost } from "${API}/testing";
+import { render, createHost, matchers } from "${API}/testing";
 
 const root = process.cwd();
+const DATA = ["agents", "terminals", "windows", "events", "fetch", "ai", "git", "diff", "worktrees", "actions"];
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const fixtures = () => {
   const dir = path.join(root, "fixtures");
@@ -181,13 +188,19 @@ it("trees", async () => {
     if (!states.length) states = fixtures();
     if (!states.length) states = [{ name: "Empty", data: {} }];
     for (const { name, data } of states.slice(0, 6)) {
-      const { size: _size, ...host } = data;
-      const h = createHost(host);
+      const { size, ...host } = data;
+      // Config as the core gives it: the fields' defaults under what the state sets.
+      const defaults = Object.fromEntries((w.config ?? []).filter((f) => !f.secret && f.default !== undefined).map((f) => [f.key, f.default]));
+      const h = createHost({ ...host, config: { ...defaults, ...(host.config ?? {}) } });
       const errors = [];
       let outline = "";
+      let empty = false;
+      // Data the state gives it: what an empty state there would be wrong about.
+      const given = DATA.some((k) => { const v = host[k]; return Array.isArray(v) ? v.length > 0 : typeof v === "function" || (v && typeof v === "object" ? Object.keys(v).length > 0 : typeof v === "string" && v.length > 0); });
       try {
         const tree = await render(mod.default, h);
         outline = tree.toString();
+        empty = matchers.toShowState(tree, "empty").pass;
         tree.unmount();
       } catch (e) {
         errors.push(String(e && e.stack || e).split("\\n").slice(0, 4).join("\\n"));
@@ -196,7 +209,7 @@ it("trees", async () => {
         if (m.kind === "error") errors.push(m.message + (m.stack ? "\\n" + String(m.stack).split("\\n").slice(0, 3).join("\\n") : ""));
         if (m.kind === "log" && (m.level === "error" || m.level === "warn")) errors.push(m.level + ": " + m.message);
       }
-      out.push({ widget: w.id, name, messages: h.messages.filter((m) => m.kind === "tree" || m.kind === "patch"), outline, errors });
+      out.push({ widget: w.id, name, messages: h.messages.filter((m) => m.kind === "tree" || m.kind === "patch"), outline, errors, empty, data: given, ...(typeof size === "string" ? { size } : {}) });
     }
   }
   fs.writeFileSync(process.env.CMD_TREES_OUT, JSON.stringify(out));
@@ -226,6 +239,12 @@ function workCopy(src: string, mods: Record<string, string>): Work {
   // The config's types as package.json says now, whatever the folder's own copy says.
   const read = readPackage(src);
   if (read.ok) writeEnvTypes(pkg, read.pkg);
+  // Modules, as Deno runs them, whether or not package.json says "type": "module".
+  try {
+    const pj = path.join(pkg, "package.json");
+    const json = JSON.parse(fs.readFileSync(pj, "utf8"));
+    if (json.type !== "module") fs.writeFileSync(pj, JSON.stringify({ ...json, type: "module" }));
+  } catch {}
   return { dir, pkg, done: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
