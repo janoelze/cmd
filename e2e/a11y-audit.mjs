@@ -221,13 +221,8 @@ for (const t of types) {
   if (DONE.has(t.kind)) continue;
   const w = await call("window.open", { kind: t.kind, input: INPUT[t.kind] ?? {} }).catch((e) => (console.log(`    (can't open ${t.kind}: ${e.message})`), null));
   if (!w) continue;
-  // A Magic widget staged with its code and data, so no model runs.
-  if (t.kind === "magic")
-    await call("window.update", {
-      id: w.id,
-      title: "Open PRs",
-      state: { prompt: "Open PRs", phase: "ready", kind: "widget", html: '<div class="k-big" id="v">–</div><script>cmd.onData((d) => (v.textContent = d.text))</script>', source: null, refresh: 0, size: "m", lastData: { data: { text: "3 open" }, at: Date.now() } },
-    });
+  // A Magic window staged with the command it ended with, so no model runs.
+  if (t.kind === "magic") await call("window.update", { id: w.id, title: "Top", state: { prompt: "what's using the CPU", phase: "ready", kind: "terminal", command: "top -o cpu", size: "m" } });
   await settle(1200);
   const tile = win.getByRole("main").locator(`[data-pane="${w.id}"]`);
   ok(await tile.isVisible(), `${t.kind}: the window is on screen, named "${await tile.getAttribute("aria-label")}"`);

@@ -1319,98 +1319,22 @@ await scenario("untitled", async () => {
   await app.evaluate(({ dialog }) => (dialog.showMessageBox = dialog.__orig));
 });
 
-// Embedded pages: browser pages and Magic widgets run in their own process, so
-// they report presses and sideways scrolls (renderer/src/lib/embed.ts; browser pages
-// through preload/guest.ts, widgets by postMessage). Magic widgets are staged
-// with a widget and its data, so no model runs.
+// Embedded pages: browser pages run in their own process, so they report presses and
+// sideways scrolls (renderer/src/lib/embed.ts, through preload/guest.ts); a click moves
+// between them, terminals and a Magic window (staged with a command it ended with, so no
+// model runs), whose menu and ⌘L Change work.
 await scenario("embedded", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   const magic = [];
   try {
+  // Magic windows that ended with a command to run (no page in them).
   for (const name of ["Alpha", "Beta"]) {
     const w = await call("window.open", { kind: "magic", input: {} });
-    await call("window.update", {
-      id: w.id,
-      title: name,
-      state: { prompt: name, phase: "ready", kind: "widget", html: '<div class="k-big" id="v">–</div><script>cmd.onData((d) => (v.textContent = d.text))</script>', source: null, refresh: 0, size: "m", lastData: { data: { text: `${name} data` }, at: Date.now() } },
-    });
+    await call("window.update", { id: w.id, title: name, state: { prompt: name, phase: "ready", kind: "terminal", command: `echo ${name}`, size: "m" } });
     magic.push(w.id);
   }
   await menu("view.grid");
-  // One read waits 2 s at most: a read caught on a frame being replaced (a new CSP) tries again instead of using up until's time.
-  const frameText = (id, sel) => win.frameLocator(`.tile[data-pane="${id}"] iframe.magic-frame`).locator(sel).textContent({ timeout: 2_000 }).catch(() => null);
-  const widgetText = await until(() => frameText(magic[0], "#v"), (t) => t === "Alpha data");
-  check(widgetText === "Alpha data", "a Magic widget renders its data in its sandboxed frame");
-
-  // A theme change reaches widgets live: CSS variables, and colours drawn from JavaScript (cmd.onTheme).
-  const themed = await call("window.open", { kind: "magic", input: {} });
-  await call("window.update", {
-    id: themed.id,
-    title: "Themed",
-    state: { prompt: "themed", phase: "ready", kind: "widget", html: '<canvas id="c"></canvas><script>cmd.onTheme(() => (c.dataset.bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()))</script>', source: null, refresh: 0, size: "s", lastData: null },
-  });
-  const themedFrame = win.frameLocator(`.tile[data-pane="${themed.id}"] iframe.magic-frame`);
-  const readTheme = () => themedFrame.locator("body").evaluate(() => ({ css: getComputedStyle(document.body).backgroundColor, js: document.getElementById("c")?.dataset.bg }), null, { timeout: 10_000 }).catch(() => ({}));
-  const beforeTheme = await until(readTheme, (t) => !!t.js && !!t.css);
-  const appearance = (await call("settings.get")).settings["theme.appearance"];
-  await call("settings.set", { key: "theme.appearance", value: appearance === "light" ? "dark" : "light" });
-  const afterTheme = await until(readTheme, (t) => t.css && t.css !== beforeTheme.css && t.js && t.js !== beforeTheme.js);
-  await call("settings.set", { key: "theme.appearance", value: appearance });
-  check(!!beforeTheme.js && afterTheme.css !== beforeTheme.css && afterTheme.js !== beforeTheme.js, `a theme change reaches a widget live, CSS and cmd.onTheme (${beforeTheme.js} → ${afterTheme.js})`);
-
-  // Media: a widget's media origins are blocked by the frame's CSP until the person allows them.
-  const radio = await call("window.open", { kind: "magic", input: {} });
-  const radioHtml = '<div id="r">–</div><script>document.addEventListener("securitypolicyviolation",()=>r.textContent="blocked");const a=new Audio();a.onerror=()=>r.textContent==="–"&&(r.textContent="loaded");a.src="https://radio.invalid/live.aacp"</script>';
-  await call("window.update", { id: radio.id, title: "Radio", state: { prompt: "radio", phase: "ready", kind: "widget", html: radioHtml, media: ["https://radio.invalid"], source: null, refresh: 0, size: "s", lastData: null } });
-  const radioTile = win.locator(`.tile[data-pane="${radio.id}"]`);
-  const radioText = () => frameText(radio.id, "#r");
-  const asked = await until(() => radioTile.locator(".ui-webstage-cover").isVisible(), Boolean);
-  const before = await until(radioText, (t) => t === "blocked");
-  await radioTile.locator(".ui-webstage-cover .ui-button[data-variant=primary]").click();
-  const after = await until(radioText, (t) => t === "loaded");
-  await until(() => radioTile.locator(".ui-webstage-cover").count(), (n) => n === 0);
-  const stored = await until(async () => (await call("window.list")).find((x) => x.id === radio.id).state.mediaAllowed, (m) => m?.[0] === "https://radio.invalid");
-  check(asked && before === "blocked" && after === "loaded" && !(await radioTile.locator(".ui-webstage-cover").count()) && stored?.[0] === "https://radio.invalid", `a widget's media origins are asked for and then allowed by the frame's CSP (${asked}, ${before} → ${after})`);
-  await call("window.close", { id: themed.id });
-
-  // Links in a widget work only while its window is selected (underlined then): a click on
-  // another window's link selects that window. Then a cmd browser window by default; the
-  // default browser with open.links = "browser".
-  const linked = await call("window.open", { kind: "magic", input: {} });
-  const linkHtml = '<a id="l" href="https://link.invalid/a" target="_blank" style="display:block;padding:40px;text-decoration:none">link</a>';
-  await call("window.update", { id: linked.id, title: "Links", state: { prompt: "links", phase: "ready", kind: "widget", html: linkHtml, source: null, refresh: 0, size: "s", lastData: null } });
-  const firstPaneId = (await call("pane.list"))[0].id;
-  await win.evaluate((id) => window.__cmdSelect?.(id), firstPaneId);
   const selected = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
-  await until(selected, (s) => s === firstPaneId);
-  await still();
-  const link = win.frameLocator(`.tile[data-pane="${linked.id}"] iframe.magic-frame`).locator("#l");
-  const underline = () => link.evaluate((a) => getComputedStyle(a).textDecorationLine, null, { timeout: 10_000 }).catch(() => null);
-  const linkWindows = async () => (await call("window.list")).filter((x) => x.kind === "browser" && JSON.stringify(x.state).includes("link.invalid"));
-  const lockedLook = await until(underline, (u) => u === "none");
-  await link.click({ timeout: 10_000 });
-  const selectedNow = await until(selected, (s) => s === linked.id);
-  const liveLook = await until(underline, (u) => u === "underline");
-  const lockedOpened = (await linkWindows()).length;
-  check(lockedLook === "none" && lockedOpened === 0 && selectedNow === linked.id && liveLook === "underline", `a widget's links wait until its window is selected, then show underlined (${lockedLook} → ${liveLook}, ${lockedOpened} opened)`);
-  await link.click({ timeout: 10_000 });
-  const inCmd = await until(linkWindows, (l) => l.length >= 1);
-  await win.waitForTimeout(300); // one click, one window: give a second one time to show
-  await app.evaluate(({ shell }) => {
-    globalThis.__openExternal ??= shell.openExternal;
-    shell.openExternal = async (u) => void (globalThis.__opened = u);
-  });
-  await call("settings.set", { key: "open.links", value: "browser" });
-  await win.evaluate((id) => window.__cmdSelect?.(id), linked.id);
-  await until(selected, (s) => s === linked.id);
-  await until(underline, (u) => u === "underline");
-  await link.click({ timeout: 10_000 });
-  const external = await until(() => app.evaluate(() => globalThis.__opened), Boolean);
-  check(inCmd.length === 1 && (await linkWindows()).length === 1 && external === "https://link.invalid/a", `a widget link opens a cmd browser window, or the default browser per open.links (${inCmd.length}, ${external})`);
-  await app.evaluate(({ shell }) => (shell.openExternal = globalThis.__openExternal));
-  await call("settings.reset", { key: "open.links" });
-  for (const w of [linked, ...inCmd]) await call("window.close", { id: w.id });
-  await still(600);
 
   // A click selects the window it lands in: wait for that, and return what is selected.
   const clickIn = async (loc, id) => {
@@ -1418,18 +1342,18 @@ await scenario("embedded", async () => {
     await win.mouse.click(b.x + b.width / 2, b.y + b.height * 0.6);
     return until(selected, (s) => s === id, 5000);
   };
-  const frame = (id) => win.locator(`.tile[data-pane="${id}"] iframe.magic-frame`);
+  const tileOf = (id) => win.locator(`.tile[data-pane="${id}"] .ui-view`).first();
   const page = win.locator(".tile.kind-browser webview");
   const pageId = await win.locator(".tile.kind-browser").getAttribute("data-pane");
   const term = win.locator(".tile.kind-terminal .xterm").first();
   const termId = await win.locator(".tile.kind-terminal").first().getAttribute("data-pane");
   const order = [];
-  for (const [loc, id] of [[term, termId], [frame(magic[0]), magic[0]], [frame(magic[1]), magic[1]], [page, pageId], [frame(magic[0]), magic[0]]]) {
+  for (const [loc, id] of [[term, termId], [page, pageId], [tileOf(magic[0]), magic[0]], [page, pageId], [term, termId]]) {
     order.push((await clickIn(loc, id)) === id);
   }
   check(order.every(Boolean), `clicking from one embedded page into the next selects each window (${order.map((x) => (x ? "✓" : "✗")).join(" ")})`);
 
-  // Right-click in a widget opens its window's menu (host.js reports it; the native menu is stubbed to record and pick).
+  // Right-click in a Magic window opens its window's menu (the native menu is stubbed to record and pick).
   await app.evaluate(({ Menu }) => {
     globalThis.__menuPopup ??= Menu.prototype.popup;
     Menu.prototype.popup = function (o) {
@@ -1439,24 +1363,24 @@ await scenario("embedded", async () => {
     };
   });
   await app.evaluate(() => (globalThis.__pick = "Change…"));
-  const b0 = await frame(magic[0]).boundingBox();
-  await win.mouse.click(b0.x + b0.width / 2, b0.y + b0.height / 2, { button: "right" });
+  const b0 = await tileOf(magic[0]).boundingBox();
+  await win.mouse.click(b0.x + b0.width / 2, b0.y + 8, { button: "right" });
   const titleInput = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
   await titleInput.waitFor({ timeout: 10_000 });
   const menuItems = await app.evaluate(() => globalThis.__lastMenu);
   await until(selected, (s) => s === magic[0], 5000);
-  check(menuItems[0] === "Change…" && menuItems.includes("Copy Request") && (await selected()) === magic[0], `right-click in a Magic widget opens its window's menu, Change first (${menuItems.slice(0, 3).join(", ")}…)`);
+  check(menuItems[0] === "Change…" && menuItems.includes("Copy Request") && (await selected()) === magic[0], `right-click in a Magic window opens its window's menu, Change first (${menuItems.slice(0, 3).join(", ")}…)`);
   const isFocused = (loc) => until(() => loc.evaluate((el) => el === document.activeElement).catch(() => false), Boolean, 5000);
   check(await isFocused(titleInput), "Change from that menu edits the title bar, focused");
   await win.keyboard.press("Escape");
   check(!(await until(() => titleInput.count(), (n) => n === 0, 5000)), "Esc puts the title back");
   await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__menuPopup));
 
-  await clickIn(frame(magic[0]), magic[0]);
+  await clickIn(tileOf(magic[1]), magic[1]);
   await menu("view.magicChange");
-  const input = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
+  const input = win.locator(`.tile[data-pane="${magic[1]}"] .tile-title-input`);
   await input.waitFor({ timeout: 10_000 });
-  check(await isFocused(input), "⌘L (a menu command) opens Change in the selected Magic widget's title bar, even with the widget focused");
+  check(await isFocused(input), "⌘L (a menu command) opens Change in the selected Magic window's title bar");
   await win.keyboard.press("Escape");
 
   await menu("view.strip");
@@ -1477,7 +1401,6 @@ await scenario("embedded", async () => {
     }
     return false;
   };
-  check(await scrolls(frame(magic[0]), magic[0]), "sideways scrolling over a Magic widget scrolls the strip");
   check(await scrolls(page, pageId), "sideways scrolling over a browser page scrolls the strip");
   } finally {
     await menu("view.grid");
@@ -1485,10 +1408,10 @@ await scenario("embedded", async () => {
   }
 });
 
-// Magic v2 (docs/14-magic-v2.md): cmd.state survives the frame, the app renders
-// previews for the core, and a widget folder's data.ts runs in the core (Deno,
-// validated against its schema). The folder is staged as a revision and brought
-// back with magic.restore, the path a real build ends in; no model runs.
+// Magic makes packages (docs/56, "Magic on V3"): the app renders previews for the core, a
+// scripted build asks for its permissions and becomes the package's widget, ⌘E lists its
+// versions (a hand edit is one, Restore brings the first back), the Widget Library and New…
+// list widgets; no model runs.
 await scenario("magic", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   // Every widget on screen: the edit view below is opened by a click on its window.
@@ -1538,193 +1461,88 @@ await scenario("magic", async () => {
     await menu("file.close");
     await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).catch(expired(".widget-library to close"));
     check(entry?.magic?.request === "git changes" && card.includes("Made with Magic"), `the Library lists the package under Your Widgets, made with Magic (${JSON.stringify(card)})`);
-    // Deleted from the Library: its window and its folder go (the checks below expect the library as it was).
+    // ⌘E: the edit view lists the package's versions; a hand edit becomes one, and Restore brings the first back.
+    const pkgDir = path.join(home, "widget-packages-home", "git-changes");
+    const main = path.join(pkgDir, "src", "changes.tsx");
+    const v1 = fs.readFileSync(main, "utf8");
+    await tile.click({ position: { x: 20, y: 10 } });
+    await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === m.id, 5000);
+    await menu("view.toggleEdit");
+    const firstVersions = await until(() => tile.locator(".magic-revision").count(), (n) => n === 1, 10_000);
+    const tabs = await tile.locator(".ui-tb-seg [role=radio]").allTextContents();
+    fs.writeFileSync(main, v1 + "\n// edited by hand\n");
+    const versions = await until(() => tile.locator(".magic-revision").allTextContents(), (v) => v.length === 2 && v[0].includes("Edited by hand"), 15_000);
+    await tile.locator(".magic-revision", { hasText: "git changes" }).locator("button", { hasText: "Restore" }).click();
+    const restored = await until(() => tile.locator(".magic-revision").allTextContents(), (v) => v.length === 3 && v[0].includes("Back to version 1"), 10_000);
+    await shot(win, "magic-edit.png");
+    const back = fs.readFileSync(main, "utf8");
+    await menu("view.toggleEdit");
+    await until(() => tile.locator(".magic-edit").count(), (n) => n === 0, 5000);
+    check(firstVersions === 1 && (tabs.length === 0 || tabs.join(",") === "Changes,Files") && versions[0].includes("Edited by hand") && restored[0].includes("Back to version 1") && back === v1, `⌘E lists a package's versions: a hand edit is one, Restore brings the first back (${restored.length} versions)`);
+
+    // Deleted from the Library: its window and its folder go.
     await call("widget.delete", { ref: "pkg:git-changes/changes" });
     const left = await until(async () => (await call("window.list")).some((x) => x.id === m.id), (open) => !open, 5000);
-    check(!left && !fs.existsSync(path.join(home, "widget-packages-home", "git-changes")), "deleting a package made with Magic closes its window and removes its folder");
+    check(!left && !fs.existsSync(pkgDir), "deleting a package made with Magic closes its window and removes its folder");
   }
 
-  // cmd.state: kept by the core, there again in a new frame.
-  const kept = await call("window.open", { kind: "magic", input: {} });
-  const counter = (v) => `<div id="k"></div><script>/*${v}*/const n=(cmd.state.get("n")||0)+1;cmd.state.set("n",n);k.textContent=String(n)</script>`;
-  await call("window.update", { id: kept.id, title: "Kept", state: { prompt: "kept", phase: "ready", kind: "widget", html: counter(1), refresh: 0, size: "s", lastData: null } });
-  const storedN = await until(async () => (await call("window.list")).find((x) => x.id === kept.id).state.kv?.n, (n) => n === 1);
-  await call("window.update", { id: kept.id, state: { html: counter(2) } });
-  const keptText = () => win.frameLocator(`.tile[data-pane="${kept.id}"] iframe.magic-frame`).locator("#k").textContent({ timeout: 10_000 }).catch(() => null);
-  const shownN = await until(keptText, (t) => t === "2");
-  check(storedN === 1 && shownN === "2", `cmd.state is kept by the core across frames (${storedN}, ${shownN})`);
-  await call("window.close", { id: kept.id });
+  // The Widget Library (docs/16-widgets.md): widgets have their own menu, the Library their built-ins.
+  const menuLabels = await app.evaluate(({ Menu }) => Object.fromEntries(Menu.getApplicationMenu().items.map((m) => [m.label, m.submenu?.items.filter((i) => i.visible && i.type !== "separator").map((i) => i.label) ?? []])));
+  check(!menuLabels.File.some((l) => /widget/i.test(l)) && menuLabels.Widgets?.[0] === "Widget Library…" && menuLabels.Widgets.includes("New Widget with Magic…"), `File has windows only; widgets have their own menu (${menuLabels.Widgets?.join(", ")})`);
+  await menu("widget.library");
+  await win.waitForSelector(".widget-library .wl-card", { timeout: 10_000 });
+  const cards = await until(() => win.locator(".widget-library .wl-name").allTextContents(), (c) => c.includes("Agent Activity") && c.includes("Live Diff"), 5000);
+  await shot(win, "widget-library.png");
+  const magicButton = await win.locator(".widget-library .ui-dialog-foot button", { hasText: "New Widget" }).count();
+  check(magicButton === 1 && cards.includes("Agent Activity") && cards.includes("Live Diff"), `the Widget Library has New Widget in its footer, and the built-ins (${cards.join(", ")})`);
+  await menu("file.close");
+  // The command reaches the renderer over IPC after the click returns: wait for the sheet to go.
+  const libraryClosed = await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).then(() => true, () => false);
+  check(libraryClosed, "⌘W closes the Widget Library first");
 
-  const deno = rt.deno;
-  if (!deno) console.log("  (skipped: no Deno for widget data)");
-  else {
-    const w = await call("window.open", { kind: "magic", input: {} });
-    const dir = path.join(home, "widgets", w.id);
-    const files = {
-      "manifest.json": JSON.stringify({ cmd: 2, kind: "widget", title: "Counter", size: "s", refresh: 0, config: [{ key: "start", title: "Start", type: "number", default: 40 }] }),
-      "data.ts": 'import { s, type Infer } from "cmd";\nexport const schema = s.object({ n: s.number() });\nexport type Data = Infer<typeof schema>;\nexport default async (c: { start: number }): Promise<Data> => ({ n: c.start + 2 });\n',
-      "view.html": '<div class="k-big" id="n">–</div>',
-      "view.ts": 'import type { Data } from "./data.ts";\nconst el = document.getElementById("n")!;\ncmd.onData<Data>((d) => { el.textContent = String(d.n); });\n',
-    };
-    const rev = path.join(dir, "revisions", "0001");
-    for (const [f, t] of Object.entries(files)) {
-      fs.mkdirSync(path.join(rev, "files"), { recursive: true });
-      fs.writeFileSync(path.join(rev, "files", f), t);
-    }
-    fs.writeFileSync(path.join(rev, "meta.json"), JSON.stringify({ n: 1, at: Date.now(), prompt: "a counter", ok: true }));
-    await call("window.update", { id: w.id, state: { prompt: "a counter", phase: "ready", widgetId: w.id } });
-    await call("magic.restore", { id: w.id, revision: 1 });
-    const frameN = () => win.frameLocator(`.tile[data-pane="${w.id}"] iframe.magic-frame`).locator("#n").textContent({ timeout: 10_000 }).catch(() => "");
-    let shown = await until(frameN, (t) => t === "42", 20_000);
-    const st = await until(async () => (await call("window.list")).find((x) => x.id === w.id), (x) => x.title === "Counter" && x.state.hasData && x.state.revision === 2, 5000);
-    check(shown === "42" && st.title === "Counter" && st.state.hasData && st.state.revision === 2, `a widget's data.ts runs in the core and its typed view shows it (${shown}, ${st.title}, v${st.state.revision})`);
+  // New… (⌘N): windows first, then the widgets, then Magic; typing finds one.
+  await menu("file.new");
+  await win.waitForSelector(".palette", { timeout: 10_000 });
+  const offered = await until(() => win.locator(".palette-list .palette-label").allTextContents(), (o) => o.at(-1) === "New Widget with Magic" && o.includes("Timer"), 5000);
+  await win.mouse.move(0, 0);
+  if (process.env.E2E_SHOTS) await win.waitForTimeout(500); // the rows' symbols load from macOS (for the screenshot)
+  await shot(win, "new-picker.png");
+  await win.locator(".palette-input").fill("timer");
+  // Enter acts on the highlighted row: wait until the filter has made it Timer (pressing at once raced the re-render).
+  await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 10_000 }).catch(expired(".palette-list li.on .palette-label:text-is('Timer')"));
+  await win.keyboard.press("Enter");
+  const timer = await until(async () => (await call("window.list")).find((x) => x.kind === "timer"), Boolean);
+  await gone(".palette");
+  check(
+    offered[0] === "Terminal" && offered.indexOf("Timer") > offered.indexOf("Text Editor") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
+    `New… lists windows, then widgets, then Magic, and opens what you type (${offered.join(", ")}; timer ${!!timer}, palette ${await win.locator(".palette").count()})`,
+  );
+  if (timer) await call("window.close", { id: timer.id });
 
-    // Its settings reach data.ts.
-    await call("magic.config", { id: w.id, values: { start: 98 } });
-    shown = await until(frameN, (t) => t === "100", 20_000);
-    check(shown === "100", `a widget's settings reach its data (${shown})`);
-
-    // ⌘E: the edit view, with its versions; ⌘E again: back to the widget.
-    await win.locator(`.tile[data-pane="${w.id}"]`).click({ position: { x: 20, y: 10 } });
-    await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === w.id, 5000);
-    await menu("view.toggleEdit");
-    const tile = win.locator(`.tile[data-pane="${w.id}"]`);
-    const versions = await until(() => tile.locator(".magic-revision").count(), (n) => n === 2);
-    const tabs = await until(() => tile.locator(".ui-tb-seg [role=radio]").allTextContents(), (t) => t.join(",").startsWith("Changes,Settings,Files,Health"), 5000);
-    // A narrow tile (CI's smaller screen) compacts the tabs into a popup.
-    const settingsTab = tile.locator(".ui-tb-seg [role=radio]", { hasText: "Settings" });
-    if (await settingsTab.isVisible()) await settingsTab.click();
-    else {
-      await tile.locator(".ui-tb-seg-pop").click();
-      await win.getByRole("menuitemradio", { name: "Settings" }).click();
-    }
-    const fields = await until(() => tile.locator(".ui-row").allTextContents(), (f) => f.some((x) => x.includes("Start")));
-    await shot(win, "magic-edit.png");
-    await menu("view.toggleEdit");
-    await until(() => tile.locator(".magic-edit").count(), (n) => n === 0);
-    check(versions === 2 && tabs.join(",").startsWith("Changes,Settings,Files,Health") && fields.some((f) => f.includes("Start")) && !(await tile.locator(".magic-edit").count()), `⌘E shows a widget's edit view (versions, settings) and back (${versions}, ${tabs.join("/")})`);
-    await call("window.close", { id: w.id });
-
-    // The Widget Library (docs/16-widgets.md): widgets have their own menu; a closed one stays in the library and comes back from it.
-    const menuLabels = await app.evaluate(({ Menu }) => Object.fromEntries(Menu.getApplicationMenu().items.map((m) => [m.label, m.submenu?.items.filter((i) => i.visible && i.type !== "separator").map((i) => i.label) ?? []])));
-    check(!menuLabels.File.some((l) => /widget/i.test(l)) && menuLabels.Widgets?.[0] === "Widget Library…" && menuLabels.Widgets.includes("New Widget with Magic…"), `File has windows only; widgets have their own menu (${menuLabels.Widgets?.join(", ")})`);
-    await menu("widget.library");
-    await win.waitForSelector(".widget-library .wl-card", { timeout: 10_000 });
-    const cards = await until(() => win.locator(".widget-library .wl-name").allTextContents(), (c) => c[0] === "Counter" && c.includes("Agent Activity") && c.includes("Live Diff"), 5000);
-    await shot(win, "widget-library.png");
-    const magicButton = await win.locator(".widget-library .ui-dialog-foot button", { hasText: "New Widget" }).count();
-    check(magicButton === 1 && cards[0] === "Counter" && cards.includes("Agent Activity") && cards.includes("Live Diff"), `the Widget Library has New Widget in its footer, then the closed widget and the built-ins (${cards.join(", ")})`);
-    await win.locator(".widget-library .wl-card", { hasText: "Counter" }).click();
-    const back = await until(async () => (await call("window.list")).find((x) => x.kind === "magic" && x.title === "Counter" && x.state.phase === "ready"), Boolean);
-    await gone(".widget-library");
-    await until(() => countOf(".widget-library"), (n) => n === 0, 5000);
-    const listed = await until(async () => (await call("widget.list")).find((e) => e.title === "Counter"), (l) => back && l?.windows.includes(back.id), 5000);
-    await until(() => countOf(".sb-widgets"), (n) => n === 1, 5000);
-    check(!!back && (await win.locator(".widget-library").count()) === 0 && listed?.windows.includes(back.id) && (await win.locator(".sb-widgets").count()) === 1, `a widget comes back from the library, on the board and in the Navigator's Widgets (${listed?.windows.length})`);
-    await menu("widget.library");
-    await win.waitForSelector(".widget-library", { timeout: 10_000 });
-    await menu("file.close");
-    // The command reaches the renderer over IPC after the click returns: wait for the sheet to go.
-    const libraryClosed = await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).then(() => true, () => false);
-    check(libraryClosed, "⌘W closes the Widget Library first");
-    await call("window.close", { id: back.id });
-
-    // New… (⌘N): windows first, then your widgets and the built-in ones, then Magic; typing finds one.
-    await menu("file.new");
-    await win.waitForSelector(".palette", { timeout: 10_000 });
-    const offered = await until(() => win.locator(".palette-list .palette-label").allTextContents(), (o) => o.at(-1) === "New Widget with Magic" && o.includes("Counter"), 5000);
-    await win.mouse.move(0, 0);
-    if (process.env.E2E_SHOTS) await win.waitForTimeout(500); // the rows' symbols load from macOS (for the screenshot)
-    await shot(win, "new-picker.png");
-    await win.locator(".palette-input").fill("timer");
-    // Enter acts on the highlighted row: wait until the filter has made it Timer (pressing at once raced the re-render).
-    await win.waitForSelector(".palette-list li.on .palette-label:text-is('Timer')", { timeout: 10_000 }).catch(expired(".palette-list li.on .palette-label:text-is('Timer')"));
-    await win.keyboard.press("Enter");
-    const timer = await until(async () => (await call("window.list")).find((x) => x.kind === "timer"), Boolean);
-    await gone(".palette");
-    check(
-      offered[0] === "Terminal" && offered.indexOf("Counter") > offered.indexOf("Text Editor") && offered.at(-1) === "New Widget with Magic" && !!timer && (await win.locator(".palette").count()) === 0,
-      `New… lists windows, then widgets, then Magic, and opens what you type (${offered.join(", ")}; timer ${!!timer}, palette ${await win.locator(".palette").count()})`,
-    );
-    if (timer) await call("window.close", { id: timer.id });
-
-    // Built-in widgets: Live Diff shows a repository's changes; Agent Activity opens from the library too.
-    const repo = path.join(home, "diff-repo");
-    fs.mkdirSync(repo, { recursive: true });
-    const g = (...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: repo, stdio: "pipe" });
-    g("init", "-q", "-b", "main");
-    fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
-    g("add", "-A");
-    g("commit", "-q", "-m", "init");
-    fs.writeFileSync(path.join(repo, "a.txt"), "two\n");
-    fs.writeFileSync(path.join(repo, "b.txt"), "new\n");
-    const ld = await call("widget.add", { ref: "type:diff" });
-    await call("window.update", { id: ld.id, state: { path: repo } });
-    const ldTile = win.locator(`.tile[data-pane="${ld.id}"]`);
-    const ldFiles = await until(() => ldTile.locator(".ui-list-row-name").allTextContents(), (f) => f.join(",") === "a.txt,b.txt");
-    const ldLines = await until(() => ldTile.locator(".ui-diff-line[data-kind=add]").allTextContents(), (l) => l.includes("+two") && l.includes("+new"));
-    check(ldFiles.join(",") === "a.txt,b.txt" && ldLines.includes("+two") && ldLines.includes("+new"), `Live Diff shows a repository's changes, untracked files too (${ldFiles.join(", ")})`);
-    const aa = await call("widget.add", { ref: "type:agents" });
-    await win.locator(`.tile[data-pane="${aa.id}"] .ui-view`).waitFor({ timeout: 10_000 });
-    // Its scope is the title bar's menu, as in the other list widgets.
-    const aaScope = await until(async () => (await win.locator(`.tile[data-pane="${aa.id}"] .tile-menu`).textContent()) ?? "", (t) => t.includes("This Workspace"));
-    const inWidgets = await until(async () => (await win.locator(".sb-widgets").textContent()) ?? "", (t) => t.includes("Agent Activity") && t.includes("Changes · diff-repo"));
-    check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && aaScope.includes("This Workspace"), `Agent Activity and Live Diff are listed under the sidebar's Widgets, Agent Activity's scope in its title bar (${aaScope})`);
-    await call("window.close", { id: ld.id });
-    await call("window.close", { id: aa.id });
-
-    // Status and notifications from data.ts; actions from the view (after a click only).
-    const b = await call("window.open", { kind: "magic", input: {} });
-    const bdir = path.join(home, "widgets", b.id, "revisions", "0001");
-    const bfiles = {
-      "manifest.json": JSON.stringify({ cmd: 2, kind: "widget", title: "Builds", size: "s", refresh: 0, config: [{ key: "fail", title: "Failing", type: "number", default: 0 }] }),
-      "data.ts": 'import { s, status, notify, type Infer } from "cmd";\nexport const schema = s.object({ fail: s.number() });\nexport type Data = Infer<typeof schema>;\nexport default async (c: { fail: number }): Promise<Data> => {\n  status({ text: c.fail ? `${c.fail} failing` : "all good", tone: c.fail ? "bad" : "good" });\n  if (c.fail) notify({ key: `fail-${c.fail}`, title: "Build failed", body: `run ${c.fail}` });\n  return { fail: c.fail };\n};\n',
-      "view.html": '<button class="k-btn" id="go">Rerun</button>',
-      "view.ts": 'import type { Data } from "./data.ts";\ncmd.terminal("echo refused-without-a-click");\ndocument.getElementById("go")!.onclick = () => cmd.terminal("echo clicked-rerun");\ncmd.onData<Data>(() => {});\n',
-    };
-    fs.mkdirSync(path.join(bdir, "files"), { recursive: true });
-    for (const [f, t] of Object.entries(bfiles)) fs.writeFileSync(path.join(bdir, "files", f), t);
-    fs.writeFileSync(path.join(bdir, "meta.json"), JSON.stringify({ n: 1, at: Date.now(), prompt: "builds", ok: true }));
-    await call("window.update", { id: b.id, state: { prompt: "builds", phase: "ready", widgetId: b.id } });
-    await call("magic.restore", { id: b.id, revision: 1 });
-    const btile = win.locator(`.tile[data-pane="${b.id}"]`);
-    const bstate = async () => (await call("window.list")).find((x) => x.id === b.id).state;
-    const statusText = () => btile.locator(".tile-status").textContent({ timeout: 10_000 }).then((t) => t ?? "", () => "");
-    await until(statusText, (t) => t.includes("all good"), 15_000);
-    await until(() => btile.locator('.mark[data-tone="success"]:not(.has-light)').count(), (n) => n === 1, 5000);
-    check((await statusText()).includes("all good") && (await btile.locator('.mark[data-tone="success"]:not(.has-light)').count()) === 1, `a widget's status line shows in its title bar, its icon tinted, no light (${await statusText()})`);
-
-    // Select another window, so the news isn't seen at once.
-    const other = (await call("pane.list"))[0];
-    await win.evaluate((id) => window.__cmdSelect?.(id), other.id);
-    await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === other.id, 5000);
-    await call("magic.config", { id: b.id, values: { fail: 1 } });
-    await until(bstate, (st) => !!st.attention, 15_000);
-    await until(statusText, (t) => t.includes("Build failed"), 5000);
-    const marked = (await bstate()).attention;
-    await shot(win, "magic-attention.png");
-    check(marked?.text === "Build failed" && (await statusText()).includes("Build failed"), `a widget's notification marks its window until seen (${marked?.text}, ${await statusText()})`);
-    // Looking at it (selected, with the app in front) is seeing it. (The status line coming
-    // back once the news is seen: fields.test.ts.)
-    await win.evaluate((id) => window.__cmdSelect?.(id), b.id);
-    check(!(await until(bstate, (st) => !st.attention)).attention, "looking at the widget clears its news");
-
-    // cmd.terminal: refused at load, typed (not run) into a new terminal after a click.
-    const known = new Set((await call("pane.list")).map((p) => p.id));
-    const before = known.size;
-    const bframe = win.frameLocator(`.tile[data-pane="${b.id}"] iframe.magic-frame`);
-    // The widget acts only while its window is active (host.js locked(), the host's "active" message, after the select).
-    await bframe.locator("html.k-active").waitFor({ state: "attached", timeout: 10_000 });
-    await bframe.locator("#go").click();
-    const panes = await until(() => call("pane.list"), (p) => p.length !== before);
-    const fresh = panes.filter((p) => !known.has(p.id));
-    const typed = await until(async () => (fresh.length ? (await call("pane.read", { paneId: fresh.at(-1).id })).text ?? "" : ""), (t) => t.replace(/\s+/g, "").includes("clicked-rerun"));
-    // A long prompt (CI's hostname) wraps the typed line in a narrow terminal: compared without line breaks.
-    const flat = typed.replace(/\s+/g, "");
-    check(panes.length === before + 1 && flat.includes("echoclicked-rerun") && !flat.includes("refused"), `cmd.terminal types a command into a new terminal only after a click (${panes.length - before} new; ${JSON.stringify(flat.slice(-120))})`);
-    await call("pane.kill", { paneId: fresh.at(-1).id }).catch(() => {});
-    await call("window.close", { id: b.id });
-  }
+  // Built-in widgets: Live Diff shows a repository's changes; Agent Activity opens from the library too.
+  const repo = path.join(home, "diff-repo");
+  fs.mkdirSync(repo, { recursive: true });
+  const g = (...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: repo, stdio: "pipe" });
+  g("init", "-q", "-b", "main");
+  fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+  g("add", "-A");
+  g("commit", "-q", "-m", "init");
+  fs.writeFileSync(path.join(repo, "a.txt"), "two\n");
+  fs.writeFileSync(path.join(repo, "b.txt"), "new\n");
+  const ld = await call("widget.add", { ref: "type:diff" });
+  await call("window.update", { id: ld.id, state: { path: repo } });
+  const ldTile = win.locator(`.tile[data-pane="${ld.id}"]`);
+  const ldFiles = await until(() => ldTile.locator(".ui-list-row-name").allTextContents(), (f) => f.join(",") === "a.txt,b.txt");
+  const ldLines = await until(() => ldTile.locator(".ui-diff-line[data-kind=add]").allTextContents(), (l) => l.includes("+two") && l.includes("+new"));
+  check(ldFiles.join(",") === "a.txt,b.txt" && ldLines.includes("+two") && ldLines.includes("+new"), `Live Diff shows a repository's changes, untracked files too (${ldFiles.join(", ")})`);
+  const aa = await call("widget.add", { ref: "type:agents" });
+  await win.locator(`.tile[data-pane="${aa.id}"] .ui-view`).waitFor({ timeout: 10_000 });
+  // Its scope is the title bar's menu, as in the other list widgets.
+  const aaScope = await until(async () => (await win.locator(`.tile[data-pane="${aa.id}"] .tile-menu`).textContent()) ?? "", (t) => t.includes("This Workspace"));
+  const inWidgets = await until(async () => (await win.locator(".sb-widgets").textContent()) ?? "", (t) => t.includes("Agent Activity") && t.includes("Changes · diff-repo"));
+  check(inWidgets.includes("Agent Activity") && inWidgets.includes("Changes · diff-repo") && aaScope.includes("This Workspace"), `Agent Activity and Live Diff are listed under the sidebar's Widgets, Agent Activity's scope in its title bar (${aaScope})`);
+  await call("window.close", { id: ld.id });
+  await call("window.close", { id: aa.id });
 });
 
 // The Agents widget package (packages/widgets/agents, docs/56): added from the Widget Library
