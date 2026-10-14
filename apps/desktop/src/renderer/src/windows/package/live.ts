@@ -1,6 +1,6 @@
 // The trees of the package widgets on screen (docs/56): one TreeStore per window while
-// its view is mounted, fed by the core's `widget.tree` events (lib/store.ts routes them
-// here), and the link back to the widget's process over the core's widget.* methods.
+// its view is mounted, fed by the core's `widget.tree` events, and the link back to the
+// widget's process over the core's widget.* methods.
 
 import type { CoreEvent, WindowId, WireValue } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
@@ -54,3 +54,6 @@ export function closeTree(windowId: WindowId): void {
 export function handleWidgetTree(e: Extract<CoreEvent, { type: "widget.tree" }>): void {
   stores.get(e.windowId)?.store.apply(e.message);
 }
+
+// Not in the store: a tree is this view's alone (as lib/acting.ts hears tool.acting).
+cmd.onEvent((e) => e.type === "widget.tree" && handleWidgetTree(e));
