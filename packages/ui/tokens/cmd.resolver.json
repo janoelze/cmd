@@ -1,7 +1,7 @@
 {
   "name": "cmd",
   "version": "2025-10-01",
-  "description": "cmd's design tokens (DTCG 2025.10). The base set, then a light appearance (light themes), reduced motion and touch screens. pnpm tokens builds them into packages/ui/src/tokens.css and tokens.gen.ts, and the Magic widget frame's packages/core/src/magic/prompt/tokens.css (kit 2).",
+  "description": "cmd's design tokens (DTCG 2025.10). The base set, then a light appearance (light themes), reduced motion and touch screens. pnpm tokens builds them into packages/ui/src/tokens.css and tokens.gen.ts.",
   "sets": {
     "base": {
       "description": "Everything, tuned for dark themes. theme.tokens.json documents what each theme sets at runtime.",
