@@ -56,6 +56,6 @@ export function scriptedBackend(script: Script): ScriptedBackend {
 /** The script in $CMD_MAGIC_SCRIPT (a JSON file), if that is set: for the e2e. */
 export function scriptFromEnv(): Script | null {
   const file = process.env.CMD_MAGIC_SCRIPT;
-  if (!file) return null;
+  if (!file || !fs.existsSync(file)) return null;
   return JSON.parse(fs.readFileSync(file, "utf8")) as Script;
 }

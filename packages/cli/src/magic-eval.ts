@@ -74,9 +74,8 @@ function judge(c: Case, r: PackageBuildResult): { problems: string[]; warnings: 
   const pkg = v.pkg;
   const kind = r.fast ? r.fast.route : r.ending?.kind === "terminal" ? "terminal" : r.ending ? "needs-program" : pkg ? "widget" : "none";
   const needsProgram = e.needs === "run";
-  // A request only a program answers: saying so (or a terminal) is right, a widget must pass every check.
-  const checksCount = !(needsProgram && kind !== "widget") && !r.fast && kind !== "terminal";
-  const problems = checksCount ? [...v.problems.map((p) => p.split("\n")[0]!)] : [];
+  // cmd's checks judge a package made; an ending without one (a terminal, a program it needs) is judged by the expectations.
+  const problems = kind === "widget" ? [...v.problems.map((p) => p.split("\n")[0]!)] : [];
   const warnings = [...v.warnings.map((w) => w.split("\n")[0]!)];
   if (r.stopped && !problems.includes(r.stopped)) problems.push(r.stopped);
   if (e.route && r.route !== e.route) problems.push(`route ${r.route}, expected ${e.route}`);

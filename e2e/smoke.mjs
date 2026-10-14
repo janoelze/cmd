@@ -104,7 +104,8 @@ const launch = async () => {
     executablePath: require("electron"),
     // Fake camera and microphone (not a fake permission prompt): a page's getUserMedia reaches cmd's sheet without real devices.
     args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_WIDGETS_HOME: path.join(home, "widget-packages-home"), CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
+    // CMD_MAGIC_SCRIPT: Magic's model plays the script the magic scenario writes (magic/package/scripted.ts).
+    env: { ...process.env, CMD_HOME: home, CMD_WIDGETS_HOME: path.join(home, "widget-packages-home"), CMD_MAGIC_SCRIPT: path.join(home, "magic-script.json"), CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
   });
   // Reduce Motion in every page: the app window, Settings, browser pages (webviews are pages
   // here too). Chromium's --force-prefers-reduced-motion doesn't reach Electron's pages.
@@ -1494,6 +1495,50 @@ await scenario("magic", async () => {
   await win.waitForSelector(".main.mode-grid", { timeout: 10_000 });
   const rt = await call("magic.runtime");
   check(rt.previewer === "app", `the app renders widget previews for the core (${rt.previewer})`);
+
+  // Magic makes a package (docs/56, "Magic on V3"): a scripted model writes the prompt's repo example as
+  // "git-changes" (the name cmd gives the request "git changes"), checks and tests it; the build asks for
+  // its permission through the grants sheet, and after Allow the window is the package's widget, drawn
+  // by the kit (no frame), listed in the Library as made with Magic.
+  {
+    const ex = path.join(root, "packages/core/src/magic/prompt/examples/7-repo");
+    const walk = (d, rel = "") => fs.readdirSync(path.join(d, rel), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(d, path.join(rel, e.name)) : e.name === "request.md" ? [] : [path.join(rel, e.name)]));
+    const content = (f) => (f === "package.json" ? JSON.stringify({ ...JSON.parse(fs.readFileSync(path.join(ex, f), "utf8")), name: "git-changes" }, null, 2) : fs.readFileSync(path.join(ex, f), "utf8"));
+    const calls = walk(ex).map((f) => ({ name: "write_file", input: { why: `Writing ${f}`, path: f, content: content(f) } }));
+    fs.writeFileSync(path.join(home, "magic-script.json"), JSON.stringify({ turns: [{ calls: [...calls, { name: "check", input: { why: "Checking it" } }, { name: "test", input: { why: "Running its tests" } }], answer: "Shows this workspace's changes." }] }));
+    const m = await call("window.open", { kind: "magic", input: {} });
+    await tileIn(m.id);
+    await call("magic.run", { id: m.id, prompt: "git changes" });
+    const sheet = win.locator(".ui-approval:not([data-closing])");
+    await sheet.waitFor({ timeout: 60_000 }).catch(expired("the build's grants sheet"));
+    const shownAt = Date.now();
+    const sheetText = (await sheet.textContent().catch(() => "")) ?? "";
+    const step = await until(() => win.locator(`.tile[data-pane="${m.id}"]`).textContent().catch(() => ""), (t) => t.includes("Wants to see this workspace"), 10_000);
+    await shot(win, "magic-package-asks.png");
+    check(sheetText.includes("See the agents, terminals and windows of this workspace") && step.includes("Wants to see this workspace") && step.includes("Allow…"), `a Magic build asks for its package's permissions as a step, through the grants sheet (${JSON.stringify(step.slice(0, 120))})`);
+    await until(() => Date.now() - shownAt > 400);
+    await win.keyboard.press("Enter");
+    await gone(".ui-approval");
+    const made = await until(async () => (await call("window.list")).find((x) => x.id === m.id), (x) => x?.kind === "pkg:git-changes/changes", 120_000);
+    const grants = path.join(home, "widget-packages", "git-changes", "grants.json");
+    const tile = win.locator(`.tile[data-pane="${m.id}"]`);
+    const kit = await until(() => tile.locator(".ui-view").count(), (n) => n > 0, 20_000);
+    const frames = await tile.locator("iframe").count();
+    const drawn = rt.deno ? await until(() => tile.textContent().catch(() => ""), (t) => /Not a git repository|Nothing to commit|Changed|Added/.test(t), 30_000) : "(no Deno: not run)";
+    await shot(win, "magic-package.png");
+    check(made?.kind === "pkg:git-changes/changes" && fs.existsSync(grants) && kit > 0 && frames === 0, `Allow writes the grant and the window becomes the package's widget, drawn by the kit with no iframe (${made?.kind}, ${frames} frames; ${JSON.stringify(String(drawn).slice(0, 80))})`);
+    const entry = (await call("widget.list")).find((e) => e.ref === "pkg:git-changes/changes");
+    await menu("widget.library");
+    await win.waitForSelector(".widget-library .wl-card", { timeout: 10_000 });
+    const card = await until(() => win.locator(".widget-library .wl-card", { hasText: "shop · changes" }).textContent().catch(() => ""), (t) => t.includes("Made with Magic"), 5000);
+    await menu("file.close");
+    await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).catch(() => {});
+    check(entry?.magic?.request === "git changes" && card.includes("Made with Magic"), `the Library lists the package under Your Widgets, made with Magic (${JSON.stringify(card)})`);
+    // Deleted from the Library: its window and its folder go (the checks below expect the library as it was).
+    await call("widget.delete", { ref: "pkg:git-changes/changes" });
+    const left = await until(async () => (await call("window.list")).some((x) => x.id === m.id), (open) => !open, 5000);
+    check(!left && !fs.existsSync(path.join(home, "widget-packages-home", "git-changes")), "deleting a package made with Magic closes its window and removes its folder");
+  }
 
   // cmd.state: kept by the core, there again in a new frame.
   const kept = await call("window.open", { kind: "magic", input: {} });
