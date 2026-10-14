@@ -1,0 +1,18 @@
+{
+  "note": "Recorded on master (c5d0a7fd, the cmd:2 prompt) before Magic made packages; `cmd magic eval` runs must pass at least this rate.",
+  "date": "2026-10-14",
+  "commit": "c5d0a7fd",
+  "promptHash": "a9adf4e18e65",
+  "model": "openai gpt-5.5",
+  "cases": 20,
+  "passed": 18,
+  "passRate": 0.9,
+  "failed": {
+    "json-paste": [
+      "Deno isn't installed, so data.ts can't run (a widget's Health tab installs it, or: brew install deno)"
+    ],
+    "src-size": [
+      "kind terminal, expected widget"
+    ]
+  }
+}
