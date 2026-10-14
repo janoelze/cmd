@@ -10,6 +10,7 @@ import { sandboxAvailable } from "../../lib/sandbox.ts";
 import type { WidgetPackages } from "../packages.ts";
 import { WidgetHost } from "./host.ts";
 import { DenoRuntime } from "./runtime.ts";
+import { toolsOf } from "../../tools/feature.ts";
 
 /** The host over the packages; Deno runs its processes when there is a state dir (else a test sets a runtime). */
 export function createWidgetHost(core: CoreContext, packages: WidgetPackages, o: { stateDir: string | null; socket: string | null; deno: () => string | null; onAsk?: () => void }): WidgetHost {
@@ -20,5 +21,6 @@ export function createWidgetHost(core: CoreContext, packages: WidgetPackages, o:
         sandbox: () => (process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required"),
       })
     : null;
-  return new WidgetHost(core, { stateDir: o.stateDir, socket: o.socket, packages, runtime, onAsk: o.onAsk });
+  // Acts ask through the tools' approvals and show on the board as their calls do (made on first use).
+  return new WidgetHost(core, { stateDir: o.stateDir, socket: o.socket, packages, runtime, onAsk: o.onAsk, acts: () => toolsOf(core) });
 }

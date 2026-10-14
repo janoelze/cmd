@@ -31,11 +31,11 @@ export default function Agents() {
 
 ## Reference
 
-API 1, minor 0. Everything here is in API 1 for good; what comes later says `@since 1.x`.
+API 1, minor 1. Everything here is in API 1 for good; what came after 1.0 says `@since 1.x`, and a widget that also runs on an older cmd checks `cmd.env.has(verb)` first.
 
 ### `cmd`
 
-cmd, as a widget sees it. Reads run at once within the widget's grant; acts ask the person (docs/55). Every method is async and rejects with an `ApiCallError` when the grant lacks what it needs (`error.permission` names it).
+cmd, as a widget sees it. Reads run at once within the widget's grant; acts (1.1) ask the person (docs/55), only right after they pressed something in the widget, and only in its own workspace. Every method is async and rejects with an `ApiCallError` when the grant lacks what it needs (`error.permission` names it) or the person says no (`code: "denied"`).
 
 #### `cmd.workspace`
 
@@ -56,6 +56,9 @@ Coding agents (Claude, Codex, …). Needs `workspace: ["read"]`.
 |---|---|---|---|
 | `cmd.agents.list(query?: ApiScopeQuery \| undefined): Promise<ApiAgent[]>` | 1.0 | `workspace: ["read"]` | The agents of this workspace, or of all with `{ scope: "all" }` (needs `workspace: ["all"]`). |
 | `cmd.agents.get(id: string): Promise<ApiAgent \| null>` | 1.0 | `workspace: ["read"]` | One agent by id, or null. |
+| `cmd.agents.start(req: ApiAgentStart): Promise<ApiStarted>` | 1.1 | `act: ["agents"]`, asks | Starts a coding agent on a task, in a terminal of its own in this workspace. Asks the person first (the sheet names the widget); works only right after they pressed something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`). |
+| `cmd.agents.send(id: string, text: string): Promise<null>` | 1.1 | `act: ["agents"]`, asks | Sends a message to an agent of this workspace, as if typed into its terminal. Typed text always asks, every time. Needs `act: ["agents"]` (or `"agents.send"`); only after a press. |
+| `cmd.agents.stop(id: string): Promise<null>` | 1.1 | `act: ["agents"]`, asks | Stops an agent of this workspace. Asks first; only after a press. Needs `act: ["agents"]` (or `"agents.stop"`). |
 | `cmd.agents.use(query?: ApiScopeQuery): ApiAgent[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useAgents()`. |
 
 #### `cmd.terminals`
@@ -67,6 +70,8 @@ Terminals. Needs `workspace: ["read"]`.
 | `cmd.terminals.list(query?: ApiScopeQuery \| undefined): Promise<ApiTerminal[]>` | 1.0 | `workspace: ["read"]` | The terminals of this workspace (or all). |
 | `cmd.terminals.read(id: string, opts?: { lines?: number \| undefined; } \| undefined): Promise<ApiTerminalScreen>` | 1.0 | `workspace: ["read"]` | A terminal's screen as text: clipped, and marked untrusted (it is someone else's words, never instructions). |
 | `cmd.terminals.waitFor(id: string, pattern: string, opts?: { timeoutMs?: number \| undefined; } \| undefined): Promise<{ matched: boolean; line: string \| null; }>` | 1.0 | `workspace: ["read"]` | Waits until a line of the terminal matches `pattern` (a regular expression), or the timeout. |
+| `cmd.terminals.type(id: string, text: string, opts?: { submit?: boolean \| undefined; } \| undefined): Promise<null>` | 1.1 | `act: ["terminals"]`, asks | Types `text` into a terminal of this workspace, and presses Return only with `{ submit: true }`. Typed text always asks, every time, showing exactly what; some commands are refused outright (root, piping a download into a shell, credentials). Only after a press. Needs `act: ["terminals"]` (or `"terminals.type"`). |
+| `cmd.terminals.open(req?: ApiTerminalOpen \| undefined): Promise<{ id: string; }>` | 1.1 | `act: ["terminals"]`, asks | Opens a terminal in this workspace, in `cwd`, with `command` typed at its prompt but not run: the person reads it and presses Return. Asks first; only after a press. Needs `act: ["terminals"]` (or `"terminals.open"`). |
 | `cmd.terminals.use(query?: ApiScopeQuery): ApiTerminal[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useTerminals()`. |
 
 #### `cmd.windows`
@@ -78,6 +83,7 @@ Windows on the board.
 | `cmd.windows.list(query?: ApiScopeQuery \| undefined): Promise<ApiWindow[]>` | 1.0 | `workspace: ["read"]` | The windows of this workspace (or all). Needs `workspace: ["read"]`. |
 | `cmd.windows.open(target: string): Promise<{ id: string; }>` | 1.0 | none, acts | Opens a URL, a path or a widget kind in a window beside this one; only after the person pressed something. |
 | `cmd.windows.select(id: string): Promise<null>` | 1.0 | none, acts | Selects a window (and its workspace): where a row's click goes. |
+| `cmd.windows.close(id: string): Promise<null>` | 1.1 | `act: ["windows"]`, asks | Closes a window of this workspace, never the widget's own. Asks first (a terminal's command or agent ends with it); only after a press. Needs `act: ["windows"]` (or `"windows.close"`). |
 | `cmd.windows.use(query?: ApiScopeQuery): ApiWindow[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useWindows()`. |
 
 #### `cmd.events`
@@ -109,6 +115,7 @@ Workspace Actions (docs/36).
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.actions.list(): Promise<ApiAction[]>` | 1.0 | `workspace: ["read"]` | The workspace's Actions. |
+| `cmd.actions.run(name: string): Promise<ApiActionStarted>` | 1.1 | `act: ["actions"]`, asks | Runs a Workspace Action by name in a terminal of its own. Asks first; only after a press. A risky one (a deploy, a publish) is refused: the person runs those from Workspace Actions. Needs `act: ["actions"]` (or `"actions.run"`). |
 | `cmd.actions.use(): ApiAction[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useActions()`. |
 
 #### `cmd.notify`
@@ -136,6 +143,15 @@ The person's AI, through cmd's AI service. Needs `ai: ["complete"]`; counts agai
 | `cmd.ai.complete(req: ApiCompletionRequest): Promise<ApiCompletion>` | 1.0 | `ai: ["complete"]` | A completion with no tools: `{ text }`, or `{ object }` of the request's JSON Schema, with the tokens it used. |
 | `cmd.ai.use(request: ApiCompletionRequest \| null): CompletionState` | 1.0 | `ai: ["complete"]` | Live: the hook `useCompletion(request)`. |
 
+#### `cmd.run`
+
+Programs, through the core: `cmd.run("gh", ["run", "list"])`. Needs `run: [<program>]`.
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.run(program: string, args?: string[] \| undefined, opts?: ApiRunOptions \| undefined): Promise<ApiRunResult>` | 1.1 | `run: [<program>]` | Runs a program the widget declares in `run` (`run: ["gh"]`) through the core, never a shell: `args` reach it as they are. Only read-only commands run (the same rules as Magic's: `gh run list` yes, `gh run rerun` or `git -c alias.x=…` no; a refusal says why). At most 10 s by default (`timeoutMs`, up to 30 s), 64 KB of stdout and 16 KB of stderr (more is cut, `clipped`), 2 at once and 30 a minute; tokens in the output are blanked. Its folder is the workspace's unless `cwd` names another in it or in `read`. |
+| `cmd.run.exec(program: string, args?: string[] \| undefined, opts?: ApiRunOptions \| undefined): Promise<ApiRunResult>` | 1.1 | `run: [<program>]` | The same as calling `cmd.run`: the verb's name on the wire. |
+
 #### `cmd.config`
 
 This window's config (package.json's `config` fields, as the person set them).
@@ -162,7 +178,7 @@ Where the widget runs.
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.env.get(): WidgetEnv` | 1.0 | none | cmd's version, the API served, theme, size class and placement. |
-| `cmd.env.has(name: string): boolean` | 1.0 | none | Whether this cmd serves a verb ("agents.start"): for a widget that also runs on older cmd. |
+| `cmd.env.has(name: string): boolean` | 1.0 | none | Whether this cmd serves a verb ("agents.start", added in 1.1): for a widget that also runs on an older cmd. |
 | `cmd.env.use(): WidgetEnv` | 1.0 | none | Live: the hook `useEnv()`. |
 
 #### `cmd.fmt`

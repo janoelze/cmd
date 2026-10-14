@@ -16,7 +16,7 @@ import { run, type WidgetModule } from "./runtime.ts";
 import { createHost, type FakeHost } from "./testing/host.ts";
 import { Mirror, RenderedTree, matchers, type WidgetMatchers } from "./testing/tree.ts";
 
-export { createHost, type FakeHost, type HostData, type FetchFixture, type AiFixture } from "./testing/host.ts";
+export { createHost, type FakeHost, type HostData, type FetchFixture, type AiFixture, type RunFixture } from "./testing/host.ts";
 export { fixtures, WORKSPACE_ID } from "./testing/fixtures.ts";
 export { RenderedTree, matchers, textOf, titleOf, type Node, type Element, type WidgetMatchers } from "./testing/tree.ts";
 

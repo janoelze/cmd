@@ -15,6 +15,7 @@ import type {
   ApiEventQuery,
   ApiGitStatus,
   ApiGitWorktree,
+  ApiRunResult,
   ApiScopeQuery,
   ApiTerminal,
   ApiTopic,
@@ -28,6 +29,8 @@ import type {
 } from "@cmd/protocol/widget-tree";
 import type { Transport } from "../connection.ts";
 import { workspace as fixtureWorkspace } from "./fixtures.ts";
+import { verbs } from "../cmd.ts";
+import { WIDGET_API, WIDGET_API_MINOR } from "../version.ts";
 
 /** What the fake core serves. Everything is optional. @since 1.0 */
 export interface HostData {
@@ -54,6 +57,26 @@ export interface HostData {
   env?: Partial<WidgetEnv>;
   /** Verbs refused as a grant without them would be, with the permission they need (`'net: ["api.github.com"]'`). */
   deny?: Partial<Record<ApiVerb, string>>;
+  /**
+   * What `cmd.run` prints, by the command line (`"gh run list --json name"`: the program and
+   * its arguments joined by spaces), or a function of it. A command with neither fails the call.
+   * @since 1.1
+   */
+  run?: Record<string, RunFixture> | ((program: string, args: string[]) => RunFixture | Promise<RunFixture>);
+  /**
+   * How the person answers the acts (agents.start, terminals.type, …): allowed (the default)
+   * or not, as a whole or per verb. A "no" rejects the call with `code: "denied"`.
+   * @since 1.1
+   */
+  approve?: boolean | ((verb: ApiVerb, args: unknown[]) => boolean);
+}
+
+/** A fake program run: exit code 0 and nothing on stderr unless given. @since 1.1 */
+export interface RunFixture {
+  code?: number | null;
+  stdout?: string;
+  stderr?: string;
+  timedOut?: boolean;
 }
 
 /** A fake response: status 200 and no headers unless given. @since 1.0 */
@@ -66,8 +89,10 @@ export interface FetchFixture {
 /** A fake completion: text or an object; usage 0 unless given. @since 1.0 */
 export type AiFixture = ({ text: string } | { object: WireValue }) & { usage?: { input: number; output: number } };
 
-/** What `host.calls` records: the acts (not done), and what reaches outside (fetches, completions; served from fixtures). */
-const ACTS = new Set<string>(["windows.open", "windows.select", "notify.send", "net.fetch", "ai.complete"]);
+/** What `host.calls` records: the acts (not done), and what reaches outside (fetches, completions, programs; served from fixtures). */
+const ACTS = new Set<string>(["windows.open", "windows.select", "notify.send", "net.fetch", "ai.complete", "agents.start", "agents.send", "agents.stop", "terminals.type", "terminals.open", "actions.run", "windows.close", "run.exec"]);
+/** The acts that ask the person (1.1): `approve` answers them. */
+const ASKS = new Set<string>(["agents.start", "agents.send", "agents.stop", "terminals.type", "terminals.open", "actions.run", "windows.close"]);
 
 /** A fake core. @since 1.0 */
 export interface FakeHost {
@@ -115,7 +140,8 @@ export function createHost(data: HostData = {}): FakeHost {
   let opened = 0;
 
   const ws = (): ApiWorkspace => fixtureWorkspace(d.workspace);
-  const env = (): WidgetEnv => ({ version: "0.32.0", api: { major: 1, minor: 0 }, verbs: [], theme: "dark", size: "regular", placement: "board", ...d.env });
+  let started = 0;
+  const env = (): WidgetEnv => ({ version: "0.32.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: Object.keys(verbs) as ApiVerb[], theme: "dark", size: "regular", placement: "board", ...d.env });
 
   const deliver = (msg: WidgetIn) => {
     inFlight++;
@@ -148,6 +174,13 @@ export function createHost(data: HostData = {}): FakeHost {
     const a = typeof d.ai === "function" ? await d.ai(req) : d.ai;
     if (!a) throw new Error("No AI answer: give createHost({ ai: { text } })");
     return { ...a, usage: a.usage ?? { input: 0, output: 0 } };
+  };
+
+  const runOf = async (program: string, args: string[]): Promise<ApiRunResult> => {
+    const line = [program, ...args].join(" ");
+    const f = typeof d.run === "function" ? await d.run(program, args) : d.run?.[line];
+    if (!f) throw new Error(`No run fixture for ${line}: give createHost({ run: { "${line}": { stdout } } })`);
+    return { code: f.code === undefined ? 0 : f.code, stdout: f.stdout ?? "", stderr: f.stderr ?? "", timedOut: !!f.timedOut, clipped: false };
   };
 
   const serve = (method: string, p: unknown[]): unknown => {
@@ -198,6 +231,23 @@ export function createHost(data: HostData = {}): FakeHost {
       }
       case "net.fetch": return fetchOf(String(p[0]), (p[1] ?? {}) as ApiFetchInit);
       case "ai.complete": return aiOf(p[0] as ApiCompletionRequest);
+      case "agents.start": {
+        const n = ++started;
+        return { id: `a-started-${n}`, terminalId: `t-started-${n}`, windowId: `t-started-${n}` };
+      }
+      case "agents.send":
+      case "agents.stop":
+      case "terminals.type":
+      case "windows.close":
+        return null;
+      case "terminals.open": return { id: `w-opened-${++opened}` };
+      case "actions.run": {
+        const a = (d.actions ?? []).find((x) => x.name === p[0]);
+        if (!a) throw new Error(`No action ${String(p[0])}`);
+        if (a.risky) throw new Error(`“${a.name}” is risky: run it from Workspace Actions.`);
+        return { terminalId: `t-action-${a.name}`, started: true };
+      }
+      case "run.exec": return runOf(String(p[0]), Array.isArray(p[1]) ? p[1].map(String) : []);
     }
     throw Object.assign(new Error(`This cmd doesn't serve ${method}.`), { code: "unknown" });
   };
@@ -212,6 +262,8 @@ export function createHost(data: HostData = {}): FakeHost {
         requests.push([m.method, ...m.params]);
         const denied = d.deny?.[m.method];
         if (denied) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "permission", permission: denied, message: `Add "${denied}" to the widget's permissions to use ${m.method}.` } });
+        const approve = typeof d.approve === "function" ? d.approve(m.method, m.params) : d.approve !== false;
+        if (ASKS.has(m.method) && !approve) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "denied", message: "The person said no." } });
         if (ACTS.has(m.method)) calls.push([m.method, ...m.params]);
         const fail = (e: unknown) => {
           const code = (e as { code?: string }).code === "unknown" ? "unknown" : "failed";

@@ -19,8 +19,10 @@ import { widgetComplete, type AiUsage } from "./ai.ts";
 import { apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
 import { brokeredFetch } from "./net.ts";
 import { subscribeTopic } from "./topics.ts";
+import { isAct, widgetActs, type ActDeps } from "./act.ts";
+import { widgetRunner, type RunScope } from "./run.ts";
 
-export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened">;
+export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call">;
 
 /** The window a widget runs for, and what it may do. */
 export interface WidgetScope {
@@ -33,6 +35,14 @@ export interface WidgetScope {
   permissions: WidgetPermissions;
   /** When the person last pressed something in the widget (ms). */
   pressedAt(): number;
+  /** Whether that press came from a paired device (an act then asks on the Mac, never kept). */
+  pressedRemote?(): boolean;
+  /** An act takes the press: one act per press (1.1). */
+  takePress?(): void;
+  /** The tools' approvals and board marks the acts ask and show through; none: acts are refused. */
+  acts?: () => ActDeps | null;
+  /** Tests: what cmd.run runs instead of execArgv. */
+  exec?: RunScope["exec"];
   /** A secret config field's value. */
   secret(key: string): string | null;
   aiUsage: AiUsage;
@@ -46,6 +56,8 @@ export interface ApiAdapter {
   call(verb: string, params: WireValue[]): Promise<WireValue>;
   /** A live topic: `push` at once with the current value, then on each change; returns what stops it. */
   subscribe(topic: string, query: unknown, push: (data: WireValue) => void): () => void;
+  /** The process is gone: its acts waiting for the person are a no, its session's yeses go. */
+  dispose(): void;
 }
 
 /** windows.open is allowed this long after the person pressed something. */
@@ -129,6 +141,17 @@ export function apiV1(core: AdapterCore, scope: WidgetScope): ApiAdapter {
     return w;
   };
   const kv = () => ({ ...((win().state.kv as Record<string, WireValue> | undefined) ?? {}) });
+  let pressTaken = 0;
+  const acts = widgetActs(core, {
+    windowId: scope.windowId,
+    workspaceId: own,
+    pkg: scope.pkg,
+    widget: scope.widget,
+    permissions: perms,
+    press: { at: () => (scope.pressedAt() > pressTaken ? scope.pressedAt() : 0), remote: () => scope.pressedRemote?.() ?? false, take: () => ((pressTaken = scope.pressedAt()), scope.takePress?.()) },
+    deps: () => scope.acts?.() ?? null,
+  });
+  const run = widgetRunner({ permissions: perms, root: () => core.workspaces.get(own())?.root ?? null, exec: scope.exec });
 
   const VERBS: Verbs = {
     "workspace.get": () => {
@@ -253,6 +276,15 @@ export function apiV1(core: AdapterCore, scope: WidgetScope): ApiAdapter {
       limits.ai.take("ai.complete");
       return widgetComplete(req, { name: scope.pkg.name, budget: () => Number(core.settings.settings["widgets.aiBudget"]) || 0, ai: core.ai }, scope.aiUsage);
     },
+    // 1.1: the acts ask the person (act.ts); cmd.run runs read-only commands through the core (run.ts).
+    "agents.start": (req) => acts.call("agents.start", [req as unknown as WireValue]) as never,
+    "agents.send": (id, text) => acts.call("agents.send", [id, text]) as never,
+    "agents.stop": (id) => acts.call("agents.stop", [id]) as never,
+    "terminals.type": (id, text, opts) => acts.call("terminals.type", [id, text, (opts ?? null) as WireValue]) as never,
+    "terminals.open": (req) => acts.call("terminals.open", [(req ?? null) as unknown as WireValue]) as never,
+    "actions.run": (name) => acts.call("actions.run", [name]) as never,
+    "windows.close": (id) => acts.call("windows.close", [id]) as never,
+    "run.exec": (program, args, opts) => run(program, args, opts) as never,
   };
 
   const reads = { agents, terminals, windows, events, git, actions, workspace: () => VERBS["workspace.get"]() };
@@ -266,9 +298,13 @@ export function apiV1(core: AdapterCore, scope: WidgetScope): ApiAdapter {
       const row = API_ACCESS[v];
       if (row.needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
       if (row.needs === "ai" && !perms.ai.includes("complete")) throw missing("ai", "complete", "Using cmd's AI");
-      if (row.mode === "confirm") throw new ApiRefusal({ code: "unknown", message: `${v} asks the person first, which this cmd can't do for widgets yet.` });
+      // A confirm row is an act: act.ts checks its grant, the press, its scope, and asks.
+      if (row.mode === "confirm" && !isAct(v)) throw new ApiRefusal({ code: "unknown", message: `${v} asks the person first, which this cmd can't do for widgets yet.` });
       const fn = VERBS[v] as (...p: WireValue[]) => unknown;
       return ((await fn(...(Array.isArray(params) ? params : []))) ?? null) as WireValue;
+    },
+    dispose() {
+      acts.dispose();
     },
     subscribe(topic, query, push) {
       if (TOPIC_ACCESS[topic as ApiTopic]?.needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");

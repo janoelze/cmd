@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import { API_ELEMENTS } from "../packages/protocol/src/widget-tree.ts";
+import { API_ELEMENTS, WIDGET_API, WIDGET_API_MINOR } from "../packages/protocol/src/widget-tree.ts";
 import { API_ACCESS, TOPIC_ACCESS, type AccessRow } from "../packages/core/src/widgets/api/access.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -35,11 +35,11 @@ export function apiExports(dir = API): { checker: ts.TypeChecker; exported: ts.S
 const one = (s: string) => s.replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|").trim();
 const code = (s: string) => "`" + s.replace(/\s+/g, " ").replace(/\|/g, "\\|") + "`";
 
-/** What a row needs, as package.json's cmd.permissions writes it. */
-function permission(row: AccessRow | undefined): string {
+/** What a row needs, as package.json's cmd.permissions writes it (`ns`: the verb's namespace, for an act). */
+function permission(row: AccessRow | undefined, ns = ""): string {
   if (!row) return "none";
-  const need = ({ workspace: '`workspace: ["read"]`', events: "`events: [<class>]`", net: "`net: [<host>]`", ai: '`ai: ["complete"]`' } as Record<string, string>)[row.needs ?? ""] ?? "none";
-  return row.mode === "read" ? need : `${need}, ${row.mode === "act" ? "acts" : "asks each time"}`;
+  const need = ({ workspace: '`workspace: ["read"]`', events: "`events: [<class>]`", net: "`net: [<host>]`", ai: '`ai: ["complete"]`', act: `\`act: ["${ns}"]\``, run: "`run: [<program>]`" } as Record<string, string>)[row.needs ?? ""] ?? "none";
+  return row.mode === "read" ? need : `${need}, ${row.mode === "act" ? "acts" : "asks"}`;
 }
 
 /** The reference, as Markdown. */
@@ -56,15 +56,22 @@ export function reference(): string {
     return name + text.replace(/^(<[^>]*>)?\(\.\.\.args: \[(.*)\]\)/, (_, g = "", p) => `${g}(${p})`).replace(/^(<[^>]*>)?\((.*?)\) => /, (_, g = "", p) => `${g}(${p}): `);
   };
   const find = (name: string) => exported.find((s) => s.name === name);
-  const out: string[] = [START, "", "## Reference", "", "API 1, minor 0. Everything here is in API 1 for good; what comes later says `@since 1.x`.", ""];
+  const out: string[] = [START, "", "## Reference", "", `API ${WIDGET_API}, minor ${WIDGET_API_MINOR}. Everything here is in API ${WIDGET_API} for good; what came after 1.0 says \`@since 1.x\`, and a widget that also runs on an older cmd checks \`cmd.env.has(verb)\` first.`, ""];
 
   out.push("### `cmd`", "", doc(find("cmd")!), "");
   for (const ns of checker.getTypeOfSymbol(find("cmd")!).getProperties()) {
     out.push(`#### \`cmd.${ns.name}\``, "", doc(ns), "", "| Verb | Since | Permission | What |", "|---|---|---|---|");
+    // A namespace that is also a function (cmd.run): its call first, documented on the call signature.
+    const call = checker.getTypeOfSymbol(ns).getCallSignatures()[0];
+    if (call) {
+      const text = checker.signatureToString(call, undefined, ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.WriteArrowStyleSignature).replace(/^\((.*?)\) => /, "($1): ");
+      const tag = call.getJsDocTags().find((t) => t.name === "since");
+      out.push(`| ${code(`cmd.${ns.name}${text}`)} | ${ts.displayPartsToString(tag?.text ?? []).trim() || "1.0"} | ${permission((API_ACCESS as Record<string, AccessRow>)[`${ns.name}.exec`])} | ${one(ts.displayPartsToString(call.getDocumentationComment(checker)))} |`);
+    }
     for (const m of checker.getTypeOfSymbol(ns).getProperties()) {
       const verb = `${ns.name}.${m.name}`;
       const row = (API_ACCESS as Record<string, AccessRow>)[verb] ?? (m.name === "use" || m.name === "subscribe" ? (TOPIC_ACCESS as Record<string, AccessRow>)[ns.name] ?? (API_ACCESS as Record<string, AccessRow>)[`${ns.name}.complete`] : undefined);
-      out.push(`| ${code(sig(m, `cmd.${verb}`))} | ${since(m)} | ${ns.name === "fmt" ? "none" : permission(row)} | ${doc(m)} |`);
+      out.push(`| ${code(sig(m, `cmd.${verb}`))} | ${since(m)} | ${ns.name === "fmt" ? "none" : permission(row, ns.name)} | ${doc(m)} |`);
     }
     out.push("");
   }

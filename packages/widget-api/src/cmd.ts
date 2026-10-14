@@ -4,7 +4,7 @@
 // names the permission, and the widget runs on. VERBS below has one entry per verb of
 // the protocol's API_VERBS: a verb missing here fails tsc.
 
-import type { ApiMethods, ApiVerb, ApiEventQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiMethods, ApiVerb, ApiEventQuery, ApiRunOptions, ApiRunResult, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { connection } from "./connection.ts";
 import { fmt } from "./fmt.ts";
 import { useActions, useAgents, useCompletion, useConfig, useEnv, useEvents, useGit, useTerminals, useWindows, useWorkspace } from "./hooks.ts";
@@ -44,15 +44,42 @@ const VERBS: Verbs = {
   "state.history": verb("state.history"),
   "net.fetch": verb("net.fetch"),
   "ai.complete": verb("ai.complete"),
+  "agents.start": verb("agents.start"),
+  "agents.send": verb("agents.send"),
+  "agents.stop": verb("agents.stop"),
+  "terminals.type": verb("terminals.type"),
+  "terminals.open": verb("terminals.open"),
+  "actions.run": verb("actions.run"),
+  "windows.close": verb("windows.close"),
+  "run.exec": verb("run.exec"),
 };
+
+/** cmd.run: a function (`cmd.run("gh", ["run", "list"])`) that is also the namespace of its one verb (`cmd.run.exec`). */
+interface Run {
+  /**
+   * Runs a program the widget declares in `run` (`run: ["gh"]`) through the core, never a
+   * shell: `args` reach it as they are. Only read-only commands run (the same rules as
+   * Magic's: `gh run list` yes, `gh run rerun` or `git -c alias.x=…` no; a refusal says
+   * why). At most 10 s by default (`timeoutMs`, up to 30 s), 64 KB of stdout and 16 KB of
+   * stderr (more is cut, `clipped`), 2 at once and 30 a minute; tokens in the output are
+   * blanked. Its folder is the workspace's unless `cwd` names another in it or in `read`.
+   * @since 1.1
+   */
+  (program: string, args?: string[], opts?: ApiRunOptions): Promise<ApiRunResult>;
+  /** The same as calling `cmd.run`: the verb's name on the wire. @since 1.1 */
+  exec: (program: string, args?: string[], opts?: ApiRunOptions) => Promise<ApiRunResult>;
+}
+
+const run: Run = Object.assign((program: string, args?: string[], opts?: ApiRunOptions) => VERBS["run.exec"](program, args, opts), { exec: VERBS["run.exec"] });
 
 /** The verbs as a map by name (tests check every verb of the protocol is here). */
 export const verbs: Readonly<Verbs> = VERBS;
 
 /**
- * cmd, as a widget sees it. Reads run at once within the widget's grant; acts ask the
- * person (docs/55). Every method is async and rejects with an `ApiCallError` when the
- * grant lacks what it needs (`error.permission` names it).
+ * cmd, as a widget sees it. Reads run at once within the widget's grant; acts (1.1) ask the
+ * person (docs/55), only right after they pressed something in the widget, and only in its
+ * own workspace. Every method is async and rejects with an `ApiCallError` when the grant
+ * lacks what it needs (`error.permission` names it) or the person says no (`code: "denied"`).
  */
 export const cmd = {
   /** The widget's workspace. Needs `workspace: ["read"]`. @since 1.0 */
@@ -72,6 +99,21 @@ export const cmd = {
     list: VERBS["agents.list"],
     /** One agent by id, or null. @since 1.0 */
     get: VERBS["agents.get"],
+    /**
+     * Starts a coding agent on a task, in a terminal of its own in this workspace. Asks the
+     * person first (the sheet names the widget); works only right after they pressed
+     * something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`).
+     * @since 1.1
+     */
+    start: VERBS["agents.start"],
+    /**
+     * Sends a message to an agent of this workspace, as if typed into its terminal. Typed
+     * text always asks, every time. Needs `act: ["agents"]` (or `"agents.send"`); only after a press.
+     * @since 1.1
+     */
+    send: VERBS["agents.send"],
+    /** Stops an agent of this workspace. Asks first; only after a press. Needs `act: ["agents"]` (or `"agents.stop"`). @since 1.1 */
+    stop: VERBS["agents.stop"],
     /** Live: the hook `useAgents()`. @since 1.0 */
     use: useAgents,
   },
@@ -83,6 +125,21 @@ export const cmd = {
     read: VERBS["terminals.read"],
     /** Waits until a line of the terminal matches `pattern` (a regular expression), or the timeout. @since 1.0 */
     waitFor: VERBS["terminals.waitFor"],
+    /**
+     * Types `text` into a terminal of this workspace, and presses Return only with
+     * `{ submit: true }`. Typed text always asks, every time, showing exactly what; some
+     * commands are refused outright (root, piping a download into a shell, credentials).
+     * Only after a press. Needs `act: ["terminals"]` (or `"terminals.type"`).
+     * @since 1.1
+     */
+    type: VERBS["terminals.type"],
+    /**
+     * Opens a terminal in this workspace, in `cwd`, with `command` typed at its prompt but
+     * not run: the person reads it and presses Return. Asks first; only after a press.
+     * Needs `act: ["terminals"]` (or `"terminals.open"`).
+     * @since 1.1
+     */
+    open: VERBS["terminals.open"],
     /** Live: the hook `useTerminals()`. @since 1.0 */
     use: useTerminals,
   },
@@ -94,6 +151,12 @@ export const cmd = {
     open: VERBS["windows.open"],
     /** Selects a window (and its workspace): where a row's click goes. @since 1.0 */
     select: VERBS["windows.select"],
+    /**
+     * Closes a window of this workspace, never the widget's own. Asks first (a terminal's
+     * command or agent ends with it); only after a press. Needs `act: ["windows"]` (or `"windows.close"`).
+     * @since 1.1
+     */
+    close: VERBS["windows.close"],
     /** Live: the hook `useWindows()`. @since 1.0 */
     use: useWindows,
   },
@@ -125,6 +188,13 @@ export const cmd = {
   actions: {
     /** The workspace's Actions. @since 1.0 */
     list: VERBS["actions.list"],
+    /**
+     * Runs a Workspace Action by name in a terminal of its own. Asks first; only after a
+     * press. A risky one (a deploy, a publish) is refused: the person runs those from
+     * Workspace Actions. Needs `act: ["actions"]` (or `"actions.run"`).
+     * @since 1.1
+     */
+    run: VERBS["actions.run"],
     /** Live: the hook `useActions()`. @since 1.0 */
     use: useActions,
   },
@@ -155,6 +225,8 @@ export const cmd = {
     /** Live: the hook `useCompletion(request)`. @since 1.0 */
     use: useCompletion,
   },
+  /** Programs, through the core: `cmd.run("gh", ["run", "list"])`. Needs `run: [<program>]`. @since 1.1 */
+  run,
   /** This window's config (package.json's `config` fields, as the person set them). @since 1.0 */
   config: {
     /** The values now. @since 1.0 */
@@ -179,7 +251,7 @@ export const cmd = {
     get(): WidgetEnv {
       return connection().env;
     },
-    /** Whether this cmd serves a verb ("agents.start"): for a widget that also runs on older cmd. @since 1.0 */
+    /** Whether this cmd serves a verb ("agents.start", added in 1.1): for a widget that also runs on an older cmd. @since 1.0 */
     has(name: string): boolean {
       return (connection().env.verbs as string[]).includes(name);
     },

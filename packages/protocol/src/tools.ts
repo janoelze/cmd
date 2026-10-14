@@ -48,6 +48,11 @@ export const approvalKey = (permission: Permission, site?: string | null) => (si
 /** "Open websites: github.com". */
 export const approvalLabel = (permission: Permission, site?: string | null) => `${permissionOf(permission)?.title ?? permission}${site ? `: ${site}` : ""}`;
 
+/** What a yes for a widget package is kept under: the permission, for that package alone ("run:widget/ci-runs"; a package name has no "/"). */
+export const widgetApprovalKey = (permission: Permission, pkg: string) => `${permission}:widget/${pkg}`;
+/** "Run project commands, for the widget ci-runs". */
+export const widgetApprovalLabel = (permission: Permission, pkg: string) => `${permissionOf(permission)?.title ?? permission}, for the widget ${pkg}`;
+
 /** An approval the person chose to keep for a workspace: this kind of action (on this site) runs without asking there. */
 export interface RememberedApproval {
   workspaceId: WorkspaceId;
@@ -96,6 +101,17 @@ export interface ToolCaller {
   pids?: number[];
 }
 
+/** A widget package asking (docs/56, phase 4): a yes is kept for it alone, in its workspace; "this session" lasts while its window is open. */
+export interface ToolWidget {
+  /** package.json's name and version. */
+  name: string;
+  version: string;
+  /** The widget's title in the Library ("CI"). */
+  title: string;
+  /** Its SF Symbol. */
+  icon: string;
+}
+
 export type ToolCallState = "running" | "waiting" | "done" | "failed" | "denied";
 
 /** A tool call the board shows: the window acted on lights up and says who acts; one waiting for the person can be answered there. */
@@ -117,7 +133,7 @@ export interface ToolActivity {
   /** The caller's kind ("claude", "codex", "operator"), for its icon. */
   callerKind?: string;
   /** While waiting: what it asks, in words and exactly, the kind of action and its site, and how long a yes may hold. */
-  approval?: { title: string; exact?: string; permission: Permission; site?: string; risky?: boolean; scopes: ApprovalScope[] };
+  approval?: { title: string; exact?: string; permission: Permission; site?: string; risky?: boolean; scopes: ApprovalScope[]; widget?: ToolWidget };
 }
 
 /** A tool call started, waits for the person, or ended. Part of CoreEvent (rpc.ts). */

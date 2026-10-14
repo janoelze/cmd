@@ -14,7 +14,6 @@
 
 import { SUPPORTED_API, WIDGET_API, WIDGET_API_MINOR, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import fs from "node:fs";
 import type { CoreContext } from "../../kernel/context.ts";
 import { ApiRefusal } from "../api/access.ts";
 import { AiUsage } from "../api/ai.ts";
@@ -26,6 +25,8 @@ import { PackageConfig } from "../config.ts";
 import { HostConnection, type ConnectionTimes } from "./connection.ts";
 import type { ExitInfo, RuntimeProcess, WidgetRuntime } from "./runtime.ts";
 import { LogLimit } from "./log-limit.ts";
+import { loadError, realDir } from "./load-error.ts";
+import type { ActDeps } from "../api/act.ts";
 import { TreeState } from "./tree.ts";
 
 const log = logger("widgets");
@@ -46,7 +47,7 @@ export const HOST_TIMES: HostTimes = { pingMs: 5000, stallMs: 20_000, stopAfterM
 /** The heap limit of a widget process (MB). */
 export const WIDGET_MEMORY_MB = 256;
 
-type HostCore = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "widgetTokens" | "broadcast" | "settings" | "agents" | "panes" | "data" | "actions" | "notifications" | "ai" | "opened">;
+type HostCore = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "widgetTokens" | "broadcast" | "settings" | "agents" | "panes" | "data" | "actions" | "notifications" | "ai" | "opened" | "call">;
 
 export interface HostOptions {
   stateDir: string | null;
@@ -57,6 +58,8 @@ export interface HostOptions {
   times?: Partial<HostTimes>;
   /** What the Library's entries say changed (a package started or stopped waiting for a grant, a secret was set). */
   onAsk?: () => void;
+  /** The tools' approvals and board marks, which widgets' acts ask and show through (none: acts are refused). */
+  acts?: () => ActDeps | null;
 }
 
 interface Instance {
@@ -78,6 +81,8 @@ interface Instance {
   env: Pick<WidgetEnv, "theme" | "size" | "placement">;
   config: string;
   pressedAt: number;
+  /** That press came from a paired device. */
+  pressedRemote: boolean;
   permissions: WidgetPermissions | null;
   /** The widget's error before it said hello (its main didn't import): an exit then is a load failure, not a crash. */
   loadError: string | null;
@@ -161,11 +166,16 @@ export class WidgetHost {
     else inst.conn?.send({ kind: "resync" });
   }
 
-  interact(windowId: WindowId, handler: number, event: string, value?: unknown): void {
+  /** What the person did in the window; `remote`: on a paired device (an act it leads to asks on the Mac). */
+  interact(windowId: WindowId, handler: number, event: string, value?: unknown, remote = false): void {
     const inst = this.#must(windowId);
     if (!inst.conn || !inst.adapter) throw new Error("this widget isn't running");
     if (!Number.isInteger(handler) || typeof event !== "string") throw new Error("an interaction names a handler and its event");
-    inst.pressedAt = Date.now();
+    // Typing into a field is no press: a widget can't act while the person types.
+    if (!(event === "onChange" && typeof value === "string" && inst.tree.typesInto(handler))) {
+      inst.pressedAt = Date.now();
+      inst.pressedRemote = remote;
+    }
     inst.conn.send({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value: value as WireValue }) });
   }
 
@@ -294,6 +304,7 @@ export class WidgetHost {
       env: { theme: this.#core.settings.settings["theme.appearance"] === "light" ? "light" : "dark", size: "regular", placement: "board" },
       config: "",
       pressedAt: 0,
+      pressedRemote: false,
       permissions: null,
       loadError: null,
       logs: new LogLimit((l) => this.#core.broadcast({ type: "widget.log", windowId: w.id, ...l })),
@@ -412,6 +423,9 @@ export class WidgetHost {
       widget: inst.widget!,
       permissions: inst.permissions!,
       pressedAt: () => inst.pressedAt,
+      pressedRemote: () => inst.pressedRemote,
+      takePress: () => void (inst.pressedAt = 0),
+      acts: () => this.#o.acts?.() ?? null,
       secret: (key) => this.config.secrets(pkg.name).get(inst.widget!.id)[key] ?? null,
       aiUsage: this.#aiUsage,
       fetchImpl: this.fetchImpl,
@@ -483,6 +497,7 @@ export class WidgetHost {
   }
 
   #cleanup(inst: Instance): void {
+    inst.adapter?.dispose();
     for (const off of inst.subs.values()) off();
     inst.subs.clear();
     inst.conn?.close();
@@ -573,27 +588,3 @@ export class WidgetHost {
     return inst;
   }
 }
-
-/**
- * What a load failure shows: the error's first line, then where (the first "at" line of the
- * message or the stack, the package's own path cut to what's in it): "SyntaxError: Expression
- * expected · src/main.tsx:15:1". Deno's code frame under the message is left out.
- */
-export function loadError(message: unknown, stack: unknown, dir?: string): string {
-  const lines = [String(message ?? ""), typeof stack === "string" ? stack : ""].join("\n").split("\n").map((l) => l.trim());
-  const first = lines[0] ?? "";
-  let at = lines.find((l) => l.startsWith("at "))?.replace(/^at (async )?/, "").replace(/^file:\/\//, "");
-  if (at && dir) {
-    const real = dir.endsWith("/") ? dir : dir + "/";
-    if (at.startsWith(real)) at = at.slice(real.length);
-  }
-  return [first, at && !first.includes(at) ? at : null].filter(Boolean).join(" · ").slice(0, 1000);
-}
-
-const realDir = (dir: string): string => {
-  try {
-    return fs.realpathSync(dir);
-  } catch {
-    return dir;
-  }
-};

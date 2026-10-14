@@ -21,6 +21,16 @@ export class TreeState {
     return { kind: "tree", rev: this.rev, nodes: this.#roots };
   }
 
+  /** Whether `handler` is a text field's onChange (typing, not a press). */
+  typesInto(handler: number): boolean {
+    for (const { node } of this.#nodes.values()) {
+      if (node.type !== "ToolbarField" && node.type !== "ToolbarSearchField") continue;
+      const h = node.props.onChange;
+      if (h && typeof h === "object" && !Array.isArray(h) && (h as { $handler?: unknown }).$handler === handler) return true;
+    }
+    return false;
+  }
+
   reset(): void {
     this.rev = 0;
     this.#roots = [];

@@ -5,9 +5,15 @@
 // keyed by the permission and, for those kept by site, the site). Risky actions always ask and
 // are never kept for always. Calls waiting for the person are answered through approvals.answer
 // from wherever the app shows them (the approval sheet, the Operator's chat).
+//
+// Widgets (docs/56, phase 4) ask through the same model, stricter (decideWidget): a yes is kept
+// for the one package (`run:widget/ci-runs`), and Allow in Settings doesn't skip asking (an act
+// grant is a permission to ask), except for the built-in packages cmd ships, which follow the
+// levels like cmd's own callers. Never still refuses. Typed text, and a press that came from a
+// paired device, ask every time and are never kept.
 
 import type { DatabaseSync } from "node:sqlite";
-import { PERMISSIONS, approvalKey, approvalLabel, type ApprovalScope, type Permission, type PermissionLevel, type RememberedApproval, type WorkspaceId } from "@cmd/protocol";
+import { PERMISSIONS, approvalKey, approvalLabel, widgetApprovalKey, widgetApprovalLabel, type ApprovalScope, type Permission, type PermissionLevel, type RememberedApproval, type WorkspaceId } from "@cmd/protocol";
 import type { Approval } from "./kit.ts";
 
 export interface Answer {
@@ -50,6 +56,32 @@ export class Approvals {
     const kept = this.remembered(workspaceId, key);
     if (kept) return { run: true, kept: kept.label };
     return { ask: SCOPES };
+  }
+
+  /**
+   * What happens to a widget's act (docs/56, phase 4): `session` is its window's key. Asks
+   * unless a yes was kept for this package here (or this window's session), or the package is
+   * built in and its level is Allow; typed text and a press from a paired device always ask, once.
+   */
+  decideWidget(session: string, workspaceId: WorkspaceId, a: Approval, w: { pkg: string; builtin: boolean; typed: boolean; remote: boolean }): Decision {
+    const level = this.#levels()[a.permission] ?? "ask";
+    if (level === "never") return { refuse: `“${approvalLabel(a.permission)}” is set to Never in cmd (Settings → AI & Agents → Permissions).` };
+    if (w.typed || w.remote || a.risky) return { ask: ["once"] };
+    const key = widgetApprovalKey(a.permission, w.pkg);
+    if (this.#session.get(session)?.has(key)) return { run: true, kept: "this session" };
+    if (w.builtin && level === "allow") return { run: true };
+    const kept = this.remembered(workspaceId, key);
+    if (kept) return { run: true, kept: kept.label };
+    return { ask: SCOPES };
+  }
+
+  /** Keeps a widget's yes: for its window's session, or always for its package in the workspace. */
+  grantWidget(session: string, workspaceId: WorkspaceId, a: Approval, pkg: string, scope: ApprovalScope = "once"): void {
+    const key = widgetApprovalKey(a.permission, pkg);
+    if (scope === "session") {
+      const s = this.#session.get(session) ?? new Set<string>();
+      this.#session.set(session, s.add(key));
+    } else if (scope === "always" && !a.risky) this.remember(workspaceId, key, widgetApprovalLabel(a.permission, pkg));
   }
 
   /** Keeps a yes for as long as the person said. */

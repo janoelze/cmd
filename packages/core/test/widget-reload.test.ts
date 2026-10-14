@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AppWindow, WidgetEntry, WidgetHostStatus } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
 import { isSource, PackageReloader } from "../src/widgets/reload.ts";
-import { loadError } from "../src/widgets/host/host.ts";
+import { loadError } from "../src/widgets/host/load-error.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { FakeWidgetRuntime, tmp, until, writePackage, type FakePackage } from "./fake-widget-runtime.ts";
 

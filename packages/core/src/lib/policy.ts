@@ -343,30 +343,40 @@ export function classify(command: string, o: PolicyOptions = {}): Verdict {
     // Leading VAR=value assignments.
     while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]!)) words.shift();
     if (!words.length) continue;
-    const name = path.basename(words[0]!);
-    const args = words.slice(1);
-    for (const a of args) {
-      // Flags never name files, except --file=path style values.
-      const candidate = a.startsWith("-") ? (a.includes("=") ? a.slice(a.indexOf("=") + 1) : "") : a;
-      if (candidate && !/^[a-z]+:\/\//i.test(candidate) && isDeniedPath(candidate, deny, home, cwd)) {
-        worse({ level: "deny", reason: `reads ${candidate}, which stays private` });
-      }
-    }
-    if (DENY[name]) {
-      worse({ level: "deny", reason: `${name} ${DENY[name]}` });
-      continue;
-    }
-    if (SENDS[name]) {
-      worse({ level: "ask", reason: `${name} ${SENDS[name]}` });
-      continue;
-    }
-    const rule = READ_ONLY[name];
-    if (!rule) {
-      worse({ level: "ask", reason: `${name} is not a known read-only command` });
-      continue;
-    }
-    const why = rule(args);
-    if (why) worse({ level: "ask", reason: `${name} ${why}` });
+    worse(classifyCommand(path.basename(words[0]!), words.slice(1), { deny, home, cwd }));
   }
   return worst;
+}
+
+/** One simple command, its program and arguments as they are: the worst of what its arguments read and what the program is. */
+function classifyCommand(name: string, args: string[], o: { deny: string[]; home: string; cwd: string }): Verdict {
+  const rank = { allow: 0, ask: 1, deny: 2 };
+  let worst: Verdict = { level: "allow", reason: "read-only" };
+  const worse = (v: Verdict) => {
+    if (rank[v.level] > rank[worst.level]) worst = v;
+  };
+  for (const a of args) {
+    // Flags never name files, except --file=path style values.
+    const candidate = a.startsWith("-") ? (a.includes("=") ? a.slice(a.indexOf("=") + 1) : "") : a;
+    if (candidate && !/^[a-z]+:\/\//i.test(candidate) && isDeniedPath(candidate, o.deny, o.home, o.cwd)) worse({ level: "deny", reason: `reads ${candidate}, which stays private` });
+  }
+  if (DENY[name]) return (worse({ level: "deny", reason: `${name} ${DENY[name]}` }), worst);
+  if (SENDS[name]) return (worse({ level: "ask", reason: `${name} ${SENDS[name]}` }), worst);
+  const rule = READ_ONLY[name];
+  if (!rule) return (worse({ level: "ask", reason: `${name} is not a known read-only command` }), worst);
+  const why = rule(args);
+  if (why) worse({ level: "ask", reason: `${name} ${why}` });
+  return worst;
+}
+
+/**
+ * Classify a program and its arguments that reach it as they are, with no shell between
+ * (a widget's `cmd.run`): the same rules as one simple command in `classify`, without
+ * parsing (a `;` or `|` in an argument is only text). A program given as a path is judged
+ * by its name, so callers take bare names only.
+ */
+export function classifyArgs(program: string, args: string[], o: PolicyOptions = {}): Verdict {
+  if (!program.trim()) return { level: "deny", reason: "empty command" };
+  const home = o.home ?? os.homedir();
+  return classifyCommand(path.basename(program), args, { deny: o.deny ?? magicDenyPaths(), home, cwd: o.cwd ?? home });
 }

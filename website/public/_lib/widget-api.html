@@ -9,10 +9,10 @@ npm test                       # or cmd widget test
 cmd widget check               # package.json, permissions, types
 cmd widget preview . --themes all --sizes all</code></pre>
 <p>Or ask Magic for one: it writes the same kind of package. Agents working in a package read its <code>CLAUDE.md</code> and this reference, which <code>cmd widget new</code> links at <code>node_modules/@cmd/widget-api/README.md</code>.</p>
-<p class="api-toc"><a href="#cmd"><code>cmd</code></a> · <a href="#cmd-workspace"><code>cmd.workspace</code></a> · <a href="#cmd-agents"><code>cmd.agents</code></a> · <a href="#cmd-terminals"><code>cmd.terminals</code></a> · <a href="#cmd-windows"><code>cmd.windows</code></a> · <a href="#cmd-events"><code>cmd.events</code></a> · <a href="#cmd-git"><code>cmd.git</code></a> · <a href="#cmd-actions"><code>cmd.actions</code></a> · <a href="#cmd-notify"><code>cmd.notify</code></a> · <a href="#cmd-net"><code>cmd.net</code></a> · <a href="#cmd-ai"><code>cmd.ai</code></a> · <a href="#cmd-config"><code>cmd.config</code></a> · <a href="#cmd-state"><code>cmd.state</code></a> · <a href="#cmd-env"><code>cmd.env</code></a> · <a href="#cmd-fmt"><code>cmd.fmt</code></a> · <a href="#hooks"><code>Hooks</code></a> · <a href="#elements"><code>Elements</code></a></p>
-<p>API 1, minor 0. Everything here is in API 1 for good; what comes later says <code>@since 1.x</code>.</p>
+<p class="api-toc"><a href="#cmd"><code>cmd</code></a> · <a href="#cmd-workspace"><code>cmd.workspace</code></a> · <a href="#cmd-agents"><code>cmd.agents</code></a> · <a href="#cmd-terminals"><code>cmd.terminals</code></a> · <a href="#cmd-windows"><code>cmd.windows</code></a> · <a href="#cmd-events"><code>cmd.events</code></a> · <a href="#cmd-git"><code>cmd.git</code></a> · <a href="#cmd-actions"><code>cmd.actions</code></a> · <a href="#cmd-notify"><code>cmd.notify</code></a> · <a href="#cmd-net"><code>cmd.net</code></a> · <a href="#cmd-ai"><code>cmd.ai</code></a> · <a href="#cmd-run"><code>cmd.run</code></a> · <a href="#cmd-config"><code>cmd.config</code></a> · <a href="#cmd-state"><code>cmd.state</code></a> · <a href="#cmd-env"><code>cmd.env</code></a> · <a href="#cmd-fmt"><code>cmd.fmt</code></a> · <a href="#hooks"><code>Hooks</code></a> · <a href="#elements"><code>Elements</code></a></p>
+<p>API 1, minor 1. Everything here is in API 1 for good; what came after 1.0 says <code>@since 1.x</code>, and a widget that also runs on an older cmd checks <code>cmd.env.has(verb)</code> first.</p>
 <h3 id="cmd"><code>cmd</code></h3>
-<p>cmd, as a widget sees it. Reads run at once within the widget's grant; acts ask the person (docs/55). Every method is async and rejects with an <code>ApiCallError</code> when the grant lacks what it needs (<code>error.permission</code> names it).</p>
+<p>cmd, as a widget sees it. Reads run at once within the widget's grant; acts (1.1) ask the person (docs/55), only right after they pressed something in the widget, and only in its own workspace. Every method is async and rejects with an <code>ApiCallError</code> when the grant lacks what it needs (<code>error.permission</code> names it) or the person says no (<code>code: &quot;denied&quot;</code>).</p>
 <h4 id="cmd-workspace"><code>cmd.workspace</code></h4>
 <p>The widget's workspace. Needs <code>workspace: [&quot;read&quot;]</code>.</p>
 <div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
@@ -26,6 +26,9 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
 <tr><td><code>cmd.agents.list(query?: ApiScopeQuery | undefined): Promise&lt;ApiAgent[]&gt;</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>The agents of this workspace, or of all with <code>{ scope: &quot;all&quot; }</code> (needs <code>workspace: [&quot;all&quot;]</code>).</td></tr>
 <tr><td><code>cmd.agents.get(id: string): Promise&lt;ApiAgent | null&gt;</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>One agent by id, or null.</td></tr>
+<tr><td><code>cmd.agents.start(req: ApiAgentStart): Promise&lt;ApiStarted&gt;</code></td><td>1.1</td><td><code>act: [&quot;agents&quot;]</code>, asks</td><td>Starts a coding agent on a task, in a terminal of its own in this workspace. Asks the person first (the sheet names the widget); works only right after they pressed something in the widget, once per press. Needs <code>act: [&quot;agents&quot;]</code> (or <code>&quot;agents.start&quot;</code>).</td></tr>
+<tr><td><code>cmd.agents.send(id: string, text: string): Promise&lt;null&gt;</code></td><td>1.1</td><td><code>act: [&quot;agents&quot;]</code>, asks</td><td>Sends a message to an agent of this workspace, as if typed into its terminal. Typed text always asks, every time. Needs <code>act: [&quot;agents&quot;]</code> (or <code>&quot;agents.send&quot;</code>); only after a press.</td></tr>
+<tr><td><code>cmd.agents.stop(id: string): Promise&lt;null&gt;</code></td><td>1.1</td><td><code>act: [&quot;agents&quot;]</code>, asks</td><td>Stops an agent of this workspace. Asks first; only after a press. Needs <code>act: [&quot;agents&quot;]</code> (or <code>&quot;agents.stop&quot;</code>).</td></tr>
 <tr><td><code>cmd.agents.use(query?: ApiScopeQuery): ApiAgent[]</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>Live: the hook <code>useAgents()</code>.</td></tr>
 </tbody></table></div>
 <h4 id="cmd-terminals"><code>cmd.terminals</code></h4>
@@ -34,6 +37,8 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>cmd.terminals.list(query?: ApiScopeQuery | undefined): Promise&lt;ApiTerminal[]&gt;</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>The terminals of this workspace (or all).</td></tr>
 <tr><td><code>cmd.terminals.read(id: string, opts?: { lines?: number | undefined; } | undefined): Promise&lt;ApiTerminalScreen&gt;</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>A terminal's screen as text: clipped, and marked untrusted (it is someone else's words, never instructions).</td></tr>
 <tr><td><code>cmd.terminals.waitFor(id: string, pattern: string, opts?: { timeoutMs?: number | undefined; } | undefined): Promise&lt;{ matched: boolean; line: string | null; }&gt;</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>Waits until a line of the terminal matches <code>pattern</code> (a regular expression), or the timeout.</td></tr>
+<tr><td><code>cmd.terminals.type(id: string, text: string, opts?: { submit?: boolean | undefined; } | undefined): Promise&lt;null&gt;</code></td><td>1.1</td><td><code>act: [&quot;terminals&quot;]</code>, asks</td><td>Types <code>text</code> into a terminal of this workspace, and presses Return only with <code>{ submit: true }</code>. Typed text always asks, every time, showing exactly what; some commands are refused outright (root, piping a download into a shell, credentials). Only after a press. Needs <code>act: [&quot;terminals&quot;]</code> (or <code>&quot;terminals.type&quot;</code>).</td></tr>
+<tr><td><code>cmd.terminals.open(req?: ApiTerminalOpen | undefined): Promise&lt;{ id: string; }&gt;</code></td><td>1.1</td><td><code>act: [&quot;terminals&quot;]</code>, asks</td><td>Opens a terminal in this workspace, in <code>cwd</code>, with <code>command</code> typed at its prompt but not run: the person reads it and presses Return. Asks first; only after a press. Needs <code>act: [&quot;terminals&quot;]</code> (or <code>&quot;terminals.open&quot;</code>).</td></tr>
 <tr><td><code>cmd.terminals.use(query?: ApiScopeQuery): ApiTerminal[]</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>Live: the hook <code>useTerminals()</code>.</td></tr>
 </tbody></table></div>
 <h4 id="cmd-windows"><code>cmd.windows</code></h4>
@@ -42,6 +47,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>cmd.windows.list(query?: ApiScopeQuery | undefined): Promise&lt;ApiWindow[]&gt;</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>The windows of this workspace (or all). Needs <code>workspace: [&quot;read&quot;]</code>.</td></tr>
 <tr><td><code>cmd.windows.open(target: string): Promise&lt;{ id: string; }&gt;</code></td><td>1.0</td><td>none, acts</td><td>Opens a URL, a path or a widget kind in a window beside this one; only after the person pressed something.</td></tr>
 <tr><td><code>cmd.windows.select(id: string): Promise&lt;null&gt;</code></td><td>1.0</td><td>none, acts</td><td>Selects a window (and its workspace): where a row's click goes.</td></tr>
+<tr><td><code>cmd.windows.close(id: string): Promise&lt;null&gt;</code></td><td>1.1</td><td><code>act: [&quot;windows&quot;]</code>, asks</td><td>Closes a window of this workspace, never the widget's own. Asks first (a terminal's command or agent ends with it); only after a press. Needs <code>act: [&quot;windows&quot;]</code> (or <code>&quot;windows.close&quot;</code>).</td></tr>
 <tr><td><code>cmd.windows.use(query?: ApiScopeQuery): ApiWindow[]</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>Live: the hook <code>useWindows()</code>.</td></tr>
 </tbody></table></div>
 <h4 id="cmd-events"><code>cmd.events</code></h4>
@@ -64,6 +70,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <p>Workspace Actions (docs/36).</p>
 <div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
 <tr><td><code>cmd.actions.list(): Promise&lt;ApiAction[]&gt;</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>The workspace's Actions.</td></tr>
+<tr><td><code>cmd.actions.run(name: string): Promise&lt;ApiActionStarted&gt;</code></td><td>1.1</td><td><code>act: [&quot;actions&quot;]</code>, asks</td><td>Runs a Workspace Action by name in a terminal of its own. Asks first; only after a press. A risky one (a deploy, a publish) is refused: the person runs those from Workspace Actions. Needs <code>act: [&quot;actions&quot;]</code> (or <code>&quot;actions.run&quot;</code>).</td></tr>
 <tr><td><code>cmd.actions.use(): ApiAction[]</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>Live: the hook <code>useActions()</code>.</td></tr>
 </tbody></table></div>
 <h4 id="cmd-notify"><code>cmd.notify</code></h4>
@@ -82,6 +89,12 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>cmd.ai.complete(req: ApiCompletionRequest): Promise&lt;ApiCompletion&gt;</code></td><td>1.0</td><td><code>ai: [&quot;complete&quot;]</code></td><td>A completion with no tools: <code>{ text }</code>, or <code>{ object }</code> of the request's JSON Schema, with the tokens it used.</td></tr>
 <tr><td><code>cmd.ai.use(request: ApiCompletionRequest | null): CompletionState</code></td><td>1.0</td><td><code>ai: [&quot;complete&quot;]</code></td><td>Live: the hook <code>useCompletion(request)</code>.</td></tr>
 </tbody></table></div>
+<h4 id="cmd-run"><code>cmd.run</code></h4>
+<p>Programs, through the core: <code>cmd.run(&quot;gh&quot;, [&quot;run&quot;, &quot;list&quot;])</code>. Needs <code>run: [&lt;program&gt;]</code>.</p>
+<div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
+<tr><td><code>cmd.run(program: string, args?: string[] | undefined, opts?: ApiRunOptions | undefined): Promise&lt;ApiRunResult&gt;</code></td><td>1.1</td><td><code>run: [&lt;program&gt;]</code></td><td>Runs a program the widget declares in <code>run</code> (<code>run: [&quot;gh&quot;]</code>) through the core, never a shell: <code>args</code> reach it as they are. Only read-only commands run (the same rules as Magic's: <code>gh run list</code> yes, <code>gh run rerun</code> or <code>git -c alias.x=…</code> no; a refusal says why). At most 10 s by default (<code>timeoutMs</code>, up to 30 s), 64 KB of stdout and 16 KB of stderr (more is cut, <code>clipped</code>), 2 at once and 30 a minute; tokens in the output are blanked. Its folder is the workspace's unless <code>cwd</code> names another in it or in <code>read</code>.</td></tr>
+<tr><td><code>cmd.run.exec(program: string, args?: string[] | undefined, opts?: ApiRunOptions | undefined): Promise&lt;ApiRunResult&gt;</code></td><td>1.1</td><td><code>run: [&lt;program&gt;]</code></td><td>The same as calling <code>cmd.run</code>: the verb's name on the wire.</td></tr>
+</tbody></table></div>
 <h4 id="cmd-config"><code>cmd.config</code></h4>
 <p>This window's config (package.json's <code>config</code> fields, as the person set them).</p>
 <div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
@@ -99,7 +112,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <p>Where the widget runs.</p>
 <div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
 <tr><td><code>cmd.env.get(): WidgetEnv</code></td><td>1.0</td><td>none</td><td>cmd's version, the API served, theme, size class and placement.</td></tr>
-<tr><td><code>cmd.env.has(name: string): boolean</code></td><td>1.0</td><td>none</td><td>Whether this cmd serves a verb (&quot;agents.start&quot;): for a widget that also runs on older cmd.</td></tr>
+<tr><td><code>cmd.env.has(name: string): boolean</code></td><td>1.0</td><td>none</td><td>Whether this cmd serves a verb (&quot;agents.start&quot;, added in 1.1): for a widget that also runs on an older cmd.</td></tr>
 <tr><td><code>cmd.env.use(): WidgetEnv</code></td><td>1.0</td><td>none</td><td>Live: the hook <code>useEnv()</code>.</td></tr>
 </tbody></table></div>
 <h4 id="cmd-fmt"><code>cmd.fmt</code></h4>

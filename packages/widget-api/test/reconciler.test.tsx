@@ -33,7 +33,7 @@ describe("the tree", () => {
         <Text tone="dim">Hello</Text>
       </View>
     ));
-    expect(sent[0]).toEqual({ kind: "hello", api: 1, minor: 0, package: "demo", version: "1.0.0", widget: "main" });
+    expect(sent[0]).toEqual({ kind: "hello", api: 1, minor: 1, package: "demo", version: "1.0.0", widget: "main" });
     expect(of("tree")).toEqual([
       {
         kind: "tree",

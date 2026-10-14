@@ -15,7 +15,7 @@ import { apiV1 } from "../api/v1.ts";
 import { effective, needsGrant } from "../grants.ts";
 import type { PackageWidget, WidgetPackage } from "../package.ts";
 
-type FrameCore = Pick<CoreContext, "windows" | "library" | "agents" | "panes" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened">;
+type FrameCore = Pick<CoreContext, "windows" | "library" | "agents" | "panes" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call">;
 
 /** The frame widget a window shows, with its grant; null for any other window, or one waiting for its grant. */
 function frameOf(core: FrameCore, windowId: WindowId): { pkg: WidgetPackage; widget: PackageWidget; net: string[]; permissions: ReturnType<typeof effective> } | null {

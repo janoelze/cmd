@@ -4,5 +4,5 @@
 
 /** The API major. @since 1.0 */
 export const WIDGET_API = 1;
-/** The API minor. @since 1.0 */
-export const WIDGET_API_MINOR = 0;
+/** The API minor: 1 since the acts and `cmd.run` came (1.1). @since 1.0 */
+export const WIDGET_API_MINOR = 1;

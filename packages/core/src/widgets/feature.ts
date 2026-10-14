@@ -39,7 +39,8 @@ const handlers = (core: CoreContext) =>
     "widget.hello": () => {
       throw new Error("widget.hello is for the widgets socket");
     },
-    "widget.interact": (p) => (core.library.host.interact(p.windowId, p.handler, p.event, p.value), null),
+    // A press from a paired device (control scope, remote/policy.ts): an act it leads to asks on the Mac.
+    "widget.interact": (p, c) => (core.library.host.interact(p.windowId, p.handler, p.event, p.value, !!c?.conn && c.conn.access !== "local"), null),
     "widget.resync": (p) => (core.library.host.resync(p.windowId), null),
     "widget.env": (p) => (core.library.host.setEnv(p.windowId, p), null),
     "widget.restart": (p) => (core.library.host.restart(p.windowId), null),

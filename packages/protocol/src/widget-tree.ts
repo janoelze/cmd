@@ -15,8 +15,8 @@
 
 /** The API major this file describes. */
 export const WIDGET_API = 1;
-/** The minor served within it; a minor only adds. */
-export const WIDGET_API_MINOR = 0;
+/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`. */
+export const WIDGET_API_MINOR = 1;
 
 // ── the tree ────────────────────────────────────────────
 
@@ -169,8 +169,12 @@ export type WidgetResult =
 
 export interface ApiError {
   message: string;
-  /** "permission": `permission` names what to add to package.json; "unknown": a verb this core doesn't serve; "failed": it ran and failed. */
-  code: "permission" | "unknown" | "invalid" | "failed";
+  /**
+   * "permission": `permission` names what to add to package.json; "unknown": a verb this core
+   * doesn't serve; "failed": it ran and failed; "denied" (1.1): the person said no to an act,
+   * or turned that kind of act off.
+   */
+  code: "permission" | "unknown" | "invalid" | "failed" | "denied";
   /** What to add to package.json's `cmd.permissions`, as written there: `net: ["api.github.com"]`, `ai: ["complete"]`, `workspace: ["read"]`. */
   permission?: string;
 }
@@ -247,8 +251,52 @@ export const API_VERBS = [
   "state.history",
   "net.fetch",
   "ai.complete",
+  // 1.1: acting (each asks the person, docs/55) and running a program through the core.
+  "agents.start",
+  "agents.send",
+  "agents.stop",
+  "terminals.type",
+  "terminals.open",
+  "actions.run",
+  "windows.close",
+  "run.exec",
 ] as const;
 export type ApiVerb = (typeof API_VERBS)[number];
+
+/** The API minor each verb came in: a widget that may run on an older cmd checks `cmd.env.has(verb)` before one newer than 1.0. */
+export const API_SINCE: { [V in ApiVerb]: "1.0" | "1.1" } = {
+  "workspace.get": "1.0",
+  "workspace.windows": "1.0",
+  "workspace.selected": "1.0",
+  "agents.list": "1.0",
+  "agents.get": "1.0",
+  "terminals.list": "1.0",
+  "terminals.read": "1.0",
+  "terminals.waitFor": "1.0",
+  "windows.list": "1.0",
+  "windows.open": "1.0",
+  "windows.select": "1.0",
+  "events.query": "1.0",
+  "events.stats": "1.0",
+  "git.status": "1.0",
+  "git.diff": "1.0",
+  "git.worktrees": "1.0",
+  "actions.list": "1.0",
+  "notify.send": "1.0",
+  "state.get": "1.0",
+  "state.set": "1.0",
+  "state.history": "1.0",
+  "net.fetch": "1.0",
+  "ai.complete": "1.0",
+  "agents.start": "1.1",
+  "agents.send": "1.1",
+  "agents.stop": "1.1",
+  "terminals.type": "1.1",
+  "terminals.open": "1.1",
+  "actions.run": "1.1",
+  "windows.close": "1.1",
+  "run.exec": "1.1",
+};
 
 /** What each verb takes (its arguments, in order) and returns. */
 export interface ApiMethods {
@@ -275,6 +323,14 @@ export interface ApiMethods {
   "state.history": { params: [key: string, value: number | null, max?: number]; result: number[] };
   "net.fetch": { params: [url: string, init?: ApiFetchInit]; result: ApiFetchResponse };
   "ai.complete": { params: [req: ApiCompletionRequest]; result: ApiCompletion };
+  "agents.start": { params: [req: ApiAgentStart]; result: ApiStarted };
+  "agents.send": { params: [id: string, text: string]; result: null };
+  "agents.stop": { params: [id: string]; result: null };
+  "terminals.type": { params: [id: string, text: string, opts?: { submit?: boolean }]; result: null };
+  "terminals.open": { params: [req?: ApiTerminalOpen]; result: { id: string } };
+  "actions.run": { params: [name: string]; result: ApiActionStarted };
+  "windows.close": { params: [id: string]; result: null };
+  "run.exec": { params: [program: string, args?: string[], opts?: ApiRunOptions]; result: ApiRunResult };
 }
 
 /** ApiMethods has exactly the verbs of API_VERBS (tsc fails here otherwise). */
@@ -457,6 +513,55 @@ export interface ApiCompletionRequest {
 
 /** Text, or an object when the request had a schema; with the tokens it used. */
 export type ApiCompletion = ({ text: string } | { object: WireValue }) & { usage: { input: number; output: number } };
+
+/** An agent to start (`cmd.agents.start`): its kind, its task, and where it works. */
+export interface ApiAgentStart {
+  /** "claude" (the default) or "codex". */
+  kind?: "claude" | "codex";
+  /** The task, as a complete brief. */
+  prompt: string;
+  /** Where it works: a folder in the workspace's (relative to it, or absolute inside it); the workspace's folder by default. */
+  cwd?: string;
+}
+
+/** An agent started: its id, and its terminal and window (null while it has none). */
+export interface ApiStarted {
+  id: string;
+  terminalId: string | null;
+  windowId: string | null;
+}
+
+/** A terminal to open (`cmd.terminals.open`): where, and a command typed at its prompt but not run. */
+export interface ApiTerminalOpen {
+  /** A folder in the workspace's (relative to it, or absolute inside it); the workspace's folder by default. */
+  cwd?: string;
+  /** One line typed at the prompt, never run: the person presses Return. */
+  command?: string;
+}
+
+/** A Workspace Action started (`cmd.actions.run`): the terminal it runs in, and false when it was already running there. */
+export interface ApiActionStarted {
+  terminalId: string;
+  started: boolean;
+}
+
+/** How `cmd.run` runs a program. */
+export interface ApiRunOptions {
+  /** A folder in the workspace's or one the widget may read (`read`); the workspace's folder by default. */
+  cwd?: string;
+  /** Stop it after this long: 10 s by default, 30 s at most. */
+  timeoutMs?: number;
+}
+
+/** What a program printed and how it ended. `code` is null when it was stopped (timed out). */
+export interface ApiRunResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  /** Its output was longer than the core keeps (64 KB of stdout, 16 KB of stderr). */
+  clipped: boolean;
+}
 
 export interface ApiNotification {
   /** Notifications with the same key replace each other. */
