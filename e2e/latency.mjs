@@ -32,7 +32,7 @@ process.on("exit", () => {
     } catch {}
   }
 });
-fs.rmSync(home, { recursive: true, force: true });
+fs.rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); // a core that just stopped may still be writing its logs
 fs.mkdirSync(path.join(home, "transcripts-home"), { recursive: true });
 fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "search.enabled": false }));
 fs.mkdirSync(path.join(home, "ui"), { recursive: true });
@@ -40,6 +40,13 @@ fs.writeFileSync(path.join(home, "ui", "onboarding.json"), JSON.stringify({ seen
 const project = path.join(home, "project");
 fs.mkdirSync(path.join(project, "src"), { recursive: true });
 for (let i = 0; i < 40; i++) fs.writeFileSync(path.join(project, "src", `file${i}.ts`), `export const x${i} = ${i};\n`.repeat(200));
+// A long source file for the editor and a folder of 2,000 files for the file browser.
+{
+  const fn = (i) => `export function handler${i}(request: { id: number; body: string }): Promise<string> {\n  const parts = request.body.split(",").map((s) => s.trim());\n  if (parts.length > ${i % 7}) return Promise.resolve(parts.join("-"));\n  return Promise.reject(new Error(\`bad request \${request.id}\`));\n}\n\n`;
+  fs.writeFileSync(path.join(project, "big.ts"), Array.from({ length: 3000 }, (_, i) => fn(i)).join(""));
+  fs.mkdirSync(path.join(project, "many"));
+  for (let i = 0; i < 2000; i++) fs.writeFileSync(path.join(project, "many", `item-${String(i).padStart(4, "0")}.json`), "{}\n");
+}
 
 const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const app = await electron.launch({
@@ -126,7 +133,7 @@ async function timed(act, { ready, settleFrames = 12, timeout = 4000 } = {}) {
           else still++;
           if ((responded !== null && still >= settleFrames) || t - t0 > timeout) {
             w.__lat.rec = false;
-            w.__lat.result = { t0, responded, settled: lastChange ?? responded, timedOut: responded === null };
+            w.__lat.result = { t0, responded, settled: lastChange ?? responded, end: t, timedOut: responded === null };
             return resolve();
           }
           requestAnimationFrame(tick);
@@ -144,7 +151,7 @@ async function timed(act, { ready, settleFrames = 12, timeout = 4000 } = {}) {
     const { result, frames, loafs } = window.__lat;
     const t0 = window.__lat.keyAt ?? result.t0;
     window.__lat.keyAt = null;
-    const until = result.settled ?? performance.now();
+    const until = result.end; // every frame watched, the quiet ones after settling too
     const inside = frames.filter(([t]) => t >= t0 && t <= until + 1);
     const budget = 1000 / 120;
     return {
@@ -169,6 +176,7 @@ async function scenario(name, run, { runs = RUNS, setup, teardown } = {}) {
   if (only && !only.includes(name)) return;
   const results = [];
   const rendersBefore = await win.evaluate(() => ({ ...window.__cmdPerf.renders }));
+  const eventsBefore = await win.evaluate(() => ({ ...window.__cmdPerf.events, sets: window.__cmdPerf.sets }));
   const stopProfile = PROFILE ? await startProfile(cdp) : null;
   for (let i = 0; i < runs; i++) {
     if (setup) await setup(i);
@@ -179,6 +187,8 @@ async function scenario(name, run, { runs = RUNS, setup, teardown } = {}) {
   if (stopProfile) await stopProfile(name, runs);
   const rendersAfter = await win.evaluate(() => ({ ...window.__cmdPerf.renders }));
   const renders = Object.fromEntries(Object.entries(rendersAfter).map(([k, v]) => [k, Math.round(((v - (rendersBefore[k] ?? 0)) / runs) * 10) / 10]).filter(([, v]) => v > 0));
+  const eventsAfter = await win.evaluate(() => ({ ...window.__cmdPerf.events, sets: window.__cmdPerf.sets }));
+  const events = Object.fromEntries(Object.entries(eventsAfter).map(([k, v]) => [k, Math.round(((v - (eventsBefore[k] ?? 0)) / runs) * 10) / 10]).filter(([, v]) => v > 0));
   const r = stats(results.map((x) => x.respond));
   const s = stats(results.map((x) => x.settle));
   const loafs = results.flatMap((x) => x.loafs);
@@ -204,7 +214,7 @@ async function scenario(name, run, { runs = RUNS, setup, teardown } = {}) {
   };
   for (const k of Object.keys(row)) if (typeof row[k] === "number") row[k] = Math.round(row[k] * 10) / 10;
   rows.push(row);
-  console.log(JSON.stringify(row), "renders/run:", JSON.stringify(renders));
+  console.log(JSON.stringify(row), "renders/run:", JSON.stringify(renders), "events/run:", JSON.stringify(events));
 }
 
 // The board: 8 terminals with some scrollback, a Files window, a second workspace.
@@ -341,6 +351,139 @@ await scenario(
     ),
   { runs: 4 },
 );
+
+// Windows other than terminals: the editor, the file browser, a browser, Settings; dragging.
+const frame = () => win.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
+const countOf = (selector) => win.evaluate((q) => document.querySelectorAll(q).length, selector);
+// Opens a path the way the palette and the file browser do: the new window is selected.
+const openPath = (target) => win.evaluate(async (t) => {
+  const w = await window.cmd.call("window.openTarget", { target: t });
+  await window.cmd.call("window.select", { id: w.id });
+  return w.id;
+}, target);
+const closeSelected = async () => {
+  await menu("window.close");
+  await sleep(700);
+};
+await scenario("open text", () => timed(() => openPath(path.join(project, "big.ts")), { ready: () => !!document.querySelector(".tile.sel .textwin .cm-line") }), { runs: 4, teardown: closeSelected });
+if (!only || only.some((n) => n.startsWith("text "))) {
+  await openPath(path.join(project, "big.ts"));
+  await win.waitForSelector(".tile.sel .textwin .cm-line");
+  await sleep(800);
+  const lines = win.locator(".tile.sel .textwin .cm-line");
+  await lines.nth(8).click();
+  await win.keyboard.press("End");
+  let typed = "";
+  await scenario(
+    "text type",
+    (i) => {
+      typed += "abcdefghij"[i % 10];
+      return timed(() => win.keyboard.press("abcdefghij"[i % 10]), { ready: new Function(`return () => document.querySelector(".tile.sel .cm-activeLine")?.textContent.endsWith(${JSON.stringify(typed)})`)(), settleFrames: 2 });
+    },
+    { runs: 30 },
+  );
+  await scenario("text newline", () => timed(() => win.keyboard.press("Enter"), { ready: () => document.querySelector(".tile.sel .cm-activeLine")?.textContent.trim() === "", settleFrames: 2 }), { runs: 10 });
+  const box = await win.locator(".tile.sel .cm-scroller").boundingBox();
+  await win.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await scenario(
+    "text scroll",
+    (i) =>
+      timed(
+        async () => {
+          for (let k = 0; k < 40; k++) await win.mouse.wheel(0, i % 2 ? -200 : 200), await sleep(8);
+        },
+        { ready: () => true, settleFrames: 12, timeout: 6000 },
+      ),
+    { runs: 4 },
+  );
+  await openPath(path.join(project, "big.ts")); // keeps it selected
+  await win.keyboard.press("Meta+Z");
+  await closeSelected();
+}
+await scenario("open files", () => timed(() => openPath(project), { ready: () => !!document.querySelector(".tile.sel [data-path]") }), { runs: 4, teardown: closeSelected });
+if (!only || only.some((n) => n.startsWith("files "))) {
+  await openPath(project);
+  await win.waitForSelector(".tile.sel [data-path]");
+  await sleep(500);
+  const many = path.join(project, "many");
+  await win.locator(`.tile.sel [data-path="${many}"]`).click();
+  await scenario("files expand 2000", () => timed(() => win.keyboard.press("ArrowRight"), { ready: () => !!document.querySelector('.tile.sel [data-path$="item-0000.json"]'), settleFrames: 6 }), {
+    runs: 4,
+    teardown: async () => {
+      await win.keyboard.press("ArrowLeft");
+      await win.waitForFunction(() => document.querySelectorAll(".tile.sel [data-path]").length < 100);
+    },
+  });
+  await win.keyboard.press("ArrowRight");
+  await win.waitForFunction(() => document.querySelectorAll(".tile.sel [data-path]").length > 1000); // drawn in full
+  await sleep(300);
+  await scenario(
+    "files ↓",
+    () => {
+      return timed(() => win.keyboard.press("ArrowDown"), { ready: () => document.querySelector(".tile.sel [data-selected]")?.dataset.path !== window.__selPath, settleFrames: 2 });
+    },
+    { runs: 20, setup: () => win.evaluate(() => (window.__selPath = document.querySelector(".tile.sel [data-selected]")?.dataset.path)) },
+  );
+  await win.keyboard.press("ArrowLeft");
+  await sleep(300);
+  await closeSelected();
+}
+await scenario("open browser", () => timed(() => menu("file.newBrowser"), { ready: () => document.querySelectorAll(".tile[data-pane]").length > window.__tiles }), {
+  runs: 4,
+  setup: () => win.evaluate(() => (window.__tiles = document.querySelectorAll(".tile[data-pane]").length)),
+  teardown: closeSelected,
+});
+// Settings is a window of its own: from the menu item to its first frame on screen, timed
+// in main. The first run creates it; later runs show it again after a close.
+await scenario(
+  "open settings",
+  async () => {
+    const ms = await app.evaluate(
+      ({ app, BrowserWindow, Menu }) =>
+        new Promise((resolve) => {
+          const t0 = performance.now();
+          const painted = (w) => w.webContents.executeJavaScript("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(0))))").then(() => resolve(performance.now() - t0));
+          const open = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes("settings.html"));
+          if (open) open.once("show", () => painted(open));
+          else app.once("browser-window-created", (_, w) => w.once("show", () => painted(w)));
+          Menu.getApplicationMenu().getMenuItemById("app.settings").click();
+          setTimeout(() => resolve(-1), 4000);
+        }),
+    );
+    return { respond: ms, settle: ms, timedOut: ms < 0, dropped: 0, worstFrame: 0, loafs: [] };
+  },
+  {
+    runs: 4,
+    teardown: async () => {
+      await app.evaluate(({ BrowserWindow }) => {
+        for (const w of BrowserWindow.getAllWindows()) if (w.webContents.getURL().includes("settings.html")) w.close();
+      });
+      await sleep(500);
+    },
+  },
+);
+// Dragging: a strip window's edge, then a canvas window by its title, 40 pointer moves a frame apart.
+async function drag(handle, dx, dy) {
+  const b = await win.locator(handle).first().boundingBox();
+  const x = b.x + b.width / 2;
+  const y = b.y + Math.min(b.height / 2, 12);
+  await win.mouse.move(x, y);
+  await win.mouse.down();
+  for (let k = 1; k <= 40; k++) {
+    await win.mouse.move(x + (dx * k) / 40, y + (dy * k) / 40);
+    await frame();
+  }
+  await win.mouse.up();
+}
+await menu("view.strip");
+await sleep(800);
+await scenario("drag strip edge", (i) => timed(() => drag(".tile.sel .strip-resize[data-edge=right]", i % 2 ? -200 : 200, 0), { settleFrames: 20, timeout: 6000 }), { runs: 4 });
+await menu("view.canvas");
+await sleep(800);
+await scenario("drag canvas window", (i) => timed(() => drag(".tile.sel .tile-title", i % 2 ? -300 : 300, i % 2 ? -100 : 100), { settleFrames: 20, timeout: 6000 }), { runs: 4 });
+await scenario("drag canvas resize", (i) => timed(() => drag(".tile.sel .canvas-resize.resize-xy", i % 2 ? -200 : 200, i % 2 ? -120 : 120), { settleFrames: 20, timeout: 6000 }), { runs: 4 });
+await menu("view.grid");
+await sleep(800);
 
 console.log(`\nlatency${label ? ` (${label})` : ""}, ms (120 Hz frame = 8.3 ms)`);
 console.table(rows);
