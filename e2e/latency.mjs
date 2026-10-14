@@ -6,6 +6,12 @@
 // the time until the board stops moving (animations included), frames dropped
 // meanwhile, and the long animation frames with the scripts that made them long.
 // usage: pnpm build && node e2e/latency.mjs [--label NAME] [--only name,name] [--runs N]
+//        [--windows N] [--workspaces N] [--agents N] [--view grid|strip|canvas|focus]
+//        (heavy use: more windows and workspaces, terminals running e2e/fake-agent.mjs)
+// Env: LATENCY_FRAMES=1 the long frames of each run; LATENCY_TRACE=<scenario> a Chromium
+// trace of its first run (the longest main-thread events, what's inside the longest script;
+// for steady states: style and layout per second), LATENCY_TRACE_INV=1 with what invalidated
+// style and layout; LATENCY_BOARD=1 every tile and its renderer; LATENCY_SETTINGS='{json}'.
 // Results are appended to .cmd-dev/perf/results.jsonl.
 import fs from "node:fs";
 import path from "node:path";
@@ -22,6 +28,13 @@ const only = arg("--only")?.split(",");
 /** --only names, or prefixes ending in * ("open *"). */
 const wanted = (name) => !only || only.some((o) => o === name || (o.endsWith("*") && name.startsWith(o.slice(0, -1))));
 const RUNS = Number(arg("--runs") ?? 8);
+// Scale: terminals on the board, extra workspaces (6 terminals each), and terminals running
+// a stand-in coding agent (fake-agent.mjs) through every scenario.
+const WINDOWS = Number(arg("--windows") ?? 8);
+const WORKSPACES = Number(arg("--workspaces") ?? 0);
+const AGENTS = Number(arg("--agents") ?? 0);
+/** --view grid|strip|canvas|focus: the board's mode for the run (the default is the app's). */
+const VIEW = arg("--view");
 // --profile: sample the renderer's CPU over each scenario and list where its time went
 // (build with CMD_NO_MINIFY=1 pnpm build for readable names).
 const PROFILE = process.argv.includes("--profile");
@@ -36,7 +49,7 @@ process.on("exit", () => {
 });
 fs.rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); // a core that just stopped may still be writing its logs
 fs.mkdirSync(path.join(home, "transcripts-home"), { recursive: true });
-fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "search.enabled": false }));
+fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ "search.enabled": false, ...JSON.parse(process.env.LATENCY_SETTINGS ?? "{}") })); // LATENCY_SETTINGS: more, as JSON
 fs.mkdirSync(path.join(home, "ui"), { recursive: true });
 fs.writeFileSync(path.join(home, "ui", "onboarding.json"), JSON.stringify({ seen: ["welcome", "ai"] }));
 const project = path.join(home, "project");
@@ -169,6 +182,8 @@ async function timed(act, { ready, settleFrames = 12, timeout = 4000 } = {}) {
       dropped: inside.reduce((n, [, d]) => n + Math.max(0, Math.round(d / budget) - 1), 0),
       worstFrame: Math.max(0, ...inside.map(([, d]) => d)),
       loafs: loafs.filter((l) => l.start + l.duration >= t0 - 1),
+      // LATENCY_FRAMES=1: every frame of the run, ms from its start, and how long it took.
+      frames: inside.map(([t, d]) => [Math.round(t - t0), Math.round(d)]),
     };
   });
 }
@@ -188,7 +203,31 @@ async function scenario(name, run, { runs = RUNS, setup, teardown } = {}) {
   const stopProfile = PROFILE ? await startProfile(cdp) : null;
   for (let i = 0; i < runs; i++) {
     if (setup) await setup(i);
-    results.push(await run(i).catch((e) => (console.log(`  ${name}: ${e.message.split("\n")[0]}`), { respond: null, settle: null, timedOut: true, dropped: 0, worstFrame: 0, loafs: [] })));
+    // LATENCY_TRACE=name: a Chromium trace of its first run; the main thread's longest events printed.
+    const tracing = process.env.LATENCY_TRACE === name && i === 0;
+    const events = [];
+    if (tracing) {
+      cdp.on("Tracing.dataCollected", (d) => events.push(...d.value));
+      await cdp.send("Tracing.start", { categories: "devtools.timeline,disabled-by-default-devtools.timeline,v8.execute,gpu,cc", transferMode: "ReportEvents" });
+    }
+    const res = await run(i).catch((e) => (console.log(`  ${name}: ${e.message.split("\n")[0]}`), { respond: null, settle: null, timedOut: true, dropped: 0, worstFrame: 0, loafs: [] }));
+    if (tracing) {
+      const done = new Promise((r) => cdp.once("Tracing.tracingComplete", r));
+      await cdp.send("Tracing.end");
+      await done;
+      const main = events.find((e) => e.name === "thread_name" && e.args?.name === "CrRendererMain")?.tid;
+      const long = events.filter((e) => e.ph === "X" && e.tid === main && e.dur > 8000).sort((a, b) => b.dur - a.dur).slice(0, 25);
+      for (const e of long) console.log(`  trace ${(e.dur / 1000).toFixed(1).padStart(6)} ms  ${e.name} ${JSON.stringify(e.args?.data ?? {}).slice(0, 400)}`);
+      // Inside the longest script: its direct parts by kind (layout, style, GC, GPU calls…).
+      const top = long.find((e) => e.name === "FunctionCall" || e.name === "EvaluateScript" || e.name === "TimerFire" || e.name === "FireAnimationFrame");
+      if (top) {
+        const parts = new Map();
+        for (const e of events) if (e.tid === main && e.ph === "X" && e.ts >= top.ts && e.ts + e.dur <= top.ts + top.dur && e !== top) parts.set(e.name, (parts.get(e.name) ?? 0) + e.dur / 1000);
+        console.log("  inside:", [...parts].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([n, ms]) => `${n} ${ms.toFixed(1)}`).join(" · "));
+      }
+    }
+    if (process.env.LATENCY_FRAMES && res.frames) console.log(`  ${name} #${i}: frames ${res.frames.filter(([, d]) => d > 20).map(([t, d]) => `${d}@${t}`).join(" ")}; long frames ${res.loafs.map((l) => `${Math.round(l.duration)}@${Math.round(l.start - (res.t0 ?? 0))}`).join(" ")}`);
+    results.push(res);
     if (teardown) await teardown(i);
     await sleep(150);
   }
@@ -225,13 +264,126 @@ async function scenario(name, run, { runs = RUNS, setup, teardown } = {}) {
   console.log(JSON.stringify(row), "renders/run:", JSON.stringify(renders), "events/run:", JSON.stringify(events));
 }
 
-// The board: 8 terminals with some scrollback, a Files window, a second workspace.
-for (let i = 0; i < 8; i++) await menu("file.newTerminal");
-await win.waitForFunction(() => document.querySelectorAll(".tile[data-pane]").length >= 8, null, { timeout: 15000 });
+// The board: 8 terminals (--windows) with some scrollback, a Files window, a second workspace.
+for (let i = 0; i < WINDOWS; i++) await menu("file.newTerminal");
+await win.waitForFunction((n) => document.querySelectorAll(".tile[data-pane]").length >= n, WINDOWS, { timeout: 30000 });
 await sleep(1500);
 const panes = (await call("pane.list", {})).map((p) => p.id);
-for (const p of panes) await call("pane.write", { paneId: p, data: `for i in $(seq 1 3000); do echo "line $i $(printf '%.0s─' {1..60})"; done\r` });
-await sleep(3000);
+// More workspaces, each with its own terminals, then back to the first.
+for (let w = 0; w < WORKSPACES; w++) {
+  const dir = path.join(home, `workspace-${w}`);
+  fs.mkdirSync(dir, { recursive: true });
+  await call("workspace.open", { path: dir, show: true });
+  await sleep(600);
+  for (let i = 0; i < 6; i++) await menu("file.newTerminal");
+  await sleep(800);
+}
+for (let w = 0; WORKSPACES && w <= WORKSPACES; w++) {
+  if (await win.evaluate((id) => !!document.querySelector(`.tile[data-pane="${id}"]`), panes[0])) break;
+  await menu("workspace.next");
+  await sleep(700);
+}
+for (const p of (await call("pane.list", {})).map((p) => p.id)) await call("pane.write", { paneId: p, data: `for i in $(seq 1 3000); do echo "line $i $(printf '%.0s─' {1..60})"; done\r` });
+await sleep(3000 + WORKSPACES * 500);
+// Agents at work beside the selected terminal (never in it: that's where the typing goes).
+const agentPanes = [];
+if (AGENTS) {
+  const selected = await win.evaluate(() => document.querySelector(".tile.sel")?.getAttribute("data-pane"));
+  for (const p of panes.filter((p) => p !== selected).slice(0, AGENTS)) {
+    await call("pane.write", { paneId: p, data: `clear; ${JSON.stringify(process.execPath)} ${JSON.stringify(path.join(root, "e2e/fake-agent.mjs"))}\r` });
+    agentPanes.push(p);
+  }
+  await sleep(1500);
+}
+if (VIEW) await menu(`view.${VIEW}`), await sleep(1200);
+console.log(`${(await call("pane.list", {})).length} terminals, ${WORKSPACES + 1} workspaces, ${agentPanes.length} agents`);
+
+/** What the window costs over `seconds` of doing nothing itself (agents may be working): main thread, frames, renders, memory. */
+async function steady(name, seconds = 8) {
+  if (!wanted(name)) return;
+  const metrics = async () => Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
+  await cdp.send("Performance.enable");
+  await app.evaluate(({ app }) => app.getAppMetrics());
+  const a = await metrics();
+  const ra = await win.evaluate(() => ({ ...window.__cmdPerf.renders }));
+  await win.evaluate(() => ((window.__lat.frames = []), (window.__lat.loafs = []), (window.__lat.rec = true)));
+  const stopProfile = PROFILE ? await startProfile(cdp) : null;
+  const events = [];
+  const tracing = process.env.LATENCY_TRACE === name;
+  if (tracing) {
+    cdp.on("Tracing.dataCollected", (d) => events.push(...d.value));
+    await cdp.send("Tracing.start", { categories: `devtools.timeline,disabled-by-default-devtools.timeline${process.env.LATENCY_TRACE_INV ? ",disabled-by-default-devtools.timeline.invalidationTracking" : ""}`, transferMode: "ReportEvents" });
+  }
+  await sleep(seconds * 1000);
+  if (tracing) {
+    const done = new Promise((r) => cdp.once("Tracing.tracingComplete", r));
+    await cdp.send("Tracing.end");
+    await done;
+    const main = events.find((e) => e.name === "thread_name" && e.args?.name === "CrRendererMain")?.tid;
+    const by = new Map();
+    for (const e of events) if (e.tid === main && e.ph === "X" && ["UpdateLayoutTree", "Layout", "Paint", "PrePaint", "Layerize", "Commit"].includes(e.name)) by.set(e.name, (by.get(e.name) ?? 0) + e.dur / 1000);
+    console.log("  per s:", [...by].map(([n, ms]) => `${n} ${(ms / seconds).toFixed(1)}`).join(" · "));
+    // What dirtied style: the elements style recalcs started from, by class.
+    const roots = new Map();
+    for (const e of events) if (e.tid === main && e.name === "ScheduleStyleRecalculation") roots.set("recalc scheduled", (roots.get("recalc scheduled") ?? 0) + 1);
+    for (const e of events) if (e.tid === main && (e.name === "LayoutInvalidationTracking" || e.name === "StyleRecalcInvalidationTracking" || e.name === "StyleInvalidatorInvalidationTracking")) {
+      const d = e.args?.data ?? {};
+      const k = `${e.name}: ${d.nodeName ?? ""} ${d.reason ?? ""} ${(d.stackTrace?.[0]?.functionName ?? "")}@${(d.stackTrace?.[0]?.url ?? "").split("/").pop()}:${d.stackTrace?.[0]?.lineNumber ?? ""}`.slice(0, 140);
+      roots.set(k, (roots.get(k) ?? 0) + 1);
+    }
+    for (const [k, n] of [...roots].sort((a, b) => b[1] - a[1]).slice(0, 12)) console.log(`  ${String(n).padStart(6)}  ${k}`);
+  }
+  if (stopProfile) await stopProfile(name, seconds, "s");
+  const { frames, loafs } = await win.evaluate(() => ((window.__lat.rec = false), { frames: window.__lat.frames.map(([, d]) => d), loafs: window.__lat.loafs }));
+  const b = await metrics();
+  const rb = await win.evaluate(() => ({ ...window.__cmdPerf.renders }));
+  const procs = await app.evaluate(({ app }) => app.getAppMetrics().map((p) => ({ type: p.type, cpu: p.cpu.percentCPUUsage, mem: p.memory.workingSetSize })));
+  const secs = b.Timestamp - a.Timestamp;
+  const sorted = [...frames].sort((x, y) => x - y);
+  const renders = Object.fromEntries(Object.entries(rb).map(([k, v]) => [k, Math.round((v - (ra[k] ?? 0)) / secs)]).filter(([, v]) => v > 0));
+  const row = {
+    action: name,
+    "main ms/s": Math.round(((b.TaskDuration - a.TaskDuration) * 1000) / secs),
+    "script ms/s": Math.round(((b.ScriptDuration - a.ScriptDuration) * 1000) / secs),
+    "style+layout ms/s": Math.round(((b.RecalcStyleDuration - a.RecalcStyleDuration + b.LayoutDuration - a.LayoutDuration) * 1000) / secs),
+    fps: Math.round(frames.length / secs),
+    "p95 frame": Math.round(sorted[Math.floor(sorted.length * 0.95)] ?? 0),
+    "worst frame": Math.round(sorted.at(-1) ?? 0),
+    "loaf ms/s": Math.round(loafs.reduce((n, l) => n + l.duration, 0) / secs),
+    "renderer CPU %": Math.round(procs.filter((p) => p.type === "Tab").reduce((n, p) => n + p.cpu, 0)),
+    "GPU CPU %": Math.round(procs.filter((p) => p.type === "GPU").reduce((n, p) => n + p.cpu, 0)),
+    "renderer MB": Math.round(procs.filter((p) => p.type === "Tab").reduce((n, p) => n + p.mem, 0) / 1024),
+    "JS heap MB": Math.round((await cdp.send("Runtime.getHeapUsage")).usedSize / 1e6),
+    "DOM nodes": await win.evaluate(() => document.getElementsByTagName("*").length),
+    // Terminals on screen drawn by WebGL (a canvas) / by the DOM renderer (rows of spans).
+    "webgl/dom": await win.evaluate(() => {
+      const shown = [...document.querySelectorAll(".tile[data-pane]:not([data-hidden]) .xterm")];
+      const gl = shown.filter((x) => x.querySelector("canvas")).length;
+      return `${gl}/${shown.length - gl}`;
+    }),
+  };
+  console.log(JSON.stringify(row), "renders/s:", JSON.stringify(renders));
+  steadyRows.push(row);
+}
+const steadyRows = [];
+if (process.env.LATENCY_BOARD)
+  console.log(await win.evaluate(() => [...document.querySelectorAll(".tile[data-pane]")].map((t) => {
+    const r = t.getBoundingClientRect();
+    const x = t.querySelector(".xterm");
+    return `${t.dataset.pane.slice(0, 6)} ${t.className.replace(/ui-window |tile /g, "").trim()} ${t.hasAttribute("data-hidden") ? "hidden" : ""} at ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)} ${x ? (x.querySelector("canvas") ? "webgl" : "dom") : "no xterm"}`;
+  }).join("\n")));
+await steady("steady");
+// The same agents while another workspace is shown: their terminals parse output but draw nothing.
+if (AGENTS && WORKSPACES && wanted("steady (agents hidden)")) {
+  await menu("workspace.next");
+  await sleep(1500);
+  await steady("steady (agents hidden)");
+  for (let w = 0; w <= WORKSPACES; w++) {
+    if (await win.evaluate((id) => !!document.querySelector(`.tile[data-pane="${id}"]`), panes[0])) break;
+    await menu("workspace.next");
+    await sleep(700);
+  }
+}
 
 const sel = () => win.evaluate(() => document.querySelector(".tile.sel")?.getAttribute("data-pane"));
 
@@ -254,7 +406,8 @@ await win.evaluate(() =>
       async (i) => {
         typed += letters[i % letters.length];
         return timed(() => win.keyboard.press(letters[i % letters.length]), {
-          ready: new Function(`return () => window.__cmdTermScreen(${JSON.stringify(target)}).includes(${JSON.stringify(typed)})`)(),
+          // Lines joined: in a narrow window the typed text wraps.
+          ready: new Function(`return () => window.__cmdTermScreen(${JSON.stringify(target)}).split("\\n").join("").includes(${JSON.stringify(typed)})`)(),
           settleFrames: 2,
         });
       },
@@ -553,6 +706,7 @@ await scenario("drag canvas resize", (i) => timed(() => drag(".tile.sel .canvas-
 await menu("view.grid");
 await sleep(800);
 
+if (steadyRows.length) console.table(steadyRows);
 console.log(`\nlatency${label ? ` (${label})` : ""}, ms (120 Hz frame = 8.3 ms)`);
 console.table(rows);
 const top = [...culprits].sort((a, b) => b[1].ms - a[1].ms).slice(0, 25);
