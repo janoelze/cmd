@@ -6,6 +6,7 @@
 // the tree is data, drawn through the renderer's allow-list.
 
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import type { PreviewRequest, Previewer, PreviewShot } from "../../widgets/preview.ts";
 import { STRIP, WIDE } from "../../widgets/preview.ts";
@@ -16,8 +17,29 @@ import { REPO } from "./toolchain.ts";
 export const PREVIEW_PAGE = path.join(REPO, "apps/desktop/out/renderer/preview.html");
 export const previewPageBuilt = (): boolean => fs.existsSync(PREVIEW_PAGE);
 
-/** Evaluated in the preview page: draws the tree, waits for it to settle and measures it. */
-export const drawTree = (tree: PreviewRequest["tree"]): string => `window.__cmdPreview(${JSON.stringify(tree)})`;
+const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".woff": "font/woff", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json" };
+
+/**
+ * The built preview page over HTTP on 127.0.0.1, for Playwright (Chromium won't load module
+ * scripts from file://): the renderer's build folder only, read-only, for one batch of renders.
+ */
+export async function servePreviewPage(): Promise<{ url: string; origin: string; close(): void }> {
+  if (!previewPageBuilt()) throw new Error("the app isn't built (pnpm build), so trees can't be drawn here");
+  const root = path.dirname(PREVIEW_PAGE);
+  const server = http.createServer((req, res) => {
+    const rel = decodeURIComponent((req.url ?? "/").split("?")[0]!);
+    const file = path.join(root, path.normalize(rel));
+    if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return void res.writeHead(404).end();
+    res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" }).end(fs.readFileSync(file));
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  return { url: `${origin}/${path.basename(PREVIEW_PAGE)}`, origin, close: () => server.close() };
+}
+
+/** Evaluated in the preview page: once it has loaded its drawing (a module after load), draws the tree, waits for it to settle and measures it. */
+export const drawTree = (tree: PreviewRequest["tree"]): string =>
+  `(async () => { for (let i = 0; i < 200 && !window.__cmdPreview; i++) await new Promise((r) => setTimeout(r, 25)); return window.__cmdPreview(${JSON.stringify(tree)}); })()`;
 
 export interface TreePreview {
   ok: boolean;

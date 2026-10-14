@@ -65,7 +65,9 @@ async function treeWindow(): Promise<BrowserWindow> {
 async function renderTree(r: MagicPreviewRequest): Promise<MagicPreviewShot> {
   const w = await treeWindow();
   w.setContentSize(Math.max(120, Math.round(r.width)), Math.max(80, Math.round(r.height)));
-  const m = (await w.webContents.executeJavaScript(`window.__cmdPreview(${JSON.stringify(r.tree)})`, true)) as Omit<MagicPreviewShot, "png">;
+  // The page loads its drawing as a module after load: wait for it (core magic/package/preview.ts drawTree does the same).
+  const draw = `(async () => { for (let i = 0; i < 200 && !window.__cmdPreview; i++) await new Promise((r) => setTimeout(r, 25)); return window.__cmdPreview(${JSON.stringify(r.tree)}); })()`;
+  const m = (await w.webContents.executeJavaScript(draw, true)) as Omit<MagicPreviewShot, "png">;
   const png = r.shot ? (await w.webContents.capturePage()).toPNG().toString("base64") : undefined;
   return { ...m, png };
 }

@@ -6,7 +6,6 @@
 // and a core without an app use Playwright's Chromium.
 
 import fs from "node:fs";
-import path from "node:path";
 import { MAGIC_SIZES, WIDGET_MEASURE, widgetCsp, widgetTokens, type MagicPreviewTree, type ThemeLike } from "@cmd/protocol";
 import { widgetHtml } from "../magic/host.ts";
 import type { WidgetManifest } from "./manifest.ts";
@@ -158,6 +157,7 @@ export async function playwrightPreviewer(): Promise<Previewer | null> {
     name: "playwright",
     async render(requests) {
       const browser = await chromium.launch();
+      let served: { url: string; origin: string; close(): void } | null = null;
       try {
         const out: PreviewShot[] = [];
         for (const r of requests) {
@@ -168,11 +168,11 @@ export async function playwrightPreviewer(): Promise<Previewer | null> {
           let m: Omit<PreviewShot, "png">;
           if (r.tree) {
             // The built renderer's preview page draws the tree; it may load its own files, nothing else.
-            const { PREVIEW_PAGE, drawTree } = await import("../magic/package/preview.ts");
-            const dir = `file://${path.dirname(PREVIEW_PAGE)}/`;
-            await page.route("**/*", (route) => (route.request().url().startsWith(dir) ? route.continue() : route.abort()));
-            if (!fs.existsSync(PREVIEW_PAGE)) throw new Error("the app isn't built (pnpm build), so trees can't be drawn here");
-            await page.goto(`file://${PREVIEW_PAGE}`, { waitUntil: "load" });
+            const { drawTree, servePreviewPage } = await import("../magic/package/preview.ts");
+            served ??= await servePreviewPage();
+            const origin = served.origin;
+            await page.route("**/*", (route) => (route.request().url().startsWith(origin + "/") ? route.continue() : route.abort()));
+            await page.goto(served.url, { waitUntil: "load" });
             m = (await page.evaluate(drawTree(r.tree))) as Omit<PreviewShot, "png">;
           } else {
             await page.route("**/*", (route) => route.abort());
@@ -186,6 +186,7 @@ export async function playwrightPreviewer(): Promise<Previewer | null> {
         }
         return out;
       } finally {
+        served?.close();
         await browser.close();
       }
     },
