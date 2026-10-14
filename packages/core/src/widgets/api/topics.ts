@@ -43,9 +43,28 @@ export interface TopicScope {
 }
 
 type Off = () => void;
-function on<E extends { on(e: string, fn: (...a: never[]) => void): unknown; off(e: string, fn: (...a: never[]) => void): unknown }>(em: E, event: string, fn: (...a: never[]) => void): Off {
-  em.on(event, fn);
-  return () => void em.off(event, fn);
+type Emitter = { on(e: string, fn: (...a: never[]) => void): unknown; off(e: string, fn: (...a: never[]) => void): unknown };
+/** One listener per service and event, however many widgets subscribe (and none while nobody does). */
+const hub = new WeakMap<object, Map<string, { fns: Set<(...a: never[]) => void>; real: (...a: never[]) => void }>>();
+function on(em: Emitter, event: string, fn: (...a: never[]) => void): Off {
+  let byEvent = hub.get(em);
+  if (!byEvent) hub.set(em, (byEvent = new Map()));
+  let h = byEvent.get(event);
+  if (!h) {
+    const fns = new Set<(...a: never[]) => void>();
+    const real = (...a: never[]) => {
+      for (const f of [...fns]) f(...a);
+    };
+    byEvent.set(event, (h = { fns, real }));
+    em.on(event, real);
+  }
+  h.fns.add(fn);
+  return () => {
+    const cur = byEvent.get(event);
+    if (!cur || !cur.fns.delete(fn) || cur.fns.size) return;
+    em.off(event, cur.real);
+    byEvent.delete(event);
+  };
 }
 
 /** Subscribe; throws ApiRefusal when the grant doesn't reach the topic (checked by its first read). */
