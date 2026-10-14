@@ -40,7 +40,7 @@ const row = (title: string, { light = "working", ...more }: Record<string, WireV
 // ── the window around it ────────────────────────────────
 
 let windows = 0;
-const quiet: WidgetLink = { interact: () => {}, resync: () => {}, env: () => {} };
+const quiet: WidgetLink = { interact: () => {}, resync: () => {}, restart: () => {}, env: () => {} };
 
 /** A widget's window at a reference size, with the title bar its Window fills. */
 function Widget({ messages, size = "regular", name = "Example", link = quiet, store: given }: { messages?: TreeMessage[]; size?: SizeName; name?: string; link?: WidgetLink; store?: TreeStore }) {
@@ -200,7 +200,7 @@ export const ExampleAgents = () => {
       listen: host.transport.listen,
     };
     const running = run(transport, AgentActivity, { package: "agents", version: "1.0.0", widget: "agents" });
-    setLink({ interact: (handler, event, value) => host.deliver({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value }) }), resync: () => host.deliver({ kind: "resync" }), env: () => {} });
+    setLink({ interact: (handler, event, value) => host.deliver({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value }) }), resync: () => host.deliver({ kind: "resync" }), restart: () => {}, env: () => {} });
     return () => void running.then((r) => r.stop());
   }, [store]);
   return link ? <Widget store={store} link={link} name="Agent Activity" /> : null;

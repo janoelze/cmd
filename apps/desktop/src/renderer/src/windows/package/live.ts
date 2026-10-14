@@ -17,6 +17,8 @@ export interface WidgetPlace {
 export interface WidgetLink {
   interact(handler: number, event: string, value?: WireValue): void;
   resync(): void;
+  /** Start a stopped process again (Restart). */
+  restart(): void;
   env(place: WidgetPlace): void;
 }
 
@@ -27,6 +29,7 @@ export function rpcLink(windowId: WindowId): WidgetLink {
   return {
     interact: (handler, event, value) => quiet(cmd.call("widget.interact", { windowId, handler, event, ...(value === undefined ? {} : { value }) })),
     resync: () => quiet(cmd.call("widget.resync", { windowId })),
+    restart: () => quiet(cmd.call("widget.restart", { windowId })),
     env: (place) => quiet(cmd.call("widget.env", { windowId, ...place })),
   };
 }

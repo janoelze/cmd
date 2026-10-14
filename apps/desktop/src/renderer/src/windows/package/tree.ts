@@ -16,14 +16,13 @@ import {
   type PatchOp,
   type TreeElement,
   type TreeNode,
+  type WidgetHostStatus,
   type WidgetPatch,
   type WidgetTree,
   type WireValue,
 } from "@cmd/protocol";
 
-/** What the process is doing, as the core says it. */
-export type WidgetStatus = { kind: "status"; state: "starting" | "running" | "stopped" | "waiting-grant"; reason?: string };
-export type TreeMessage = WidgetTree | WidgetPatch | WidgetStatus;
+export type TreeMessage = WidgetTree | WidgetPatch | WidgetHostStatus;
 
 /** What the view draws: the top-level nodes, the last rev, the process's state. A new object on every change. */
 export interface TreeSnapshot {
@@ -31,7 +30,8 @@ export interface TreeSnapshot {
   rev: number;
   /** A tree arrived (a later restart keeps it on screen). */
   loaded: boolean;
-  status: WidgetStatus["state"];
+  /** What the process is doing, as the last status message said (a tree doesn't change it). */
+  status: WidgetHostStatus["state"];
   reason: string | undefined;
 }
 
@@ -288,7 +288,8 @@ export class TreeStore {
       this.dropped.clear();
       this.resyncing = false;
       const nodes = this.adoptAll(m.nodes, TREE_ROOT);
-      this.set({ nodes, rev: m.rev, loaded: true, status: "running", reason: undefined });
+      // The status stays as last told: a stopped process's last tree comes after its status on resync.
+      this.set({ nodes, rev: m.rev, loaded: true });
     } else if (m.kind === "patch") {
       if (this.resyncing || m.rev <= this.snap.rev) return; // waiting for the tree, or old news
       if (!this.snap.loaded || m.rev !== this.snap.rev + 1) return this.lose();

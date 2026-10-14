@@ -100,8 +100,16 @@ describe("patches", () => {
     expect(s.snapshot).toMatchObject({ status: "stopped", reason: "crashed", loaded: true });
     s.apply({ kind: "status", state: "starting" });
     expect(titles(s)).toEqual(["Tours", "Perf"]);
+    s.apply({ kind: "status", state: "running" });
     s.apply(tree(list(), 1));
     expect(s.snapshot.status).toBe("running");
+  });
+
+  it("keeps a stopped status through the tree that follows it (a resync sends the status, then the last tree)", () => {
+    const { s } = store();
+    s.apply({ kind: "status", state: "stopped", reason: "crashed" });
+    s.apply(tree(list(), 3));
+    expect(s.snapshot).toMatchObject({ status: "stopped", reason: "crashed", loaded: true, rev: 3 });
   });
 });
 

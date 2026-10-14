@@ -29,7 +29,7 @@ afterEach(async () => {
 });
 
 function link(over: Partial<Link> = {}): Link & { interact: ReturnType<typeof vi.fn> } {
-  return { interact: vi.fn(), resync: vi.fn(), env: vi.fn(), ...over } as never;
+  return { interact: vi.fn(), resync: vi.fn(), restart: vi.fn(), env: vi.fn(), ...over } as never;
 }
 
 async function draw(store: InstanceType<typeof TreeStore>, l: Link = link()) {
@@ -140,7 +140,8 @@ describe("the package view", () => {
     await act(async () => store.apply({ kind: "status", state: "stopped", reason: "crashed" }));
     expect(el.textContent).toContain("Stopped · crashed");
     await act(async () => [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("Restart"))!.click());
-    expect(l.resync).toHaveBeenCalledTimes(1);
+    expect(l.restart).toHaveBeenCalledTimes(1);
+    expect(l.resync).not.toHaveBeenCalled();
   });
 
   it("draws a thousand rows: a window's worth first, then the rest", async () => {

@@ -54,8 +54,7 @@ export function PackageWidget({ windowId, store, link }: { windowId: WindowId; s
 function coverOf(snap: TreeSnapshot, link: WidgetLink): ViewStateSpec | null {
   if (snap.status === "waiting-grant") return { kind: "empty", icon: "lock", title: "Waiting for permission", text: "This widget runs once you allow what it asks for." };
   if (snap.status === "stopped")
-    // TODO(docs/56 item C): a restart method if the host names one; until then a resync asks the core to start it again.
-    return { kind: "error", title: snap.reason ? `Stopped · ${snap.reason}` : "Stopped", action: <Button icon="arrow.clockwise" onClick={() => link.resync()}>Restart</Button> };
+    return { kind: "error", title: snap.reason ? `Stopped · ${snap.reason}` : "Stopped", action: <Button icon="arrow.clockwise" onClick={() => link.restart()}>Restart</Button> };
   if (!snap.loaded) return STARTING;
   return null;
 }
