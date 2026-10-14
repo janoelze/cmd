@@ -26,7 +26,7 @@ import type { FindRequest } from "../../lib/find.tsx";
 import { pasteRisk, preview, shellWord } from "./paste.ts";
 import { registerDropTarget } from "../../lib/drops.ts";
 import { Replayer } from "@cmd/protocol/replay";
-import { IdleFits } from "./fits.ts";
+import { FitQueue } from "./fits.ts";
 
 // ⌘ keys sent to the PTY as readline control characters: kill line, start, end.
 const CMD_KEYS: Record<string, string> = { Backspace: "\x15", ArrowLeft: "\x01", ArrowRight: "\x05" };
@@ -106,8 +106,8 @@ let webglLoading: Promise<void> | null = null;
 
 class Terminals {
   #hosts = new Map<PaneId, Host>();
-  /** Fits of terminals out of sight, waiting for an idle moment. */
-  #idleFits = new IdleFits();
+  /** Fits after a size change, spread over frames and idle time (fits.ts). */
+  #fits = new FitQueue();
   #selectionVersion = 0;
   #selectionListeners = new Set<() => void>();
   /** Terminals a remote device sizes to its screen (see setOverride). */
@@ -166,7 +166,7 @@ class Terminals {
       if (fontChanged || s["font.code"] !== prev["font.code"] || s["font.codeSize"] !== prev["font.codeSize"]) {
         h.webgl?.clearTextureAtlas();
       }
-      this.fit(id);
+      this.#fits.fit(h.el, id, () => this.fit(id)); // a new font size: spread over frames (fits.ts)
     }
     // A smaller pool: hand the least recently used terminals back to the DOM renderer.
     const live = [...this.#hosts.values()].filter((h) => h.webgl).sort((a, b) => b.lastUsed - a.lastUsed);
@@ -379,7 +379,7 @@ class Terminals {
     if (!h || h.replays.busy) return;
     const wait = h.fitTimer ? Infinity : h.fittedAt + FIT_INTERVAL - performance.now();
     // Fitting now: one resize for rows and columns (each resize redraws the whole terminal).
-    if (wait <= 0) return this.#idleFits.fit(h.el, paneId, () => this.fit(paneId));
+    if (wait <= 0) return this.#fits.fit(h.el, paneId, () => this.fit(paneId));
     if (h.opened && h.el.isConnected && !this.#overrides.has(paneId)) {
       const d = h.fit.proposeDimensions();
       // Rows never wait for columns: a new width is the throttled fit's below.
@@ -548,7 +548,7 @@ class Terminals {
     if (!h) return;
     if (h.fitTimer) clearTimeout(h.fitTimer);
     if (h.ptyTimer) clearTimeout(h.ptyTimer);
-    this.#idleFits.delete(paneId);
+    this.#fits.delete(paneId);
     // With mouse reporting on (Claude Code, vim), a mousedown adds mousemove/mouseup
     // listeners on the document that only a mouseup removes, and dispose doesn't.
     // Closing the pane mid-drag would leave them calling into the disposed renderer
