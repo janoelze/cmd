@@ -343,7 +343,7 @@ class Terminals {
 
   fit(paneId: PaneId): void {
     const h = this.#hosts.get(paneId);
-    if (!h?.opened || !h.el.isConnected || h.replays.busy) return;
+    if (!h?.opened || !h.el.isConnected || h.replays.busy || !h.el.clientWidth || !h.el.clientHeight) return; // no size (hidden): xterm would fit 2×1, a reflow there and back
     if (h.fitTimer) clearTimeout(h.fitTimer), (h.fitTimer = null);
     h.fittedAt = performance.now();
     const o = this.#overrides.get(paneId);

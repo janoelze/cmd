@@ -89,6 +89,9 @@ export function resolveTheme(appearance: "dark" | "light", darkId: string, light
   return t?.appearance === appearance ? t : (themes.get(appearance) ?? currentTheme());
 }
 
+/** Keep the theme in localStorage for the next launch's first frame (not when the URL says it: see bootTheme). */
+let remember = true;
+
 /** Make this the active theme: its tokens on :root, listeners told. */
 export function applyTheme(t: Theme): void {
   const root = document.documentElement.style;
@@ -101,17 +104,27 @@ export function applyTheme(t: Theme): void {
   if (t === current) return;
   current = t;
   // The next launch paints its first frame in this theme (see boot).
-  try {
-    localStorage.setItem("cmd.theme", t.id);
-  } catch {}
+  if (remember)
+    try {
+      localStorage.setItem("cmd.theme", t.id);
+    } catch {}
+  else {
+    const url = new URL(location.href); // a reload (⌘R) starts in it too
+    url.searchParams.set("theme", t.id);
+    history.replaceState(history.state, "", url);
+  }
   listeners.forEach((fn) => fn());
 }
 
 /** Before settings arrive: the theme the last run used, so the first frame isn't the wrong one. */
 export function bootTheme(): void {
-  let id: string | null = null;
-  try {
-    id = localStorage.getItem("cmd.theme");
-  } catch {}
+  // The desktop app loads its pages with ?theme= (the main process keeps the last one), which
+  // spares the first frame localStorage: opening it blocks ~15 ms. Other pages (the web app) keep it there.
+  let id = new URLSearchParams(location.search).get("theme");
+  if (id) remember = false;
+  else
+    try {
+      id = localStorage.getItem("cmd.theme");
+    } catch {}
   applyTheme((id && themes.get(id)) || currentTheme());
 }

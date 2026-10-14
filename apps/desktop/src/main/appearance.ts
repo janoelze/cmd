@@ -14,6 +14,8 @@ export interface Appearance {
   background: string;
   /** The theme whose Dock icon to show (dock-icon.ts); null: the app's own. */
   dockIcon?: string | null;
+  /** The theme's id: pages load with it (?theme=), so their first frame is in it. */
+  theme?: string;
 }
 
 const file = () => path.join(cmdHome(), "appearance.json");
@@ -32,9 +34,15 @@ export function savedAppearance(): Appearance {
 export function setAppearance(a: Appearance): void {
   nativeTheme.themeSource = a.source;
   const prev = savedAppearance();
-  if (prev.source === a.source && prev.background === a.background && prev.dockIcon === a.dockIcon) return;
+  if (prev.source === a.source && prev.background === a.background && prev.dockIcon === a.dockIcon && prev.theme === a.theme) return;
   saved = a;
   try {
     fs.writeFileSync(file(), JSON.stringify(a));
   } catch {}
+}
+
+/** The saved theme as a page's query (?theme=), for its first frame (bootTheme in @cmd/ui). */
+export function themeQuery(): Record<string, string> {
+  const t = savedAppearance().theme;
+  return t ? { theme: t } : {};
 }

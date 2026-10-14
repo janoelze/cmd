@@ -17,7 +17,7 @@ export function pinTheme(t: Theme | null): void {
   pinned = t;
   if (t) {
     applyTheme(t);
-    cmd.setAppearance({ source: t.appearance, background: t.colors.bg, dockIcon: null });
+    cmd.setAppearance({ source: t.appearance, background: t.colors.bg, dockIcon: null, theme: t.id });
   } else sync();
 }
 
@@ -34,7 +34,7 @@ function sync(): void {
   applyTheme(t);
   // Auto lets macOS decide, so prefers-color-scheme (above) tracks the system.
   const source = lastSettings["theme.appearance"] === "auto" ? "system" : t.appearance;
-  cmd.setAppearance({ source, background: t.colors.bg, dockIcon: lastSettings["theme.dockIcon"] ? t.id : null });
+  cmd.setAppearance({ source, background: t.colors.bg, dockIcon: lastSettings["theme.dockIcon"] ? t.id : null, theme: t.id });
 }
 
 // Auto: the system switched between light and dark.
