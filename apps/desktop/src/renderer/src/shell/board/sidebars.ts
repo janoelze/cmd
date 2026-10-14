@@ -1,6 +1,7 @@
 // Sidebars coming and going (docs/21-sidebars.md): View → Show Left/Right Sidebar slides a
-// side out (its window kept until it is out of sight) or in; an empty left side gets a
-// Navigator, and so does every workspace at first (also the migration from the old sidebar).
+// side out (its window kept until it is out of sight) or in, Show Sidebars both at once;
+// an empty left side gets a Navigator, and so does every workspace at first (also the
+// migration from the old sidebar).
 
 import { useEffect, useSyncExternalStore } from "react";
 import { GLIDE_MS, reducedMotion } from "@cmd/ui";
@@ -9,7 +10,7 @@ import { cmd } from "../../lib/bridge.ts";
 import { windowIdOf, type SidebarRow } from "../../lib/model.ts";
 import { getState, getWorkspaceView, setWorkspaceView } from "../../lib/store.ts";
 import { boardOf } from "./board.ts";
-import { dock, dockWidths, readDocks, type Side } from "./docks.ts";
+import { dock, dockWidths, readDocks, SIDES, type Docks, type Side } from "./docks.ts";
 import { setDocks } from "./view.ts";
 
 export type Slide = { dir: "in" | "out"; row?: SidebarRow; width?: number };
@@ -42,6 +43,27 @@ export function toggleSide(side: Side): void {
   clearTimeout(timers[side]);
   timers[side] = setTimeout(() => set(Object.fromEntries(Object.entries(sliding).filter(([k]) => k !== side))), reducedMotion() ? 0 : GLIDE_MS);
   setDocks((x) => ({ ...x, [side]: { ...x[side], hidden: !x[side].hidden } }));
+}
+
+export const anySideShown = (d: Docks): boolean => SIDES.some((s) => !!d[s].id && !d[s].hidden);
+
+/**
+ * Show Sidebars (View menu, the top bar): hides every shown side, or shows again the
+ * ones it hid (kept per workspace in "sidebars.hid"); with none to bring back, every
+ * docked side, or a Navigator on the left.
+ */
+export function toggleSidebars(): void {
+  const { docks: d, workspaceId } = boardOf(getState());
+  const shown = SIDES.filter((s) => d[s].id && !d[s].hidden);
+  if (shown.length) {
+    setWorkspaceView(workspaceId, "sidebars.hid", shown);
+    shown.forEach(toggleSide);
+    return;
+  }
+  const hid = getWorkspaceView<unknown>(workspaceId, "sidebars.hid", []);
+  const back = SIDES.filter((s) => d[s].id && Array.isArray(hid) && hid.includes(s));
+  const sides = back.length ? back : SIDES.filter((s) => d[s].id);
+  (sides.length ? sides : (["left"] as const)).forEach(toggleSide);
 }
 
 /** A Navigator docked to `side` of a workspace; `carry` is the side's earlier width and visibility. */

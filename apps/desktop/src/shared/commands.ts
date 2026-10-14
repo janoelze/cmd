@@ -112,9 +112,10 @@ export const COMMANDS = spec([
   // Sidebars (docs/21-sidebars.md). view.sidebar keeps its id: keybindings.json uses it.
   { id: "view.sidebar", label: "Show Left Sidebar", keys: ["Ctrl+Cmd+S"], checkable: "checkbox", menu: "View/sidebars" },
   { id: "view.rightSidebar", label: "Show Right Sidebar", checkable: "checkbox", menu: "View/sidebars" },
-  { id: "window.dockLeft", label: "Move to Left Sidebar", menu: "Window/dock" },
-  { id: "window.dockRight", label: "Move to Right Sidebar", menu: "Window/dock" },
-  { id: "window.undock", label: "Move to Board", menu: "Window/dock" },
+  { id: "view.sidebars", label: "Show Sidebars", keys: ["Alt+Cmd+S"], checkable: "checkbox", menu: "View/sidebars" },
+  { id: "window.dockLeft", label: "Attach as Left Sidebar", menu: "Window/dock" },
+  { id: "window.dockRight", label: "Attach as Right Sidebar", menu: "Window/dock" },
+  { id: "window.undock", label: "Detach Sidebar", menu: "Window/dock" },
   // A fixed size for consistent screenshots (marketing site).
   { id: "window.screenshotSize", label: "Resize to 1500 × 900", menu: "Window/size" },
   // The editor.wordWrap setting, for every text window.

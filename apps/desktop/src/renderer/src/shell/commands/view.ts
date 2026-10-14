@@ -6,7 +6,7 @@ import { cmd } from "../../lib/bridge.ts";
 import { togglePreview } from "../../windows/preview.ts";
 import { dock, undock } from "../board/docks.ts";
 import type { ViewMode } from "../board/layouts.ts";
-import { toggleSide } from "../board/sidebars.ts";
+import { anySideShown, toggleSide, toggleSidebars } from "../board/sidebars.ts";
 import { DEFAULT_FRACTION, MIN_WIDTH, nextPreset, stepFraction } from "../board/strip.ts";
 import { setDocks, setMode, setStripWidth } from "../board/view.ts";
 import { requestCanvas } from "../board/WindowsView.tsx";
@@ -49,6 +49,7 @@ registerCommands({
   "view.toggleEdit": { run: (c) => (c.actions?.toggleEdit ? c.actions.toggleEdit() : c.window && togglePreview(c.window)) },
   "view.sidebar": { run: () => toggleSide("left"), checked: (c) => shown(c, "left") },
   "view.rightSidebar": { when: (c) => !!c.board.docks.right.id, run: () => toggleSide("right"), checked: (c) => shown(c, "right") },
+  "view.sidebars": { run: () => toggleSidebars(), checked: (c) => anySideShown(c.board.docks) },
   "window.dockLeft": { when: (c) => !!c.selected && c.side !== "left", run: (c) => setDocks((d) => dock(d, c.selected!, "left")) },
   "window.dockRight": { when: (c) => !!c.selected && c.side !== "right", run: (c) => setDocks((d) => dock(d, c.selected!, "right")) },
   "window.undock": { when: (c) => !!c.side, run: (c) => setDocks((d) => undock(d, c.selected!)) },
