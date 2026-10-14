@@ -19,6 +19,7 @@ const BAD: Record<string, string> = {
   "bad-run-shell": "cmd.permissions.run",
   "bad-read-home": "cmd.permissions.read",
   "bad-duplicate-id": "cmd.widgets[1].id",
+  "bad-secret-host": "cmd.widgets[0].config[1].host",
 };
 
 async function check(dir: string): Promise<{ code: number; out: string; err: string }> {

@@ -18,10 +18,19 @@ export interface ConfigField {
   type: "string" | "number" | "boolean" | "enum";
   default?: string | number | boolean;
   options?: string[];
-  /** Kept in cmd's secrets (never in the widget folder or the window state); reaches the widget's code only. */
+  /** Kept in cmd's secrets (never in the widget folder or the window state). */
   secret?: boolean;
+  /** A package's secret: the host it is sent to (in permissions.net); the core attaches it to cmd.net.fetch(url, { auth: key }), the widget never holds it. */
+  host?: string;
+  /** The header it goes in (default "Authorization"). */
+  header?: string;
+  /** What comes before it in the header (default "Bearer"; "" for the value alone). */
+  scheme?: string;
   description?: string;
 }
+
+/** A header name (RFC 9110's token). */
+const HEADER = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
 export interface PackageWidget {
   id: string;
@@ -65,6 +74,7 @@ const NAME = /^[a-z0-9][a-z0-9._-]{0,213}$/;
 const WIDGET_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ICON = /^[a-z0-9]+(\.[a-z0-9]+)*$/;
 const ACT = ["agents", "terminals", "windows", "actions"];
+const AI = ["complete"];
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const q = (v: unknown) => JSON.stringify(v);
@@ -94,15 +104,18 @@ export function enginesMin(range: string): string | null {
   return m ? m[1]! : null;
 }
 
-/** Config fields (a manifest's `config`, a package widget's): the fields, problems in `errors` under `at`. */
-export function parseConfigFields(v: unknown, at: string, errors: string[]): ConfigField[] {
+/**
+ * Config fields (a manifest's `config`, a package widget's): the fields, problems in `errors` under `at`.
+ * `bind`: a package's, whose secrets name the host they're for (one of `bind.net`); a Magic manifest's don't.
+ */
+export function parseConfigFields(v: unknown, at: string, errors: string[], bind?: { net: string[] }): ConfigField[] {
   const strs = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === "string" && !!s.trim()).map((s) => s.trim()).slice(0, 32) : []);
   const config: ConfigField[] = [];
-  for (const c of Array.isArray(v) ? v : []) {
+  (Array.isArray(v) ? v : []).forEach((c: unknown, i: number) => {
     const f = c as Record<string, unknown>;
     if (!f || typeof f.key !== "string" || !/^[A-Za-z_][\w]*$/.test(f.key)) {
       errors.push(`${at}: each field needs a key (letters, digits, _)`);
-      continue;
+      return;
     }
     const type = f.type === "number" || f.type === "boolean" || f.type === "enum" ? f.type : "string";
     const field: ConfigField = { key: f.key, title: typeof f.title === "string" ? f.title : f.key, type };
@@ -110,9 +123,32 @@ export function parseConfigFields(v: unknown, at: string, errors: string[]): Con
     if (type === "enum") field.options = strs(f.options);
     if (f.secret === true) field.secret = true;
     if (typeof f.description === "string") field.description = f.description;
+    if (bind) bindSecret(f, field, `${at}[${i}]`, bind.net, errors);
     config.push(field);
-  }
+  });
   return config;
+}
+
+/** A package's secret field: the host, header and scheme it's sent with, checked against `net`. */
+function bindSecret(f: Record<string, unknown>, field: ConfigField, at: string, net: string[], errors: string[]): void {
+  if (!field.secret) {
+    for (const k of ["host", "header", "scheme"]) if (f[k] !== undefined) errors.push(`${at}.${k}: only a secret field says where it's sent; add "secret": true or remove it`);
+    return;
+  }
+  const host = f.host;
+  if (host === undefined) errors.push(`${at}.host: missing; a secret names the host it's sent to, like "api.github.com"`);
+  else if (typeof host !== "string" || !host.trim()) errors.push(`${at}.host: should be a host, like "api.github.com"`);
+  else if (host.trim() === "*" || host.includes("*")) errors.push(`${at}.host: "${host}" would send the secret anywhere; name one host`);
+  else if (!net.includes(host.trim())) errors.push(`${at}.host: "${host}" isn't in cmd.permissions.net; add it there too`);
+  else field.host = host.trim();
+  if (f.header !== undefined) {
+    if (typeof f.header !== "string" || !HEADER.test(f.header)) errors.push(`${at}.header: ${q(f.header)} isn't a header name, like "Authorization" or "X-Api-Key"`);
+    else field.header = f.header;
+  }
+  if (f.scheme !== undefined) {
+    if (typeof f.scheme !== "string" || !/^([A-Za-z][\w-]*)?$/.test(f.scheme)) errors.push(`${at}.scheme: ${q(f.scheme)} should be a word like "Bearer" or "token", or "" for the value alone`);
+    else field.scheme = f.scheme;
+  }
 }
 
 /** Whether `p` is `dir` or inside it. */
@@ -152,6 +188,7 @@ function permissions(v: unknown, errors: string[], home: string): WidgetPermissi
   for (const w of out.workspace) if (w !== "read" && w !== "all") errors.push(`cmd.permissions.workspace: "${w}" should be "read" (this workspace) or "all"`);
   const may = declarable("widget");
   for (const c of out.events) if (!may.includes(c as never)) errors.push(`cmd.permissions.events: "${c}" ${c in POLICY.widget ? "can't be read by widgets" : "isn't a class of events"} (${may.join(", ")})`);
+  for (const a of out.ai) if (!AI.includes(a)) errors.push(`cmd.permissions.ai: "${a}" isn't something widgets may ask of cmd's AI (${AI.join(", ")})`);
   for (const a of out.act) {
     const [ns, verb, more] = a.split(".");
     if (!ACT.includes(ns!) || more !== undefined || (verb !== undefined && !/^[a-zA-Z]+$/.test(verb))) errors.push(`cmd.permissions.act: "${a}" should be one of ${ACT.join(", ")}, or a verb of one, like "actions.run"`);
@@ -251,7 +288,7 @@ export function parsePackage(json: unknown, dir: string, o: ParseOptions = {}): 
         if (p) errors.push(`${at}.main: ${p}`);
       }
       if (w.config !== undefined && !Array.isArray(w.config)) errors.push(`${at}.config: should be a list of fields`);
-      const config = parseConfigFields(w.config, `${at}.config`, errors);
+      const config = parseConfigFields(w.config, `${at}.config`, errors, { net: perms.net });
       if (typeof name === "string")
         widgets.push({ id, kind: packageKind(name, id), title, icon: String(icon), ...(typeof w.description === "string" ? { description: w.description } : {}), main: String(main), size: size as WidgetSize, config, surface: surface as "tree" | "frame" });
     });

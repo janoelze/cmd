@@ -19,11 +19,13 @@ export interface WidgetPermissions {
   events: string[];
   /** What it may ask to do ("actions.run", "agents"). */
   act: string[];
+  /** cmd's AI, through the core ("complete"); the widget never holds a key. */
+  ai: string[];
 }
 
-export const PERMISSION_KEYS = ["net", "run", "read", "workspace", "events", "act"] as const satisfies readonly (keyof WidgetPermissions)[];
+export const PERMISSION_KEYS = ["net", "run", "read", "workspace", "events", "act", "ai"] as const satisfies readonly (keyof WidgetPermissions)[];
 
-export const noPermissions = (): WidgetPermissions => ({ net: [], run: [], read: [], workspace: [], events: [], act: [] });
+export const noPermissions = (): WidgetPermissions => ({ net: [], run: [], read: [], workspace: [], events: [], act: [], ai: [] });
 
 /** The window kind of a package's widget: "pkg:<package>/<widget>". */
 export const packageKind = (name: string, widget: string): string => `pkg:${name}/${widget}`;

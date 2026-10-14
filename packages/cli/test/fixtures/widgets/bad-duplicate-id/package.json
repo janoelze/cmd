@@ -26,7 +26,8 @@
             "key": "token",
             "title": "Token",
             "type": "string",
-            "secret": true
+            "secret": true,
+            "host": "api.github.com"
           }
         ]
       },
@@ -47,7 +48,8 @@
             "key": "token",
             "title": "Token",
             "type": "string",
-            "secret": true
+            "secret": true,
+            "host": "api.github.com"
           }
         ]
       }

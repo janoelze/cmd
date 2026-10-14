@@ -9,6 +9,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { noPermissions, type WidgetEntry, type WidgetPermissions } from "@cmd/protocol";
 import { parsePackage, readPackage, enginesMin, compareVersions } from "../src/widgets/package.ts";
+import { parseManifest } from "../src/widgets/manifest.ts";
 import { effective, grantsPath, needsGrant, readGrants, writeGrants } from "../src/widgets/grants.ts";
 import { runWidgetTool } from "../src/magic/widget-tools.ts";
 import { WidgetStore } from "../src/widgets/store.ts";
@@ -29,7 +30,7 @@ const PKG = (o: Record<string, unknown> = {}, c: Record<string, unknown> = {}) =
   version: "1.2.0",
   description: "The latest runs.",
   engines: { cmd: ">=0.30" },
-  cmd: { api: 1, widgets: [{ id: "ci", title: "CI", icon: "checkmark.seal", main: "src/ci.tsx", size: "m", config: [{ key: "token", title: "Token", type: "string", secret: true }] }], permissions: { net: ["api.github.com"], run: ["gh"], workspace: ["read"], events: ["agents"], act: ["actions.run"] }, ...c },
+  cmd: { api: 1, widgets: [{ id: "ci", title: "CI", icon: "checkmark.seal", main: "src/ci.tsx", size: "m", config: [{ key: "token", title: "Token", type: "string", secret: true, host: "api.github.com" }] }], ...c, permissions: { net: ["api.github.com"], run: ["gh"], workspace: ["read"], events: ["agents"], act: ["actions.run"], ...(c.permissions as object) } },
   ...o,
 });
 
@@ -61,8 +62,8 @@ describe("package.json", () => {
         api: 1,
         dir,
         experimental: [],
-        permissions: { net: ["api.github.com"], run: ["gh"], read: [], workspace: ["read"], events: ["agents"], act: ["actions.run"] },
-        widgets: [{ id: "ci", kind: "pkg:ci-runs/ci", title: "CI", icon: "checkmark.seal", main: "src/ci.tsx", size: "m", surface: "tree", config: [{ key: "token", title: "Token", type: "string", secret: true }] }],
+        permissions: { net: ["api.github.com"], run: ["gh"], read: [], workspace: ["read"], events: ["agents"], act: ["actions.run"], ai: [] },
+        widgets: [{ id: "ci", kind: "pkg:ci-runs/ci", title: "CI", icon: "checkmark.seal", main: "src/ci.tsx", size: "m", surface: "tree", config: [{ key: "token", title: "Token", type: "string", secret: true, host: "api.github.com" }] }],
       },
     });
   });
@@ -129,9 +130,39 @@ describe("package.json", () => {
     expect(errors(PKG({}, { widgets: [w, { ...w }] }))).toEqual(['cmd.widgets[1].id: "ci" is used twice; each widget needs its own id']);
   });
 
+  describe("secrets name the host they're sent to", () => {
+    /** Problems with the widget's config `fields` (net: api.github.com). */
+    const cfg = (...fields: Record<string, unknown>[]) => errors(PKG({}, { widgets: [{ id: "ci", title: "CI", main: "src/ci.tsx", config: [{ key: "repo", title: "Repo", type: "string" }, ...fields] }] }));
+    const tok = (o: Record<string, unknown> = {}) => ({ key: "token", title: "Token", type: "string", secret: true, ...o });
+
+    it("reads a bound secret, with its header and scheme", () => {
+      const r = parsePackage(PKG({}, { widgets: [{ id: "ci", title: "CI", main: "src/ci.tsx", config: [tok({ host: "api.github.com", header: "X-Api-Key", scheme: "" })] }] }), pkgDir(null), { cmdVersion: null });
+      expect(r.ok && r.pkg.widgets[0]!.config).toEqual([{ key: "token", title: "Token", type: "string", secret: true, host: "api.github.com", header: "X-Api-Key", scheme: "" }]);
+      expect(cfg(tok({ host: "api.github.com", scheme: "token" }))).toEqual([]);
+    });
+    it("refuses a secret without a host", () => expect(cfg(tok())).toEqual([expect.stringMatching(/^cmd\.widgets\[0\]\.config\[1\]\.host: missing/)]));
+    it("refuses a host not in cmd.permissions.net", () => expect(cfg(tok({ host: "evil.example" }))).toEqual(['cmd.widgets[0].config[1].host: "evil.example" isn\'t in cmd.permissions.net; add it there too']));
+    it("refuses a * host", () => {
+      expect(errors(PKG({}, { permissions: { net: ["*"] }, widgets: [{ id: "ci", title: "CI", main: "src/ci.tsx", config: [tok({ host: "*" })] }] }))).toEqual([expect.stringMatching(/^cmd\.widgets\[0\]\.config\[0\]\.host: "\*" would send the secret anywhere/)]);
+    });
+    it("refuses a header that isn't a header name", () => expect(cfg(tok({ host: "api.github.com", header: "Bad Header:" }))).toEqual([expect.stringMatching(/^cmd\.widgets\[0\]\.config\[1\]\.header: /)]));
+    it("refuses host, header or scheme on a field that isn't secret", () => {
+      for (const k of ["host", "header", "scheme"]) expect(cfg({ key: "repo2", title: "Repo", type: "string", [k]: k === "host" ? "api.github.com" : "X" }), k).toEqual([expect.stringMatching(new RegExp(`^cmd\\.widgets\\[0\\]\\.config\\[1\\]\\.${k}: only a secret field`))]);
+    });
+    it("leaves Magic manifests' secrets as they were: no host needed", () => {
+      const r = parseManifest({ title: "Status", permissions: {}, config: [{ key: "token", title: "Token", type: "string", secret: true }] });
+      expect(r.ok && r.manifest.config).toEqual([{ key: "token", title: "Token", type: "string", secret: true }]);
+    });
+  });
+
+  it("asks for cmd's AI only as complete", () => {
+    expect(errors(PKG({}, { permissions: { net: ["api.github.com"], ai: ["complete"] } }))).toEqual([]);
+    expect(errors(PKG({}, { permissions: { net: ["api.github.com"], ai: ["complete", "chat"] } }))).toEqual(['cmd.permissions.ai: "chat" isn\'t something widgets may ask of cmd\'s AI (complete)']);
+  });
+
   it("names the field of every other problem", () => {
     expect(errors(PKG({ name: "CI Runs" }))).toEqual([expect.stringMatching(/^name: /)]);
-    expect(errors(PKG({}, { permissions: { net: ["https://x y"] } }))).toEqual([expect.stringMatching(/^cmd\.permissions\.net: /)]);
+    expect(errors(PKG({}, { permissions: { net: ["api.github.com", "https://x y"] } }))).toEqual([expect.stringMatching(/^cmd\.permissions\.net: /)]);
     expect(errors(PKG({}, { permissions: { env: ["TOKEN"] } }))).toEqual([expect.stringMatching(/^cmd\.permissions\.env: isn't a permission.*secret/)]);
     expect(errors(PKG({}, { permissions: { events: ["transcripts", "nope"] } }))).toEqual([expect.stringMatching(/^cmd\.permissions\.events: "nope"/)]);
     expect(errors(PKG({}, { permissions: { workspace: ["write"] } }))).toEqual([expect.stringMatching(/^cmd\.permissions\.workspace: /)]);
@@ -159,6 +190,7 @@ describe("grants", () => {
     expect(needsGrant(perms({ net: ["api.github.com"] }), declared)).toBe(false);
     expect(needsGrant(noPermissions(), null)).toBe(false);
     expect(needsGrant(declared, null)).toBe(true);
+    expect(needsGrant({ ...declared, ai: ["complete"] }, declared)).toBe(true); // cmd's AI, newly asked for
   });
 
   it("live per instance, outside the package, and round-trip", () => {
