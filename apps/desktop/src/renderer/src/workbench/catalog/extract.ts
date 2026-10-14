@@ -266,7 +266,8 @@ function story(file: string, roots: CatalogRoots, byFile: Map<string, ComponentI
   // Kit files are named in lower case (button.tsx): their stories' titles aren't.
   const title = kit ? base.replace(/^./, (c) => c.toUpperCase()) : base;
   const folder = path.posix.dirname(inside);
-  const group = kit ? (folder === "." ? "ui" : `ui/${folder}`) : folder === "." ? "app" : folder;
+  // Widget packages' stories (docs/56) are "widgets/…": the package view's, and later each package's.
+  const group = kit ? (folder === "." ? "ui" : `ui/${folder}`) : folder === "." ? "app" : folder === "windows/package" ? "widgets" : folder;
   const id = `${group}/${base.toLowerCase()}`;
   const src = fs.readFileSync(file, "utf8");
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
