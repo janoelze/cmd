@@ -1,6 +1,6 @@
 ---
 name: window-design
-description: Design or build the inside of any cmd window or widget so it matches the rest: a built-in window type, a React widget, a sidebar or inspector, a dashboard, a table, a list of things to run, a document or media viewer, or the Magic kit and prompt that AI-made widgets use. Covers the design tokens (packages/ui/tokens, DTCG), the kit's window pieces (View, Split, List, Panes, Stat, Chart, DataGrid, Text, Stack, Inline), the five reference windows, the rules settled for insets, bars, tables, charts and lists, how to measure a layout, and Magic's kit versions. Use when adding or changing a window's layout, spacing, toolbar, footer, empty or error state, table, chart or list; when adding or changing a design token; when a stylesheet test (design-css, tokens) fails; when migrating a window off its own CSS; and when changing Magic's kit.css, prompt or kit versions.
+description: Design or build the inside of any cmd window or widget so it matches the rest: a built-in window type, a React widget, a sidebar or inspector, a dashboard, a table, a list of things to run, a document or media viewer, or how Magic's prompt tells AI-made widgets to look. Covers the design tokens (packages/ui/tokens, DTCG), the kit's window pieces (View, Split, List, Panes, Stat, Chart, DataGrid, Text, Stack, Inline), the five reference windows, the rules settled for insets, bars, tables, charts and lists, how to measure a layout, and how Magic's widgets follow it. Use when adding or changing a window's layout, spacing, toolbar, footer, empty or error state, table, chart or list; when adding or changing a design token; when a stylesheet test (design-css, tokens) fails; when migrating a window off its own CSS; and when changing what Magic's prompt says about how widgets look.
 ---
 
 # Window design
@@ -9,7 +9,7 @@ Every window in cmd, built-in or made with Magic, is drawn from one set of desig
 
 ## The system
 
-- **Tokens** (`packages/ui/tokens/*.tokens.json`, DTCG 2025.10, tied together by `cmd.resolver.json`): every colour, size, space, radius and duration, each with a `$description` that says when to use it. `pnpm tokens` builds them into `packages/ui/src/tokens.css`, `tokens.gen.ts` (scales as types: `SpaceName`, `TextSize`, `RadiusName`; `LIGHT_VARS`; `TOKENS`, a manifest of all of them) and the Magic frame's `tokens.css` and `preview-themes.json`. Read the generated `tokens.css`: it is the reference, each token commented with its rule.
+- **Tokens** (`packages/ui/tokens/*.tokens.json`, DTCG 2025.10, tied together by `cmd.resolver.json`): every colour, size, space, radius and duration, each with a `$description` that says when to use it. `pnpm tokens` builds them into `packages/ui/src/tokens.css`, `tokens.gen.ts` (scales as types: `SpaceName`, `TextSize`, `RadiusName`; `LIGHT_VARS`; `TOKENS`, a manifest of all of them) Read the generated `tokens.css`: it is the reference, each token commented with its rule.
   - `theme.tokens.json` documents what each theme sets at runtime (`--well`, `--ink`, `--accent`, `--chart-1…6`…); everything else derives from those, so it follows any theme, a person's own included.
   - A new value a view needs becomes a token (with a description), never a literal in the view.
 - **Window pieces** (`packages/ui/src/frame.tsx`, `chart.tsx`, styles in `frame.css`):
@@ -26,7 +26,7 @@ Every window in cmd, built-in or made with Magic, is drawn from one set of desig
   - `Tree`, `TreeRow`, `TreeHeader`, `TreeRename`: files and folders (the Files window and sidebar): disclosure, icon, name, git mark (`tone`), size and date (dropped when narrow), a dense sidebar version with guides, sortable column heads, rename in place, drop targets. A focused selection is the accent with `--on-accent` on it. States go inside the `Tree` (it still takes drops).
   - `WebStage`: a web page (the Browser): on white, faded in once painted; a device's page lifted with its caption; a `cover` state over the page.
   - `Mark` (the icon that gives way to a status light) also goes in a table cell (Resources); `TwistySpace` holds a disclosure's place. `LiveBadge`: a device on a window, its note fading (`--dur-note`). `IconButton` takes `tone` and `pulse`. A `Dialog` dressed as a window takes `window.status` at its title bar's right.
-  - `Thumb`: a small screenshot at a row's start (first in a `ListRow`), a placeholder without one. `WebStage` also hosts an `iframe` (a Magic widget).
+  - `Thumb`: a small screenshot at a row's start (first in a `ListRow`), a placeholder without one. `WebStage` also hosts an `iframe` (a frame widget).
   - `Document`: a reading column for rendered Markdown or HTML, in the person's text and code fonts (the Markdown window).
   - `Viewport` (pan and zoom a picture: grab cursors, a loading cover; the view zooms) and `Picture` (a checkerboard behind transparency, crisp pixels far in): the Image window. Third-party markup (pdf.js) keeps a small stylesheet of its own, on tokens.
   - `Ribbon` (bars between two times on lanes, hour ticks) and `Timeline` / `TimelineEntry` (a time, a mark on a rail, the entry), marks in a hue with `--mark` (the Journal).
@@ -104,14 +104,12 @@ For text, measure ink, not boxes: a `Range` over a text node gives its line box;
 
 ## Magic widgets
 
-Widgets made with Magic share the tokens through **kit versions** (`KIT_FILES` in `packages/protocol/src/magic.ts`). A widget's `manifest.json` pins its kit (`"kit"`; absent: 1), so changing the kit never changes a widget nobody asked to change.
+Widgets made with Magic are packages (docs/56): their views are trees of the kit's own components, drawn by the app through the element table (`windows/package/elements.tsx`), so they follow these rules and every token change at once. There are no kit versions any more: the CSS kit (`k-*` classes), its versions (`kits/1.css`, `kits/2.css`, kit 3) and the frame's generated `tokens.css` were deleted with the cmd:2 runtime in phase 2b; a person's old widgets were moved to `$CMD_HOME/widgets-old`.
 
-- **Kit 1** (`packages/core/src/magic/prompt/kits/1.css`) is Magic's kit before the tokens, frozen: a test pins its hash. Never edit it.
-- **Kit 2** (`kits/2.css`): the app's tokens and kit with the 12px inset, frozen (hash pinned). Never edit it.
-- **Kit 3** (current) is the generated `prompt/tokens.css` plus `prompt/kit.css`, the app's tokens (16px content inset, 12px bars) and the rules above in `k-*` classes. Fixes to kit.css are fine while it is current; a change that would alter how existing kit-3 widgets lay out is a new version: concatenate the current tokens.css and kit.css into `kits/3.css`, point `KIT_FILES[3]` at it, add the next version, bump `CURRENT_KIT`, write a rename table if names change (like `KIT1_RENAMES`), and pin kit 3's hash in `kits.test.ts`.
-- New widgets get the current kit (Magic's write tool fills it in and keeps a widget's kit on rewrites); a change to a widget on an older kit asks the model to move it up (`kitMove` in `magic/prompt.ts`; from kit 1 that also renames variables), and the lint names old variables left behind.
-- The prompt (`prompt/prompt.md`, "How cmd looks", "Layout", "The kit") states these rules for the model in the kit's terms; when a rule here changes, change it there, and in the examples (`prompt/examples/`).
-- Check a kit change with `pnpm cmd widget preview <dir>` on copies of the examples (dark, light, small, wide), before and after.
+- What the model is told about how widgets look is the prompt (`packages/core/src/magic/prompt/prompt.md`, "Writing the UI") and the example packages (`prompt/examples/`): when a rule here changes, change it there.
+- A widget gets a component the kit lacks only through the kit: add it to `@cmd/ui`, then to the element table and protocol's `widget-tree.ts` (docs/56, "Elements": a minor of the API).
+- A frame widget (`"surface": "frame"`, pixels only) draws its own page in the one frame host; it reads the theme's variables, never a kit.
+- Check a widget's look with the edit view's screenshots, `pnpm cmd magic` (the lab writes `preview.png`), or the Workbench (`pnpm workbench widgets/elements`).
 
 ## Don't
 
@@ -119,5 +117,4 @@ Widgets made with Magic share the tokens through **kit versions** (`KIT_FILES` i
 - Don't add margins to kit components or wrap content in cards to space it; spacing belongs to `Stack`, `Inline`, `View` and the scales.
 - Don't place controls in the body, a spinner by hand, or a second toolbar.
 - Don't compensate for scrollbars (gutters, padding maths): they float.
-- Don't edit `tokens.css`, `tokens.gen.ts`, the Magic frame's `tokens.css` or `preview-themes.json`: they're generated.
-- Don't edit `kits/1.css` or `kits/2.css`, or change kit 3 in a way that moves existing widgets: version it.
+- Don't edit `tokens.css` or `tokens.gen.ts`: they're generated.
