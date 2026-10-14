@@ -97,3 +97,12 @@ if (process.platform === "darwin") {
     console.warn("postinstall: could not brand the dev Electron.app:", err.message);
   }
 }
+
+// Vendor @cmd/widget-api with React for the widget process (Deno, --no-npm): ESM files and
+// an import map in packages/widget-api/dist/deno (scripts/widget-api-bundle.mjs).
+try {
+  const { bundleWidgetApi } = await import("./widget-api-bundle.mjs");
+  await bundleWidgetApi({ ifStale: true });
+} catch (err) {
+  console.warn("postinstall: could not bundle @cmd/widget-api for widgets:", err.message);
+}

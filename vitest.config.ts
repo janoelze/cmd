@@ -22,7 +22,7 @@ const SYSTEM = [
   "sqlite",
   "state-dir-core",
   "widgets",
-].map((f) => `packages/core/test/${f}.test.ts`).concat("packages/ui/test/dialog.test.ts");
+].map((f) => `packages/core/test/${f}.test.ts`).concat("packages/ui/test/dialog.test.ts", "packages/widget-api/test/deno-bundle.test.ts");
 
 export default defineConfig({
   test: {

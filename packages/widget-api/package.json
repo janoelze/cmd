@@ -11,8 +11,7 @@
     "./runtime": "./src/runtime.ts"
   },
   "files": [
-    "src",
-    "README.md"
+    "src"
   ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
