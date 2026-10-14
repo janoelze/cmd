@@ -6,11 +6,13 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ApiCompletion, ApiCompletionRequest, ApiAction, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
-import { connection } from "./connection.ts";
+import { connection, type ApiCallError } from "./connection.ts";
 
 /** A topic's current value, live; `initial` until the core's first event. */
 function useTopic<T extends ApiTopic>(topic: T, query: TopicQuery[T] | null, initial: TopicData[T], merge?: (prev: TopicData[T], next: TopicData[T]) => TopicData[T]): TopicData[T] {
   const [value, setValue] = useState(initial);
+  // A refusal (the grant lacks what the topic needs) is thrown on render: the reconciler's boundary shows it.
+  const [refused, setRefused] = useState<ApiCallError | null>(null);
   const key = JSON.stringify(query ?? null);
   const mergeRef = useRef(merge);
   mergeRef.current = merge;
@@ -19,9 +21,11 @@ function useTopic<T extends ApiTopic>(topic: T, query: TopicQuery[T] | null, ini
     // A new query starts from nothing, not from the last query's data.
     if (lastKey.current !== key) setValue(initial);
     lastKey.current = key;
-    return connection().subscribe(topic, query, (data) => setValue((prev) => (mergeRef.current ? mergeRef.current(prev, data as TopicData[T]) : (data as TopicData[T]))));
+    setRefused(null);
+    return connection().subscribe(topic, query, (data) => setValue((prev) => (mergeRef.current ? mergeRef.current(prev, data as TopicData[T]) : (data as TopicData[T]))), setRefused);
     // The query by value: a new object with the same fields is the same subscription.
   }, [topic, key]);
+  if (refused) throw refused;
   return value;
 }
 

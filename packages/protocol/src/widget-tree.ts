@@ -118,6 +118,9 @@ export interface WidgetCall {
  * Live data: the core sends an `event` for `id` at once with the current value, then
  * on every change. For `events` the data is the new events (the first, the query's
  * result); for every other topic it is the whole current value, replacing the last.
+ * A subscription the core refuses (the grant lacks what the topic needs) gets a `result`
+ * with `ok: false` under its `id` instead, and no events: it has ended, and the live hook
+ * throws the error on its next render (the reconciler's boundary shows it).
  */
 export interface WidgetSubscribe {
   kind: "subscribe";

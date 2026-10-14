@@ -186,6 +186,28 @@ describe("errors", () => {
     r.stop();
   });
 
+  it("a subscription the core refuses ends, and its hook's widget shows the refusal as a Callout", async () => {
+    function Agents() {
+      const agents = useAgents();
+      return <Text>{`${agents.length} agents`}</Text>;
+    }
+    const { of, deliver, r } = await start(Agents);
+    const sub = of("subscribe")[0]!;
+    const message = 'Seeing this workspace needs workspace: ["read"] in package.json\'s cmd.permissions.';
+    deliver({ kind: "result", id: sub.id, ok: false, error: { code: "permission", permission: 'workspace: ["read"]', message } });
+    await idle();
+    const callout = (of("patch").flatMap((p) => p.ops).find((o) => o.op === "insert" && o.node.type === "Callout") as { node: TreeElement } | undefined)?.node;
+    expect(callout?.props).toMatchObject({ tone: "danger" });
+    expect(JSON.stringify(callout)).toContain("Seeing this workspace needs workspace:");
+    expect(of("error")[0]?.message).toBe(message);
+    // Ended by the refusal: an event for it now changes nothing.
+    const patches = of("patch").length;
+    deliver({ kind: "event", sub: sub.id, data: [] });
+    await idle();
+    expect(of("patch")).toHaveLength(patches);
+    r.stop();
+  });
+
   it("a handler that throws is reported, and the widget runs on", async () => {
     const { of, deliver } = await start(() => (
       <Button

@@ -42,7 +42,7 @@ export class Connection {
 
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
-  private readonly subs = new Map<number, (data: unknown) => void>();
+  private readonly subs = new Map<number, { fn: (data: unknown) => void; onError?: (e: ApiCallError) => void }>();
   private readonly watchers = new Set<() => void>();
   private readonly stop: () => void;
   private readyResolve!: () => void;
@@ -72,9 +72,10 @@ export class Connection {
     });
   }
 
-  subscribe<T extends ApiTopic>(topic: T, query: TopicQuery[T] | null, fn: (data: unknown) => void): () => void {
+  /** `onError`: the core refused it (a `result` with ok: false under its id); it has ended then. */
+  subscribe<T extends ApiTopic>(topic: T, query: TopicQuery[T] | null, fn: (data: unknown) => void, onError?: (e: ApiCallError) => void): () => void {
     const id = this.nextId++;
-    this.subs.set(id, fn);
+    this.subs.set(id, { fn, onError });
     this.send({ kind: "subscribe", id, topic, query });
     return () => {
       if (!this.subs.delete(id)) return;
@@ -116,14 +117,22 @@ export class Connection {
         return;
       case "result": {
         const p = this.pending.get(m.id);
-        if (!p) return;
+        if (!p) {
+          // A refused subscription: it ends, and its subscriber hears why.
+          const sub = m.ok ? undefined : this.subs.get(m.id);
+          if (sub && !m.ok) {
+            this.subs.delete(m.id);
+            sub.onError?.(new ApiCallError(m.error));
+          }
+          return;
+        }
         this.pending.delete(m.id);
         if (m.ok) p.resolve(m.value);
         else p.reject(new ApiCallError(m.error));
         return;
       }
       case "event":
-        this.subs.get(m.sub)?.(m.data);
+        this.subs.get(m.sub)?.fn(m.data);
         return;
       case "interaction": {
         const fn = this.handlers.get(m.handler);
