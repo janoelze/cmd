@@ -39,21 +39,10 @@ import { fileIcon, PlacementContext } from "../registry.ts";
 import { registerWindowActions, type WindowActions } from "../../lib/windowActions.ts";
 import { commandItem } from "../../shell/commands/registry.ts";
 import { useFind } from "../../lib/find.tsx";
+import { sorted, useDrawnRows, when } from "./rows.ts";
 import { domFindable } from "../../lib/find-dom.ts";
 
 const iconFor = (e: FileEntry) => (e.kind === "dir" ? "folder.fill" : fileIcon(e.name));
-
-// Formatters are built once: toLocale*String with options builds one per call,
-// which costs more than the rest of rendering a row.
-const TIME = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit" });
-const DATE = new Intl.DateTimeFormat([], { day: "numeric", month: "short", year: "numeric" });
-
-function when(ms: number): string {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay ? TIME.format(d) : DATE.format(d);
-}
 
 interface Row {
   entry: FileEntry;
@@ -309,6 +298,11 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
     if (sel && rows.some((r) => r.entry.path === sel)) return;
     setSel(rows[0]?.entry.path ?? null);
   }, [rows, children, root, sel, showChanges]);
+
+  // A folder of thousands is drawn a part a frame: the first rows at once, the rest after.
+  const drawn = useDrawnRows(rows.length);
+  const selAt = sel ? rows.findIndex((r) => r.entry.path === sel) : -1;
+  const shown = Math.min(rows.length, Math.max(drawn, selAt + 1)); // the selection is always drawn (End, PageDown)
 
   useEffect(() => {
     if (!sel) return;
@@ -659,6 +653,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
         ref={listRef}
         dense={docked}
         dropping={dropDir === root}
+        pending={rows.length - shown}
         onKeyDown={onKey}
         aria-label="Files"
         onContextMenu={(ev) => {
@@ -671,7 +666,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       >
         {/* Inside the tree, so an empty folder still takes drops and its menu. */}
         {error ? <ViewState state={{ kind: "error", title: "Can't read this folder", text: error }} /> : empty && <ViewState state={{ kind: "empty", icon: showChanges ? "checkmark.circle" : "folder", title: empty }} />}
-        {rows.map(({ entry: e, depth, label }) => {
+        {rows.slice(0, shown).map(({ entry: e, depth, label }) => {
           const dir = e.kind === "dir";
           const g = gitOf(e.path);
           const inside = dir ? gitInside.get(e.path) : undefined;
@@ -711,15 +706,6 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       </Tree>
     </View>
   );
-}
-
-const byName = (a: FileEntry, b: FileEntry) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
-
-/** A folder's entries in the chosen order, folders first; ties go by name. */
-function sorted(list: readonly FileEntry[], s: TreeSort): FileEntry[] {
-  const dir = s.desc ? -1 : 1;
-  const by = s.key === "size" ? (a: FileEntry, b: FileEntry) => a.size - b.size : s.key === "date" ? (a: FileEntry, b: FileEntry) => a.mtime - b.mtime : byName;
-  return [...list].sort((a, b) => Number(b.kind === "dir") - Number(a.kind === "dir") || dir * by(a, b) || byName(a, b));
 }
 
 /** A git state as the tree's tone: renamed reads as modified, untracked as added. */

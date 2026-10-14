@@ -6,14 +6,23 @@
 // caller owns keys, drag and drop and menus: the pieces pass DOM props through.
 // TreeHeader names the columns above it and sorts by one (the caller sorts).
 
-import { forwardRef, useRef, type HTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useRef, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 import { ICON, Icon } from "./icon.tsx";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
-/** The tree's list: focusable, scrolls; `dropping` rings it (a drop into the root folder). */
-export const Tree = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { dense?: boolean; dropping?: boolean }>(function Tree({ dense, dropping, className, ...rest }, ref) {
-  return <div ref={ref} role="tree" tabIndex={0} className={cls("ui-tree", className)} data-dense={dense || undefined} data-dropping={dropping || undefined} {...rest} />;
+/**
+ * The tree's list: focusable, scrolls; `dropping` rings it (a drop into the root folder).
+ * `pending`: rows not drawn yet (a long list drawn a part at a time), whose room the
+ * list keeps below the rows so the scrollbar is right from the start.
+ */
+export const Tree = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { dense?: boolean; dropping?: boolean; pending?: number }>(function Tree({ dense, dropping, pending, className, children, ...rest }, ref) {
+  return (
+    <div ref={ref} role="tree" tabIndex={0} className={cls("ui-tree", className)} data-dense={dense || undefined} data-dropping={dropping || undefined} {...rest}>
+      {children}
+      {!!pending && <div className="ui-tree-pending" aria-hidden style={{ "--pending": pending } as CSSProperties} />}
+    </div>
+  );
 });
 
 export interface TreeSort {

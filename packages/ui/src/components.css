@@ -808,6 +808,7 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
   font-size: var(--text-base);
   line-height: 18px;
   cursor: default;
+  content-visibility: auto; /* a folder of thousands: only the rows in view are laid out and painted */
 }
 @container (max-width: 420px) {
   .ui-tree-row { grid-template-columns: 12px 18px minmax(0, 1fr) 12px; }
@@ -845,6 +846,8 @@ button.ui-secret-part:hover:not(:disabled) { color: var(--text); background: var
    a guide per level at each ancestor's disclosure. */
 .ui-tree[data-dense] { --guide: color-mix(in srgb, var(--ink) 9%, transparent); }
 .ui-tree[data-dense]:hover { --guide: color-mix(in srgb, var(--ink) 16%, transparent); }
+.ui-tree-pending { height: calc(var(--pending) * var(--control-h)); }
+.ui-tree[data-dense] .ui-tree-pending { height: calc(var(--pending) * var(--row-h-sm)); }
 .ui-tree[data-dense] .ui-tree-row { height: var(--row-h-sm); margin: 0 var(--space-1-5); padding-left: calc(var(--space-1) + var(--depth) * var(--space-3)); padding-right: var(--space-1-5); gap: var(--space-1); border-radius: var(--radius-sm); }
 .ui-tree[data-dense] .ui-tree-row::before {
   content: "";

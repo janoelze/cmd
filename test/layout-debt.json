@@ -19,9 +19,9 @@
   "lines in packages/core/src/terminals/panes.ts": 854,
   "lines in packages/core/src/windows/builtin.ts": 733,
   "lines in packages/ui/src/overlay.tsx": 689,
-  "lines in apps/desktop/src/main/index.ts": 1007,
+  "lines in apps/desktop/src/main/index.ts": 965,
   "lines in apps/desktop/src/renderer/src/lib/store.ts": 642,
   "lines in apps/desktop/src/renderer/src/shell/board/WindowsView.tsx": 1217,
-  "lines in apps/desktop/src/renderer/src/windows/files/FilesView.tsx": 732,
+  "lines in apps/desktop/src/renderer/src/windows/files/FilesView.tsx": 718,
   "lines in apps/desktop/src/renderer/src/windows/terminal/terminals.ts": 802
 }

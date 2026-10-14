@@ -32,8 +32,8 @@ export function WorkspaceBar(p: Props) {
   const recent = recentLabels(useRecentWorkspaces(), 3);
   const button = useRef<HTMLButtonElement>(null);
   const name = useRef<HTMLSpanElement>(null);
-  useWholePixelWidth(name); // the badge and chevron after it stay crisp
   const shown = p.workspaces.find((sp) => sp.id === p.current);
+  useWholePixelWidth(name, shown?.name ?? "Workspaces"); // the badge and chevron after it stay crisp
   // The strongest mark among the other workspaces, and how many have one.
   const others = p.workspaces.filter((sp) => sp.id !== p.current && p.attention.has(sp.id));
   const mark: Attention | undefined = others.some((sp) => p.attention.get(sp.id) === "needs") ? "needs" : others.length ? "unseen" : undefined;
