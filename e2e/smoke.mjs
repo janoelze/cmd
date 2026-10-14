@@ -8,7 +8,7 @@
 // Pages run with Reduce Motion, so glides and fades end at once and checks don't
 // wait out animations (no check here is about motion: e2e/motion.mjs and the kit's
 // Dialog test measure that). E2E_MOTION=1 keeps real motion.
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -237,6 +237,8 @@ const SCENARIOS = {
   restart: ["marker"],
   "core-status": [],
   workspaces: [],
+  "widget-grants": [],
+  "widget-reload": [],
   "app-window": [],
 };
 const failures = [];
@@ -2262,6 +2264,129 @@ await scenario("workspaces", async () => {
   check((await until(chip, (c) => c === "proj")) === "proj", "choosing a recent workspace reopens and shows it");
   await win.evaluate((id) => window.cmd.call("workspace.close", { id }), sp.id);
   await until(chip, (c) => c === "Home");
+});
+
+// Widget packages (docs/56): fixture packages in a folder of their own, linked into the
+// packages folder with the CLI (as a person would from a terminal), run in real Deno.
+const widgetsHome = path.join(home, "widget-packages-home");
+const widgetSrc = path.join(home, "widget-src");
+const writeWidget = (name, permissions, status) => {
+  const dir = path.join(widgetSrc, name);
+  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name, version: "1.0.0", cmd: { api: 1, widgets: [{ id: "main", title: name, main: "src/main.tsx" }], permissions } }, null, 2));
+  fs.writeFileSync(path.join(dir, "src", "main.tsx"), widgetMain(status));
+  return dir;
+};
+// The status line (in the title bar) on the first line, so an edit can find it.
+const widgetMain = (status, broken = false) => `const STATUS = "${status}";
+import { Window, View, List, ListRow, ListRowContent } from "@cmd/widget-api";
+
+export default function Demo() {
+  return (
+    <Window status={STATUS}>
+      <View>
+        <List>
+          <ListRow><ListRowContent title="First row" /></ListRow>
+          <ListRow><ListRowContent title="Second row" /></ListRow>
+        </List>
+      </View>
+    </Window>
+  )${broken ? " }" : ";"}
+}
+`;
+// The CLI from source, talking to this run's core.
+const cmdCli = (...args) =>
+  new Promise((resolve) => {
+    const env = { ...process.env, CMD_HOME: home, CMD_WIDGETS_HOME: widgetsHome };
+    delete env.CMD_SOCKET;
+    delete env.CMD_PANE_ID;
+    execFile(process.execPath, ["--no-warnings", path.join(root, "packages/cli/src/main.ts"), ...args], { env }, (err, stdout, stderr) => resolve({ code: err ? (err.code ?? 1) : 0, out: `${stdout}${stderr}` }));
+  });
+
+// Linking a package that wants something asks once, in words; Return allows; the widget then runs.
+await scenario("widget-grants", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const dir = writeWidget("grants-demo", { net: ["api.example.com"], workspace: ["read"] }, "Granted");
+  const linked = await cmdCli("widget", "link", dir);
+  check(linked.code === 0 && linked.out.includes("pkg:grants-demo/main"), `cmd widget link prints the Library entry (${JSON.stringify(linked.out.trim().slice(0, 240))})`);
+  const sheet = win.locator(".ui-approval:not([data-closing])");
+  await sheet.waitFor({ timeout: 10_000 }).catch(expired("grants sheet"));
+  const shownAt = Date.now();
+  const text = (await sheet.textContent().catch(() => "")) ?? "";
+  await shot(win, "widget-grants.png");
+  check(
+    text.includes("Allow “grants-demo” to use these?") && text.includes("grants-demo 1.0.0") && text.includes("Linked from") && text.includes("Reach api.example.com") && text.includes("See the agents, terminals and windows of this workspace"),
+    `the grants sheet names the package, its source and each permission (${JSON.stringify(text.slice(0, 300))})`,
+  );
+  await until(() => Date.now() - shownAt > 400); // past the guard against an Enter already being typed
+  await win.keyboard.press("Enter");
+  await gone(".ui-approval");
+  const grantsFile = path.join(home, "widget-packages", "grants-demo", "grants.json");
+  const granted = await until(() => (fs.existsSync(grantsFile) ? JSON.parse(fs.readFileSync(grantsFile, "utf8")).permissions.net : null), (n) => n?.[0] === "api.example.com");
+  check(granted?.[0] === "api.example.com", `Return grants what it asks (${JSON.stringify(granted)})`);
+  const w = await call("widget.add", { ref: "pkg:grants-demo/main" });
+  await tileIn(w.id);
+  const body = await until(() => win.locator(`.tile[data-pane="${w.id}"]`).textContent().catch(() => ""), (t) => t.includes("First row"), 30_000);
+  await shot(win, "widget-grants-running.png");
+  check(body.includes("First row") && (await sheet.count()) === 0, `the widget runs without asking again and shows its first row (${JSON.stringify(body.slice(0, 160))})`);
+  await call("window.close", { id: w.id });
+});
+
+// Hot reload: a save from cmd's editor, then from a shell in a cmd terminal, redraws the window;
+// a save that doesn't load keeps the rows under a banner with the error; the next good save clears it.
+await scenario("widget-reload", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const dir = writeWidget("reload-demo", {}, "Version one");
+  const main = path.join(dir, "src", "main.tsx");
+  const linked = await cmdCli("widget", "link", dir);
+  check(linked.code === 0, `cmd widget link links it (${JSON.stringify(linked.out.trim().slice(0, 200))})`);
+  const w = await call("widget.add", { ref: "pkg:reload-demo/main" });
+  await tileIn(w.id);
+  const tile = () => win.locator(`.tile[data-pane="${w.id}"]`).textContent().catch(() => "");
+  const first = await until(tile, (t) => t.includes("First row") && t.includes("Version one"), 30_000);
+  check(first.includes("Version one"), `the widget shows its status in the title bar (${JSON.stringify(first.slice(0, 160))})`);
+
+  // From cmd's own text editor: open, change "one" to "two", ⌘S.
+  const ed = await call("window.open", { kind: "text", input: { path: main } });
+  await tileIn(ed.id);
+  const editor = win.locator(`.tile[data-pane="${ed.id}"] .cm-content`);
+  await until(() => editor.textContent().catch(() => ""), (t) => t.includes("Version one"));
+  await select(ed.id);
+  await still();
+  await editor.click();
+  await focused(`.tile[data-pane="${ed.id}"] .cm-content`);
+  await win.keyboard.press("Meta+ArrowUp");
+  await win.keyboard.press("End");
+  for (let i = 0; i < 2; i++) await win.keyboard.press("ArrowLeft"); // before `";`
+  for (let i = 0; i < 3; i++) await win.keyboard.press("Backspace");
+  await win.keyboard.type("two");
+  await until(() => editor.textContent().catch(() => ""), (t) => t.includes("Version two"));
+  await menu("file.save");
+  await until(() => fs.readFileSync(main, "utf8"), (t) => t.includes("Version two"));
+  const two = await until(tile, (t) => t.includes("Version two"), 15_000);
+  check(two.includes("Version two") && two.includes("First row"), `a save in cmd's editor redraws the widget (${JSON.stringify(two.slice(0, 160))})`);
+
+  // From a shell in a cmd terminal.
+  await menu("file.newTerminal");
+  const term = await shellReady();
+  await focusIn(term.id);
+  await win.keyboard.type(`sed -i '' 's/Version two/Version three/' '${main}'`);
+  await win.keyboard.press("Enter");
+  const three = await until(tile, (t) => t.includes("Version three"), 15_000);
+  check(three.includes("Version three"), `a sed in a terminal redraws it (${JSON.stringify(three.slice(0, 160))})`);
+
+  // A save that doesn't load: the rows stay, the error over them; the next good one clears it.
+  await select(w.id);
+  const banner = win.locator(`.tile[data-pane="${w.id}"] [role=alert]`);
+  fs.writeFileSync(main, widgetMain("Version three", true));
+  const error = await until(() => banner.textContent().catch(() => ""), (t) => t.includes("didn't load"), 15_000);
+  const kept = await tile();
+  await shot(win, "widget-reload-error.png");
+  check(error.includes("Stopped · didn't load") && kept.includes("First row"), `a syntax error shows over the last rows (${JSON.stringify(error.slice(0, 200))})`);
+  fs.writeFileSync(main, widgetMain("Version four"));
+  const fixed = await until(async () => [await banner.count(), await tile()], ([n, t]) => n === 0 && t.includes("Version four"), 15_000);
+  check(fixed[0] === 0 && fixed[1].includes("First row"), `the next good save clears the error (${fixed[0]} banners, ${JSON.stringify(fixed[1].slice(0, 120))})`);
+  for (const id of [w.id, ed.id, term.id]) await call("window.close", { id });
 });
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web

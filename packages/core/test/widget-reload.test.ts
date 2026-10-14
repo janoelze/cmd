@@ -111,7 +111,7 @@ describe("a widget that doesn't load", () => {
     };
     const w = await open();
     await until(isStatus(w.id, "stopped", "didn't load"), "Stopped · didn't load");
-    expect(status(w.id)?.detail).toBe("The module's source code could not be parsed: Expected ';', got 'x' at file:///w/src/main.tsx:2:9\nat async file:///runtime/package-main.ts:95:9");
+    expect(status(w.id)?.detail).toBe("The module's source code could not be parsed: Expected ';', got 'x' at file:///w/src/main.tsx:2:9 · /runtime/package-main.ts:95:9");
     expect(rt.procs).toHaveLength(1); // not started again: it would fail the same way
     rt.boot = (p) => p.connect().hello();
     core.library.host.reload("demo");
@@ -119,9 +119,11 @@ describe("a widget that doesn't load", () => {
     expect(rt.procs).toHaveLength(2);
   });
 
-  it("keeps the message alone when the stack has no frame", () => {
+  it("says the error's first line and where, in the package's own words", () => {
     expect(loadError("boom", "Error: boom")).toBe("boom");
     expect(loadError("boom", null)).toBe("boom");
+    const deno = "SyntaxError: Expression expected\n   |\n15 | }\n   | ~\n    at file:///p/demo/src/main.tsx:15:1";
+    expect(loadError(deno, deno, "/p/demo")).toBe("SyntaxError: Expression expected · src/main.tsx:15:1");
   });
 });
 

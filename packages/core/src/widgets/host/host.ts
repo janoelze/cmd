@@ -14,6 +14,7 @@
 
 import { SUPPORTED_API, WIDGET_API, WIDGET_API_MINOR, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger, widgetPackageData } from "@cmd/protocol/node";
+import fs from "node:fs";
 import path from "node:path";
 import type { CoreContext } from "../../kernel/context.ts";
 import { ApiRefusal } from "../api/access.ts";
@@ -336,7 +337,7 @@ export class WidgetHost {
 
   #message(inst: Instance, conn: HostConnection, m: WidgetOut): void {
     if (conn !== inst.conn) return;
-    if (m.kind === "error" && !inst.adapter) inst.loadError = loadError(m.message, m.stack);
+    if (m.kind === "error" && !inst.adapter) inst.loadError = loadError(m.message, m.stack, inst.pkg ? realDir(inst.pkg.dir) : undefined);
     if (m.kind !== "hello" && !inst.adapter) return; // nothing else before hello
     switch (m.kind) {
       case "hello":
@@ -553,9 +554,26 @@ export class WidgetHost {
   }
 }
 
-/** What a load failure shows: the error's message, then the first line of its stack that isn't the message again. */
-export function loadError(message: unknown, stack: unknown): string {
-  const msg = String(message ?? "").trim();
-  const at = typeof stack === "string" ? stack.split("\n").map((l) => l.trim()).find((l) => l.startsWith("at ")) : undefined;
-  return [msg, at].filter(Boolean).join("\n").slice(0, 1000);
+/**
+ * What a load failure shows: the error's first line, then where (the first "at" line of the
+ * message or the stack, the package's own path cut to what's in it): "SyntaxError: Expression
+ * expected · src/main.tsx:15:1". Deno's code frame under the message is left out.
+ */
+export function loadError(message: unknown, stack: unknown, dir?: string): string {
+  const lines = [String(message ?? ""), typeof stack === "string" ? stack : ""].join("\n").split("\n").map((l) => l.trim());
+  const first = lines[0] ?? "";
+  let at = lines.find((l) => l.startsWith("at "))?.replace(/^at (async )?/, "").replace(/^file:\/\//, "");
+  if (at && dir) {
+    const real = dir.endsWith("/") ? dir : dir + "/";
+    if (at.startsWith(real)) at = at.slice(real.length);
+  }
+  return [first, at && !first.includes(at) ? at : null].filter(Boolean).join(" · ").slice(0, 1000);
 }
+
+const realDir = (dir: string): string => {
+  try {
+    return fs.realpathSync(dir);
+  } catch {
+    return dir;
+  }
+};
