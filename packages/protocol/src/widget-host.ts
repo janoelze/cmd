@@ -48,7 +48,23 @@ export interface WidgetHostMethods {
   "widget.secret": { params: { name: string; widget: string; key: string; value: string | null }; result: null };
   /** Which secret fields of a package's widget are set (their keys, never their values). */
   "widget.secrets": { params: { name: string; widget: string }; result: { set: string[] } };
+  /**
+   * What a frame widget's window draws (`"surface": "frame"`): its package folder (real path) and
+   * the hosts its grant reaches, which its frame may load media and images from; null when the
+   * window isn't a frame widget or its package waits for a grant.
+   */
+  "widget.frameSource": { params: { windowId: WindowId }; result: { dir: string; media: string[] } | null };
+  /**
+   * A frame widget's call (FRAME_VERBS), through the same API adapter and access table as its
+   * process's: `state.set`, or `windows.open` of an http(s) URL with `pressed`, which the app sets
+   * only right after the person pressed in the frame (its gesture rule, AR1-11-05).
+   */
+  "widget.frame": { params: { windowId: WindowId; verb: FrameVerb; params: unknown[]; pressed?: boolean }; result: unknown };
 }
+
+/** What a frame widget's view.html may ask of cmd (widget.frame): its window's state, and a link opened after a press. */
+export const FRAME_VERBS = ["state.set", "windows.open"] as const;
+export type FrameVerb = (typeof FRAME_VERBS)[number];
 
 /** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window. */
 export type WidgetHostEvent = { type: "widget.tree"; windowId: WindowId; message: WidgetTree | WidgetPatch | WidgetHostStatus };

@@ -76,7 +76,7 @@ export class WidgetLibrary {
             const link = linkOf(e.dir);
             const config = w.config.length ? { config: configFields(w), secrets: w.config.some((f) => f.secret) ? this.host.config.secretsSet(e.pkg.name, w.id) : [] } : {};
             const magic = e.pkg.magic ? { magic: e.pkg.magic, request: e.pkg.magic.request, createdAt: Date.parse(e.pkg.magic.madeAt) || undefined, shot: this.shotOf(e.pkg.name) } : {};
-            return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), ...(e.builtin ? { builtin: true } : {}), ...config, ...magic, windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
+            return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), ...(e.builtin ? { builtin: true } : {}), ...config, ...magic, ...(w.surface === "frame" ? { surface: "frame" as const } : {}), windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
           })
         : this.building.has(e.folder)
           ? []

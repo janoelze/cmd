@@ -32,3 +32,4 @@ export { ErrorBoundary, type ErrorBoundaryProps } from "./boundary.tsx";
 export { Window, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "./window.tsx";
 export { installTooltips, placeTip, useTooltip, type TipSide } from "./tooltips.tsx";
 export { Tree, TreeHeader, TreeRename, TreeRow, type TreeRowProps, type TreeSort, type TreeTone } from "./tree.tsx";
+export { TOKENS, type TokenInfo } from "./tokens.gen.ts";

@@ -151,6 +151,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "widget.config": "never", // the Mac's Configure sheet
   "widget.secret": "never", // secrets are typed on the Mac
   "widget.secrets": "never",
+  "widget.frameSource": "never", // the app's frame host
+  "widget.frame": "never", // a frame's calls, after the app's own checks
   "fs.list": "view",
   "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within workspaces later
   "fs.read": "view",

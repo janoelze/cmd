@@ -37,6 +37,7 @@ import { bootDone, booting, bootStalled, pollBoot } from "./boot.ts";
 import { notifyPermission, openNotifySettings, requestNotifyPermission } from "./notify-permission.ts";
 import { claimOnboarding, recordOnboarding } from "./onboarding.ts";
 import { FRAME_SCHEMES, frameHandler, fromFrame, isFramePage } from "./frames.ts";
+import { PACKAGE_FRAME_BASE, installPackageFrames, isPackageFramePage, packageFrameResponse } from "./package-frames.ts";
 import { ensureKeybindingsFile, loadKeybindings, resetKeybindings, watchKeybindings, writeKeybinding, type KeybindingsSnapshot } from "./keybindings.ts";
 
 // Loaded after launch: the updater isn't needed to show the first window.
@@ -104,14 +105,11 @@ if (process.env.CMD_FORCE_SCALE) app.commandLine.appendSwitch("force-device-scal
 // cmd-file://local/?path=<abs path> — read-only access to local images/media for the app's own
 // pages (Markdown windows show relative images) and PDFs (the PDF window fetches them). Registered on the default
 // session only; browser windows use their own session and can't reach it.
-// cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-widgets.md):
-// the kit and the `cmd` runtime, under a CSP header that allows only inline code
-// and no network. The renderer posts the widget, theme and data into it. Frames
-// are sandboxed (no allow-same-origin), so each is an opaque origin.
-// cmd-widget://frame/<token> — the same page whose CSP also lets media (audio,
-// video, images) load from origins the person allowed for that window. Tokens
-// come from the renderer's "widget-frame" call and can't be guessed, so a widget
-// can't navigate itself to a page with a looser CSP.
+// cmd-widget://frame/ — the page every Magic widget runs in (docs/12-magic-widgets.md): the kit and
+// the `cmd` runtime, under a CSP header that allows only inline code and no network; the renderer
+// posts the widget, theme and data into it. Sandboxed (no allow-same-origin): opaque origins.
+// cmd-widget://frame/<token> — the same page whose CSP also lets media load from origins the person
+// allowed for that window (tokens never guessed). cmd-widget://package/: frame widgets (./package-frames.ts).
 // cmd-visualizer://frame/, cmd-jam://frame/ — the pages Visualizer and Jam windows run in (./frames.ts).
 protocol.registerSchemesAsPrivileged([
   // corsEnabled: the app's page (file://) fetches PDFs from it.
@@ -510,9 +508,9 @@ function createWindow(workspaceId: string, b: Bounds): BrowserWindow {
   // Subframes are Magic widgets, Visualizers and Jam: they stay on their own page. host.js turns
   // link clicks into open-url; a widget that sets location itself gets a browser too.
   win.webContents.on("will-frame-navigate", (e) => {
-    if (e.isMainFrame || e.url.startsWith("cmd-widget:") || isFramePage(e.url)) return;
-    e.preventDefault();
-    if (/^https?:/i.test(e.url)) win.webContents.send("open-url", e.url);
+    if (e.isMainFrame || (e.url.startsWith("cmd-widget:") && !e.url.startsWith(PACKAGE_FRAME_BASE)) || isPackageFramePage(e.url) || isFramePage(e.url)) return;
+    e.preventDefault(); // a frame widget's page goes nowhere: its links open through the app, after a press (lib/frames.ts)
+    if (/^https?:/i.test(e.url) && !e.frame?.url.startsWith(PACKAGE_FRAME_BASE)) win.webContents.send("open-url", e.url);
   });
   performance.mark("boot:window-created");
   win.once("ready-to-show", () => (performance.mark("boot:ready-to-show"), win.show()));
@@ -840,6 +838,7 @@ ipcMain.handle("alert", async (e, o: { message: string; detail?: string }) => {
   const win = winOf(e);
   await (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts));
 });
+installPackageFrames(ipcMain);
 ipcMain.handle("confirm", async (e, o: { message: string; detail?: string; confirm: string }) => {
   const opts = { type: "warning" as const, message: o.message, detail: o.detail, buttons: [o.confirm, "Cancel"], defaultId: 0, cancelId: 1 };
   const win = winOf(e);
@@ -893,6 +892,7 @@ app.whenReady().then(async () => {
     iconPath: devIcon,
   });
   protocol.handle("cmd-widget", (req) => {
+    if (req.url.startsWith(PACKAGE_FRAME_BASE)) return packageFrameResponse(req);
     const dir = path.join(repoRoot, "packages/core/src/magic/prompt");
     const read = (f: string) => fs.readFileSync(path.join(dir, f), "utf8");
     const [kit, token = ""] = new URL(req.url).pathname.split("/").filter(Boolean);

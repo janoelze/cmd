@@ -3,7 +3,8 @@
 // are read, stopped with the core. Its methods are what a package widget's window calls (the
 // person's interactions, a resync, where it is drawn, Restart), the grant (the grants sheet,
 // `cmd widget grant`), asking for one (widget.ask: `cmd widget link`, the sheet's Decline), and
-// a window's config and its package's secrets (the Configure sheet; widgets/config.ts).
+// a window's config and its package's secrets (the Configure sheet; widgets/config.ts), and a
+// frame widget's source and calls (frame.ts).
 
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +14,7 @@ import { slice } from "../../kernel/handlers.ts";
 import { findDeno } from "../deno.ts";
 import { sandboxAvailable } from "../../magic/sandbox.ts";
 import type { WidgetPackages } from "../packages.ts";
+import { frameCall, frameSource } from "./frame.ts";
 import { WidgetHost } from "./host.ts";
 import { DenoRuntime } from "./runtime.ts";
 
@@ -39,6 +41,8 @@ const handlers = (core: CoreContext) =>
     "widget.config": (p) => (core.library.host.config.set(p.windowId, p.values), null),
     "widget.secret": (p) => (core.library.host.config.setSecret(p.name, p.widget, p.key, p.value), null),
     "widget.secrets": (p) => ({ set: core.library.host.config.secretsSet(p.name, p.widget) }),
+    "widget.frameSource": (p) => frameSource(core, p.windowId),
+    "widget.frame": (p) => frameCall(core, p.windowId, p.verb, p.params, p.pressed === true),
   });
 
 export const widgetHostFeature = {

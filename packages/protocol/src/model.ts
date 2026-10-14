@@ -370,6 +370,8 @@ export interface WidgetEntry {
   secrets?: string[];
   /** Packages made with Magic (package.json's cmd.magic): listed under Your Widgets. */
   magic?: MagicMark;
+  /** Packages: a widget that draws its own pixels in a frame (`"surface": "frame"`, view.html). */
+  surface?: "frame";
 }
 
 export interface FileEntry {

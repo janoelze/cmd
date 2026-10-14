@@ -137,6 +137,8 @@ export interface FakePackage {
   permissions?: Partial<WidgetPermissions>;
   config?: unknown[];
   api?: number;
+  /** "frame": a frame widget, with a view.html. */
+  surface?: "frame";
 }
 
 /** A package folder "<name>" with one widget "main" in `home`. */
@@ -144,9 +146,10 @@ export function writePackage(home: string, o: FakePackage = {}): string {
   const name = o.name ?? "demo";
   const dir = path.join(home, name);
   fs.mkdirSync(path.join(dir, "src"), { recursive: true });
-  const json = { name, version: "1.0.0", cmd: { api: o.api ?? 1, widgets: [{ id: "main", title: "Demo", main: "src/main.tsx", ...(o.config ? { config: o.config } : {}) }], permissions: o.permissions ?? {} } };
+  const json = { name, version: "1.0.0", cmd: { api: o.api ?? 1, widgets: [{ id: "main", title: "Demo", main: "src/main.tsx", ...(o.config ? { config: o.config } : {}), ...(o.surface ? { surface: o.surface } : {}) }], permissions: o.permissions ?? {} } };
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(json, null, 2));
   if (!fs.existsSync(path.join(dir, "src", "main.tsx"))) fs.writeFileSync(path.join(dir, "src", "main.tsx"), "export default function Main() { return null; }\n");
+  if (o.surface === "frame") fs.writeFileSync(path.join(dir, "view.html"), "<canvas></canvas>\n");
   return dir;
 }
 

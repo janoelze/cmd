@@ -266,7 +266,7 @@ export function checkoutToolchain(repo = REPO): Toolchain | null {
     async trees(dir, o) {
       const read = readPackage(dir, { cmdVersion: o.cmdVersion ?? null });
       if (!read.ok) return { ok: false, variants: [], problems: read.errors };
-      if (read.pkg.widgets.every((x) => x.surface === "frame")) return { ok: true, variants: [], problems: [], skipped: "it draws in a frame, which this cmd can't show yet" };
+      if (read.pkg.widgets.every((x) => x.surface === "frame")) return { ok: true, variants: [], problems: [], skipped: "it draws in a frame (view.html), which the previewer doesn't draw" };
       const w = workCopy(dir, mods);
       try {
         fs.mkdirSync(path.join(w.pkg, "__cmd__"));

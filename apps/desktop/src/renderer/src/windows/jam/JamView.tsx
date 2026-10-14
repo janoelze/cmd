@@ -26,6 +26,7 @@ import { indentWithTab } from "@codemirror/commands";
 import { javascript } from "@codemirror/lang-javascript";
 import { syntaxHighlighting } from "@codemirror/language";
 import { publishLevels, type Levels } from "../../lib/audio.ts";
+import { useFrame, type FrameMessage } from "../../lib/frames.ts";
 import { cmd } from "../../lib/bridge.ts";
 import { appTheme, minimalChange } from "../../editor/theme.ts";
 import { applyAndFlash, flashChanges } from "../../editor/flash.ts";
@@ -72,7 +73,7 @@ export function JamView({ win }: WindowViewProps) {
   const winRef = useRef(win);
   winRef.current = win;
 
-  const post = (m: unknown) => frame.current?.contentWindow?.postMessage(m, "*");
+  const post = useFrame(frame, (m) => playerMessage(m));
   const sounds = useRef<string[]>([]);
   const levels = useRef<Levels | null>(null);
   const started = useRef(false);
@@ -328,42 +329,33 @@ export function JamView({ win }: WindowViewProps) {
     if (edit && !v.hasFocus) v.dispatch({ changes: edit });
   }, [win.state.code]);
 
-  // The frame's messages: only from our own frame (opaque origins all say "null").
-  useEffect(() => {
-    const onMessage = (e: MessageEvent) => {
-      if (e.source && e.source === renderFrame.current?.contentWindow && e.data && typeof e.data === "object") {
-        const m = e.data as { type?: string; ok?: boolean; wav?: ArrayBuffer; seconds?: number; error?: string };
-        const job = renderJob.current;
-        if (!job) return;
-        if (m.type === "ready") renderFrame.current.contentWindow.postMessage({ type: "render", id: 1, code: job.code, cycles: job.cycles }, "*");
-        else if (m.type === "rendered") job.resolve(m.ok && m.wav ? { ok: true, wav: m.wav, seconds: m.seconds ?? 0 } : { ok: false, error: m.error ?? "Didn't render" });
-        return;
-      }
-      if (e.source !== frame.current?.contentWindow || !e.data || typeof e.data !== "object") return;
-      const m = e.data as { type?: string; id?: number; ok?: boolean; error?: string | null; started?: boolean; sounds?: unknown; cps?: number | null; t?: Uint8Array<ArrayBuffer>; l?: Uint8Array<ArrayBuffer>; r?: Uint8Array<ArrayBuffer> };
-      if (m.type === "levels" && m.t && m.l && m.r) levels.current = { t: m.t, l: m.l, r: m.r };
-      else if (m.type === "ready") {
-        if (Array.isArray(m.sounds)) sounds.current = m.sounds.filter((s): s is string => typeof s === "string");
-        markReady.current();
-      } else if (m.type === "evaluated" && typeof m.id === "number") {
-        evals.current.get(m.id)?.(m.ok ? { ok: true } : { ok: false, error: m.error ?? "Didn't play" });
-        evals.current.delete(m.id);
-      } else if (m.type === "state") {
-        if (typeof m.cps === "number" && m.cps > 0) setCps(m.cps);
-        started.current = !!m.started;
-        const next = m.started ? "playing" : pausing.current ? "paused" : "stopped";
-        if (m.started) pausing.current = false;
-        setMode(next);
-        if (m.error) status(m.error, "error");
-        else status(next === "playing" ? "Playing" : next === "paused" ? "Paused" : "Stopped", next);
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => {
-      window.removeEventListener("message", onMessage);
-      setWindowStatus(win.id, null);
-    };
-  }, [win.id]);
+  // The frames' messages (lib/frames.ts): the renderer's, while a render runs; the player's.
+  const postRender = useFrame(renderFrame, (m) => {
+    const job = renderJob.current;
+    if (!job) return;
+    if (m.type === "ready") postRender({ type: "render", id: 1, code: job.code, cycles: job.cycles });
+    else if (m.type === "rendered") job.resolve(m.ok && m.wav instanceof ArrayBuffer ? { ok: true, wav: m.wav, seconds: typeof m.seconds === "number" ? m.seconds : 0 } : { ok: false, error: typeof m.error === "string" ? m.error : "Didn't render" });
+  });
+  function playerMessage(fm: FrameMessage) {
+    const m = fm as { type?: string; id?: number; ok?: boolean; error?: string | null; started?: boolean; sounds?: unknown; cps?: number | null; t?: Uint8Array<ArrayBuffer>; l?: Uint8Array<ArrayBuffer>; r?: Uint8Array<ArrayBuffer> };
+    if (m.type === "levels" && m.t && m.l && m.r) levels.current = { t: m.t, l: m.l, r: m.r };
+    else if (m.type === "ready") {
+      if (Array.isArray(m.sounds)) sounds.current = m.sounds.filter((s): s is string => typeof s === "string");
+      markReady.current();
+    } else if (m.type === "evaluated" && typeof m.id === "number") {
+      evals.current.get(m.id)?.(m.ok ? { ok: true } : { ok: false, error: m.error ?? "Didn't play" });
+      evals.current.delete(m.id);
+    } else if (m.type === "state") {
+      if (typeof m.cps === "number" && m.cps > 0) setCps(m.cps);
+      started.current = !!m.started;
+      const next = m.started ? "playing" : pausing.current ? "paused" : "stopped";
+      if (m.started) pausing.current = false;
+      setMode(next);
+      if (m.error) status(m.error, "error");
+      else status(next === "playing" ? "Playing" : next === "paused" ? "Paused" : "Stopped", next);
+    }
+  }
+  useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
   // Menu, commands (⌘R plays, ⌘. stops, ⌘L asks), and the window's sound for Visualizers.
   const latest = useRef({ play, stop, change, save });

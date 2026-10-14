@@ -7,6 +7,7 @@
 // saying why (a save that didn't load: its error) with Restart;
 // an error boundary so a tree that can't be drawn shows a Callout and not a broken
 // board, and `widget.env` whenever the window's theme, size class or placement changes.
+// A frame widget (`"surface": "frame"`) draws its page instead of a tree (PackageFrame.tsx).
 
 import { Button, Callout, Stack, View, type ViewStateSpec } from "@cmd/ui";
 import { Component, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -16,9 +17,10 @@ import { PlacementContext, windowChromeChanged, type WindowViewProps } from "../
 import { configurable, configure, needsSetup } from "./ConfigSheet.tsx";
 import { drawAll, type DrawContext } from "./elements.tsx";
 import { closeTree, openTree, rpcLink, type WidgetLink, type WidgetPlace } from "./live.ts";
+import { PackageFrame } from "./PackageFrame.tsx";
 import type { TreeSnapshot, TreeStore } from "./tree.ts";
 
-export function PackageView({ win }: WindowViewProps) {
+export function PackageView({ win, focused }: WindowViewProps) {
   const name = typeof win.state.package === "string" ? win.state.package : "";
   const link = useMemo(() => rpcLink(win.id, name), [win.id, name]);
   const [store, setStore] = useState<TreeStore | null>(null);
@@ -32,7 +34,8 @@ export function PackageView({ win }: WindowViewProps) {
   useEffect(() => windowChromeChanged(), [canConfigure]);
   const setup = needsSetup(entry, win.state.config as Record<string, unknown> | undefined) ? { title: entry!.title, configure: () => configure(win.id) } : null;
   if (!store) return <View state={STARTING} />;
-  return <PackageWidget windowId={win.id} store={store} link={link} setup={setup} />;
+  const frame = entry?.surface === "frame" ? (reload: number) => <PackageFrame win={win} entry={entry} active={focused} reload={reload} /> : null;
+  return <PackageWidget windowId={win.id} store={store} link={link} setup={setup} frame={frame} />;
 }
 
 /** A widget that needs settings before it can show anything: its title and the way to the Configure sheet. */
@@ -43,16 +46,29 @@ export interface Setup {
 
 const STARTING: ViewStateSpec = { kind: "loading", title: "Starting…" };
 
-/** A widget's tree and state, drawn; the view without the core (stories and tests give it a store and a link of their own). */
-export function PackageWidget({ windowId, store, link, setup = null }: { windowId: WindowId; store: TreeStore; link: WidgetLink; setup?: Setup | null }) {
+/**
+ * A widget's tree and state, drawn; the view without the core (stories and tests give it a store and a link of their own).
+ * A frame widget (`frame`) draws its page instead, from its first draw, the tree giving only the title bar; each restart of
+ * its process (a save) loads the page again (`reload`).
+ */
+export function PackageWidget({ windowId, store, link, setup = null, frame = null }: { windowId: WindowId; store: TreeStore; link: WidgetLink; setup?: Setup | null; frame?: ((reload: number) => ReactNode) | null }) {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const reload = useRestarts(snap.status);
   const ctx = useMemo<DrawContext>(() => ({ windowId, send: (h, e, v) => link.interact(h, e, v) }), [windowId, link]);
   const [probe, size] = useSizeClass();
   const theme = useAppearance();
   const placement = useContext(PlacementContext);
   useEffect(() => link.env({ theme, size, placement }), [link, theme, size, placement]);
 
-  const cover = coverOf(snap, link, setup);
+  const cover = frame ? frameCover(snap, link, setup) : coverOf(snap, link, setup);
+  if (frame && !cover)
+    return (
+      <View scroll={false}>
+        {snap.status === "stopped" && <Stopped snap={snap} link={link} />}
+        {drawAll(chromeOnly(snap.nodes), ctx)}
+        {frame(reload)}
+      </View>
+    );
   return (
     <>
       <span ref={probe} hidden />
@@ -60,11 +76,7 @@ export function PackageWidget({ windowId, store, link, setup = null }: { windowI
         <View state={cover} />
       ) : (
         <>
-          {snap.status === "stopped" && (
-            <Callout tone="danger" banner title={stoppedTitle(snap)} actions={<Button size="sm" icon="arrow.clockwise" onClick={() => link.restart()}>Restart</Button>}>
-              {snap.detail}
-            </Callout>
-          )}
+          {snap.status === "stopped" && <Stopped snap={snap} link={link} />}
           <TreeBoundary rev={snap.rev}>
             <Tree nodes={snap.nodes} ctx={ctx} />
           </TreeBoundary>
@@ -86,6 +98,36 @@ function coverOf(snap: TreeSnapshot, link: WidgetLink, setup: Setup | null): Vie
 }
 
 const stoppedTitle = (snap: TreeSnapshot) => (snap.reason ? `Stopped · ${snap.reason}` : "Stopped");
+
+/** A stopped process over what it drew: why, and Restart. */
+function Stopped({ snap, link }: { snap: TreeSnapshot; link: WidgetLink }) {
+  return (
+    <Callout tone="danger" banner title={stoppedTitle(snap)} actions={<Button size="sm" icon="arrow.clockwise" onClick={() => link.restart()}>Restart</Button>}>
+      {snap.detail}
+    </Callout>
+  );
+}
+
+/** A frame widget's page needs the grant and its settings, not its process: those are all that cover it. */
+function frameCover(snap: TreeSnapshot, link: WidgetLink, setup: Setup | null): ViewStateSpec | null {
+  const c = coverOf(snap, link, setup);
+  return snap.status === "waiting-grant" || setup ? c : null;
+}
+
+/** A frame widget's tree: its Window alone (the title bar's status and menus); the page is the content. */
+const chromeOnly = (nodes: readonly TreeNode[]): TreeNode[] => nodes.filter((n) => n.type === "Window").map((n) => ({ ...n, children: [] }));
+
+/** How many times the process started again after running (a save, Restart): the frame's page reloads with it. */
+function useRestarts(status: TreeSnapshot["status"]): number {
+  const [n, setN] = useState(0);
+  const ran = useRef(false);
+  useEffect(() => {
+    if (status !== "running") return;
+    if (ran.current) setN((x) => x + 1);
+    ran.current = true;
+  }, [status]);
+  return n;
+}
 
 /** The top of the tree: a widget's own View (in its Window or not) draws the frame; anything else gets one. */
 function Tree({ nodes, ctx }: { nodes: readonly TreeNode[]; ctx: DrawContext }) {

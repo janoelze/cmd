@@ -68,3 +68,14 @@ export interface SitePermissionRequest {
 }
 
 export type MacDevice = "camera" | "microphone";
+
+/**
+ * A frame widget's page to serve (main/package-frames.ts): the package folder its files come
+ * from, the hosts its grant reaches (media and images may load from them), and what the page
+ * has before its first message: the theme's variables and appearance, the window's state and config.
+ */
+export interface PackageFrameRequest {
+  dir: string;
+  media: string[];
+  init: { appearance: "dark" | "light"; vars: Record<string, string>; state: Record<string, unknown>; config: Record<string, unknown> };
+}

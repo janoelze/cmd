@@ -1,0 +1,129 @@
+// A frame widget's content (docs/56, "The frame surface, for pixels"): a package widget with
+// `"surface": "frame"` draws its view.html in the one frame host (lib/frames.ts), a sandboxed
+// iframe on cmd-widget://package/ (main/package-frames.ts) inside the kit's WebStage. The core
+// says what it may load (widget.frameSource: the package folder, the grant's hosts); the page
+// starts with the theme's variables, the window's state and config, and gets them again as
+// they change. What it asks goes through the widget API (widget.frame): its state, batched; a
+// link only right after a press in the frame (the host's gesture rule), as cmd.windows.open.
+
+import { TOKENS, WebStage } from "@cmd/ui";
+import { useEffect, useRef, useState } from "react";
+import type { AppWindow, WidgetEntry } from "@cmd/protocol";
+import { cmd } from "../../lib/bridge.ts";
+import { useFrame } from "../../lib/frames.ts";
+
+/** How long state.set from a frame waits for more before it goes to the core (a slider sends many). */
+const STATE_BATCH_MS = 300;
+
+export function PackageFrame({ win, entry, active, reload }: { win: AppWindow; entry: WidgetEntry | undefined; active: boolean; reload: number }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [src, setSrc] = useState<string | null>(null);
+  const [painted, setPainted] = useState(false);
+  const kv = (win.state.kv as Record<string, unknown> | undefined) ?? {};
+  const config = configOf(entry, win);
+  const latest = useRef({ kv, config });
+  latest.current = { kv, config };
+  const grant = JSON.stringify(entry?.ask ?? null) + JSON.stringify(entry?.permissions ?? null);
+
+  // The page's URL: asked again when the grant changes or the package reloads (a save, a restart).
+  useEffect(() => {
+    let live = true;
+    let url: string | null = null;
+    setPainted(false);
+    void cmd
+      .call("widget.frameSource", { windowId: win.id })
+      .then((s) => (s && live ? cmd.packageFrame({ dir: s.dir, media: s.media, init: { ...themeOf(ref.current?.parentElement), state: latest.current.kv, config: latest.current.config } }) : null))
+      .then((u) => {
+        url = u;
+        if (live) setSrc(u);
+        else if (u) cmd.releasePackageFrame(u);
+      })
+      .catch((e: Error) => console.warn(`widget ${win.id}: its frame couldn't start: ${e.message}`));
+    return () => {
+      live = false;
+      if (url) cmd.releasePackageFrame(url);
+    };
+  }, [win.id, grant, reload]);
+
+  // state.set from the page, a moment later in one go.
+  const pending = useRef(new Map<string, unknown>());
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flush = () => {
+    timer.current = null;
+    for (const [key, value] of pending.current) void cmd.call("widget.frame", { windowId: win.id, verb: "state.set", params: [key, value] }).catch((e: Error) => console.warn(`widget ${win.id}: ${e.message}`));
+    pending.current.clear();
+  };
+  useEffect(() => () => void (timer.current && (clearTimeout(timer.current), flush())), []);
+
+  const post = useFrame(
+    ref,
+    (m) => {
+      if (m.type === "ready") {
+        setPainted(true);
+        post({ type: "state", state: latest.current.kv });
+      } else if (m.type === "state" && typeof m.key === "string" && m.key.length <= 200) {
+        pending.current.set(m.key, m.value ?? null);
+        timer.current ??= setTimeout(flush, STATE_BATCH_MS);
+      } else if (m.type === "error") console.warn(`widget ${win.id}: ${String(m.message).slice(0, 300)}`);
+    },
+    {
+      active,
+      actions: {
+        open: (m) => {
+          if (typeof m.url !== "string" || !/^https?:\/\//i.test(m.url)) return;
+          void cmd.call("widget.frame", { windowId: win.id, verb: "windows.open", params: [m.url], pressed: true }).catch((e: Error) => console.warn(`widget ${win.id}: ${e.message}`));
+        },
+      },
+    },
+  );
+
+  // What changes while it runs: the window's state, its config, the theme.
+  const kvText = JSON.stringify(kv);
+  useEffect(() => void (painted && post({ type: "state", state: latest.current.kv })), [painted, kvText]);
+  const configText = JSON.stringify(config);
+  useEffect(() => void (painted && post({ type: "config", config: latest.current.config })), [painted, configText]);
+  useEffect(() => {
+    if (!painted) return;
+    const send = () => post({ type: "theme", ...themeOf(ref.current?.parentElement) });
+    send();
+    const o = new MutationObserver(send);
+    o.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class", "data-appearance"] });
+    return () => o.disconnect();
+  }, [painted]);
+  // Never stay hidden if the page doesn't say it's ready.
+  useEffect(() => {
+    if (!src) return;
+    const t = setTimeout(() => setPainted(true), 1500);
+    return () => clearTimeout(t);
+  }, [src]);
+
+  return (
+    <WebStage>
+      {src && <iframe key={src} ref={ref} data-embed data-painted={painted || undefined} sandbox="allow-scripts" src={src} title={win.title} />}
+    </WebStage>
+  );
+}
+
+/** The window's config as the page sees it: the manifest's defaults, then the person's values; never a secret. */
+function configOf(entry: WidgetEntry | undefined, win: AppWindow): Record<string, unknown> {
+  const set = (win.state.config as Record<string, unknown> | undefined) ?? {};
+  const out: Record<string, unknown> = {};
+  for (const f of entry?.config ?? []) {
+    if (f.secret) continue;
+    const v = set[f.key];
+    if (v !== undefined && v !== null) out[f.key] = v;
+    else if (f.default !== undefined) out[f.key] = f.default;
+  }
+  return out;
+}
+
+/** The theme where the frame is drawn: every design token's value there, and the appearance. */
+function themeOf(at: Element | null | undefined): { appearance: "dark" | "light"; vars: Record<string, string> } {
+  const style = getComputedStyle(at ?? document.documentElement);
+  const vars: Record<string, string> = {};
+  for (const t of TOKENS) {
+    const v = style.getPropertyValue(t.name).trim();
+    if (v) vars[t.name] = v;
+  }
+  return { appearance: document.documentElement.dataset.appearance === "light" ? "light" : "dark", vars };
+}

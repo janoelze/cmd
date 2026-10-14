@@ -130,6 +130,8 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "widget.config": "never", // the person's Configure sheet
   "widget.secret": "never", // a secret is typed by the person, never by a tool
   "widget.secrets": "never",
+  "widget.frameSource": "never", // the app's frame host
+  "widget.frame": "never", // a frame's calls, after the app's own checks
   "fs.list": "read",
   "fs.resolve": "never",
   "fs.read": "read",

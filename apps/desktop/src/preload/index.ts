@@ -17,7 +17,7 @@ import type { NotifyAccess, NotifyPermission } from "../main/notify-permission.t
 import type { OnboardingClaim } from "../shared/ipc.ts";
 import type { AppProcess } from "../shared/ipc.ts";
 import type { MacDevice, SiteDecisions, SitePermission, SitePermissionRequest } from "../shared/ipc.ts";
-import type { OpenFrom } from "../shared/ipc.ts";
+import type { OpenFrom, PackageFrameRequest } from "../shared/ipc.ts";
 
 export interface AppInfo {
   version: string;
@@ -295,6 +295,10 @@ const api = {
   alert: (o: { message: string; detail?: string }): Promise<void> => ipcRenderer.invoke("alert", o),
   /** The URL of a Magic widget frame whose CSP allows media from these origins (cmd-widget://, main process). */
   widgetFrame: (media: string[], kit?: number): Promise<string> => ipcRenderer.invoke("widget-frame", media, kit),
+  /** The URL of a frame widget's page (cmd-widget://package/, main/package-frames.ts): its package folder, served with these first values. */
+  packageFrame: (req: PackageFrameRequest): Promise<string> => ipcRenderer.invoke("package-frame", req),
+  /** A frame widget's page no view shows any more: main stops serving it. */
+  releasePackageFrame: (url: string) => ipcRenderer.send("package-frame-release", url),
   /** Put text on the clipboard, also while the app isn't focused (navigator.clipboard needs focus): OSC 52 from a background terminal. */
   writeClipboard: (text: string) => ipcRenderer.send("clipboard-write", text),
   /** The path of a file dropped from Finder ("" for one that isn't on disk). */

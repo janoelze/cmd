@@ -9,7 +9,7 @@ import { useEffect, useRef } from "react";
 import type { AppWindow } from "@cmd/protocol";
 import { audioContext, audioRate, publishedSources, tap } from "../../lib/audio.ts";
 import type { MenuEntry } from "../../lib/context.ts";
-import { handleEmbedMessage } from "../../lib/embed.ts";
+import { useFrame } from "../../lib/frames.ts";
 import { setWidgetState } from "../../lib/widgets.ts";
 import { setWindowStatus } from "../../lib/windowActions.ts";
 import type { WindowViewProps } from "../registry.ts";
@@ -70,7 +70,6 @@ export function VisualizerView({ win }: WindowViewProps) {
   const preset = typeof win.state.preset === "string" ? win.state.preset : null;
   const source = sourceOf(win);
   const cycle = cycleOf(win);
-  const post = (m: unknown, transfer?: Transferable[]) => ref.current?.contentWindow?.postMessage(m, "*", transfer);
 
   const show = (name: string | null) => post({ type: "preset", name, blend: 2.5 });
   const random = () => {
@@ -79,31 +78,22 @@ export function VisualizerView({ win }: WindowViewProps) {
     return others[Math.floor(Math.random() * others.length)] ?? null;
   };
 
-  // The frame's messages: only from our own frame (opaque origins all say "null").
+  // The frame's messages (lib/frames.ts: only its own; presses and right-clicks select the window and open its menu).
   const presetRef = useRef(preset);
   presetRef.current = preset;
-  useEffect(() => {
-    const onMessage = (e: MessageEvent) => {
-      if (e.source !== ref.current?.contentWindow || !e.data || typeof e.data !== "object") return;
-      const m = e.data as { type?: string; presets?: unknown; name?: unknown; message?: unknown };
-      if (m.type === "ready") {
-        if (Array.isArray(m.presets)) presetNames = m.presets.filter((n): n is string => typeof n === "string");
-        ready.current = true;
-        // No sound to listen to: no audio context yet (the frame assumes 48 kHz).
-        post({ type: "init", sampleRate: sourceOf(win) === "none" ? audioRate() : audioContext().sampleRate });
-        show(presetRef.current);
-      } else if (m.type === "preset" && typeof m.name === "string") {
-        if (history.current.at(-1) !== m.name) history.current = [...history.current.slice(-49), m.name];
-        setWindowStatus(win.id, { label: m.name, key: "preset" });
-      } else if (handleEmbedMessage(ref.current!, m)) return;
-      else if (m.type === "error") console.warn(`visualizer ${win.id}:`, m.message);
-    };
-    window.addEventListener("message", onMessage);
-    return () => {
-      window.removeEventListener("message", onMessage);
-      setWindowStatus(win.id, null);
-    };
-  }, [win.id]);
+  const post = useFrame(ref, (m) => {
+    if (m.type === "ready") {
+      if (Array.isArray(m.presets)) presetNames = m.presets.filter((n): n is string => typeof n === "string");
+      ready.current = true;
+      // No sound to listen to: no audio context yet (the frame assumes 48 kHz).
+      post({ type: "init", sampleRate: sourceOf(win) === "none" ? audioRate() : audioContext().sampleRate });
+      show(presetRef.current);
+    } else if (m.type === "preset" && typeof m.name === "string") {
+      if (history.current.at(-1) !== m.name) history.current = [...history.current.slice(-49), m.name];
+      setWindowStatus(win.id, { label: m.name, key: "preset" });
+    } else if (m.type === "error") console.warn(`visualizer ${win.id}:`, m.message);
+  });
+  useEffect(() => () => setWindowStatus(win.id, null), [win.id]);
 
   // A preset picked from the menu.
   useEffect(() => {

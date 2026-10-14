@@ -310,7 +310,6 @@ export class WidgetHost {
     inst.pkg = pkg;
     inst.widget = widget;
     if (!pkg || !widget) return this.#status(inst, { kind: "status", state: "stopped", reason: "isn't installed" });
-    if (widget.surface === "frame") return this.#status(inst, { kind: "status", state: "stopped", reason: "draws in a frame, which this cmd can't show yet" });
     const g = this.#granted(pkg.name);
     if (needsGrant(pkg.permissions, g?.permissions)) return this.#status(inst, { kind: "status", state: "waiting-grant" });
     if (!this.#o.runtime) return this.#status(inst, { kind: "status", state: "stopped", reason: "can't run here" });
