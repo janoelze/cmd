@@ -15,6 +15,11 @@ export interface WidgetIdentity {
   workspaceId: string | null;
   /** Classes of data its manifest declares (permissions.events). */
   events: string[];
+  /**
+   * A package widget's process (widgets/host, docs/56): after hello its connection carries the
+   * widget wire (widget-tree.ts) instead of JSON-RPC; this takes it over.
+   */
+  attach?: (send: (line: string) => void, close: () => void) => { receive(line: string): void; closed(): void };
 }
 
 /** Most rows one query may return a widget. */
@@ -51,7 +56,7 @@ export class WidgetTokens {
     const t = this.#tokens.get(token);
     if (!t) return null;
     if (t.expires < Date.now()) return this.#tokens.delete(token), null;
-    return { widgetId: t.widgetId, workspaceId: t.workspaceId, events: t.events };
+    return { widgetId: t.widgetId, workspaceId: t.workspaceId, events: t.events, ...(t.attach ? { attach: t.attach } : {}) };
   }
 
   #sweep(): void {

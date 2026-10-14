@@ -68,6 +68,8 @@ export class CoreServer {
   #subscribers = new Map<Connection, (e: CoreEvent) => boolean | CoreEvent | null>();
   /** Connections on the widgets socket, and which widget each said it is (null until widget.hello). */
   #widgetConns = new Map<Connection, WidgetIdentity | null>();
+  /** Widget connections a package widget's host took over after hello (data/widgets.ts `attach`). */
+  #hosted = new Map<Connection, { receive(line: string): void; closed(): void }>();
   #onClosed: ((conn: Connection) => void)[] = [];
 
   constructor(core: ServerCore, o: ServerOptions) {
@@ -261,6 +263,8 @@ export class CoreServer {
       writer.dispose();
       this.#sockets.delete(sock);
       this.#widgetConns.delete(conn);
+      this.#hosted.get(conn)?.closed();
+      this.#hosted.delete(conn);
       rpcLog.debug("connection closed");
       served.closed();
     });
@@ -286,6 +290,8 @@ export class CoreServer {
 
   async #receive(conn: Connection, line: string): Promise<void> {
     if (!line.trim()) return;
+    const hosted = this.#hosted.get(conn);
+    if (hosted) return hosted.receive(line);
     const answer = (id: unknown, msg: object) => conn.send(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, ...msg }) + "\n");
     let req: { id?: number; method: Method; params?: unknown };
     try {
@@ -343,7 +349,9 @@ export class CoreServer {
       const id = this.#core.widgetTokens.check(String(params.token ?? ""));
       if (!id) throw new Error("unknown or expired widget token");
       this.#widgetConns.set(conn, id);
-      return id;
+      // A package widget's process: from the next line on, the widget wire (after this answer goes out).
+      if (id.attach) this.#hosted.set(conn, id.attach((line) => conn.send(line), () => conn.close()));
+      return { widgetId: id.widgetId, workspaceId: id.workspaceId };
     }
     const who = this.#widgetConns.get(conn);
     if (!who) throw new Error("say widget.hello first");
