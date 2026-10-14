@@ -25,6 +25,24 @@ function xtermScaledCoords(): Plugin {
   };
 }
 
+// xterm's scrollbar re-arms its hide timer (clearTimeout + setTimeout) on every scroll, which
+// is every line a busy terminal prints: ~40 ms a second of timers in a flood. One timer per
+// hold instead, which looks again when it fires (as scrolled() in @cmd/ui does).
+const XTERM_SCROLLBAR_HIDE = "_scheduleHide(){!this._mouseIsOver&&!this._isDragging&&this._hideTimeout.cancelAndSet(()=>this._hide(),Ma)}";
+function xtermScrollbarHide(): Plugin {
+  return {
+    name: "xterm-scrollbar-hide",
+    transform(code, id) {
+      if (!/@xterm[/+]xterm.*[/]lib[/]xterm\.mjs$/.test(id)) return;
+      if (!code.includes(XTERM_SCROLLBAR_HIDE)) throw new Error("xterm-scrollbar-hide: _scheduleHide changed, update the patch");
+      return code.replace(
+        XTERM_SCROLLBAR_HIDE,
+        "_scheduleHide(){if(this._mouseIsOver||this._isDragging)return;this._hideAt=performance.now()+Ma;if(this._hideArmed)return;this._hideArmed=!0;const t=()=>{const l=this._hideAt-performance.now();if(l>0)return void this._hideTimeout.cancelAndSet(t,l);this._hideArmed=!1,this._hide()};this._hideTimeout.cancelAndSet(t,Ma)}",
+      );
+    },
+  };
+}
+
 // The WebGL addon sizes its canvas to the cells' device pixels (cols × cell width, maybe
 // odd), its CSS size to that over the pixel ratio, rounded, and a ResizeObserver then sets
 // the canvas to the device pixels of that CSS size: one more when the first was odd. So
@@ -117,7 +135,7 @@ export default defineConfig({
   renderer: {
     define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
     // The UI Workbench's catalog (docs/48), dev server only.
-    plugins: [react(), xtermScaledCoords(), xtermWebglCanvasSize(), pdfjsAssets(), workbenchCatalog(resolve(import.meta.dirname, "../.."))],
+    plugins: [react(), xtermScaledCoords(), xtermScrollbarHide(), xtermWebglCanvasSize(), pdfjsAssets(), workbenchCatalog(resolve(import.meta.dirname, "../.."))],
     optimizeDeps: { exclude: ["@xterm/xterm", "@xterm/addon-webgl"] },
     build: {
       // CMD_NO_MINIFY=1: readable function names in profiles (e2e/latency.mjs --profile).

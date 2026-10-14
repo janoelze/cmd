@@ -61,17 +61,14 @@ function Navigator(p: NavigatorData) {
   const searching = query.trim().length > 0;
 
   const groups = useMemo(() => SECTIONS.map((id) => ({ id, rows: rows.filter((r) => sectionOf(r) === id) })), [rows]);
-  // ⌘1–9 follow the visible order of rows that have a window.
-  const shortcutOf = useMemo(
-    () =>
-      new Map(
-        flatten(groups.flatMap((g) => g.rows))
-          .filter((r) => r.pane || r.win)
-          .slice(0, 9)
-          .map((r, i) => [r.key, i + 1]),
-      ),
-    [groups],
-  );
+  // ⌘1–9 follow the visible order of rows that have a window. The same Map while they do,
+  // so the rows (memoised) don't re-render for every change of the list.
+  const shortcutKeys = flatten(groups.flatMap((g) => g.rows))
+    .filter((r) => r.pane || r.win)
+    .slice(0, 9)
+    .map((r) => r.key)
+    .join("\n");
+  const shortcutOf = useMemo(() => new Map(shortcutKeys ? shortcutKeys.split("\n").map((k, i) => [k, i + 1]) : []), [shortcutKeys]);
 
   const live = useMemo(
     () =>

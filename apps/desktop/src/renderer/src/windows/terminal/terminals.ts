@@ -99,7 +99,6 @@ function searchOptions(o: FindOptions): ISearchOptions {
   };
 }
 
-
 // The WebGL addon loads only when the webgl renderer is used (not the default),
 // so it stays out of the startup bundle.
 let Webgl: typeof WebglAddon | null = null;
@@ -315,8 +314,9 @@ class Terminals {
     term.buffer.onBufferChange(scrollable);
     term.onResize(scrollable);
     term.onResize(() => countRender("TerminalResize"));
-    // xterm scrolls without DOM scroll events: tell the kit, so the bar fades like every other.
-    term.onScroll(() => scrolled(el));
+    // xterm scrolls without DOM scroll events: tell the kit (once a frame), so the bar fades like every other.
+    let scrolling = 0;
+    term.onScroll(() => (scrolling ||= requestAnimationFrame(() => ((scrolling = 0), scrolled(el)))));
     this.#hosts.set(paneId, h);
     return h;
   }

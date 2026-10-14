@@ -4,7 +4,8 @@
 // while scrolling the scrollback. Main-thread time comes from CDP
 // Performance.getMetrics, CPU from app.getAppMetrics(), renders and store events
 // from window.__cmdPerf (renderer/src/lib/perf.ts), frame times from a rAF probe.
-// usage: pnpm build && node e2e/perf.mjs [--label NAME]
+// usage: pnpm build && node e2e/perf.mjs [--label NAME] [--profile]
+// (--profile: where the renderer's script time went per scenario; see profile.mjs)
 // Results are appended to .cmd-dev/perf/results.jsonl.
 import fs from "node:fs";
 import path from "node:path";
@@ -12,9 +13,11 @@ import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { _electron as electron } from "playwright";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
+import { startProfile } from "./profile.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const label = process.argv.includes("--label") ? process.argv[process.argv.indexOf("--label") + 1] : "";
+const PROFILE = process.argv.includes("--profile");
 const home = path.join(root, ".cmd-dev", "perf-e2e");
 await stopCore(home, { terminals: true });
 process.on("exit", () => {
@@ -82,9 +85,11 @@ async function measure(name, { seconds = 10, during } = {}) {
   await app.evaluate(({ app }) => app.getAppMetrics()); // resets each process's CPU% window
   await win.evaluate(() => ((window.__frames = []), (window.__recording = true)));
   const a = await snapshot();
+  const stopProfile = PROFILE ? await startProfile(cdp) : null;
   if (during) await during();
   else await sleep(seconds * 1000);
   const b = await snapshot();
+  if (stopProfile) await stopProfile(name, (b.at - a.at) / 1000, "s");
   const frames = await win.evaluate(() => ((window.__recording = false), window.__frames));
   const procs = await app.evaluate(({ app }) => app.getAppMetrics().map((p) => ({ type: p.type, cpu: p.cpu.percentCPUUsage, mem: p.memory.workingSetSize })));
   const secs = (b.at - a.at) / 1000;

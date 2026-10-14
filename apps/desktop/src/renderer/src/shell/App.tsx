@@ -51,6 +51,18 @@ const run = (id: string) => runCommand(id, "other");
 /** A layout key of the shown workspace's view. */
 const setView = (key: string, value: unknown) => setWorkspaceView(getState().workspaceId, key, value);
 
+/** The Navigator's row actions: the same functions every render, so its rows (memoised) stay put. */
+const navigatorActions: Pick<NavigatorData, "onSelect" | "onRowMenu" | "onClose" | "onNewTerminal" | "onReopen"> = {
+  onSelect: (r) => {
+    const id = homeOf(r);
+    if (id) select(id);
+  },
+  onRowMenu: rowMenu,
+  onClose: (r) => windowIdOf(r) && void closePane(windowIdOf(r)!),
+  onNewTerminal: () => void newTerminal(),
+  onReopen: (id) => reopenClosed(id),
+};
+
 export function App() {
   countRender("App");
   /** Everything, every workspace: attention, the Dock badge, cross-workspace jumps. */
@@ -102,14 +114,7 @@ export function App() {
     workspaceId: all.workspaceId,
     rows: board.rows,
     selected,
-    onSelect: (r) => {
-      const id = homeOf(r);
-      if (id) select(id);
-    },
-    onRowMenu: rowMenu,
-    onClose: (r) => windowIdOf(r) && void closePane(windowIdOf(r)!),
-    onNewTerminal: () => void newTerminal(),
-    onReopen: (id) => reopenClosed(id),
+    ...navigatorActions,
     search: s.search,
   };
 
