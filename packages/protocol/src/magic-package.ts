@@ -4,6 +4,7 @@
 // window, the Library and the previewer need to know of that.
 
 import type { WindowId } from "./model.ts";
+import type { MagicRevision } from "./magic.ts";
 import type { WidgetPatch, WidgetTree } from "./widget-tree.ts";
 
 /**
@@ -29,6 +30,23 @@ export interface MagicPackageBuild {
   asking?: boolean;
 }
 
+/** A package made with Magic as the edit view (⌘E) shows it (magic.package). */
+export interface MagicPackageInfo {
+  name: string;
+  /** Its folder in the packages folder. */
+  dir: string;
+  /** A linked package: the person's own folder it links to (Restore doesn't write there). */
+  link?: string;
+  /** Its own files, relative. */
+  files: string[];
+  /** Every version, oldest first; the last is what its files are, unless `edited`. */
+  revisions: MagicRevision[];
+  /** Its files differ from the last version (edited by hand since; a version once it reloads). */
+  edited: boolean;
+  /** A build is changing it now. */
+  building: boolean;
+}
+
 export interface MagicPackageMethods {
   /**
    * Change a package widget made with Magic: a Magic window opens beside it and builds the
@@ -36,6 +54,10 @@ export interface MagicPackageMethods {
    * what is wrong with the window now (its stop reason and error).
    */
   "magic.editPackage": { params: { windowId: WindowId; prompt?: string; fix?: boolean }; result: { id: WindowId } };
+  /** The package a window shows, when Magic made it: its folder, files and versions (the edit view); null for any other. */
+  "magic.package": { params: { windowId: WindowId }; result: MagicPackageInfo | null };
+  /** Bring back a version of that package, as a new version; the package's windows reload. Refused for a linked package. */
+  "magic.restorePackage": { params: { windowId: WindowId; revision: number }; result: null };
 }
 
 /** A package widget's tree for the previewer to draw with the kit (magic.previewRequest's `tree`). */

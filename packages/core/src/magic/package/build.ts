@@ -2,8 +2,7 @@
 // No dependency on the Core: `cmd magic` runs it in-process (the prompt lab, evals) and
 // MagicPackages (service.ts) runs it for a Magic window.
 //
-// 1. The fast paths (pasted JSON, an obvious shell command) aren't packages: the result says
-//    which, and the caller makes them as before (MagicService).
+// 1. The fast path: an obvious shell command ends with a terminal at once, without a model.
 // 2. The agent looks around if it needs to (read-only), writes the package's files, and
 //    checks, tests and previews them with the same toolchain cmd uses. When package.json asks
 //    for permissions, `check` asks the person (o.ask) and returns the answer.
@@ -14,20 +13,56 @@
 // It stops at the token ceiling (o.maxTokens, magic.maxTokens) with a clear message.
 
 import os from "node:os";
+import { spawnSync } from "node:child_process";
 import type { WidgetPermissions } from "@cmd/protocol";
 import type { Backend, Usage } from "../../ai/backends.ts";
 import { magicDenyPaths } from "../../lib/paths-deny.ts";
-import type { Previewer } from "../../widgets/preview.ts";
+import type { Previewer } from "../previewer.ts";
 import type { WidgetPackage } from "../../widgets/package.ts";
-import { fastRoute, type BuildEvent, type BuildRoute, type TraceStep } from "../build.ts";
-import type { Workspace } from "../prompt.ts";
-import { commandsSupported, type SandboxMode } from "../sandbox.ts";
+import { commandsSupported, type SandboxMode } from "../../lib/sandbox.ts";
 import { runTool, toolsFor, type ToolContext, type ToolOutput } from "../tools.ts";
 import { snapshotFiles } from "./files.ts";
 import { previewTrees } from "./preview.ts";
-import { buildPackageRequest, buildPackageSystem, promptHash } from "./prompt.ts";
+import { buildPackageRequest, buildPackageSystem, promptHash, type Workspace } from "./prompt.ts";
 import { defaultToolchain, type RunOptions, type Toolchain } from "./toolchain.ts";
 import { PACKAGE_TOOL_SPECS, permissionStep, runPackageTool, type PackageEnding, type PackageToolContext, type PackageToolState } from "./tools.ts";
+
+/** One tool call of a build, as the trace (and an eval's report) keeps it. */
+export interface TraceStep {
+  id: number;
+  tool: string;
+  why: string;
+  input: Record<string, unknown>;
+  output: string;
+  isError: boolean;
+  ms: number;
+}
+
+/** "agent", or the fast path an obvious command takes (a terminal, no model). */
+export type BuildRoute = "terminal" | "agent";
+
+export type BuildEvent =
+  | { type: "route"; route: BuildRoute; at: number }
+  | { type: "step-start"; id: number; tool: string; why: string; input: Record<string, unknown>; at: number }
+  | { type: "step-end"; id: number; ms: number; output: string; isError: boolean; at: number }
+  | { type: "turn"; at: number }
+  | { type: "text"; delta: string; at: number }
+  | { type: "title"; title: string; icon?: string; at: number }
+  | { type: "verify"; at: number }
+  | { type: "repair"; reason: string; at: number };
+
+/** An obvious shell command (shell syntax, a program this Mac has, nothing that reads like a sentence): the command; else null. */
+export function fastCommand(prompt: string): string | null {
+  const t = prompt.trim();
+  const first = /^[A-Za-z0-9_./-]+/.exec(t)?.[0];
+  // The "is it a command?" check asks /bin/sh; on Windows the agent decides.
+  if (!first || process.platform === "win32" || /^[[{]/.test(t)) return null;
+  const shellish = /\s-{1,2}[A-Za-z]|[|><;$`'"]|^\S+$/.test(t);
+  const english = /\b(of|every|all|my|the|show|me|what|which|how|is|are|in|for|with|and|live|please)\b/i.test(t.replace(/(["'])[^"']*\1/g, ""));
+  if (!shellish || english) return null;
+  const found = first.includes("/") ? false : spawnSync("/bin/sh", ["-c", `command -v ${first}`], { stdio: "ignore" }).status === 0;
+  return found ? t : null;
+}
 
 export interface PackageBuildOptions {
   /** The request (for a change: with the earlier requests, as refineRequest makes it). */
@@ -47,7 +82,7 @@ export interface PackageBuildOptions {
   sandbox?: SandboxMode;
   deny?: string[];
   systemFile?: string;
-  /** Skip the fast paths (changes). */
+  /** Skip the fast path (changes). */
   noFast?: boolean;
   /** Default: the checkout's, else package.json only (defaultToolchain); null: none. */
   toolchain?: Toolchain | null;
@@ -75,8 +110,6 @@ export interface PackageVerdict {
 
 export interface PackageBuildResult {
   route: BuildRoute;
-  /** A fast path's input (the caller makes it). */
-  fast?: { route: "json"; data: unknown } | { route: "terminal"; command: string };
   /** The build ended without a package (a terminal, or a program it would need). */
   ending: PackageEnding | null;
   ok: boolean;
@@ -141,12 +174,11 @@ export async function buildPackage(o: PackageBuildOptions): Promise<PackageBuild
   const system = buildPackageSystem(o.systemFile);
   const base = { usage: { ...EMPTY_USAGE }, model: o.backend.model, backend: o.backend.name, trace: [] as TraceStep[], repairs: [] as string[], summary: "", promptHash: promptHash(system), ending: null };
 
-  if (!o.noFast) {
-    const fast = fastRoute(o.prompt);
-    if (fast) {
-      emit({ type: "route", route: fast.route, at: at() });
-      return { ...base, route: fast.route, fast, ok: true, verdict: { ...EMPTY_VERDICT, ok: true, usable: true }, timings: { done: at() } };
-    }
+  const command = o.noFast ? null : fastCommand(o.prompt);
+  if (command) {
+    emit({ type: "route", route: "terminal", at: at() });
+    const ending: PackageEnding = { kind: "terminal", command, title: command.split(/\s+/)[0]!, icon: "terminal" };
+    return { ...base, route: "terminal", ending, ok: true, verdict: { ...EMPTY_VERDICT, ok: true, usable: true }, timings: { done: at() } };
   }
   emit({ type: "route", route: "agent", at: at() });
 

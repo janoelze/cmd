@@ -1,10 +1,9 @@
-// Widgets reading the event log (docs/28 §4, scenario S6): a widget's data.ts
-// talks to the core over its own socket (widgets.sock), says which widget it
-// is with a token issued for that run, and may then query events, read-only,
-// within the policy (policy.ts). Only a widget whose manifest declares `events`
-// gets one, and it's revoked when the run ends; the token says the widget, its
-// workspace and the classes its manifest declares, which is all the policy needs:
-// nothing the widget passes in a query widens it.
+// Widgets reading the event log (docs/28 §4, scenario S6; docs/56): a widget's process
+// talks to the core over its own socket (widgets.sock), says which widget it is with a
+// token issued for it, and may then read events, read-only, within the policy (policy.ts):
+// a package widget through the widget wire (widgets/api), anything else that says hello
+// through data.query and stats.query. The token says the widget, its workspace and the
+// classes it declared, which is all the policy needs: nothing it passes in a query widens it.
 
 import { randomBytes } from "node:crypto";
 import type { DataClass, DataEvent, DataQuery, StatQuery, StatResult } from "@cmd/protocol";
@@ -13,7 +12,7 @@ import { clampQuery, clampRows, PolicyError, readsClass, type Reader } from "./p
 export interface WidgetIdentity {
   widgetId: string;
   workspaceId: string | null;
-  /** Classes of data its manifest declares (permissions.events). */
+  /** Classes of data it declares (permissions.events). */
   events: string[];
   /**
    * A package widget's process (widgets/host, docs/56): after hello its connection carries the
@@ -25,20 +24,10 @@ export interface WidgetIdentity {
 /** Most rows one query may return a widget. */
 export const WIDGET_QUERY_LIMIT = 1000;
 
-/**
- * The widgets socket for one run of a widget's data.ts: none for a manifest that
- * declares no `events` (it has nothing to read), else a token, which `done()` revokes.
- */
-export function runSocket(tokens: Pick<WidgetTokens, "issue" | "revoke">, path: string | null, id: WidgetIdentity): { socket: { path: string; token: string } | null; done: () => void } {
-  if (!path || !id.events.length) return { socket: null, done: () => {} };
-  const token = tokens.issue(id);
-  return { socket: { path, token }, done: () => tokens.revoke(token) };
-}
-
 export class WidgetTokens {
   #tokens = new Map<string, WidgetIdentity & { expires: number }>();
 
-  /** A token for one run of a widget's data.ts, good for `ttlMs`. */
+  /** A token for a widget's process, good for `ttlMs`. */
   issue(id: WidgetIdentity, ttlMs = 60_000): string {
     this.#sweep();
     const token = randomBytes(24).toString("base64url");
@@ -79,7 +68,7 @@ export function widgetRead(id: WidgetIdentity, q: DataQuery, run: (q: DataQuery)
 }
 
 /**
- * A widget's stat (docs/49, `stats()` in data.ts): only of a class it may read, only its own
+ * A widget's stat (docs/49): only of a class it may read, only its own
  * workspace (whatever the query names), and its rankings no longer than a query's limit.
  */
 export function widgetStats(id: WidgetIdentity, q: StatQuery, classOf: (stat: string) => DataClass, run: (q: StatQuery) => StatResult): StatResult {

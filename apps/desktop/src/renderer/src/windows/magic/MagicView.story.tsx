@@ -1,6 +1,5 @@
-// The Magic window's own states, at
-// a regular size: asking (no provider, an error), a first build (with steps),
-// a command to run, a media request over a widget.
+// The Magic window's own states, at a regular size: asking (no provider, an error), a build
+// (with steps, asking for permissions), a command to run, and "Download Deno?".
 
 import type { MagicStep } from "@cmd/protocol";
 import { View, WebStage } from "@cmd/ui";
@@ -8,12 +7,12 @@ import { useState } from "react";
 import type { MagicLive } from "./magic.ts";
 import { AllSizes, RefWindow, type SizeName } from "../../reference/RefWindow.tsx";
 import { storyWindow } from "../../reference/RepoFile.tsx";
-import { Ask, Building, mediaRequest, TerminalOffer } from "./MagicView.tsx";
+import { Ask, Building, runtimeRequest, TerminalOffer } from "./MagicView.tsx";
 
 const step = (id: number, why: string, detail: string, ms?: number, isError?: boolean): MagicStep => ({ id, tool: "bash", why, detail, ms, isError, output: ms ? "Wi-Fi: connected\nVPN (WireGuard): connected" : undefined });
 const LIVE: MagicLive = {
   running: true,
-  steps: [step(1, "Looking at network services", "scutil --nc list", 820), step(2, "Reading the VPN's state", "scutil --nc status WireGuard", 410), step(3, "Writing the widget", "view.html")],
+  steps: [step(1, "Looking at network services", "scutil --nc list", 820), step(2, "Reading the VPN's state", "scutil --nc status WireGuard", 410), step(3, "Writing the widget", "src/vpn.tsx")],
 };
 
 function W({ size = "regular", children }: { size?: SizeName; children: React.ReactNode }) {
@@ -65,10 +64,19 @@ export const Command = () => (
     </View>
   </W>
 );
-export const MediaRequest = () => (
+/** A package asking for what it wants: Allow… brings the grants sheet back. */
+export const AskingForPermissions = () => (
   <W>
     <View scroll={false}>
-      <WebStage cover={mediaRequest(["https://radio.example.com"], () => {})}>
+      <Building live={{ ...LIVE, steps: [...LIVE.steps, { id: 4, tool: "permissions", why: "Wants to reach api.github.com", detail: "ci-runs" }] }} showSteps={false} onStop={() => {}} onAllow={() => {}} />
+    </View>
+  </W>
+);
+/** The first build on a Mac without Deno. */
+export const DenoRequest = () => (
+  <W>
+    <View scroll={false}>
+      <WebStage cover={runtimeRequest(() => {})}>
         <div />
       </WebStage>
     </View>

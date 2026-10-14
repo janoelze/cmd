@@ -127,7 +127,7 @@ export class WidgetHost {
     this.reconcile();
   }
 
-  /** The packages changed: windows waiting for one (or a grant) try again; one now asking for more waits. */
+  /** The packages changed, or Deno came: windows waiting for one (a grant, Deno) try again; one now asking for more waits. */
   packagesChanged(): void {
     if (!this.#started) return;
     for (const inst of this.#all.values()) {
@@ -138,8 +138,8 @@ export class WidgetHost {
         else if (needsGrant(pkg.permissions, this.#granted(pkg.name)?.permissions)) {
           this.#stop(inst, null);
           this.#status(inst, { kind: "status", state: "waiting-grant" });
-        } else if (inst.pkg && JSON.stringify(pkg) !== JSON.stringify(inst.pkg)) this.#relaunch(inst); // its package.json changed
-      } else if (inst.status.state === "waiting-grant" || inst.status.reason === "isn't installed") this.#launch(inst);
+        } else if (inst.pkg && JSON.stringify({ ...pkg, magic: 0 }) !== JSON.stringify({ ...inst.pkg, magic: 0 })) this.#relaunch(inst); // its package.json changed (not only cmd's mark)
+      } else if (inst.status.state === "waiting-grant" || inst.status.reason === "isn't installed" || /Deno/.test(inst.status.reason ?? "")) this.#launch(inst);
     }
     this.reconcile();
   }

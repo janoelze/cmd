@@ -10,7 +10,7 @@ import type { FindRequest } from "./find.tsx";
 export type WindowActions = {
   save?: () => void | Promise<void>;
   openExternally?: () => void;
-  /** Magic widgets: change (refine), refresh the data, stop a run. */
+  /** Change (a Magic window, Jam), refresh (SQLite), stop a run. */
   change?: () => void;
   refresh?: () => void;
   stop?: () => void;

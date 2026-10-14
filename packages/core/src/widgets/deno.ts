@@ -1,11 +1,8 @@
-// Deno for widgets (docs/14-magic-v2.md): find or install it, type-check a
-// widget (data.ts and view.ts against data.ts's schema), and run its data.ts
-// through widget-runtime/runner.ts. Permissions come from manifest.json and
-// become Deno flags; the whole process also runs under cmd's sandbox-exec
-// profile (no writes, no private paths, TCP only to HTTPS and the granted
-// hosts' ports), so even `--allow-run=git` can't change anything, and Deno's
-// --allow-net picks the hosts. cmd's own copy is one pinned Deno release, checked against
-// its SHA-256 and code signature before it runs (bumping it: DENO_VERSION).
+// Deno for widget packages (docs/56, "The runtime: a widget process"): find it, or install
+// cmd's own copy, one pinned Deno release checked against its SHA-256 and code signature
+// before it runs (bumping it: DENO_VERSION). DenoSetup is the download as the app asks for
+// it: once at a time, shared by everyone waiting, and "Not now" remembered while the core
+// runs. How a widget's process runs in it: host/runtime.ts.
 
 import fs from "node:fs";
 import { createHash } from "node:crypto";
@@ -13,12 +10,8 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { credentialsForPrograms, expandPath, redact } from "../magic/policy.ts";
-import { magicDenyPaths } from "../lib/paths-deny.ts";
-import { execArgv, type SandboxMode } from "../magic/sandbox.ts";
 import { logger } from "@cmd/protocol/node";
-import type { MagicNotify, MagicStatus } from "@cmd/protocol";
-import type { WidgetManifest } from "./manifest.ts";
+import { expandPath } from "../lib/paths-deny.ts";
 
 const log = logger("deno");
 
@@ -118,166 +111,82 @@ export function denoVersion(deno: string): string | null {
   return r.status === 0 ? (r.stdout.split("\n")[0] ?? null) : null;
 }
 
-// ── a widget folder's deno.json ──────────────────────────
+// ── the download, as the app asks for it ─────────────────
 
-/** Written into every widget folder: `cmd` resolves to the runtime, view.ts sees the frame's `cmd` type. */
-export function writeDenoConfig(dir: string): string {
-  const file = path.join(dir, "deno.json");
-  const config = {
-    imports: { cmd: path.join(RUNTIME_DIR, "cmd.ts") },
-    compilerOptions: { strict: true, lib: ["deno.ns", "dom", "dom.iterable", "esnext"], types: [path.join(RUNTIME_DIR, "view.d.ts")] },
-    lock: false,
-  };
-  const text = JSON.stringify(config, null, 2) + "\n";
-  if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== text) fs.writeFileSync(file, text);
-  return file;
-}
+/** An answer to "Download Deno?": the download under way (yes), or null (not now, or the asker stopped). */
+export type DenoAnswer = { install: Promise<unknown> } | null;
 
-export interface DenoEnv {
-  deno: string;
-  /** Deno's cache (compiled TypeScript); writable inside the sandbox. */
-  denoDir: string;
-  sandbox: SandboxMode;
-}
+export class DenoSetup {
+  #stateDir: string | null;
+  #install: (stateDir: string) => Promise<string>;
+  #installing: Promise<string> | null = null;
+  #declined = false;
+  #asks = new Set<(a: DenoAnswer) => void>();
+  /** After a download: what was waiting for Deno can start (the widget host restarts its windows). */
+  onInstalled: () => void = () => {};
 
-/** What a sandboxed Deno may write besides its temp dir: its cache. */
-function denoExecOptions(env: DenoEnv) {
-  fs.mkdirSync(env.denoDir, { recursive: true });
-  return { sandbox: env.sandbox, deny: magicDenyPaths(), writable: [env.denoDir], env: { DENO_DIR: env.denoDir, NO_COLOR: "1", DENO_NO_UPDATE_CHECK: "1" } };
-}
+  /** The Deno widgets run on now (findDeno, or the one a test picks); null when there is none. */
+  readonly find: () => string | null;
 
-// ── type-checking ────────────────────────────────────────
-
-export interface CheckResult {
-  ok: boolean;
-  /** Compiler errors, with paths relative to the widget folder. */
-  errors: string[];
-}
-
-/** deno check on data.ts and view.ts (whichever exist). */
-export async function checkTypes(dir: string, env: DenoEnv): Promise<CheckResult> {
-  const files = ["data.ts", "view.ts"].filter((f) => fs.existsSync(path.join(dir, f)));
-  if (!files.length) return { ok: true, errors: [] };
-  const config = writeDenoConfig(dir);
-  const r = await execArgv([env.deno, "check", "--quiet", "--no-remote", "--no-npm", "--config", config, ...files], { ...denoExecOptions(env), cwd: dir, timeoutMs: 60_000 });
-  if (r.code === 0) return { ok: true, errors: [] };
-  if (r.code === null && !r.timedOut) return { ok: false, errors: [r.stderr || "deno didn't run"] };
-  const text = (r.stderr + "\n" + r.stdout).replaceAll(`file://${dir}/`, "").replaceAll(`${dir}/`, "");
-  const errors = text
-    .split(/\n(?=TS\d+ |error: )/)
-    .map((e) => e.trim())
-    .filter((e) => e && !/^Check /.test(e) && !/^error: Type checking failed/.test(e))
-    .slice(0, 20);
-  return { ok: false, errors: errors.length ? errors : [text.trim().slice(0, 2000) || `deno check exited ${r.code}`] };
-}
-
-// ── running data.ts ──────────────────────────────────────
-
-export interface DataResult {
-  ok: boolean;
-  data?: unknown;
-  error?: string;
-  /** Schema problems: the data came back but has the wrong shape. */
-  issues?: { path: string; message: string }[];
-  /** Seconds the server asked to wait (rate limits). */
-  retryAfter?: number;
-  status?: number;
-  /** A permission was missing (net host, program, env var): manifest.json needs it. */
-  permission?: boolean;
-  stack?: string;
-  /** What the run reported besides the data (status(), notify() in data.ts). */
-  statusLine?: MagicStatus | null;
-  notify?: MagicNotify[];
-  /** The data function's console output and Deno's own messages. */
-  stderr: string;
-  ms: number;
-}
-
-export interface RunDataOptions extends DenoEnv {
-  /** Where run() starts by default (the window's workspace). */
-  cwd: string;
-  /** The core's widgets socket and this run's token, for `events()` in data.ts (docs/28 §4). */
-  socket?: { path: string; token: string } | null;
-  config: Record<string, unknown>;
-  timeoutMs?: number;
-  signal?: AbortSignal;
-}
-
-const MARK = "\u0000cmd-result ";
-
-export function denoRunArgs(dir: string, m: WidgetManifest, env: DenoEnv, socket?: string | null): string[] {
-  const p = m.permissions;
-  const home = os.homedir();
-  const read = [dir, RUNTIME_DIR, ...p.read.map((r) => path.resolve(expandPath(r, home))), ...(socket ? [socket] : [])];
-  const args = [env.deno, "run", "--quiet", "--no-prompt", "--no-remote", "--no-npm", "--config", path.join(dir, "deno.json"), `--allow-read=${read.join(",")}`];
-  // The widgets socket: Deno asks net permission for a Unix socket ("unix:<path>"), older ones read and write on its path.
-  if (socket) args.push(`--allow-write=${socket}`);
-  const net = [...p.net, ...(socket ? [`unix:${socket}`] : [])];
-  if (net.includes("*")) args.push("--allow-net");
-  else if (net.length) args.push(`--allow-net=${net.join(",")}`);
-  if (p.run.length) args.push(`--allow-run=${p.run.join(",")}`);
-  args.push(`--allow-env=${["CMD_WIDGET_CWD", "CMD_WIDGET_HOME", ...(socket ? ["CMD_SOCKET", "CMD_WIDGET_TOKEN"] : []), ...p.env].join(",")}`);
-  args.push(path.join(RUNTIME_DIR, "runner.ts"), dir);
-  return args;
-}
-
-/**
- * The TCP endpoints data.ts's process may reach in the sandbox (SBPL can't
- * match host names; --allow-net does): HTTPS when it has hosts or runs a CLI
- * that needs its server, HTTP when it has hosts, plus the ports granted hosts
- * name ("localhost:3000").
- */
-export function denoNet(m: WidgetManifest, cliNet = false): string[] {
-  const out = new Set<string>();
-  if (m.permissions.net.length || cliNet) out.add("*:443");
-  // Plain-http hosts too: --allow-net still limits which hosts.
-  if (m.permissions.net.length) out.add("*:80");
-  for (const h of m.permissions.net) {
-    const at = /^(.*):(\d{1,5})$/.exec(h);
-    if (!at) continue;
-    out.add(`${/^(localhost|127\.0\.0\.1)$/i.test(at[1]!) ? "localhost" : "*"}:${at[2]}`);
+  /** `install`: tests inject one; null: this core can't install (no state folder, or a test that picks the Deno). */
+  constructor(o: { stateDir: string | null; find: () => string | null; install?: ((stateDir: string) => Promise<string>) | null }) {
+    const install = o.install === undefined ? (dir: string) => installDeno(dir) : o.install;
+    this.find = o.find;
+    this.#stateDir = install ? o.stateDir : null;
+    this.#install = install ?? (() => Promise.reject(new Error("no state folder to install Deno into")));
   }
-  return [...out];
-}
 
-/** Run data.ts once: its data validated against its schema, or what went wrong. */
-export async function runData(dir: string, m: WidgetManifest, o: RunDataOptions): Promise<DataResult> {
-  if (!fs.existsSync(path.join(dir, "data.ts"))) return { ok: false, error: "this widget has no data.ts", stderr: "", ms: 0 };
-  writeDenoConfig(dir);
-  const base = denoExecOptions(o);
-  const keep = credentialsForPrograms(m.permissions.run);
-  const r = await execArgv(denoRunArgs(dir, m, o, o.socket?.path), {
-    ...base,
-    writable: [...base.writable, ...(o.socket ? [o.socket.path] : [])],
-    env: { ...base.env, CMD_WIDGET_CWD: o.cwd, CMD_WIDGET_HOME: os.homedir(), ...(o.socket ? { CMD_SOCKET: o.socket.path, CMD_WIDGET_TOKEN: o.socket.token } : {}) },
-    cwd: o.cwd,
-    stdin: JSON.stringify(o.config),
-    timeoutMs: o.timeoutMs ?? 20_000,
-    maxBytes: 4 * 1024 * 1024,
-    signal: o.signal,
-    credentials: { env: [...keep.env, ...m.permissions.env], paths: keep.paths, keychain: keep.keychain },
-    net: denoNet(m, keep.net),
-  });
-  const stderr = r.stderr.trim().slice(0, 4000);
-  if (r.timedOut) return { ok: false, error: `data.ts didn't finish within ${Math.round((o.timeoutMs ?? 20_000) / 1000)} s`, stderr, ms: r.ms };
-  const line = r.stdout.split("\n").find((l) => l.startsWith(MARK));
-  if (!line) {
-    const why = r.code === null ? r.stderr || "deno didn't run" : r.truncated ? "data.ts returned more than 4 MB" : `data.ts exited ${r.code} without a result`;
-    return { ok: false, error: why.trim().slice(0, 1000), stderr, ms: r.ms };
+  /** Whether asking makes sense: cmd can download it here. */
+  get canInstall(): boolean {
+    return !!this.#stateDir;
   }
-  try {
-    const res = JSON.parse(line.slice(MARK.length)) as Omit<DataResult, "stderr">;
-    return { ...res, stderr, ms: res.ms ?? r.ms };
-  } catch {
-    return { ok: false, error: "data.ts's result couldn't be read", stderr, ms: r.ms };
-  }
-}
 
-/** A run's error for people and the model, without secrets. */
-export function describeDataError(r: DataResult, secrets: string[] = []): string {
-  let s = r.error ?? "failed";
-  if (r.permission) s += " (add what it needs to manifest.json's permissions)";
-  if (r.retryAfter) s += ` (the server asks to wait ${r.retryAfter} s)`;
-  for (const v of secrets) if (v.length >= 4) s = s.replaceAll(v, "[secret]");
-  return redact(s);
+  /** Wait for the person's answer, after `asking()` puts the question (a build's window); a download under way or an earlier "Not now" answers at once, unasked. */
+  ask(signal: AbortSignal, asking: () => void): Promise<DenoAnswer> {
+    if (this.#installing) return Promise.resolve({ install: this.#installing });
+    if (this.#declined) return Promise.resolve(null);
+    asking();
+    return new Promise((resolve) => {
+      const answer = (a: DenoAnswer) => {
+        this.#asks.delete(answer);
+        signal.removeEventListener("abort", stop);
+        resolve(a);
+      };
+      const stop = () => answer(null);
+      this.#asks.add(answer);
+      signal.addEventListener("abort", stop, { once: true });
+    });
+  }
+
+  /** Whether a build is waiting for the answer. */
+  get asking(): boolean {
+    return this.#asks.size > 0;
+  }
+
+  /** Download it (Settings, a build's yes): one download at a time; everyone waiting gets it. */
+  install(): Promise<string> {
+    const stateDir = this.#stateDir;
+    if (!stateDir) return Promise.reject(new Error("no state folder to install Deno into"));
+    this.#declined = false;
+    if (!this.#installing) {
+      log.info(`installing Deno ${DENO_VERSION}`);
+      this.#installing = this.#install(stateDir)
+        .then((p) => (this.onInstalled(), p))
+        .catch((e: Error) => {
+          log.warn(`installing Deno failed: ${e.message}`);
+          throw e;
+        })
+        .finally(() => (this.#installing = null));
+      // Builds show the download's error as a step; they don't fail on it.
+      this.#installing.catch(() => {});
+    }
+    for (const answer of [...this.#asks]) answer({ install: this.#installing });
+    return this.#installing;
+  }
+
+  /** "Not now": the builds waiting go on without it, and later ones don't ask until it's installed. */
+  skip(): void {
+    this.#declined = true;
+    for (const answer of [...this.#asks]) answer(null);
+  }
 }

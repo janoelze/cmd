@@ -5,11 +5,10 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { spawnSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { classify, credentialsFor, credentialsForPrograms, redact, sandboxProfile, execCommand, fastRoute, runTool, sandboxAvailable, widgetHtml } from "../src/magic/index.ts";
-import { lintBody } from "../src/magic/lint.ts";
+import { classify, credentialsFor, credentialsForPrograms, redact, sandboxProfile, execCommand, fastCommand, runTool, sandboxAvailable } from "../src/magic/index.ts";
 import { nonPublic, type Lookup } from "../src/magic/fetch.ts";
 import { magicDenyPaths, magicPrivatePaths, realPathOf } from "../src/lib/paths-deny.ts";
-import { requestedMedia, widgetCsp } from "@cmd/protocol";
+import { widgetCsp } from "@cmd/protocol";
 import { needs } from "../../../test/system.ts";
 
 const home = "/Users/test";
@@ -102,23 +101,20 @@ describe("widget frame CSP", () => {
     expect(csp).toContain("media-src data: https://a.example;");
     expect(csp).toContain("img-src data: https://a.example;");
     expect(csp).toContain("connect-src 'none'");
-    expect(requestedMedia({ html: '<audio></audio><script>const u="https://r.example/live.aacp"</script>' })).toEqual(["https://r.example"]);
-    expect(requestedMedia({ html: '<a href="https://r.example">x</a>' })).toEqual([]);
-    expect(requestedMedia({ media: [], html: "<audio src='https://r.example/x'>" })).toEqual([]);
   });
 });
 
-describe("fast paths", () => {
-  it("routes pasted JSON and obvious commands", () => {
-    expect(fastRoute('{"a": [1, 2]}')).toEqual({ route: "json", data: { a: [1, 2] } });
+describe("the fast path", () => {
+  it("ends an obvious command with a terminal, and leaves pasted JSON and sentences to the agent", () => {
+    expect(fastCommand('{"a": [1, 2]}')).toBeNull();
     if (posix) {
-      expect(fastRoute("ps aux | head")).toEqual({ route: "terminal", command: "ps aux | head" });
-      expect(fastRoute("ls -la")).toEqual({ route: "terminal", command: "ls -la" });
+      expect(fastCommand("ps aux | head")).toBe("ps aux | head");
+      expect(fastCommand("ls -la")).toBe("ls -la");
+      expect(fastCommand("top")).toBe("top");
     }
-    expect(fastRoute("show my vpn status")).toBeNull();
-    expect(fastRoute("weather in Berlin")).toBeNull();
-    expect(fastRoute("git status of every repo in ~/src")).toBeNull();
-    if (posix) expect(fastRoute("top")).toEqual({ route: "terminal", command: "top" });
+    expect(fastCommand("show my vpn status")).toBeNull();
+    expect(fastCommand("weather in Berlin")).toBeNull();
+    expect(fastCommand("git status of every repo in ~/src")).toBeNull();
   });
 });
 
@@ -276,21 +272,6 @@ describe("cmd's own secrets (AR1-11-11)", () => {
     expect(host.code).not.toBe(0);
     const ok = await execCommand(`cat "${path.join(widget, "data.ts")}"`, { sandbox: "required", deny });
     expect(ok).toMatchObject({ code: 0, stdout: "export default () => 1;" });
-  });
-});
-
-describe("widget page and lint", () => {
-  it("inlines data safely", () => {
-    const html = widgetHtml({ title: "<x>", body: "<p>", tokens: { "--bg": "#000" }, data: { s: "</script><b>" } });
-    expect(html).toContain("<title>&lt;x&gt;</title>");
-    expect(html).not.toContain("</script><b>");
-    expect(html).toContain("--bg: #000;");
-  });
-
-  it("finds literal colours but not id selectors", () => {
-    expect(lintBody("<style>#add{color:var(--text)}</style>").literalColors).toEqual([]);
-    expect(lintBody("<style>.a{color: #fff}</style><script>e.style.color='#0a84ff'</script>").literalColors).toEqual(["#fff", "#0a84ff"]);
-    expect(lintBody("<div style='background:rgb(0 0 0)'>").literalColors).toEqual(["rgb("]);
   });
 });
 

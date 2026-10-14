@@ -34,6 +34,8 @@ export interface PackagesOptions {
   types: () => WindowTypes;
   /** The packages changed (added, removed, edited). */
   onChange: () => void;
+  /** Folders being written (a Magic build): not a problem to log while they are. */
+  quiet?: ReadonlySet<string>;
   /** After a change, how long to wait for the rest of its burst (ms). */
   debounce?: number;
   parse?: ParseOptions;
@@ -50,6 +52,8 @@ export class WidgetPackages {
   #timer: NodeJS.Timeout | null = null;
   #started = false;
   #closed = false;
+  /** Why each folder that isn't a package can't be used, as last logged: each reason is logged once. */
+  #logged = new Map<string, string>();
 
   constructor(o: PackagesOptions) {
     this.#o = o;
@@ -120,12 +124,24 @@ export class WidgetPackages {
     this.#register();
     this.#rewatch(home);
     const changed = this.#signature() !== before;
+    this.#logProblems(next);
     if (changed) {
-      for (const e of next.values()) if (!e.ok) log.info(`widget package ${e.folder} can't be used: ${e.errors.join("; ")}`);
       for (const f of shadowed) log.info(`widget package ${f}: yours in ${home} is used instead of the built-in one`);
       this.#o.onChange();
     }
     return changed;
+  }
+
+  /** A folder that isn't a package says why once (not again on every scan), and not while a build writes it. */
+  #logProblems(entries: Map<string, PackageEntry>): void {
+    for (const folder of this.#logged.keys()) if (entries.get(folder)?.ok !== false) this.#logged.delete(folder);
+    for (const e of entries.values()) {
+      if (e.ok || this.#o.quiet?.has(e.folder)) continue;
+      const why = e.errors.join("; ");
+      if (this.#logged.get(e.folder) === why) continue;
+      this.#logged.set(e.folder, why);
+      log.info(`widget package ${e.folder} can't be used: ${why}`);
+    }
   }
 
   dispose(): void {

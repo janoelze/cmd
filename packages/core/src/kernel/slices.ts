@@ -6,19 +6,17 @@ import { aiHandlers } from "../ai/handlers.ts";
 import { dataHandlers } from "../data/handlers.ts";
 import { jamHandlers } from "../jam/handlers.ts";
 import { fileHandlers } from "../lib/handlers.ts";
-import { magicHandlers } from "../magic/handlers.ts";
 import { notifyHandlers } from "../notifications/handlers.ts";
 import { remoteHandlers } from "../remote/handlers.ts";
 import { searchHandlers } from "../search/handlers.ts";
 import { sqliteHandlers } from "../sqlite/handlers.ts";
 import { paneHandlers } from "../terminals/handlers.ts";
-import { widgetHandlers } from "../widgets/handlers.ts";
 import { windowHandlers } from "../windows/handlers.ts";
 import { workspaceHandlers } from "../workspaces/handlers.ts";
 import type { CoreContext } from "./context.ts";
 import { kernelHandlers } from "./methods.ts";
 
-export const SLICES = { kernelHandlers, paneHandlers, notifyHandlers, agentHandlers, dataHandlers, windowHandlers, workspaceHandlers, widgetHandlers, magicHandlers, jamHandlers, aiHandlers, fileHandlers, sqliteHandlers, searchHandlers, remoteHandlers } as const;
+export const SLICES = { kernelHandlers, paneHandlers, notifyHandlers, agentHandlers, dataHandlers, windowHandlers, workspaceHandlers, jamHandlers, aiHandlers, fileHandlers, sqliteHandlers, searchHandlers, remoteHandlers } as const;
 
 type Intersection<T> = (T extends unknown ? (x: T) => void : never) extends (x: infer I) => void ? I : never;
 type Slices = { [K in keyof typeof SLICES]: ReturnType<(typeof SLICES)[K]> }[keyof typeof SLICES];

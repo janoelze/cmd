@@ -489,8 +489,7 @@ export const SETTINGS_SCHEMA = {
     description: "Counts of what's used, never what you do.", details: "Once a minute: app launches, windows opened by type, agents started by kind and crashes, with the app and macOS versions, processor type and this Mac's random id (the one crash reports use). Never commands, paths, titles or anything you type, and no location. The totals are public at endtime-instruments.org/cmd/usage.",
   },
   "magic.explore": { title: "Look around this Mac", type: "boolean", default: true, description: "Let the Magic agent look around to answer.", details: "It runs read-only commands and reads files about this Mac. Private files (keys, keychains, browser profiles) stay off limits." },
-  "magic.deno": { title: "Deno", code: true, type: "string", default: "", placeholder: "found automatically", description: "Runs widgets' `data.ts`. Empty finds one." },
-  "magic.autoFix": { title: "Fix broken widgets automatically", type: "boolean", default: false, description: "Let the Magic agent try once, as if you pressed Fix." },
+  "magic.deno": { title: "Deno", code: true, type: "string", default: "", placeholder: "found automatically", description: "Runs widgets. Empty finds one." },
   "magic.showSteps": { title: "Show commands while building", type: "boolean", default: false, description: "Show the commands, files and URLs it looks at." },
 } as const satisfies Record<string, Def>;
 

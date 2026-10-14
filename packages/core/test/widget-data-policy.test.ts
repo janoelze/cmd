@@ -10,7 +10,7 @@ import { connect } from "@cmd/protocol/node";
 import type { DataEvent, NewDataEvent } from "@cmd/protocol";
 import { Core, widgetsSocketPath } from "../src/kernel/core.ts";
 import { POLICY, clampQuery } from "../src/data/policy.ts";
-import { runSocket, widgetQuery, WidgetTokens } from "../src/data/widgets.ts";
+import { widgetQuery, WidgetTokens } from "../src/data/widgets.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 
@@ -67,8 +67,8 @@ describe("the widget data policy", () => {
 
   it("denies transcripts, agents and ai unless declared, and says how to declare them", async () => {
     const w = await widget("A");
-    await expect(w.query({ types: ["transcript."] })).rejects.toThrow(/add "transcripts" to permissions\.events in manifest\.json/);
-    await expect(w.query({ types: ["agent.hook"] })).rejects.toThrow(/add "agents" to permissions\.events/);
+    await expect(w.query({ types: ["transcript."] })).rejects.toThrow(/add "transcripts" to cmd\.permissions\.events in package\.json/);
+    await expect(w.query({ types: ["agent.hook"] })).rejects.toThrow(/add "agents" to cmd\.permissions\.events/);
     await expect(w.query({ types: ["agent."] })).rejects.toThrow(/add "agents"/);
     await expect(w.query({ types: ["ai."] })).rejects.toThrow(/add "ai"/);
     await expect(w.query({ types: ["note", "transcript.message"] })).rejects.toThrow(/transcripts/);
@@ -140,14 +140,11 @@ describe("the widget data policy", () => {
     expect(clampQuery({ kind: "widget", workspaceId: "A", declared: [] }, { limit: -5 }, { fallback: 200, max: 1000 }).limit).toBe(1);
   });
 
-  it("gives a run a token only when its manifest declares events, and takes it back when the run ends", () => {
+  it("takes a token back at once when revoked", () => {
     const tokens = new WidgetTokens();
-    const none = runSocket(tokens, "/tmp/widgets.sock", { widgetId: "w", workspaceId: "s", events: [] });
-    expect(none.socket).toBeNull();
-    const run = runSocket(tokens, "/tmp/widgets.sock", { widgetId: "w", workspaceId: "s", events: ["commands"] });
-    expect(run.socket?.path).toBe("/tmp/widgets.sock");
-    expect(tokens.check(run.socket!.token)).toMatchObject({ widgetId: "w", workspaceId: "s" });
-    run.done();
-    expect(tokens.check(run.socket!.token)).toBeNull();
+    const token = tokens.issue({ widgetId: "w", workspaceId: "s", events: ["commands"] });
+    expect(tokens.check(token)).toMatchObject({ widgetId: "w", workspaceId: "s" });
+    tokens.revoke(token);
+    expect(tokens.check(token)).toBeNull();
   });
 });

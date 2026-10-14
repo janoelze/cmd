@@ -4,7 +4,7 @@
 // @cmd/widget-api/testing (the fake host), and the widget's trees for the previewer, rendered
 // in Vitest against each of its story's states (else each fixture). Each runs on a copy of the
 // package in a temporary folder whose node_modules links to the checkout's widget-api, React,
-// Vitest and types, as a child process of this Node under magic/sandbox.ts (writes only to that
+// Vitest and types, as a child process of this Node under lib/sandbox.ts (writes only to that
 // folder, no network): the agent's code and tests never run in the core. The tools are the
 // checkout's TypeScript and Vitest; a cmd without them (the packaged app for now) checks
 // package.json alone and says the rest was skipped (packageJsonToolchain; docs/56, Open questions).
@@ -13,7 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { WidgetPatch, WidgetTree } from "@cmd/protocol";
-import { execArgv, type SandboxMode } from "../sandbox.ts";
+import { execArgv, type SandboxMode } from "../../lib/sandbox.ts";
 import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
 import { listFiles } from "./files.ts";
 

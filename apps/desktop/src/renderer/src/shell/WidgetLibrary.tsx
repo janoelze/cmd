@@ -1,11 +1,10 @@
-// The Widget Library (docs/16-widgets.md): a sheet of cards, yours (by last
-// use) and built-in ones, with a New Widget button (Magic) beside the search field.
-// A click puts a widget on the board of this workspace; the search field only searches. Each card's menu adds, and
-// for yours renames, duplicates, shows the folder and deletes. Each card has
-// an avatar: a built-in widget's icon, else the widget's initial, in a colour
-// of its own from its name (as projects' chips in the sidebar).
+// The Widget Library (docs/16-widgets.md): a sheet of cards, yours (made with Magic), packages
+// and built-in ones, with a New Widget button (Magic) beside the search field. A click puts a
+// widget on the board of this workspace; the search field only searches. Each card's menu adds,
+// and for a package shows its folder and, for one made with Magic, deletes it. Each card has an
+// avatar: the widget's icon, in a colour of its own from its name (as projects' chips in the sidebar).
 
-import { Button, Callout, Dialog, EmptyState, IconButton, Presence, SearchField, SectionHeading, TextField, iconNode } from "@cmd/ui";
+import { Button, Callout, Dialog, EmptyState, IconButton, SearchField, SectionHeading, iconNode } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WidgetEntry } from "@cmd/protocol";
 import { cmd } from "../lib/bridge.ts";
@@ -15,11 +14,9 @@ import { setLibrary, useStoreValue } from "../lib/store.ts";
 import { projectHue } from "../lib/model.ts";
 import "./library.css";
 
-/** "Weather · Lisbon" → "W": the first letter or digit. */
-const initial = (title: string) => (/[\p{L}\p{N}]/u.exec(title)?.[0] ?? "✦").toUpperCase();
 const sourceOf = (e: WidgetEntry) => (e.source === "builtin" ? "Built-in" : e.source === "package" && !e.magic ? (e.problem ? "Can't run" : `${e.builtin ? "Built-in · " : ""}${e.name} ${e.version}`) : "Made with Magic");
-/** Made with Magic: the widgets of before (source "yours") and packages Magic made (docs/56). */
-const madeWithMagic = (e: WidgetEntry) => e.source === "yours" || (e.source === "package" && !!e.magic);
+/** Made with Magic: packages Magic made (docs/56). */
+const madeWithMagic = (e: WidgetEntry) => e.source === "package" && !!e.magic;
 
 function matches(e: WidgetEntry, query: string): boolean {
   const hay = [e.title, e.description, e.request].filter(Boolean).join(" ").toLowerCase();
@@ -34,7 +31,6 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
   const library = useStoreValue((s) => s.library);
   const workspaceId = useStoreValue((s) => s.workspaceId);
   const [query, setQuery] = useState("");
-  const [renaming, setRenaming] = useState<WidgetEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   // Fresh on open (widget.library events keep it current while it's open).
@@ -82,25 +78,17 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
     void showContextMenu(
       e.source === "builtin"
         ? [{ label: "Add to Workspace", run: () => void add(e) }]
-        : e.source === "package" && e.magic
-          ? [{ label: "Add to Workspace", run: () => void add(e), enabled: !e.problem }, { label: "Show in Finder", run: () => e.dir && cmd.revealPath(e.dir), enabled: !!e.dir }, "-", { label: "Delete…", run: () => void remove(e) }]
-          : e.source === "package"
-          ? [{ label: "Add to Workspace", run: () => void add(e), enabled: !e.problem }, { label: "Show in Finder", run: () => e.dir && cmd.revealPath(e.dir), enabled: !!e.dir }]
-          : [
-            { label: "Add to Workspace", run: () => void add(e) },
-            "-",
-            { label: "Rename…", run: () => setRenaming(e) },
-            { label: "Duplicate Widget", run: () => void cmd.call("widget.duplicate", { ref: e.ref }).catch(fail) },
+        : [
+            { label: "Add to Workspace", run: () => void add(e), enabled: !e.problem },
             { label: "Show in Finder", run: () => e.dir && cmd.revealPath(e.dir), enabled: !!e.dir },
-            "-",
-            { label: "Delete…", run: () => void remove(e) },
+            ...(e.magic && !e.link ? ["-" as const, { label: "Delete…", run: () => void remove(e) }] : []),
           ],
     );
 
   const card = (e: WidgetEntry) => (
     <div key={e.ref} className="wl-card" role="button" tabIndex={0} onClick={() => void add(e)} onKeyDown={(k) => k.key === "Enter" && void add(e)} onContextMenu={(ev) => (ev.preventDefault(), menu(e))}>
       <span className="wl-avatar" data-source={e.source} style={{ ["--hue" as string]: projectHue(e.title) }}>
-        {e.source !== "yours" ? iconNode(e.icon, 20) : <span className="wl-initial">{initial(e.title)}</span>}
+        {iconNode(e.icon, 20)}
       </span>
       <span className="wl-head">
         <span className="wl-title">
@@ -137,7 +125,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
           }}
         />
       }
-      aside="Right-click a widget to rename, duplicate or delete it"
+      aside="Right-click a widget you made to show or delete it"
       actions={
         <Button variant="primary" icon="sparkles" onClick={make}>
           New Widget
@@ -174,34 +162,6 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
         </section>
       )}
       {query && !shown.length && <EmptyState compact>Nothing matches “{query}”. New Widget makes one.</EmptyState>}
-      <Presence when={renaming}>{(entry, open) => <RenameDialog open={open} entry={entry} onDone={() => setRenaming(null)} onError={fail} />}</Presence>
-    </Dialog>
-  );
-}
-
-function RenameDialog({ open, entry, onDone, onError }: { open: boolean; entry: WidgetEntry; onDone: () => void; onError: (e: unknown) => void }) {
-  const [title, setTitle] = useState(entry.title);
-  const save = () => {
-    if (title.trim() && title.trim() !== entry.title) void cmd.call("widget.rename", { ref: entry.ref, title }).catch(onError);
-    onDone();
-  };
-  return (
-    <Dialog
-      open={open}
-      onClose={onDone}
-      title="Rename Widget"
-      width={360}
-      position="center"
-      actions={
-        <>
-          <Button onClick={onDone}>Cancel</Button>
-          <Button variant="primary" onClick={save} disabled={!title.trim()}>
-            Rename
-          </Button>
-        </>
-      }
-    >
-      <TextField value={title} onChange={setTitle} fill autoFocus onKeyDown={(k) => k.key === "Enter" && save()} />
     </Dialog>
   );
 }

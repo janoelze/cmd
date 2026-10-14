@@ -284,7 +284,7 @@ export function readEvents(id: WidgetIdentity, q: DataQuery, core: Pick<CoreCont
   } catch (e) {
     if (!(e instanceof PolicyError)) throw e;
     const type = /^events: "([^"]+)"/.exec(e.message)?.[1];
-    const cls = /add "(\w+)" to permissions\.events/.exec(e.message)?.[1];
+    const cls = /add "(\w+)" to cmd\.permissions\.events/.exec(e.message)?.[1];
     if (cls) throw missing("events", cls, `Reading ${type ? `"${type}"` : "these"} events`);
     throw invalid(e.message.replace(/^events: /, "events.query: "));
   }

@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { PERMISSION_KEYS, SUPPORTED_API, noPermissions, packageKind, type MagicMark, type WidgetPermissions } from "@cmd/protocol";
 import { POLICY, declarable } from "../data/policy.ts";
-import { ESCAPES } from "../magic/policy.ts";
+import { ESCAPES } from "../lib/policy.ts";
 import { expandPath, magicDenyPaths, privateMatcher } from "../lib/paths-deny.ts";
 
 export type WidgetSize = "s" | "m" | "l" | "wide";
@@ -109,8 +109,8 @@ export function enginesMin(range: string): string | null {
 }
 
 /**
- * Config fields (a manifest's `config`, a package widget's): the fields, problems in `errors` under `at`.
- * `bind`: a package's, whose secrets name the host they're for (one of `bind.net`); a Magic manifest's don't.
+ * A package widget's config fields: the fields, problems in `errors` under `at`. `bind`: the
+ * package's permissions, whose secrets name the host they're for (one of `bind.net`).
  */
 export function parseConfigFields(v: unknown, at: string, errors: string[], bind?: { net: string[] }): ConfigField[] {
   const strs = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === "string" && !!s.trim()).map((s) => s.trim()).slice(0, 32) : []);
@@ -308,15 +308,6 @@ export function markOf(json: unknown): MagicMark | null {
   const m = (json as { cmd?: { magic?: Partial<MagicMark> } } | null)?.cmd?.magic;
   if (!m || typeof m !== "object" || typeof m.request !== "string" || typeof m.madeAt !== "string") return null;
   return { request: m.request.slice(0, 2000), madeAt: m.madeAt, revisions: typeof m.revisions === "number" ? m.revisions : 0 };
-}
-
-/** A folder holds a widget package: a package.json with a "cmd" block. */
-export function isPackageDir(dir: string): boolean {
-  try {
-    return isObj(JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).cmd);
-  } catch {
-    return false;
-  }
 }
 
 /** Read and validate the package in `dir`. */

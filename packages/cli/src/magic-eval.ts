@@ -72,7 +72,7 @@ function judge(c: Case, r: PackageBuildResult): { problems: string[]; warnings: 
   const v = r.verdict;
   const e = c.expect;
   const pkg = v.pkg;
-  const kind = r.fast ? r.fast.route : r.ending?.kind === "terminal" ? "terminal" : r.ending ? "needs-program" : pkg ? "widget" : "none";
+  const kind = r.ending?.kind === "terminal" ? "terminal" : r.ending ? "needs-program" : pkg ? "widget" : "none";
   const needsProgram = e.needs === "run";
   // cmd's checks judge a package made; an ending without one (a terminal, a program it needs) is judged by the expectations.
   const problems = kind === "widget" ? [...v.problems.map((p) => p.split("\n")[0]!)] : [];
@@ -205,7 +205,7 @@ export async function evalCommand(argv: string[]): Promise<number> {
       problems,
       warnings,
       title: r.verdict.pkg?.widgets[0]?.title ?? (r.ending?.kind === "terminal" ? r.ending.title : null),
-      kind: r.fast ? r.route : (r.ending?.kind ?? (r.verdict.pkg ? "widget" : null)),
+      kind: r.ending?.kind ?? (r.verdict.pkg ? "widget" : null),
       ms: r.timings.done,
       steps: r.trace.length,
       repairs: r.repairs.length,

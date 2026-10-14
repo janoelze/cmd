@@ -10,8 +10,17 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PROMPT_DIR, type RequestContext } from "../prompt.ts";
+import { fileURLToPath } from "node:url";
 import { REPO } from "./toolchain.ts";
+
+/** Magic's prompt folder: prompt.md and the examples. */
+export const PROMPT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "../prompt");
+
+/** The workspace a window belongs to (not Home): what "this project" or a relative path means. */
+export interface Workspace {
+  name: string;
+  root: string;
+}
 
 export const API_README = path.join(REPO, "packages/widget-api/README.md");
 /** Where the API's data types are declared (protocol's widget-tree.ts; @cmd/widget-api re-exports them). */
@@ -113,7 +122,17 @@ export function buildPackageSystem(file?: string): string {
 /** A short hash of a system prompt, for eval reports and the log. */
 export const promptHash = (system: string): string => crypto.createHash("sha256").update(system).digest("hex").slice(0, 12);
 
-export interface PackageRequestContext extends Omit<RequestContext, "widgetDir"> {
+export interface PackageRequestContext {
+  cwd: string;
+  /** The window's workspace, when it has one besides Home. */
+  workspace?: Workspace | null;
+  home?: string;
+  now?: Date;
+  explore: boolean;
+  /** Shell commands can run (false on Windows for now: no sandbox). */
+  canRun?: boolean;
+  /** The package's files as they are now (a change), by path. */
+  files?: Record<string, string>;
   /** The package's folder and name. */
   dir: string;
   name: string;

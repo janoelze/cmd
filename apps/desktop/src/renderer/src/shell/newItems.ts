@@ -1,5 +1,5 @@
 // What New… (⌘N, the top bar's +) offers: every kind of window first, then the
-// widgets in the library (yours by last use, then the built-in ones), then
+// widgets in the library (yours, newest first, then the built-in ones), then
 // Magic. Typing a URL or a path opens it; any other text makes a widget of it.
 // Each window runs its own command, so it opens where that command would.
 
@@ -28,9 +28,9 @@ export function newItems(library: WidgetEntry[], bindings: Keybindings, run: (id
     hint: prettyAccelerator(bindings[id]?.[0]),
     run: () => run(id),
   }));
-  const used = (e: WidgetEntry) => e.usedAt ?? e.createdAt ?? 0;
-  // Yours: made with Magic, before packages and as packages (docs/56).
-  const yours = library.filter((e) => e.source === "yours" || (e.source === "package" && e.magic && !e.problem)).sort((a, b) => used(b) - used(a));
+  const made = (e: WidgetEntry) => e.createdAt ?? 0;
+  // Yours: packages made with Magic (docs/56), newest first.
+  const yours = library.filter((e) => e.source === "package" && e.magic && !e.problem).sort((a, b) => made(b) - made(a));
   const widgets = [...yours, ...library.filter((e) => e.source === "builtin")].map((e) => ({
     id: e.ref,
     group: "Widgets",

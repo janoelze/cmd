@@ -254,14 +254,15 @@ describe("the AI service", () => {
 });
 
 describe("the window's workspace", () => {
-  it("is named in the request, with what kind of folder it is", async () => {
-    const { buildRequest } = await import("../src/magic/prompt.ts");
+  it("is named in the request", async () => {
+    const { buildPackageRequest } = await import("../src/magic/package/prompt.ts");
+    const buildRequest = (p: string, c: { cwd: string; workspace: { name: string; root: string } | null; explore: boolean }) => buildPackageRequest(p, { ...c, dir: path.join(root, "w"), name: "w" });
     const root = tmp();
     fs.mkdirSync(path.join(root, ".git"));
     fs.writeFileSync(path.join(root, "package.json"), "{}");
     const text = buildRequest("open pull requests", { cwd: root, workspace: { name: "shop", root }, explore: true });
-    expect(text).toContain(`Workspace: this window belongs to the workspace "shop" at ${root} (a git repository with package.json).`);
-    expect(text).toMatch(/"this project", "the repo".*mean this folder/);
+    expect(text).toContain(`Workspace: this window belongs to the workspace "shop" at ${root}.`);
+    expect(text).toMatch(/"This project", "the repo".*mean this workspace/);
     expect(buildRequest("a timer", { cwd: root, workspace: null, explore: true })).not.toContain("Workspace:");
   });
 
@@ -292,7 +293,7 @@ describe("the window's workspace", () => {
     const end = Date.now() + 3000;
     while (seen.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
     // The path may be shortened to ~ (Windows keeps temp folders in the home folder).
-    expect(seen.find((t) => t.includes("Workspace:"))).toMatch(/the workspace "shop" at \S*shop \(/);
+    expect(seen.find((t) => t.includes("Workspace:"))).toMatch(/the workspace "shop" at \S*shop\./);
     // Each window's request (its repair turns resend it): only the workspace's names a workspace.
     expect(new Set(seen.filter((t) => t.includes("Workspace:"))).size).toBe(1);
     expect(seen.some((t) => !t.includes("Workspace:"))).toBe(true);

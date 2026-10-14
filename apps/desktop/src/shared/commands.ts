@@ -52,7 +52,6 @@ export const COMMANDS = spec([
   { id: "widget.library", label: "Widget Library…", keys: ["Shift+Cmd+L"], menu: "Widgets/library" },
   { id: "file.newMagic", label: "New Widget with Magic…", keys: ["Shift+Cmd+M"], menu: "Widgets/library" },
   { id: "view.magicChange", label: "Change Widget…", keys: ["Cmd+L"], menu: "Widgets/widget" },
-  { id: "view.magicRefresh", label: "Refresh Widget", keys: ["Cmd+R"], menu: "Widgets/widget" },
   { id: "view.magicStop", label: "Stop Making Widget", keys: ["Cmd+."], menu: "Widgets/widget" },
   { id: "widget.remove", label: "Remove from Board", menu: "Widgets/remove" },
   { id: "file.save", label: "Save", keys: ["Cmd+S"], menu: "File/save" },

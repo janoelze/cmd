@@ -10,7 +10,6 @@ import path from "node:path";
 import type { AppWindow } from "@cmd/protocol";
 import { logger, widgetsHome } from "@cmd/protocol/node";
 import type { CoreContext } from "../kernel/context.ts";
-import type { Feature } from "../kernel/features.ts";
 
 const log = logger("widgets");
 
@@ -50,14 +49,3 @@ export function dropOldWidgets(stateDir: string, core: Pick<CoreContext, "window
   if (moved || old.length) log.info(`widgets made before packages: ${moved ? `moved to ${to}` : "folder left as it was"}, ${old.length} ${old.length === 1 ? "window" : "windows"} closed`);
   return { moved, closed: old.length };
 }
-
-/** The startup job (kernel/features.ts), before the packages are read. */
-export const oldWidgetsFeature = {
-  id: "old-widgets",
-  startup: {
-    label: "Moving old widgets aside",
-    run: (core: CoreContext) => {
-      if (core.library.stateDir) dropOldWidgets(core.library.stateDir, core);
-    },
-  },
-} satisfies Feature;

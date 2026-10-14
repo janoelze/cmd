@@ -8,7 +8,7 @@ import type { CoreContext } from "../kernel/context.ts";
 import { isDir, restoredText } from "../terminals/restore.ts";
 import { terminalWindow } from "./manager.ts";
 
-type OpsCore = Pick<CoreContext, "windows" | "panes" | "agents" | "workspaces" | "closed" | "magic" | "data" | "store" | "broadcast" | "opened" | "place" | "library">;
+type OpsCore = Pick<CoreContext, "windows" | "panes" | "agents" | "workspaces" | "closed" | "data" | "store" | "broadcast" | "opened" | "place" | "library">;
 
 export class WindowOps {
   #core: OpsCore;
@@ -23,15 +23,12 @@ export class WindowOps {
     this.#core = core;
   }
 
-  /** A window of `p.kind` where the call belongs; a Magic window only for a widget in the library. */
+  /** A window of `p.kind` where the call belongs. */
   open(p: Params<"window.open">): AppWindow {
-    const { windows, magic, place, opened } = this.#core;
+    const { windows, place, opened } = this.#core;
     const input = p.input ?? {};
     const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
-    const widgetId = p.kind === "magic" && typeof input.widgetId === "string" ? input.widgetId : null;
-    if (widgetId && !magic.library().some((e) => e.id === widgetId)) throw new Error(`no such widget: ${widgetId}`);
     const w = windows.open(p.kind, input, place(p, { path: at }));
-    if (widgetId) magic.opened(w.id);
     return opened(windows.others().find((x) => x.id === w.id) ?? w);
   }
 
@@ -122,7 +119,7 @@ export class WindowOps {
    * runs nothing, not even what was running when it closed.
    */
   reopen(p: Params<"window.reopen">): AppWindow | null {
-    const { closed, panes, windows, workspaces, magic, place, opened, broadcast } = this.#core;
+    const { closed, panes, windows, workspaces, place, opened, broadcast } = this.#core;
     const rec = p.id ? closed.get(p.id) : closed.latest(p.workspaceId ?? workspaces.home().id);
     if (!rec) return null;
     if (panes.get(rec.id) || windows.others().some((w) => w.id === rec.id)) {
@@ -146,17 +143,7 @@ export class WindowOps {
       });
       w = terminalWindow(pane);
     } else if (rec.window) {
-      if (rec.kind === "magic") {
-        // It shows a widget from the library, which may have been deleted since.
-        if (!this.#widgetKept(rec.window)) {
-          closed.forget(rec.id);
-          throw new Error("That widget was deleted.");
-        }
-        w = windows.open("magic", { widgetId: rec.window.state.widgetId }, workspace, rec.id);
-        magic.opened(w.id);
-      } else {
-        w = windows.restore({ ...rec.window, workspaceId: workspace.id });
-      }
+      w = windows.restore({ ...rec.window, workspaceId: workspace.id });
     } else {
       closed.forget(rec.id);
       return null;
@@ -165,12 +152,6 @@ export class WindowOps {
     opened(w);
     broadcast({ type: "window.focus", id: w.id });
     return windows.list().find((x) => x.id === w.id) ?? w;
-  }
-
-  /** A Magic window's widget is still in the library. */
-  #widgetKept(w: AppWindow): boolean {
-    const id = w.state.widgetId;
-    return typeof id === "string" && this.#core.magic.library().some((e) => e.id === id);
   }
 
   /** A window closed in this workspace can be reopened: not one closed with its workspace (its terminals end after it is marked closed). */
@@ -184,8 +165,8 @@ export class WindowOps {
     windows.on("removed", (id, w) => {
       if (this.#keepsClosed(w.workspaceId)) {
         closed.add({ id, workspaceId: w.workspaceId, kind: w.kind, title: w.title, closedAt: Date.now(), window: w, terminal: null });
-        // A Magic draft that never built is deleted with its window (magic/service.ts): nothing to reopen.
-        if (w.kind === "magic") queueMicrotask(() => !this.#widgetKept(w) && closed.forget(id));
+        // A Magic window that never made anything (a request, a build stopped by closing it): nothing to reopen.
+        if (w.kind === "magic" && w.state.phase !== "ready") queueMicrotask(() => closed.forget(id));
       } else store.deleteUiStateOf(id);
       broadcast({ type: "window.removed", id });
       this.#core.library.changed();

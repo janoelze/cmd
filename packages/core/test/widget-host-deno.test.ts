@@ -13,7 +13,7 @@ import { connect, type Connection } from "@cmd/protocol/node";
 import type { CoreEvent, TreeNode } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
 import { findDeno } from "../src/widgets/deno.ts";
-import { sandboxAvailable } from "../src/magic/sandbox.ts";
+import { sandboxAvailable } from "../src/lib/sandbox.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { needs, SYSTEM_TIMEOUT, until } from "../../../test/system.ts";
 

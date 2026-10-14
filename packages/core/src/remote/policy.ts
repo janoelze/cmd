@@ -120,17 +120,9 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.run": "control", // spends API keys, runs the exploring agent
   "jam.change": "control", // spends API keys; returns code, runs nothing
   "magic.cancel": "control",
-  "magic.refresh": "view", // re-runs an already approved, read-only source
-  "magic.setRefresh": "never",
-  "magic.media": "never",
-  "magic.widget": "never", // file paths and config
-  "magic.restore": "never",
-  "magic.config": "never",
-  "magic.secret": "never",
-  "magic.state": "never",
-  "magic.fix": "never", // spends API keys; from the Mac only for now
   "magic.editPackage": "never",
-  "magic.mute": "never",
+  "magic.package": "never", // file paths
+  "magic.restorePackage": "never",
   "magic.runtime": "never",
   "magic.installRuntime": "never",
   "magic.skipRuntime": "never",
@@ -138,8 +130,6 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.previewResult": "never",
   "widget.list": "never", // file paths (screenshots)
   "widget.add": "never",
-  "widget.rename": "never",
-  "widget.duplicate": "never",
   "widget.delete": "never",
   // widget packages (docs/56): a press reaches the Mac from a control-scope device; trees reach a device that follows the window, without handlers below control scope (remoteEvent, withoutHandlers)
   "widget.interact": "control",
@@ -328,7 +318,6 @@ const ARGS: { [M in Method]?: Check<M> } = {
     if (JSON.stringify(p.value ?? null).length > MAX_WRITE) throw new RemoteDenied("value too large");
   },
   "magic.cancel": (p, ctx) => magicWidget(ctx, p.id),
-  "magic.refresh": (p, ctx) => magicWidget(ctx, p.id),
   "jam.change": (p) => {
     text(p.code);
     text(p.request);
@@ -537,7 +526,6 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
   switch (e.type) {
     case "pane.output":
       return follows.has(e.paneId);
-    case "magic.data":
     case "magic.stream":
       return follows.has(e.id);
     case "widget.tree":

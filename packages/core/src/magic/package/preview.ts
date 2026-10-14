@@ -8,8 +8,8 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import type { PreviewRequest, Previewer, PreviewShot } from "../../widgets/preview.ts";
-import { STRIP, WIDE } from "../../widgets/preview.ts";
+import type { PreviewRequest, Previewer, PreviewShot } from "../previewer.ts";
+import { STRIP, WIDE } from "../previewer.ts";
 import type { TreeVariant } from "./toolchain.ts";
 import { REPO } from "./toolchain.ts";
 

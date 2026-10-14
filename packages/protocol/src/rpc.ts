@@ -5,7 +5,7 @@ import type { Agent, AgentId, AgentKind, AgentState, AppNotification, AppWindow,
 import type { DataClassInfo, DataEvent, DataQuery, DataStats, NewDataEvent, SessionInfo, TurnRow, ViewQuery } from "./events.ts";
 import type { SettingKey, Settings } from "./settings.ts";
 import type { AiModel, AiStatus } from "./ai.ts";
-import type { MagicPackageMethods, MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime, MagicWidgetInfo } from "./magic.ts";
+import type { MagicPackageMethods, MagicPreviewRequest, MagicPreviewShot, MagicProgress, MagicRuntime } from "./magic.ts";
 import type { SecretsStatus } from "./secrets.ts";
 import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, AgentTurn } from "./activity.ts";
 import type { JournalMethods } from "./journal.ts";
@@ -301,31 +301,13 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   "window.list": { params: {}; result: AppWindow[] };
 
   /**
-   * Make a Magic widget's content from a request (docs/12-magic-widgets.md), or
-   * refine what it shows. Returns at once; progress arrives as magic.stream
-   * events and the result in the window's state.
+   * Make a widget package from a Magic window's request (docs/56, "Magic on V3"), or the
+   * change it asks for. Returns at once; progress arrives as magic.stream events and the
+   * result in the window's state (it becomes the package's widget).
    */
   "magic.run": { params: { id: WindowId; prompt: string }; result: null };
   /** Stop a run in progress. */
   "magic.cancel": { params: { id: WindowId }; result: null };
-  /** Run the widget's data source now (then on its interval again). */
-  "magic.refresh": { params: { id: WindowId }; result: null };
-  /** Set how often the widget's data source runs, in seconds (0 = only on Refresh Now); kept across refinements. */
-  "magic.setRefresh": { params: { id: WindowId; seconds: number }; result: null };
-  /** Allow (or decline) the media origins the widget asks for (MagicState.media); the frame's CSP opens only allowed ones. */
-  "magic.media": { params: { id: WindowId; allow: boolean }; result: null };
-  /** A Magic widget, for the edit view: folder, files, revisions, manifest, which secrets are set. */
-  "magic.widget": { params: { id: WindowId }; result: MagicWidgetInfo | null };
-  /** Bring back a revision of the widget (as a new revision). */
-  "magic.restore": { params: { id: WindowId; revision: number }; result: null };
-  /** Set the widget's config values (its manifest's config fields; secrets go through magic.secret); the data runs again. */
-  "magic.config": { params: { id: WindowId; values: Record<string, unknown> }; result: null };
-  /** Store or clear a secret config field's value (kept by the core, only data.ts gets it). */
-  "magic.secret": { params: { id: WindowId; key: string; value: string | null }; result: null };
-  /** The widget's cmd.state.set (value null removes the key). */
-  "magic.state": { params: { id: WindowId; key: string; value: unknown }; result: null };
-  /** Ask the agent to fix what is wrong (the data's last error, the checks' problems). */
-  "magic.fix": { params: { id: WindowId }; result: null };
   /**
    * Jam's AI: the new code for a request about the code playing now. `sounds`: what the
    * window has loaded; `history`: the code before each earlier change, newest first (for "undo
@@ -335,8 +317,6 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
     params: { code: string; request: string; sounds?: string[]; history?: { code: string; request: string; summary: string }[]; failed?: { code: string; error: string } };
     result: { code: string; summary: string };
   };
-  /** Mute a widget: its notifications only mark the window, without a system notification or sound. */
-  "magic.mute": { params: { id: WindowId; muted: boolean }; result: null };
   /** What widgets run on: Deno, the sandbox, the previewer. */
   "magic.runtime": { params: {}; result: MagicRuntime };
   /** Download the pinned Deno into cmd's state folder (also the yes to a build's "Download Deno?"). */
@@ -348,16 +328,12 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   /** The previewer's answer to a magic.previewRequest. */
   "magic.previewResult": { params: { reqId: string; shots?: MagicPreviewShot[]; error?: string }; result: null };
 
-  /** The Widget Library (docs/16-widgets.md): built-in widgets, then yours by last use. */
+  /** The Widget Library (docs/16-widgets.md): built-in widgets, then packages' (docs/56). */
   "widget.list": { params: {}; result: WidgetEntry[] };
   /** Put a widget from the library in a workspace (another window showing it, if one already does). */
   /** `cwd`: the folder a built-in widget is about (Live Diff's repository), e.g. the selected terminal's. */
   "widget.add": { params: Placement & { ref: string; cwd?: string }; result: AppWindow };
-  /** Name a widget made with Magic; the name sticks across changes. */
-  "widget.rename": { params: { ref: string; title: string }; result: null };
-  /** A copy of a widget made with Magic, to change on its own (files, revisions, secrets). */
-  "widget.duplicate": { params: { ref: string }; result: WidgetEntry };
-  /** Delete a widget made with Magic: its folder, revisions and secrets. Refused while a window shows it. */
+  /** Delete a package made with Magic (its ref): its windows, folder, versions and the instance's data about it. */
   "widget.delete": { params: { ref: string }; result: null };
 
   /** Directory listing for file windows (dirs first, then by name). */
@@ -439,7 +415,7 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   /** null deletes the key. Values must be JSON, ≤ 64 KiB. */
   "ui.set": { params: { key: string; value: unknown }; result: null };
 
-  /** The windows this connection shows (terminals, Magic): remote sessions get pane.output and magic.data only for these. */
+  /** The windows this connection shows (terminals, widgets): remote sessions get pane.output and widget.tree only for these. */
   "window.follow": { params: { ids: WindowId[] }; result: null };
 
   /** After this call the connection receives `event` notifications. */
@@ -489,8 +465,6 @@ export type CoreEvent =
   | { type: "workspace.show"; workspaceId: WorkspaceId; newWindow: boolean }
   /** A Magic widget's run: agent steps, the header, the body so far, done or failed. */
   | { type: "magic.stream"; id: WindowId; progress: MagicProgress }
-  /** New data from a Magic widget's source (error: the source failed; the widget keeps its last data). */
-  | { type: "magic.data"; id: WindowId; data: unknown; at: number; error?: string }
   /** To the previewer connection only: render these pages offscreen and answer with magic.previewResult. */
   | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
   /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a workspace). */

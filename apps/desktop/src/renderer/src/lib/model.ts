@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, kindLabel, needsAttention, placeAgainst, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type GitPlace, type PaneId, type Workspace, type WorkspaceId } from "@cmd/protocol";
+import { bucketOf, kindLabel, needsAttention, placeAgainst, type Agent, type AppWindow, type Attention, type Pane, type GitPlace, type PaneId, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import type { DotState } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
@@ -26,14 +26,6 @@ export function windowAttention(w: AppWindow | null | undefined): Attention | nu
   const a = w?.state.attention as Attention | null | undefined;
   return a && typeof a.text === "string" ? a : null;
 }
-
-/** A widget's status line (data.ts status()). */
-function widgetStatus(w: AppWindow): MagicStatus | null {
-  const st = w.state.status as MagicStatus | null | undefined;
-  return st && typeof st.text === "string" && st.text ? st : null;
-}
-
-const TONE_LIGHT: Record<NonNullable<MagicStatus["tone"]>, DotState> = { good: "success", warn: "warning", bad: "danger", dim: "off" };
 
 const RANK = { needs: 0, unseen: 1, rest: 2 } as const;
 
@@ -263,24 +255,19 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
     const w = r.win;
     const type = typeFor(w.kind);
     const d = viewFor(w.kind)?.describe?.(w) ?? {};
-    // Unseen news first (like a terminal's marker), then a widget's own status
-    // line unless the window has something more pressing to say (stale, working).
+    // Unseen news first (like a terminal's marker), then what the window says of itself.
     const attn = windowAttention(w);
-    const ws = widgetStatus(w);
-    const own = live && (live.key !== "updated" || !ws);
     f = {
       name: d.name || w.title || type?.title || w.kind,
       kind: d.kind === null ? undefined : (d.kind ?? type?.title ?? w.kind).toLowerCase(),
       place: d.place || undefined,
       status: attn
         ? { text: attn.text, key: `attention:${attn.kind}` }
-        : own
+        : live
           ? { text: live.label, key: live.key ?? live.label, transient: live.transient }
-          : ws
-            ? { text: ws.text, key: "widget-status" }
-            : undefined,
+          : undefined,
       dirty: live?.dirty,
-      tone: attn ? (attn.urgent ? "needs" : "unseen") : ws?.tone ? TONE_LIGHT[ws.tone] : undefined,
+      tone: attn ? (attn.urgent ? "needs" : "unseen") : undefined,
       icon: d.icon || type?.icon || "macwindow",
     };
   } else {

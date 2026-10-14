@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { expandPath, type Credentials } from "./policy.ts";
-import { INSTANCE_PRIVATE_PATTERN, realPathOf } from "../lib/paths-deny.ts";
+import { INSTANCE_PRIVATE_PATTERN, realPathOf } from "./paths-deny.ts";
 import { pathReady } from "../terminals/loginpath.ts";
 
 export type SandboxMode = "required" | "off";

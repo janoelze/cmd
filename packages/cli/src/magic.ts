@@ -18,18 +18,14 @@ import {
   AiService,
   buildPackage,
   checkoutToolchain,
-  findDeno,
   playwrightPreviewer,
   SecretsService,
   sandboxAvailable,
   slugOf,
   wantsText,
-  WidgetStore,
   type Backend,
   type BuildEvent,
-  type BuildResult,
   type PackageBuildResult,
-  type VerifyContext,
 } from "@cmd/core/magic";
 
 export const MAGIC_HELP = `cmd magic — make a widget package (or a terminal command) from a request
@@ -83,23 +79,8 @@ export function pickBackend(o: { provider?: string; model?: string; effort?: str
   return ai.backend({ tier: "smart", purpose: "magic.lab", provider: o.provider as never, model: o.model, effort });
 }
 
-/** A widget folder (anywhere) as a store entry, with Deno and a previewer, the way the core checks widgets. */
-export async function widgetContext(dir: string, o: { unsandboxed?: boolean; config?: Record<string, unknown>; cwd?: string; preview?: boolean } = {}): Promise<VerifyContext> {
-  const abs = path.resolve(dir);
-  const unsandboxed = o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
-  const deno = findDeno({ setting: userSettings()["magic.deno"], stateDir: cmdHome() });
-  return {
-    store: new WidgetStore(path.dirname(abs)),
-    id: path.basename(abs),
-    deno: deno ? { deno, denoDir: path.join(cmdHome(), "runtime", "deno-cache"), sandbox: unsandboxed ? "off" : "required" } : null,
-    previewer: o.preview === false ? null : await playwrightPreviewer(),
-    cwd: o.cwd ?? process.cwd(),
-    config: o.config,
-  };
-}
-
 export function sandboxNote(unsandboxed: boolean): void {
-  if (!unsandboxed && !sandboxAvailable()) process.stderr.write(dim("  note: sandbox-exec is unavailable here (inside another sandbox?), so commands and data.ts won't run; use --unsandboxed to rely on the policy and Deno's permissions alone\n"));
+  if (!unsandboxed && !sandboxAvailable()) process.stderr.write(dim("  note: sandbox-exec is unavailable here (inside another sandbox?), so commands won't run; use --unsandboxed to rely on the policy and Deno's permissions alone\n"));
 }
 
 // ── trace printing ──────────────────────────────────────
@@ -148,15 +129,6 @@ function printer(): (e: BuildEvent) => void {
         break;
     }
   };
-}
-
-/** The verdict as lines on stderr; returns whether it passed. */
-export function printVerdict(v: BuildResult["verdict"]): boolean {
-  if (v.ok) process.stderr.write(`  ${green("✓")} checks passed${v.warnings.length ? dim(` (${v.warnings.length} warning${v.warnings.length > 1 ? "s" : ""})`) : ""}\n`);
-  else process.stderr.write(`  ${v.usable ? yellow("!") : red("✗")} ${v.usable ? "renders, but" : "doesn't work:"}\n`);
-  for (const p of v.problems) process.stderr.write(red(`    ${p.split("\n")[0]!.slice(0, 200)}\n`));
-  for (const w of v.warnings) process.stderr.write(dim(`    ${w.split("\n")[0]!.slice(0, 200)}\n`));
-  return v.ok;
 }
 
 // ── command ─────────────────────────────────────────────
@@ -263,8 +235,7 @@ export async function magicCommand(argv: string[]): Promise<number> {
     const u = r.usage;
     const tokens = u.input || u.output ? ` · ${k(u.input + u.cacheRead + u.cacheWrite)} in (${k(u.cacheRead)} cached) / ${k(u.output)} out` : "";
     process.stderr.write(`  ${secs(r.timings.done)} · ${r.trace.length} steps${r.repairs.length ? ` · ${r.repairs.length} repair` : ""}${tokens} · prompt ${r.promptHash}\n`);
-    if (r.fast) process.stderr.write(dim(`  fast path (${r.fast.route}): the app makes it as a widget of its own; the lab makes packages\n`));
-    else printPackageVerdict(r);
+    printPackageVerdict(r);
     if (r.summary) process.stderr.write(`  ${dim(r.summary)}\n`);
     console.log(r.ending?.kind === "terminal" ? r.ending.command : r.verdict.pkg ? dir : "");
   }

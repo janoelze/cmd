@@ -10,10 +10,9 @@
 .wl-card:active { transform: scale(0.99); }
 .wl-card:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 
-/* The avatar: a stable colour per widget, its icon (built-in) or initial. */
+/* The avatar: a stable colour per widget, and its icon. */
 /* A full-colour tile; the glyph is near-white or near-black, whichever the tile's lightness calls for. */
 .wl-avatar { --hue: 240; --tile: hsl(var(--hue) var(--avatar)); position: relative; width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--radius-xl); background: var(--tile); color: oklch(from var(--tile) clamp(0.22, (0.72 - l) * 1000, 0.99) 0 0); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.18); }
-.wl-initial { font: 650 19px/1 var(--font-ui); letter-spacing: -0.01em; }
 
 /* Name and kind beside the avatar; the description at the bottom, open space between. */
 .wl-head { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-0-5); padding-right: var(--space-4); min-height: 44px; }

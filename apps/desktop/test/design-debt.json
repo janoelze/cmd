@@ -3,8 +3,7 @@
     "color": 1
   },
   "apps/desktop/src/renderer/src/shell/library.css": {
-    "color": 2,
-    "fontSize": 1
+    "color": 2
   },
   "apps/desktop/src/renderer/src/styles.css": {
     "fontSize": 1,

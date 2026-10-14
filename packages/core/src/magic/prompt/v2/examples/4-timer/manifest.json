@@ -1,9 +1,0 @@
-{
-  "cmd": 2,
-  "kit": 3,
-  "kind": "widget",
-  "title": "Pomodoro",
-  "icon": "timer",
-  "size": "s",
-  "refresh": 0
-}

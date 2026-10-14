@@ -1,6 +1,5 @@
-// Live progress of Magic widgets (docs/14-magic-v2.md), from the core's
-// magic.stream / magic.data events. Kept out of the main store: progress and
-// refreshes re-render only the window they belong to.
+// Live progress of Magic builds (docs/56, "Magic on V3"), from the core's magic.stream
+// events. Kept out of the main store: progress re-renders only the window it belongs to.
 
 import { useSyncExternalStore } from "react";
 import type { CoreEvent, MagicStep, WindowId } from "@cmd/protocol";
@@ -15,8 +14,6 @@ export interface MagicLive {
   verifying?: boolean;
   /** What cmd's check sent back to the agent. */
   repair?: string;
-  /** The latest data run. */
-  data?: { data: unknown; at: number; error?: string };
 }
 
 const EMPTY: MagicLive = { running: false, steps: [] };
@@ -28,15 +25,11 @@ function set(id: WindowId, next: MagicLive): void {
   for (const fn of listeners.get(id) ?? []) fn();
 }
 
-export function handleMagicEvent(e: Extract<CoreEvent, { type: "magic.stream" | "magic.data" }>): void {
+export function handleMagicEvent(e: Extract<CoreEvent, { type: "magic.stream" }>): void {
   const cur = live.get(e.id) ?? EMPTY;
-  if (e.type === "magic.data") {
-    set(e.id, { ...cur, data: e.error ? { data: cur.data?.data, at: cur.data?.at ?? e.at, error: e.error } : { data: e.data, at: e.at } });
-    return;
-  }
   const p = e.progress;
   // A new run's first event resets what the last one left.
-  const base = cur.running ? cur : { ...EMPTY, running: true, data: cur.data };
+  const base = cur.running ? cur : { ...EMPTY, running: true };
   switch (p.type) {
     case "step": {
       const steps = [...base.steps];
@@ -64,8 +57,7 @@ export function handleMagicEvent(e: Extract<CoreEvent, { type: "magic.stream" | 
 
 /** Forget a window's progress (a new run starts). */
 export function resetMagic(id: WindowId): void {
-  const cur = live.get(id);
-  set(id, { ...EMPTY, running: true, data: cur?.data });
+  set(id, { ...EMPTY, running: true });
 }
 
 export function useMagicLive(id: WindowId): MagicLive {
@@ -78,17 +70,4 @@ export function useMagicLive(id: WindowId): MagicLive {
     },
     () => live.get(id) ?? EMPTY,
   );
-}
-
-/** Choices for a widget's refresh interval, in seconds (0: only on Refresh Now). */
-export const REFRESH_CHOICES = [2, 5, 10, 30, 60, 300, 900, 3600, 0];
-
-export function intervalLabel(s: number): string {
-  const [n, unit] = s % 3600 === 0 ? [s / 3600, "Hour"] : s % 60 === 0 ? [s / 60, "Minute"] : [s, "Second"];
-  return s === 0 ? "Never" : `${n} ${unit}${n === 1 ? "" : "s"}`;
-}
-
-/** The interval choices including the current one (the model may have picked 3 s). */
-export function refreshChoices(cur: number): number[] {
-  return REFRESH_CHOICES.includes(cur) ? REFRESH_CHOICES : [...REFRESH_CHOICES.slice(0, -1), cur].sort((x, y) => x - y).concat(0);
 }

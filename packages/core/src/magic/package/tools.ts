@@ -6,9 +6,9 @@
 // one package folder; nothing else is reachable, grants.json least of all.
 
 import type { WidgetPermissions } from "@cmd/protocol";
-import { redact } from "../policy.ts";
+import { redact } from "../../lib/policy.ts";
 import type { ToolOutput, ToolSpec } from "../tools.ts";
-import type { Previewer } from "../../widgets/preview.ts";
+import type { Previewer } from "../previewer.ts";
 import type { WidgetPackage } from "../../widgets/package.ts";
 import { WRITABLE, listFiles, readFile, writeFile } from "./files.ts";
 import { previewTrees } from "./preview.ts";

@@ -1,14 +1,13 @@
 // The Magic agent's tools for looking around (docs/12-magic-widgets.md → Agent):
 // all read-only; `run` only runs what the policy calls read-only, under the
-// sandbox. The tools that build the widget are in widget-tools.ts. Every input
+// sandbox. The tools that build a package are in package/tools.ts. Every input
 // carries `why`, a short label for the trace.
 
 import fs from "node:fs";
 import path from "node:path";
-import { classify, credentialsFor, expandPath, redact } from "./policy.ts";
+import { classify, credentialsFor, expandPath, redact } from "../lib/policy.ts";
 import { privateMatcher } from "../lib/paths-deny.ts";
-import { execCommand, type SandboxMode } from "./sandbox.ts";
-import { preview } from "./sources.ts";
+import { execCommand, type SandboxMode } from "../lib/sandbox.ts";
 import { FetchRefused, guardedFetch, type Lookup } from "./fetch.ts";
 
 export interface ToolSpec {
@@ -172,4 +171,24 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
     }
   }
   return err(`unknown tool: ${name}`);
+}
+
+/** A compact preview of data for the model: valid JSON-ish text, long arrays and strings shortened. */
+export function preview(data: unknown, maxChars = 6000): string {
+  if (typeof data === "string") return data.length > maxChars ? data.slice(0, maxChars) + `\n… (${data.length - maxChars} more characters)` : data;
+  const shrink = (v: unknown, depth: number): unknown => {
+    if (Array.isArray(v)) {
+      const head = v.slice(0, depth > 2 ? 3 : 8).map((x) => shrink(x, depth + 1));
+      return v.length > head.length ? [...head, `… ${v.length - head.length} more items`] : head;
+    }
+    if (v && typeof v === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(v)) out[k] = shrink(x, depth + 1);
+      return out;
+    }
+    if (typeof v === "string" && v.length > 200) return v.slice(0, 200) + "…";
+    return v;
+  };
+  const s = JSON.stringify(shrink(data, 0), null, 1);
+  return s.length > maxChars ? s.slice(0, maxChars) + "\n… (truncated)" : s;
 }

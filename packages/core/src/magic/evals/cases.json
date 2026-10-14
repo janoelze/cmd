@@ -1,6 +1,6 @@
 [
-  {"id": "json-paste", "prompt": "{\"service\":\"api\",\"healthy\":true,\"latency_ms\":[12,15,11,40,13],\"regions\":{\"eu\":\"ok\",\"us\":\"degraded\"}}", "expect": {"route": "json"}, "tags": ["fast"]},
-  {"id": "command-paste", "prompt": "ps aux | sort -nrk 3 | head", "expect": {"route": "terminal"}, "tags": ["fast"]},
+  {"id": "json-paste", "prompt": "{\"service\":\"api\",\"healthy\":true,\"latency_ms\":[12,15,11,40,13],\"regions\":{\"eu\":\"ok\",\"us\":\"degraded\"}}", "expect": {"kind": "widget", "data": null}, "tags": ["portable"]},
+  {"id": "command-paste", "prompt": "ps aux | sort -nrk 3 | head", "expect": {"route": "terminal", "kind": "terminal"}, "tags": ["fast"]},
   {"id": "weather", "prompt": "what's the weather like in Tokyo this week", "expect": {"kind": "widget", "data": "net", "explores": false}, "tags": ["portable"]},
   {"id": "fx", "prompt": "euro to yen rate, last 30 days", "expect": {"kind": "widget", "data": "net", "explores": false}, "tags": ["portable"]},
   {"id": "hn", "prompt": "top 10 hacker news stories", "expect": {"kind": "widget", "data": "net", "explores": false}, "tags": ["portable"]},

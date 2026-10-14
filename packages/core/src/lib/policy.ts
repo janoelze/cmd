@@ -7,10 +7,10 @@
 
 import os from "node:os";
 import path from "node:path";
-import { isDeniedPath, magicDenyPaths } from "../lib/paths-deny.ts";
+import { isDeniedPath, magicDenyPaths } from "./paths-deny.ts";
 
 // The private paths moved to paths-deny.ts (shared with remote access); kept here for Magic's imports.
-export { DEFAULT_DENY_PATHS, expandPath, isDeniedPath } from "../lib/paths-deny.ts";
+export { DEFAULT_DENY_PATHS, expandPath, isDeniedPath } from "./paths-deny.ts";
 
 /** Programs that would let a widget run anything (shells, interpreters, launchers): never declared in a widget's `run`. */
 export const ESCAPES: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "fish", "deno", "node", "python", "python3", "ruby", "perl", "osascript", "sudo", "env", "xargs", "open", "bun", "npx"]);
@@ -213,8 +213,8 @@ const READ_ONLY: Record<string, ArgRule> = {
  * network is fetch's job in the agent and permissions.net in a widget.
  */
 const SENDS: Record<string, string> = {
-  curl: "sends requests to any host (use fetch, or permissions.net in data.ts)",
-  wget: "sends requests to any host (use fetch, or permissions.net in data.ts)",
+  curl: "sends requests to any host (use fetch, or a package's permissions.net)",
+  wget: "sends requests to any host (use fetch, or a package's permissions.net)",
   dig: "sends DNS queries, which can carry data", nslookup: "sends DNS queries, which can carry data", host: "sends DNS queries, which can carry data",
   ping: "sends packets to any host", nc: "opens connections to any host", telnet: "opens connections to any host",
 };
@@ -292,7 +292,7 @@ export function credentialsForPrograms(programs: string[]): Credentials {
   return out;
 }
 
-export { redact } from "../lib/redact.ts";
+export { redact } from "./redact.ts";
 
 export interface PolicyOptions {
   deny?: string[];

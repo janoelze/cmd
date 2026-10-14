@@ -1,19 +1,14 @@
-export { buildWidget, fastRoute, type BuildOptions, type BuildResult, type BuildEvent, type TraceStep } from "./build.ts";
+// What `cmd magic` and `cmd widget` use of the core without one running (the prompt lab, evals).
 export * from "../ai/index.ts";
-export { MagicService } from "./service.ts";
-export { refineRequest } from "./refine.ts";
-export { classify, credentialsFor, credentialsForPrograms, DEFAULT_DENY_PATHS, isDeniedPath, redact } from "./policy.ts";
-export { execArgv, execCommand, sandboxAvailable, sandboxProfile, type SandboxMode } from "./sandbox.ts";
-export { runSource, preview, type MagicSource, type SourceResult } from "./sources.ts";
-export { TOOL_SPECS, toolsFor, runTool } from "./tools.ts";
-export { WIDGET_TOOL_SPECS, runWidgetTool } from "./widget-tools.ts";
-export { buildSystem, buildRequest, PROMPT_DIR, V2_PROMPT_DIR, type Workspace } from "./prompt.ts";
-export { widgetHtml, widgetTokens, SIZES, type ThemeLike } from "./host.ts";
+export { classify, credentialsFor, credentialsForPrograms, DEFAULT_DENY_PATHS, isDeniedPath, redact } from "../lib/policy.ts";
+export { execArgv, execCommand, sandboxAvailable, sandboxProfile, type SandboxMode } from "../lib/sandbox.ts";
+export { TOOL_SPECS, toolsFor, runTool, preview } from "./tools.ts";
 export { readSecrets, SecretsService } from "../kernel/secrets.ts";
-export * from "../widgets/index.ts";
-export { buildPackage, verifyPackage, type PackageBuildOptions, type PackageBuildResult, type PackageVerdict } from "./package/build.ts";
+export { RUNTIME_DIR, DENO_VERSION, findDeno, installDeno, bundledDeno, denoVersion } from "../widgets/deno.ts";
+export { playwrightPreviewer, STRIP, WIDE, MEASURE, type Previewer, type PreviewRequest, type PreviewShot } from "./previewer.ts";
+export { buildPackage, verifyPackage, fastCommand, type BuildEvent, type BuildRoute, type TraceStep, type PackageBuildOptions, type PackageBuildResult, type PackageVerdict } from "./package/build.ts";
 export { checkoutToolchain, type Toolchain } from "./package/toolchain.ts";
-export { buildPackageSystem, buildPackageRequest, promptHash, examples, exampleFiles } from "./package/prompt.ts";
+export { buildPackageSystem, buildPackageRequest, promptHash, examples, exampleFiles, PROMPT_DIR, type Workspace } from "./package/prompt.ts";
 export { scriptedBackend, type Script, type ScriptTurn } from "./package/scripted.ts";
 export { slugOf, wantsText } from "./package/service.ts";
 export { PACKAGE_TOOL_SPECS } from "./package/tools.ts";

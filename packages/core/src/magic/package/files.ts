@@ -9,6 +9,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { MagicMark } from "@cmd/protocol";
 import { markOf } from "../../widgets/package.ts";
+import { listFiles } from "../../widgets/revisions.ts";
+
+export { listFiles };
 
 const MAX_FILE = 256 * 1024;
 const SEGMENT = /^[\w][\w.-]*$/;
@@ -59,27 +62,6 @@ export function writeFile(dir: string, rel: string, content: string): string {
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, w.rel === "package.json" ? keepMark(dir, content) : content);
   return w.rel;
-}
-
-/** The package's own files (no node_modules, dot-files or links), relative, sorted. */
-export function listFiles(dir: string): string[] {
-  const out: string[] = [];
-  const walk = (rel: string) => {
-    let entries: fs.Dirent[] = [];
-    try {
-      entries = fs.readdirSync(path.join(dir, rel), { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      if (e.name.startsWith(".") || e.name === "node_modules" || e.isSymbolicLink()) continue;
-      const r = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isDirectory()) walk(r);
-      else if (e.isFile()) out.push(r);
-    }
-  };
-  walk("");
-  return out.sort();
 }
 
 /** Every file of the package by path (for a change: what the agent starts from). */

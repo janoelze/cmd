@@ -2,7 +2,7 @@
 // kind × class of data → allow | deny | declare | fields, and the query and rows
 // a reader gets under it. Enforced here, on the query and on every row it
 // returns, so a reader can't widen it by what it asks for. Widgets read their own
-// workspace only; classes marked declare need the widget's manifest to name them
+// workspace only; classes marked declare need the widget's package.json to name them
 // (permissions.events); fields keeps only those payload keys, no blob, and no
 // full-text search over the body, unless declared. Remote stays out of data.*
 // altogether (remote/policy.ts).
@@ -66,7 +66,7 @@ const denied = (r: Reader, t: string, c: DataClass, why = "") =>
   new PolicyError(
     POLICY[r.kind][c] === "deny"
       ? `events: "${t}" is ${c} data, which widgets can't read`
-      : `events: "${t}" ${why || `is ${c} data`}; to read it, add "${c}" to permissions.events in manifest.json`,
+      : `events: "${t}" ${why || `is ${c} data`}; to read it, add "${c}" to cmd.permissions.events in package.json`,
   );
 
 /**

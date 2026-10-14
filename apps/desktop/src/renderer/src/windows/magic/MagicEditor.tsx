@@ -1,103 +1,121 @@
-// A Magic widget's edit view (docs/14-magic-v2.md), ⌘E from its widget:
-//  - Changes: ask for a change, and every version so far (what was asked, a
-//    screenshot, whether its checks passed), any of which can be brought back.
-//  - Settings: how often the data runs, the widget's own settings (from its
-//    manifest: a city, a repository, a token), and what its data.ts may touch.
-//  - Files: the widget's folder; files open in cmd, and edits made anywhere
-//    (by hand, by Claude Code) show up in the widget as a new version.
-//  - Health: is the data coming, why not, what the last build's checks left,
-//    how it was made (the agent's steps), and what widgets run on.
+// A package widget's edit view (docs/56, "Revisions"), ⌘E on the window of a widget made with
+// Magic (withMagicEdit wraps the package view, windows/package/register.tsx):
+//  - Changes: ask for a change (Edit with Magic builds it beside the window), and every version
+//    so far: what was asked, a screenshot, whether its checks passed, any of which comes back
+//    with Restore (refused for a linked package, whose folder is the person's own).
+//  - Files: the package's folder; files open in cmd, and a save anywhere (by hand, by Claude
+//    Code) reloads the widget and becomes a version, "Edited by hand".
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { AppWindow, MagicConfigField, MagicRuntime, MagicState, MagicWidgetInfo } from "@cmd/protocol";
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
+import type { AppWindow, MagicPackageInfo, MagicRevision } from "@cmd/protocol";
 import {
   Badge,
   Button,
   ButtonGroup,
   Callout,
-  CodeBlock,
   EmptyState,
   FormRow,
   FormSection,
   Inline,
-  KeyValue,
   LinkButton,
   List,
   ListRow,
   ListRowContent,
   ListRowEnd,
-  NumberField,
   Page,
-  ResetButton,
-  SecretField,
-  Select,
   Spacer,
-  Spinner,
-  Stack,
   StatusDot,
-  Switch,
   Text,
   TextArea,
-  TextField,
   Thumb,
   ToolbarButton,
   ToolbarSegmented,
   ToolbarSpacer,
-  ToolbarText,
   View,
   WindowToolbar,
 } from "@cmd/ui";
 import { cmd } from "../../lib/bridge.ts";
 import { copy, openPath } from "../../lib/actions.ts";
-import { intervalLabel, refreshChoices, type MagicLive } from "./magic.ts";
 import { ago } from "../../lib/model.ts";
-import { StepList } from "./MagicView.tsx";
+import { useStoreValue } from "../../lib/store.ts";
+import { registerWindowActions } from "../../lib/windowActions.ts";
+import type { WindowViewProps } from "../registry.ts";
 
-type Tab = "changes" | "settings" | "files" | "health";
+// Which windows show their edit view (kept across remounts, not across restarts).
+let editing = new Set<string>();
+const editListeners = new Set<() => void>();
+export function setEditing(id: string, on: boolean): void {
+  if (editing.has(id) === on) return;
+  editing = new Set(editing);
+  if (on) editing.add(id);
+  else editing.delete(id);
+  for (const fn of editListeners) fn();
+}
+function useEditing(id: string): boolean {
+  const set = useSyncExternalStore(
+    (fn) => (editListeners.add(fn), () => editListeners.delete(fn)),
+    () => editing,
+  );
+  return set.has(id);
+}
+
+/** A package window's view with ⌘E: the edit view, for a widget made with Magic. */
+export function withMagicEdit(Inner: ComponentType<WindowViewProps>): ComponentType<WindowViewProps> {
+  return function MagicEditable(props: WindowViewProps) {
+    const { win } = props;
+    const made = useStoreValue((s) => !!s.library.find((e) => e.kind === win.kind)?.magic);
+    const edit = useEditing(win.id) && made;
+    useEffect(() => (made ? registerWindowActions(win.id, { toggleEdit: () => setEditing(win.id, !editing.has(win.id)) }) : undefined), [win.id, made]);
+    return edit ? <MagicEditor win={win} onClose={() => setEditing(win.id, false)} /> : <Inner {...props} />;
+  };
+}
+
+type Tab = "changes" | "files";
 const TABS: { value: Tab; label: string }[] = [
   { value: "changes", label: "Changes" },
-  { value: "settings", label: "Settings" },
   { value: "files", label: "Files" },
-  { value: "health", label: "Health" },
 ];
 
 const fileUrl = (p: string) => `cmd-file://local/?path=${encodeURIComponent(p)}`;
 
-export function MagicEditor({ win, live, onRun, onClose }: { win: AppWindow; live: MagicLive; onRun: (prompt: string) => void; onClose: () => void }) {
-  const s = win.state as MagicState;
-  const [tab, setTab] = useState<Tab>(s.health && !s.health.ok ? "health" : "changes");
-  const [info, setInfo] = useState<MagicWidgetInfo | null>(null);
-  const working = s.phase === "working";
-  // Asked again whenever the window changes (a new version, a hand edit, new config).
+export function MagicEditor({ win, onClose }: { win: AppWindow; onClose: () => void }) {
+  const [tab, setTab] = useState<Tab>("changes");
+  const [info, setInfo] = useState<MagicPackageInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Asked again whenever the Library changes (a build, a Restore, a hand edit).
+  const library = useStoreValue((s) => s.library);
+  const [asked, setAsked] = useState(0);
   useEffect(() => {
     let alive = true;
-    void cmd.call("magic.widget", { id: win.id }).then((i) => alive && setInfo(i), () => alive && setInfo(null));
+    void cmd.call("magic.package", { windowId: win.id }).then((i) => alive && setInfo(i), () => alive && setInfo(null));
     return () => void (alive = false);
-  }, [win.id, s.revision, win.updatedAt]);
-  const healthBad = !!(s.health && !s.health.ok) || !!s.problems?.length || !!s.error;
-
+  }, [win.id, library, asked]);
+  const restore = (n: number) => {
+    setError(null);
+    void cmd.call("magic.restorePackage", { windowId: win.id, revision: n }).then(
+      () => setAsked((x) => x + 1),
+      (e: Error) => setError(e.message),
+    );
+  };
   return (
     <View
       className="magic-edit"
       inset
       toolbar={
-      <WindowToolbar label="Widget editor">
-        <ToolbarSegmented label="Editor" value={tab} onChange={setTab} options={TABS.map((t) => (t.value === "health" && healthBad ? { ...t, badge: <StatusDot size="sm" state="danger" /> } : t))} />
-        <ToolbarSpacer />
-        {working && (
-          <ToolbarText>
-            <Spinner size={11} /> Working…
-          </ToolbarText>
-        )}
-        <ToolbarButton label="Done" shortcut="⌘E" tip="Back to the widget" onClick={onClose} />
-      </WindowToolbar>
+        <WindowToolbar label="Widget editor">
+          <ToolbarSegmented label="Editor" value={tab} onChange={setTab} options={TABS} />
+          <ToolbarSpacer />
+          <ToolbarButton label="Done" shortcut="⌘E" tip="Back to the widget" onClick={onClose} />
+        </WindowToolbar>
       }
     >
       <Page>
-        {tab === "changes" && <Changes win={win} info={info} working={working} onRun={onRun} />}
-        {tab === "settings" && <Settings win={win} info={info} />}
-        {tab === "files" && <Files info={info} />}
-        {tab === "health" && <Health win={win} live={live} />}
+        {error && (
+          <Callout tone="danger" onDismiss={() => setError(null)}>
+            {error}
+          </Callout>
+        )}
+        {tab === "changes" ? <Changes win={win} info={info} onRestore={restore} /> : <Files info={info} />}
       </Page>
     </View>
   );
@@ -111,304 +129,108 @@ const Dim = ({ children }: { children: ReactNode }) => (
 
 // ── Changes ─────────────────────────────────────────────
 
-function Changes({ win, info, working, onRun }: { win: AppWindow; info: MagicWidgetInfo | null; working: boolean; onRun: (p: string) => void }) {
-  const s = win.state as MagicState;
+function Changes({ win, info, onRestore }: { win: AppWindow; info: MagicPackageInfo | null; onRestore: (n: number) => void }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => ref.current?.focus(), []);
+  const building = !!info?.building;
   const submit = () => {
-    if (!text.trim() || working) return;
-    onRun(text.trim());
+    if (!text.trim() || building) return;
+    void cmd.call("magic.editPackage", { windowId: win.id, prompt: text.trim() });
     setText("");
   };
   const revisions = [...(info?.revisions ?? [])].reverse();
+  const shown = info && !info.edited ? info.revisions.at(-1)?.n : undefined;
   return (
     <>
-      <FormSection title="Change it" plain>
+      <FormSection title="Change It" plain>
         <TextArea
           ref={ref}
           rows={3}
           autoGrow={10}
-          placeholder={working ? "Wait for the current change to finish…" : "What should change? “bigger numbers”, “add humidity”, “show the last 7 days”"}
+          placeholder={building ? "Wait for the change being made to finish…" : "What should change? “bigger numbers”, “add humidity”, “show the last 7 days”"}
           value={text}
-          disabled={working}
+          disabled={building}
           onChange={setText}
           onSubmit={submit}
           submitOnEnter
         />
         <Inline gap={2}>
-          <Text size="sm" tone="dim">
-            ⏎ to send · the widget stays as it is until the change works
-          </Text>
+          <Dim>⏎ to send · the widget stays as it is until the change works</Dim>
           <Spacer />
-          <Button disabled={working} onClick={() => void cmd.call("magic.fix", { id: win.id })}>
-            Check and Fix
-          </Button>
-          <Button variant="primary" disabled={working || !text.trim()} onClick={submit}>
+          <Button variant="primary" disabled={building || !text.trim()} onClick={submit}>
             Change
           </Button>
         </Inline>
       </FormSection>
       <FormSection title="Versions" aside={info?.edited ? "files edited since the last version" : undefined} plain>
+        {info?.link && <Callout compact>Linked from your own folder, so Restore is off: cmd doesn't write into it.</Callout>}
         {!revisions.length && <EmptyState compact icon="clock.arrow.circlepath" title="No versions yet" />}
         <List>
-          {revisions.map((r) => {
-            const current = r.n === s.revision;
-            return (
-              <ListRow
-                key={r.n}
-                className="magic-revision"
-                tip={r.prompt}
-              >
-                <Thumb src={r.shot ? fileUrl(r.shot) : null} />
-                <ListRowContent title={current ? <Text strong>{r.prompt}</Text> : r.prompt} detail={
-                  <Inline gap={1}>
-                    <StatusDot size="sm" state={r.ok ? "success" : "warning"} />
-                    {r.ok ? "checks passed" : `${r.problems?.length ?? "some"} problem${r.problems?.length === 1 ? "" : "s"} left`} · {ago(r.at, Date.now())}
-                    {r.model ? ` · ${r.model}` : ""} · v{r.n}
-                  </Inline>
-                } />
-                <ListRowEnd>
-                  {current ? (
-                    <Badge>shown</Badge>
-                  ) : (
-                    <Button size="sm" disabled={working} onClick={() => void cmd.call("magic.restore", { id: win.id, revision: r.n })}>
-                      Restore
-                    </Button>
-                  )}
-                </ListRowEnd>
-              </ListRow>
-            );
-          })}
+          {revisions.map((r) => (
+            <Version key={r.n} r={r} shown={r.n === shown} restore={!info?.link && !building ? () => onRestore(r.n) : undefined} />
+          ))}
         </List>
       </FormSection>
-      {(s.history?.length ?? 0) > 0 && (
-        <FormSection title="Asked so far" plain>
-          <Stack gap={0.5}>
-            {s.history!.map((h, i) => (
-              <Text key={i} tone="dim">
-                › {h}
-              </Text>
-            ))}
-          </Stack>
-        </FormSection>
-      )}
     </>
   );
 }
 
-// ── Settings ────────────────────────────────────────────
-
-function Settings({ win, info }: { win: AppWindow; info: MagicWidgetInfo | null }) {
-  const s = win.state as MagicState;
-  const m = info?.manifest;
-  const hasData = !!(s.hasData || s.source);
-  const cur = s.refresh ?? 0;
-  const setRefresh = (seconds: number) => void cmd.call("magic.setRefresh", { id: win.id, seconds });
+function Version({ r, shown, restore }: { r: MagicRevision; shown: boolean; restore?: () => void }) {
+  const checks = r.hand ? "edited outside cmd" : r.ok ? "checks passed" : `${r.problems?.length ?? "some"} problem${r.problems?.length === 1 ? "" : "s"} left`;
   return (
-    <>
-      {hasData && (
-        <FormSection title="Data">
-          <FormRow
-            title="Refresh"
-            description="How often its data runs."
-            accessory={s.refreshByUser && m && m.refresh !== cur && <ResetButton label={`Use the widget's (${intervalLabel(m.refresh)})`} onClick={() => setRefresh(m.refresh)} />}
-          >
-            <Select
-              value={String(cur)}
-              options={refreshChoices(cur).map(String)}
-              labels={Object.fromEntries(refreshChoices(cur).map((c) => [String(c), c === 0 ? "Never" : `Every ${intervalLabel(c).replace(/^1 /, "")}`]))}
-              onChange={(v) => setRefresh(Number(v))}
-            />
-          </FormRow>
-        </FormSection>
-      )}
-      {m && m.config.length > 0 && (
-        <FormSection title="Widget settings">
-          {m.config.map((f) => (f.secret ? <SecretRow key={f.key} win={win} field={f} set={!!info?.secrets[f.key]} /> : <ConfigRow key={f.key} win={win} field={f} value={s.config?.[f.key]} />))}
-        </FormSection>
-      )}
-      {m && (
-        <FormSection title="What its data may use">
-          <FormRow title="Permissions" description="Always read-only: it can't change files or run anything else, whatever its code does." stacked>
-            <KeyValue
-              mono
-              items={[
-                ["Websites", m.permissions.net.length ? m.permissions.net.join(", ") : "none"],
-                ["Programs", m.permissions.run.length ? m.permissions.run.join(", ") : "none"],
-                ...(m.permissions.env.length ? [["Environment", m.permissions.env.join(", ")] as const] : []),
-                ...(m.permissions.read.length ? [["Folders", m.permissions.read.join(", ")] as const] : []),
-              ]}
-            />
-          </FormRow>
-        </FormSection>
-      )}
-      {!m && (
-        <Callout tone={s.widgetId ? "warning" : "neutral"}>
-          {s.widgetId ? "The widget's manifest.json has a problem (see Health)." : "Made before widgets had settings: change it once to rebuild it as a widget."}
-        </Callout>
-      )}
-    </>
-  );
-}
-
-function ConfigRow({ win, field, value }: { win: AppWindow; field: MagicConfigField; value: unknown }) {
-  const shown = value ?? field.default;
-  const commit = (v: unknown) => void cmd.call("magic.config", { id: win.id, values: { [field.key]: v } });
-  let control: ReactNode;
-  if (field.type === "boolean") control = <Switch checked={!!shown} onChange={commit} label={field.title} />;
-  else if (field.type === "enum") control = <Select value={String(shown ?? "")} options={field.options ?? []} onChange={commit} />;
-  else if (field.type === "number" && typeof shown === "number") control = <NumberField value={shown} onChange={commit} />;
-  else
-    control = (
-      <TextField
-        value={shown === undefined ? "" : String(shown)}
-        inputMode={field.type === "number" ? "decimal" : undefined}
-        placeholder={field.default === undefined ? "" : String(field.default)}
-        onCommit={(t) => commit(field.type === "number" ? (t.trim() === "" ? null : Number(t)) : t)}
+    <ListRow className="magic-revision" tip={r.prompt}>
+      <Thumb src={r.shot ? fileUrl(r.shot) : null} />
+      <ListRowContent
+        title={shown ? <Text strong>{r.prompt}</Text> : r.prompt}
+        detail={
+          <Inline gap={1}>
+            <StatusDot size="sm" state={r.hand ? "off" : r.ok ? "success" : "warning"} />
+            {checks} · {ago(r.at, Date.now())}
+            {r.model ? ` · ${r.model}` : ""} · v{r.n}
+          </Inline>
+        }
       />
-    );
-  return (
-    <FormRow
-      title={field.title}
-      tip={field.key}
-      description={field.description}
-      accessory={value !== undefined && value !== field.default && <ResetButton onClick={() => commit(null)} />}
-    >
-      {control}
-    </FormRow>
-  );
-}
-
-function SecretRow({ win, field, set }: { win: AppWindow; field: MagicConfigField; set: boolean }) {
-  return (
-    <FormRow title={field.title} tip={field.key} description={field.description ?? "Kept by cmd outside the widget; only its data.ts gets it."}>
-      <SecretField set={set} onSave={(v) => void cmd.call("magic.secret", { id: win.id, key: field.key, value: v })} />
-    </FormRow>
+      <ListRowEnd>
+        {shown ? (
+          <Badge>shown</Badge>
+        ) : (
+          <Button size="sm" disabled={!restore} onClick={restore}>
+            Restore
+          </Button>
+        )}
+      </ListRowEnd>
+    </ListRow>
   );
 }
 
 // ── Files ───────────────────────────────────────────────
 
-const FILE_NOTES: Record<string, string> = {
-  "manifest.json": "title, size, refresh, permissions, settings",
-  "data.ts": "gets the data (Deno), checked against its schema",
-  "view.html": "the markup and its styles",
-  "view.ts": "draws the data",
-  "static.json": "data that doesn't change",
-};
-
-function Files({ info }: { info: MagicWidgetInfo | null }) {
-  if (!info) return <EmptyState compact icon="folder" title="No widget folder yet">Change it once to rebuild it as a widget.</EmptyState>;
+function Files({ info }: { info: MagicPackageInfo | null }) {
+  if (!info) return <EmptyState compact icon="folder" title="No package folder" />;
+  const dir = info.link ?? info.dir;
   return (
     <>
       <FormSection
         title="Files"
         aside={
           <ButtonGroup>
-            <LinkButton onClick={() => cmd.revealPath(info.dir)}>Show in Finder</LinkButton>
-            <LinkButton onClick={() => copy(info.dir)}>Copy Path</LinkButton>
+            <LinkButton onClick={() => cmd.revealPath(dir)}>Show in Finder</LinkButton>
+            <LinkButton onClick={() => copy(dir)}>Copy Path</LinkButton>
           </ButtonGroup>
         }
       >
         {info.files.map((f) => (
-          <FormRow
-            key={f}
-            compact
-            title={<Text mono>{f}</Text>}
-            description={FILE_NOTES[f] ?? (f.startsWith("fixtures/") ? (f === "fixtures/live.json" ? "the data from the last check" : "test data the view must handle") : undefined)}
-          >
-            <Button size="sm" onClick={() => void openPath(`${info.dir}/${f}`, "user")}>
+          <FormRow key={f} compact title={<Text mono>{f}</Text>}>
+            <Button size="sm" onClick={() => void openPath(`${dir}/${f}`, "user")}>
               Open
             </Button>
           </FormRow>
         ))}
       </FormSection>
       <Dim>
-        Edit them in cmd or anywhere else (Claude Code too: <code>cmd widget check {info.dir}</code> runs the same checks). Saved changes show up in the widget and become a new version.
+        Edit them in cmd or anywhere else (Claude Code too: <code>cmd widget check {dir}</code> checks its package.json). A save reloads the widget and becomes a version.
       </Dim>
-    </>
-  );
-}
-
-// ── Health ──────────────────────────────────────────────
-
-function Health({ win, live }: { win: AppWindow; live: MagicLive }) {
-  const s = win.state as MagicState;
-  const [rt, setRt] = useState<MagicRuntime | null>(null);
-  const [installing, setInstalling] = useState<string | null>(null);
-  useEffect(() => {
-    void cmd.call("magic.runtime", {}).then(setRt, () => {});
-  }, []);
-  const install = () => {
-    setInstalling("Downloading Deno…");
-    cmd.call("magic.installRuntime", {}).then(
-      (r) => (setRt(r), setInstalling(null)),
-      (e: Error) => setInstalling(e.message),
-    );
-  };
-  const h = s.health;
-  const hasData = !!(s.hasData || s.source);
-  const now = Date.now();
-  const broken = h?.ok === false || !!s.problems?.length || !!s.error;
-  const fix = (
-    <Button size="sm" variant="primary" disabled={s.phase === "working"} onClick={() => void cmd.call("magic.fix", { id: win.id })} data-tip="The agent gets the error and the widget's files.">
-      Fix It
-    </Button>
-  );
-  return (
-    <>
-      <FormSection title="Data" aside={hasData && <LinkButton onClick={() => void cmd.call("magic.refresh", { id: win.id })}>Refresh Now</LinkButton>} plain>
-        {!hasData ? (
-          <Callout>This widget has no data to fetch.</Callout>
-        ) : !h ? (
-          <Callout>Not run yet.</Callout>
-        ) : h.ok ? (
-          <Callout tone="success">Coming in{h.lastOk ? `, last ${ago(live.data?.at ?? h.lastOk, now)}` : ""}.</Callout>
-        ) : (
-          <>
-            <Callout tone="danger" title={`Failing${h.failures > 1 ? ` (${h.failures} times in a row)` : ""}`} actions={fix}>
-              {h.lastOk ? `Last good data ${ago(h.lastOk, now)}. ` : ""}
-              {h.retryAt && h.retryAt > now ? `Next try in ${Math.ceil((h.retryAt - now) / 1000)} s. ` : ""}
-              {h.permission && "It needs something its manifest doesn't allow: Fix lets the agent add it."}
-            </Callout>
-            {h.error && <CodeBlock tone="danger">{h.error}</CodeBlock>}
-          </>
-        )}
-      </FormSection>
-      {(s.problems?.length || s.error) && (
-        <FormSection title="Problems" aside={h?.ok !== false && broken && fix} plain>
-          <Stack gap={1.5}>
-            {s.error && <CodeBlock tone="danger">{s.error}</CodeBlock>}
-            {s.problems?.map((p, i) => (
-              <CodeBlock key={i}>{p}</CodeBlock>
-            ))}
-          </Stack>
-        </FormSection>
-      )}
-      {s.summary && (
-        <FormSection title="Last change" plain>
-          <div>{s.summary}</div>
-        </FormSection>
-      )}
-      {(live.running ? live.steps : s.steps)?.length ? (
-        <FormSection title="How it was made" plain>
-          <StepList steps={live.running ? live.steps : s.steps} live={live.running ? live : undefined} />
-        </FormSection>
-      ) : null}
-      <FormSection title="Runtime">
-        <FormRow title="Deno" description={rt ? (rt.deno ? `${rt.version ?? "?"} · ${rt.deno}` : "Not installed.") : "…"} note={installing}>
-          {rt && !rt.deno && (
-            <Button size="sm" busy={!!installing && installing.startsWith("Downloading")} onClick={install}>
-              Install
-            </Button>
-          )}
-        </FormRow>
-        <FormRow title="Sandbox" description={rt ? (rt.sandbox ? "sandbox-exec" : "Unavailable: data.ts runs only with CMD_MAGIC_UNSANDBOXED=1.") : "…"}>
-          {rt && <StatusDot state={rt.sandbox ? "success" : "warning"} />}
-        </FormRow>
-        <FormRow title="Previews" description={rt ? (rt.previewer ?? "none") : "…"} />
-      </FormSection>
     </>
   );
 }

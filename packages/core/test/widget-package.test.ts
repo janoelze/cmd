@@ -9,11 +9,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { noPermissions, type WidgetEntry, type WidgetPermissions } from "@cmd/protocol";
 import { parsePackage, readPackage, enginesMin, compareVersions } from "../src/widgets/package.ts";
-import { parseManifest } from "../src/widgets/manifest.ts";
 import { effective, grantsPath, needsGrant, readGrants, writeGrants } from "../src/widgets/grants.ts";
-import { runWidgetTool } from "../src/magic/widget-tools.ts";
-import { WidgetStore } from "../src/widgets/store.ts";
-import type { VerifyContext } from "../src/widgets/verify.ts";
 import { BUILTIN_WIDGETS, WidgetPackages } from "../src/widgets/packages.ts";
 import type { WindowTypes } from "../src/windows/types.ts";
 import { FakeWidgetRuntime, until, writePackage } from "./fake-widget-runtime.ts";
@@ -152,10 +148,6 @@ describe("package.json", () => {
     it("refuses host, header or scheme on a field that isn't secret", () => {
       for (const k of ["host", "header", "scheme"]) expect(cfg({ key: "repo2", title: "Repo", type: "string", [k]: k === "host" ? "api.github.com" : "X" }), k).toEqual([expect.stringMatching(new RegExp(`^cmd\\.widgets\\[0\\]\\.config\\[1\\]\\.${k}: only a secret field`))]);
     });
-    it("leaves Magic manifests' secrets as they were: no host needed", () => {
-      const r = parseManifest({ title: "Status", permissions: {}, config: [{ key: "token", title: "Token", type: "string", secret: true }] });
-      expect(r.ok && r.manifest.config).toEqual([{ key: "token", title: "Token", type: "string", secret: true }]);
-    });
   });
 
   it("asks for cmd's AI only as complete", () => {
@@ -204,24 +196,6 @@ describe("grants", () => {
     expect(readGrants(state, "ci-runs")).toEqual({ version: "1.2.0", permissions: declared });
   });
 
-  it("can't be written by Magic's tools", async () => {
-    const state = tmp("cmd-state-");
-    writeGrants(state, "ci-runs", { version: "1.2.0", permissions: noPermissions() });
-    const file = grantsPath(state, "ci-runs");
-    const before = fs.readFileSync(file, "utf8");
-    const store = new WidgetStore(path.join(state, "widgets"));
-    store.ensure("w1");
-    const c = { store, id: "w1", deno: null, previewer: null, cwd: state } satisfies VerifyContext;
-    const grant = JSON.stringify({ version: "1.2.0", permissions: { ...noPermissions(), net: ["*"] } });
-    for (const p of [file, "../../widget-packages/ci-runs/grants.json", "../widget-packages/ci-runs/grants.json", "grants.json"]) {
-      const r = await runWidgetTool("write_file", { why: "x", path: p, content: grant }, c, { dirty: false });
-      expect(r?.isError, p).toBe(true);
-      const e = await runWidgetTool("edit_file", { why: "x", path: p, old: "[]", new: '["*"]' }, c, { dirty: false });
-      expect(e?.isError, p).toBe(true);
-    }
-    expect(fs.readFileSync(file, "utf8")).toBe(before);
-    expect(fs.existsSync(path.join(store.dir("w1"), "grants.json"))).toBe(false);
-  });
 });
 
 describe("packages in the Widget Library", () => {

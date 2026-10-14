@@ -4,7 +4,7 @@
 
 import type { CoreEvent, MagicPreviewRequest, MagicPreviewShot, Params } from "@cmd/protocol";
 import type { Connection } from "../kernel/connection.ts";
-import { playwrightPreviewer, type Previewer } from "./preview.ts";
+import { playwrightPreviewer, type Previewer } from "./previewer.ts";
 
 export class PreviewBroker {
   /** Tests: who renders (default: the app's connection, else Playwright). */

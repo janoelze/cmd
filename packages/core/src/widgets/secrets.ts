@@ -1,8 +1,8 @@
-// Widget secrets: values of config fields marked `secret` in manifest.json (an
-// API token a widget's data.ts needs). Kept per widget in
-// $CMD_HOME/widget-secrets.json (mode 0600), never in the widget folder, the
-// window state or anything sent to a client or the model. data.ts gets them in
-// its config; clients only see which are set.
+// Widget secrets: values of config fields marked `secret` in a package's package.json (an API
+// token for the host it is bound to). One file per package (config.ts: its widget-packages
+// folder's secrets.json, mode 0600), never in the package folder, the window state or anything
+// sent to a widget, a client or the model; the core attaches them to cmd.net.fetch. Clients
+// only see which are set.
 
 import fs from "node:fs";
 import path from "node:path";

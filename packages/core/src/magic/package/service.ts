@@ -1,41 +1,44 @@
-// Magic making widget packages in the app (docs/56, "Magic on V3"): a request in a Magic window
-// is built into a package in the packages folder (widgetsHome(), named from the request), the
-// agent's steps streamed to the window as MagicService streams them. When the package asks for
-// permissions, the build pauses on a step and the grants sheet asks (widget.ask; one sheet,
-// shown for the Library's entry), and the build goes on with the answer. A finished package is
-// marked as made with Magic (package.json's cmd.magic), kept as a revision in the instance's
-// widget-packages/<name>/revisions, and the window becomes the package's widget in place
-// ("pkg:<name>/<id>", drawn by the kit). Edit with Magic and Fix open a Magic window beside a
-// package window and build the change into the same package; its windows reload once at the end.
-// Requests that aren't packages stay MagicService's: the fast paths (pasted JSON, a command)
-// and changes to widgets made before packages.
+// Magic in the app (docs/56, "Magic on V3"; core.magic): a request in a Magic window is built
+// into a package in the packages folder (widgetsHome(), named from the request), the agent's
+// steps streamed to the window (magic.stream). A Mac without Deno is asked once whether to
+// download it first. When the package asks for permissions, the build pauses on a step and the
+// grants sheet asks (widget.ask; one sheet, shown for the Library's entry), and the build goes
+// on with the answer. A finished package is marked as made with Magic (package.json's
+// cmd.magic), kept as a version in the instance's widget-packages/<name>/revisions, and the
+// window becomes the package's widget in place ("pkg:<name>/<id>", drawn by the kit); an
+// obvious command, or a request a program answers better, ends as a terminal to open instead.
+// Edit with Magic and Fix open a Magic window beside a package window and build the change into
+// the same package; its windows reload once at the end. The edit view (⌘E) lists the versions
+// and brings one back (Restore, never into a linked package's own folder).
 
 import fs from "node:fs";
 import path from "node:path";
-import { parsePackageKind, type AppWindow, type CoreEvent, type MagicPackageBuild, type MagicState, type MagicStep, type WidgetPermissions, type WindowId } from "@cmd/protocol";
+import { parsePackageKind, type AppWindow, type CoreEvent, type MagicPackageBuild, type MagicPackageInfo, type MagicState, type MagicStep, type Settings, type WidgetPermissions, type WindowId } from "@cmd/protocol";
 import { logger, widgetPackageData, widgetsHome } from "@cmd/protocol/node";
 import type { Backend } from "../../ai/backends.ts";
 import type { CoreContext } from "../../kernel/context.ts";
 import { magicDenyPaths } from "../../lib/paths-deny.ts";
 import { cmdVersion, type WidgetPackage } from "../../widgets/package.ts";
-import { fastRoute, type BuildEvent } from "../build.ts";
-import { sandboxAvailable, type SandboxMode } from "../sandbox.ts";
-import { buildPackage, type PackageBuildResult } from "./build.ts";
+import { linkOf, listFiles, PackageRevisions } from "../../widgets/revisions.ts";
+import { DENO_VERSION } from "../../widgets/deno.ts";
+import { RELOAD_DEBOUNCE_MS } from "../../widgets/reload.ts";
+import { sandboxAvailable, type SandboxMode } from "../../lib/sandbox.ts";
+import { buildPackage, type BuildEvent, type PackageBuildResult } from "./build.ts";
 import { readMark, writeMark } from "./files.ts";
-import { PackageRevisions } from "./revisions.ts";
 import { scriptFromEnv, scriptedBackend } from "./scripted.ts";
 import { defaultToolchain, type Toolchain } from "./toolchain.ts";
 import { permissionLines } from "./words.ts";
 
 const log = logger("magic");
 
-type Ctx = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "settings" | "ai" | "broadcast" | "library" | "previews" | "magic" | "opened" | "place">;
+type Ctx = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "settings" | "ai" | "broadcast" | "library" | "previews" | "opened" | "closed">;
 
 export interface MagicPackagesOptions {
   /** The instance's state folder (revisions; grants are the host's). null: a temporary one (tests). */
   stateDir: string | null;
-  /** Tests: the model (default: MagicService's, else the AI service's smart tier). */
-  backend?: () => Backend;
+  /** Tests: the model (default: the AI service's smart tier). */
+  backend?: (s: Settings) => Backend;
+  sandbox?: SandboxMode;
   /** Tests: the toolchain (default: the checkout's). */
   toolchain?: Toolchain | null;
   /** Where packages are made (default: widgetsHome()). */
@@ -68,10 +71,6 @@ function detailOf(tool: string, input: Record<string, unknown>): string {
   return String(v).replace(/\s+/g, " ").slice(0, 160) || tool;
 }
 
-/** Cores whose new requests build widgets of the format before packages, as MagicService did: the tests of that path, until phase 2b removes it. */
-const cmd2 = new WeakSet<object>();
-export const buildCmd2Widgets = (magic: object): void => void cmd2.add(magic);
-
 export class MagicPackages {
   #c: Ctx;
   #o: MagicPackagesOptions;
@@ -82,7 +81,26 @@ export class MagicPackages {
     this.#c = c;
     this.#o = o;
     this.#stateDir = o.stateDir ?? fs.mkdtempSync(path.join(fs.realpathSync(process.env.TMPDIR ?? "/tmp"), "cmd-magic-pkg-state-"));
+    // A core without a state folder (tests) never writes into the person's packages folder.
+    if (!o.stateDir && !o.home) {
+      const home = path.join(this.#stateDir, "widgets");
+      this.#o = { ...o, home: () => home };
+    }
     c.library.shotOf = (name) => new PackageRevisions(this.#stateDir, name).latest()?.shot;
+    c.windows.on("removed", (id) => this.cancel(id));
+    for (const w of c.windows.others()) if (w.kind === "magic" && stateOf(w).phase === "working") this.#interrupted(w);
+  }
+
+  /** A build can't survive the core: what it left goes (a new package) or back to its last version, and the window says so. */
+  #interrupted(w: AppWindow): void {
+    const pkg = stateOf(w).pkg;
+    if (pkg) {
+      const dir = path.join(this.#home(), pkg.name);
+      const last = new PackageRevisions(this.#stateDir, pkg.name).latest();
+      if (last) new PackageRevisions(this.#stateDir, pkg.name).checkout(dir, last.n);
+      else if (!pkg.editing) fs.rmSync(dir, { recursive: true, force: true });
+    }
+    this.#c.windows.update(w.id, { state: { phase: stateOf(w).command ? "ready" : "error", askRuntime: undefined, pkg: pkg ? { name: pkg.name, ...(pkg.editing ? { editing: pkg.editing } : {}) } : undefined, error: "Interrupted: cmd restarted while this was being made." } });
   }
 
   /** The packages folder the core reads (widgetsHome() when it was made). */
@@ -92,17 +110,6 @@ export class MagicPackages {
 
   #window(id: WindowId): AppWindow | null {
     return this.#c.windows.others().find((w) => w.id === id) ?? null;
-  }
-
-  /** Whether a Magic window's request is a package build: not a fast path, not a change to a widget made before packages. */
-  takes(id: WindowId, prompt: string): boolean {
-    const w = this.#window(id);
-    // A core without a state folder (tests) has nowhere to keep a package's grant and versions: it writes no package.
-    if (cmd2.has(this.#c.magic) || !this.#c.magic.made().stateDir || !w || w.kind !== "magic") return false;
-    const s = stateOf(w);
-    if (s.pkg) return true;
-    const changing = !!s.prompt && (s.phase === "ready" || s.phase === "error") && !!(s.widgetId || s.html || s.command);
-    return !changing && !fastRoute(prompt);
   }
 
   building(id: WindowId): boolean {
@@ -130,11 +137,11 @@ export class MagicPackages {
   #backend(): Backend {
     const script = scriptFromEnv();
     if (script) return scriptedBackend(script);
-    return this.#o.backend?.() ?? this.#c.magic.made().backend?.(this.#c.settings.settings) ?? this.#c.ai.backend({ tier: "smart", purpose: "magic" });
+    return this.#o.backend?.(this.#c.settings.settings) ?? this.#c.ai.backend({ tier: "smart", purpose: "magic" });
   }
 
   #sandbox(): SandboxMode {
-    return this.#c.magic.made().sandbox ?? (process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required");
+    return this.#o.sandbox ?? (process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required");
   }
 
   /** Build the window's request into a package (new, or the one it edits). */
@@ -152,9 +159,9 @@ export class MagicPackages {
     const mark = readMark(dir);
     const original = mark?.request ?? (fresh ? text : prev.prompt || text);
     const history = [...(prev.history?.length && !fresh ? prev.history : mark ? [mark.request] : []), text].slice(-20);
+    fs.mkdirSync(dir, { recursive: true });
     const ac = new AbortController();
     this.#runs.set(id, ac);
-    fs.mkdirSync(dir, { recursive: true });
     const { library } = this.#c;
     library.building.add(name);
     library.reloader.paused.add(name);
@@ -220,7 +227,7 @@ export class MagicPackages {
     }
     log.info(`run ${id.slice(0, 8)} package ${name}${fresh ? "" : " (change)"}`, { provider: backend.name, model: backend.model });
     const change = fresh ? text : `The widget was made for: ${original}\n\nChange it as asked, keeping what still fits: ${text}`;
-    buildPackage({
+    this.#deno(id, ac.signal, stepEvent).then(() => buildPackage({
       prompt: change,
       backend,
       dir,
@@ -231,7 +238,7 @@ export class MagicPackages {
       maxTokens: s["magic.maxTokens"] || undefined,
       sandbox: this.#sandbox(),
       deny: magicDenyPaths(),
-      noFast: true,
+      noFast: !fresh,
       toolchain: this.#o.toolchain === undefined ? defaultToolchain() : this.#o.toolchain,
       previewer: () => this.#c.previews.previewer(),
       ask,
@@ -239,10 +246,37 @@ export class MagicPackages {
       cmdVersion: cmdVersion(),
       signal: ac.signal,
       onEvent,
-    }).then(
+    })).then(
       (r) => this.#finish(id, name, ac, r, { fresh, text, original, history, steps, editing }),
       (e: Error) => this.#end(id, name, ac, { error: ac.signal.aborted ? "Stopped." : e.message, fresh }),
     );
+  }
+
+  /**
+   * On a Mac without Deno (what a widget's process runs on), the first build asks whether to
+   * download it (MagicState.askRuntime: magic.installRuntime is yes, magic.skipRuntime not now)
+   * and waits for the answer; the download is a step.
+   */
+  async #deno(id: WindowId, signal: AbortSignal, step: (s: MagicStep) => void): Promise<void> {
+    const deno = this.#c.library.deno;
+    if (deno.find() || !deno.canInstall) return;
+    const asked = () => {
+      log.info(`run ${id.slice(0, 8)} asks to download Deno`);
+      this.#c.windows.update(id, { state: { askRuntime: true } });
+    };
+    const yes = await deno.ask(signal, asked);
+    if (this.#window(id)?.state.askRuntime) this.#c.windows.update(id, { state: { askRuntime: undefined } });
+    if (signal.aborted) throw new Error("Stopped.");
+    if (!yes) return;
+    const s: MagicStep = { id: 0, tool: "install", why: "Installing Deno for widgets (once)", detail: `Deno ${DENO_VERSION}` };
+    step(s);
+    const t0 = Date.now();
+    try {
+      await yes.install;
+      step({ ...s, ms: Date.now() - t0 });
+    } catch (e) {
+      step({ ...s, ms: Date.now() - t0, isError: true, output: (e as Error).message });
+    }
   }
 
   /** The build's result into the window: the package's widget, a terminal, or why not. */
@@ -328,28 +362,55 @@ export class MagicPackages {
     return this.#window(w.id) ?? w;
   }
 
-  /** A package made with Magic deleted from the Library: its folder, revisions and the instance's data about it. */
-  remove(name: string): void {
-    const entry = this.#c.library.packages.list().find((e) => e.folder === name);
-    if (!entry || !entry.ok || !entry.pkg.magic || entry.builtin || entry.dir !== path.join(this.#home(), name)) throw new Error(`${name} isn't a widget made with Magic`);
-    for (const w of this.#c.windows.others()) if (parsePackageKind(w.kind)?.name === name) this.#c.windows.close(w.id);
-    fs.rmSync(entry.dir, { recursive: true, force: true });
-    fs.rmSync(widgetPackageData(this.#stateDir, name), { recursive: true, force: true });
-    this.#c.library.packages.scan();
+  /** The package a window shows, when Magic made it: its folder, files and versions (the edit view, ⌘E). */
+  info(windowId: WindowId): MagicPackageInfo | null {
+    const e = this.#made(windowId);
+    if (!e) return null;
+    const revs = new PackageRevisions(this.#stateDir, e.name);
+    const link = linkOf(e.dir);
+    return {
+      name: e.name,
+      dir: e.dir,
+      ...(link ? { link } : {}),
+      files: listFiles(e.dir),
+      revisions: revs.list(),
+      edited: revs.differs(e.dir),
+      building: this.#c.library.building.has(e.name),
+    };
+  }
+
+  /**
+   * Bring back version n of the package a window shows, as a new version: its files go back
+   * into the package folder, and the package watcher reloads its windows. Refused while a build
+   * writes it, and for a linked package, whose folder is the person's own.
+   */
+  restore(windowId: WindowId, n: number): void {
+    const e = this.#made(windowId);
+    if (!e) throw new Error("Only a widget made with Magic has versions.");
+    if (this.#c.library.building.has(e.name)) throw new Error("Wait for the change being made to finish.");
+    const link = linkOf(e.dir);
+    if (link) throw new Error(`This widget is linked from ${link}, your own folder: cmd doesn't write versions into it.`);
+    const revs = new PackageRevisions(this.#stateDir, e.name);
+    const meta = revs.list().find((r) => r.n === n);
+    if (!meta) throw new Error(`There's no version ${n}.`);
+    // One reload, now: the saves below don't reload it again a moment later.
+    const { reloader, host } = this.#c.library;
+    reloader.paused.add(e.name);
+    revs.checkout(e.dir, n);
+    const rev = revs.snapshot(e.dir, { prompt: `Back to version ${n}: ${meta.prompt}`.slice(0, 300), ok: meta.ok, ...(meta.problems ? { problems: meta.problems } : {}), ...(meta.model ? { model: meta.model } : {}), ...(meta.hand ? { hand: true } : {}) }, revs.shotOf(n));
+    const mark = readMark(e.dir);
+    if (mark) writeMark(e.dir, { ...mark, revisions: rev.n });
+    log.info(`package ${e.name} back to version ${n} (version ${rev.n})`);
+    host.reload(e.name);
+    setTimeout(() => this.#c.library.building.has(e.name) || reloader.paused.delete(e.name), RELOAD_DEBOUNCE_MS).unref();
     this.#c.library.changed();
   }
-}
 
-// ── one per core ─────────────────────────────────────────
-
-const instances = new WeakMap<object, MagicPackages>();
-
-/** The core's MagicPackages (made on first use, with MagicService's state dir and backend). */
-export function magicPackages(core: Ctx): MagicPackages {
-  let m = instances.get(core.magic);
-  if (!m) {
-    m = new MagicPackages(core, { stateDir: core.magic.made().stateDir ?? null });
-    instances.set(core.magic, m);
+  /** The package entry of a window's widget, when Magic made it (not a built-in one). */
+  #made(windowId: WindowId): { name: string; dir: string } | null {
+    const w = this.#c.windows.others().find((x) => x.id === windowId);
+    const ref = w && parsePackageKind(w.kind);
+    const entry = ref && this.#c.library.packages.list().find((e) => e.ok && e.pkg.name === ref.name);
+    return entry?.ok && entry.pkg.magic && !entry.builtin ? { name: entry.pkg.name, dir: entry.dir } : null;
   }
-  return m;
 }

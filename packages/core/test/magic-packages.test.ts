@@ -19,7 +19,7 @@ import { buildPackageSystem, examples, exampleFiles } from "../src/magic/package
 import { scriptedBackend, type ScriptTurn } from "../src/magic/package/scripted.ts";
 import { slugOf, wantsText } from "../src/magic/package/service.ts";
 import { checkoutToolchain, packageJsonToolchain } from "../src/magic/package/toolchain.ts";
-import { sandboxAvailable } from "../src/magic/sandbox.ts";
+import { sandboxAvailable } from "../src/lib/sandbox.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { tmp, until } from "./fake-widget-runtime.ts";
 

@@ -27,7 +27,8 @@ import { WidgetTokens } from "../data/widgets.ts";
 import type { JournalService } from "../journal/service.ts";
 import { createJournal } from "../journal/feature.ts";
 import { createWatches } from "../lib/watch.ts";
-import { createMagic, type MagicService } from "../magic/service.ts";
+import { createMagic } from "../magic/feature.ts";
+import type { MagicPackages } from "../magic/package/service.ts";
 import { createNotifications, type NotificationCenter } from "../notifications/center.ts";
 import { createRemote, type RemoteService } from "../remote/service.ts";
 import { registerBuiltinSources } from "../search/builtin.ts";
@@ -41,8 +42,8 @@ import { ProcessSampler, ResourceMonitor, type ProcSampler, type TreeSampler } f
 import { restoreSession } from "../terminals/restore.ts";
 import type { TermBackend } from "../terminals/types.ts";
 import { WidgetLibrary } from "../widgets/library.ts";
-import type { Previewer } from "../widgets/preview.ts";
-import { PreviewBroker } from "../widgets/previews.ts";
+import type { Previewer } from "../magic/previewer.ts";
+import { PreviewBroker } from "../magic/previews.ts";
 import { createClosed } from "../windows/closed.ts";
 import { registerBuiltins, WindowTypes, type ClosedWindows, type WindowManager } from "../windows/index.ts";
 import { createWindows } from "../windows/manager.ts";
@@ -174,7 +175,7 @@ export class Core {
   readonly journal: JournalService;
   readonly library: WidgetLibrary;
   readonly previews: PreviewBroker;
-  readonly magic: MagicService;
+  readonly magic: MagicPackages;
   /** Workspace Actions: how to run the project in a folder (docs/39). */
   readonly actions: ActionsService;
   readonly remote: RemoteService;
@@ -239,10 +240,10 @@ export class Core {
     recordWindows(this.data, this.windows);
     recordWorkspaces(this.data, this.workspaces);
     recordNotifications(this.data, this.notifications);
-    this.library = new WidgetLibrary(ctx, { stateDir: state, socket: path.isAbsolute(opts.socketPath) ? widgetsSocketPath(opts.socketPath) : null });
+    this.library = new WidgetLibrary(ctx, { stateDir: state, socket: path.isAbsolute(opts.socketPath) ? widgetsSocketPath(opts.socketPath) : null, deno: opts.magicDeno, installDeno: opts.magicInstallDeno });
     this.previews = new PreviewBroker(opts.magicPreviewer);
     this.server.onClosed((conn) => this.previews.closed(conn));
-    this.magic = createMagic(ctx, { widgetSocket: path.isAbsolute(opts.socketPath) ? widgetsSocketPath(opts.socketPath) : null, backend: opts.magicBackend, stateDir: state, deno: opts.magicDeno, installDeno: opts.magicInstallDeno });
+    this.magic = createMagic(ctx, { stateDir: state, backend: opts.magicBackend });
     this.actions = createActions(ctx);
     // What clients and the log hear about terminals and agents, after the services above took a change in.
     this.windowOps.watchShells();
@@ -283,7 +284,6 @@ export class Core {
         const types = Array.isArray(p.types) ? new Set<string>(p.types) : null;
         if (!this.server.watched()) this.resources?.soon(); // samples aren't taken while nobody watches
         this.server.subscribe(conn, types ? (e) => types.has(e.type) : () => true);
-        this.magic.resume();
       }
       return state;
     },
@@ -448,7 +448,6 @@ export class Core {
     this.data.dispose();
     this.views.close();
     await this.usage.flush();
-    this.magic.dispose();
     this.remote.close();
     await this.panes.shutdown();
     await this.server.close();

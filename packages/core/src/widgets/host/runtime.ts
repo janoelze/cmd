@@ -1,5 +1,5 @@
 // What runs a package widget's process (docs/56, "The runtime: a widget process"): Deno, the
-// pinned one widgets/deno.ts finds, under magic/sandbox.ts's sandbox-exec profile (writes and the
+// pinned one widgets/deno.ts finds, under lib/sandbox.ts's sandbox-exec profile (writes and the
 // network denied but the widgets socket), with Deno's own permissions from the grant: reads of
 // the package, the vendored @cmd/widget-api and the granted folders only; the widgets socket;
 // no --allow-net, --allow-run or --allow-write beyond the socket; no remote or npm imports; a
@@ -11,8 +11,8 @@ import os from "node:os";
 import path from "node:path";
 import type { WidgetPermissions } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
-import { expandPath } from "../../magic/policy.ts";
-import { cleanEnv, sandboxAvailable, sandboxProfile, type SandboxMode } from "../../magic/sandbox.ts";
+import { expandPath } from "../../lib/policy.ts";
+import { cleanEnv, sandboxAvailable, sandboxProfile, type SandboxMode } from "../../lib/sandbox.ts";
 import { magicDenyPaths } from "../../lib/paths-deny.ts";
 import { RUNTIME_DIR } from "../deno.ts";
 

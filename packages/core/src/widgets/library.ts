@@ -1,10 +1,15 @@
 // The Widget Library (docs/16-widgets.md): built-in widget types, then packages' widgets
-// (docs/56), then the widgets made with Magic by last use; clients get it again when it
-// changes, once per burst.
+// (docs/56), those made with Magic among them; clients get it again when it changes, once per
+// burst. It owns what runs them: the packages (packages.ts), their processes (host/), hot reload
+// (reload.ts, which also keeps a hand edit of a package Magic made as a version: revisions.ts),
+// and Deno (deno.ts).
 
 import fs from "node:fs";
+import path from "node:path";
 import { parsePackageKind, type WidgetEntry } from "@cmd/protocol";
+import { logger, widgetPackageData } from "@cmd/protocol/node";
 import { configFields } from "./config.ts";
+import { DenoSetup, findDeno } from "./deno.ts";
 import { DEFAULT_ICON } from "./package.ts";
 import { createPackages } from "./feature.ts";
 import type { WidgetPackages } from "./packages.ts";
@@ -12,26 +17,26 @@ import type { CoreContext } from "../kernel/context.ts";
 import { createWidgetHost } from "./host/feature.ts";
 import type { WidgetHost } from "./host/host.ts";
 import { PackageReloader } from "./reload.ts";
+import { linkOf, recordHandEdit } from "./revisions.ts";
 
-/** A Widget Library ref: "magic:<widget id>" (made with Magic), "type:<kind>" (a built-in widget) or "pkg:<package>/<widget>" (a package's). */
-export function widgetRef(ref: string): { kind: string; widgetId?: string } {
+const log = logger("widgets");
+
+/** A Widget Library ref: "type:<kind>" (a built-in widget) or "pkg:<package>/<widget>" (a package's). */
+export function widgetRef(ref: string): { kind: string } {
   if (parsePackageKind(ref)) return { kind: ref };
-  const m = /^(magic|type):([\w-]+)$/.exec(ref);
+  const m = /^type:([\w-]+)$/.exec(ref);
   if (!m) throw new Error(`not a widget: ${ref}`);
-  return m[1] === "magic" ? { kind: "magic", widgetId: m[2] } : { kind: m[2]! };
+  return { kind: m[1]! };
 }
 
-/** The widget id of a Magic widget's ref; built-in widgets aren't the library's to change. */
-export function magicRef(ref: string): string {
-  const r = widgetRef(ref);
-  if (!r.widgetId) throw new Error(`built-in widgets can't be renamed, duplicated or deleted: ${ref}`);
-  return r.widgetId;
-}
-
-/** Where package widgets' processes find the instance's grants and the widgets socket. */
+/** Where package widgets' processes find the instance's grants and the widgets socket, and Deno. */
 export interface LibraryOptions {
   stateDir?: string | null;
   socket?: string | null;
+  /** Tests: the Deno to use (null: none); default findDeno. */
+  deno?: string | null;
+  /** Tests: what downloads Deno (default installDeno, unless `deno` is given). */
+  installDeno?: (stateDir: string) => Promise<string>;
 }
 
 export class WidgetLibrary {
@@ -49,23 +54,41 @@ export class WidgetLibrary {
   shotOf: (name: string) => string | undefined = () => undefined;
   /** The instance's state folder ($CMD_HOME); null in tests without one. */
   readonly stateDir: string | null;
+  /** Deno: found, or downloaded when the person says so (magic.installRuntime). */
+  readonly deno: DenoSetup;
 
   constructor(core: CoreContext, o: LibraryOptions = {}) {
     this.#core = core;
     this.stateDir = o.stateDir ?? null;
-    this.packages = createPackages(core, () => {
-      this.changed();
-      this.reloader?.sync(this.packages.list());
-      this.host?.packagesChanged();
+    const stateDir = this.stateDir;
+    this.deno = new DenoSetup({
+      stateDir,
+      find: () => (o.deno !== undefined ? o.deno : findDeno({ setting: core.settings.settings["magic.deno"], stateDir: stateDir ?? undefined })),
+      install: o.installDeno ?? (o.deno === undefined ? undefined : null),
     });
-    this.host = createWidgetHost(core, this.packages, { stateDir: o.stateDir ?? null, socket: o.socket ?? null, onAsk: () => this.changed() });
-    this.reloader = new PackageReloader({ onReload: (name) => this.host.reload(name) });
+    this.deno.onInstalled = () => this.host.packagesChanged();
+    this.packages = createPackages(core, {
+      quiet: this.building,
+      onChange: () => {
+        this.changed();
+        this.reloader?.sync(this.packages.list());
+        for (const e of this.packages.list()) this.#handEdit(e.folder);
+        this.host?.packagesChanged();
+      },
+    });
+    this.host = createWidgetHost(core, this.packages, { stateDir, socket: o.socket ?? null, deno: () => this.deno.find(), onAsk: () => this.changed() });
+    this.reloader = new PackageReloader({
+      onReload: (name) => {
+        this.#handEdit(name);
+        this.host.reload(name);
+      },
+    });
     // Developer widgets come and go from the library with their setting.
     core.settings.bind(["widgets.developer"], () => this.changed());
   }
 
   entries(): WidgetEntry[] {
-    const { windows, windowTypes, magic, settings } = this.#core;
+    const { windows, windowTypes, settings } = this.#core;
     const packages = this.packages;
     const others = windows.others();
     const builtin = windowTypes
@@ -85,22 +108,7 @@ export class WidgetLibrary {
           ? []
           : [{ ref: `pkg:${e.folder}`, source: "package", kind: `pkg:${e.folder}`, title: e.folder, icon: DEFAULT_ICON, name: e.folder, problem: e.errors.join("; "), dir: e.dir, windows: [] }],
     );
-    const type = windowTypes.get("magic")!;
-    const yours = magic.library().map((e): WidgetEntry => ({
-      ref: `magic:${e.id}`,
-      source: "yours",
-      kind: "magic",
-      title: e.title,
-      description: e.description,
-      icon: type.icon,
-      request: e.history[0],
-      shot: e.shot,
-      dir: magic.store.dir(e.id),
-      createdAt: e.createdAt,
-      usedAt: e.usedAt,
-      windows: e.windows,
-    }));
-    return [...builtin, ...pkgs, ...yours];
+    return [...builtin, ...pkgs];
   }
 
   /** Tell clients the library changed; changes in a burst (a build, closing a workspace) go out once. */
@@ -112,17 +120,30 @@ export class WidgetLibrary {
     }, 50);
   }
 
+  /** A package Magic made, changed outside a build: its files become a version ("Edited by hand"). */
+  #handEdit(name: string): void {
+    const entry = this.packages.list().find((e) => e.folder === name || (e.ok && e.pkg.name === name));
+    if (!this.stateDir || !entry?.ok || !entry.pkg.magic) return;
+    try {
+      if (recordHandEdit(this.stateDir, entry, this.building)) this.changed();
+    } catch (e) {
+      log.warn(`keeping a hand edit of ${name} as a version failed: ${(e as Error).message}`);
+    }
+  }
+
+  /** Delete a package made with Magic from the Library: its windows, its folder, its versions and the instance's data about it. */
+  remove(name: string): void {
+    const entry = this.packages.list().find((e) => e.folder === name);
+    if (!entry || !entry.ok || !entry.pkg.magic || entry.builtin || linkOf(entry.dir) || !this.packages.home || entry.dir !== path.join(this.packages.home, name)) throw new Error(`${name} isn't a widget made with Magic`);
+    for (const w of this.#core.windows.others()) if (parsePackageKind(w.kind)?.name === name) this.#core.windows.close(w.id);
+    fs.rmSync(entry.dir, { recursive: true, force: true });
+    if (this.stateDir) fs.rmSync(widgetPackageData(this.stateDir, name), { recursive: true, force: true });
+    this.packages.scan();
+    this.changed();
+  }
+
   dispose(): void {
     if (this.#timer) clearTimeout(this.#timer);
     this.reloader.close();
-  }
-}
-
-/** The folder a linked package is (its link resolved), or null for a folder of its own. */
-function linkOf(dir: string): string | null {
-  try {
-    return fs.lstatSync(dir).isSymbolicLink() ? fs.realpathSync(dir) : null;
-  } catch {
-    return null;
   }
 }

@@ -515,7 +515,6 @@ function handle(e: CoreEvent): void {
       return;
     }
     case "magic.stream":
-    case "magic.data":
       handleMagicEvent(e);
       return;
     case "fs.changed":

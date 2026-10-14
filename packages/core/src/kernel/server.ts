@@ -178,14 +178,14 @@ export class CoreServer {
 
   /**
    * The widgets socket beside the main one: every connection on it is a widget's
-   * data.ts (see #widgetCall). Secondary to the main socket: a core that took
+   * process (see #widgetCall). Secondary to the main socket: a core that took
    * the main path takes this one too (renamed over, atomically), and a rebind
    * of the main socket keeps the one already there.
    */
   async #bindWidgets(): Promise<void> {
     const sock = widgetsSocketPath(this.#o.socketPath);
     if (this.#widgetsBound && fs.existsSync(sock)) return;
-    // Node binds longer paths, but Deno can't connect to them: data.ts's events() would fail.
+    // Node binds longer paths, but Deno can't connect to them: widgets' processes would fail.
     const bytes = Buffer.byteLength(sock);
     if (bytes > SOCKET_PATH_MAX) log.warn(`widgets can't read the event log: the widgets socket path is ${bytes} bytes, more than the ${SOCKET_PATH_MAX} macOS allows. Set CMD_HOME to a shorter folder.`, { path: sock });
     const bindTo = path.join(path.dirname(sock), `.${process.pid}-${this.#servers.length}-w.sock`);
@@ -304,7 +304,7 @@ export class CoreServer {
     const reply = (msg: object) => "id" in req && req.id !== undefined && answer(req.id, msg);
     try {
       const params = (req.params ?? {}) as Record<string, unknown>;
-      // A widget's data.ts: it says which widget it is, then it may read events, nothing else.
+      // A widget's process: it says which widget it is, then it may read events, nothing else.
       if (this.#widgetConns.has(conn)) {
         reply({ result: this.#widgetCall(conn, req.method, params) });
         return;

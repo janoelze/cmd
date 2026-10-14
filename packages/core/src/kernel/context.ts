@@ -16,7 +16,7 @@ import type { DataService } from "../data/service.ts";
 import type { SessionsView } from "../data/views/sessions.ts";
 import type { ViewsStore } from "../data/views/views.ts";
 import type { JournalService } from "../journal/service.ts";
-import type { MagicService } from "../magic/service.ts";
+import type { MagicPackages } from "../magic/package/service.ts";
 import type { NotificationCenter } from "../notifications/center.ts";
 import type { TranscriptSources } from "../search/sources.ts";
 import type { SummaryService } from "../summaries/service.ts";
@@ -26,7 +26,7 @@ import type { ClosedWindows, WindowManager, WindowTypes } from "../windows/index
 import type { TimerAlarms } from "../windows/timers.ts";
 import type { WorkspaceManager } from "../workspaces/manager.ts";
 import type { WidgetTokens } from "../data/widgets.ts";
-import type { PreviewBroker } from "../widgets/previews.ts";
+import type { PreviewBroker } from "../magic/previews.ts";
 import type { WidgetLibrary } from "../widgets/library.ts";
 import type { AgentSetup } from "../agents/setup.ts";
 import type { Search } from "../search/search.ts";
@@ -69,7 +69,7 @@ export interface Services {
   timers: TimerAlarms;
   summaries: SummaryService;
   journal: JournalService;
-  magic: MagicService;
+  magic: MagicPackages;
   actions: ActionsService;
   widgetTokens: WidgetTokens;
   server: CoreServer;
