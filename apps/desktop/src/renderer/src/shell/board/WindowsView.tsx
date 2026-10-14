@@ -493,11 +493,8 @@ export function WindowsView(p: Props) {
       at = r;
       if (done) clearTimeout(done);
       done = setTimeout(() => setLiveResize(false), LIVE_RESIZE_MS);
-      // Before this frame is painted: the windows take the new size in the same frame
-      // as the board (else for a frame they sit at the old place in the new box).
-      // Sidebars toggled again mid-slide aren't a live resize: the windows turn back on their glide.
-      const live = resized || (now - last < LIVE_RESIZE_MS && !sidebarsSliding());
-      const apply = () => (live ? setLiveResize(true) : undefined, setVp(size));
+      // Before paint, the board's new size in the same frame (sidebars toggled mid-slide still glide).
+      const apply = () => (resized || (now - last < LIVE_RESIZE_MS && !sidebarsSliding()) ? setLiveResize(true) : undefined, setVp(size));
       if (sync) flushSync(apply);
       else apply();
       last = now;
