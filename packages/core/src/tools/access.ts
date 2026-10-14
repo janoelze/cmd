@@ -124,6 +124,7 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "widget.resync": "never",
   "widget.env": "never",
   "widget.restart": "never",
+  "widget.ask": "never", // the person is asked, by the person
   "widget.grant": "never", // a person's answer, never a tool's or a device's
   "fs.list": "read",
   "fs.resolve": "never",

@@ -6,8 +6,11 @@
 // widget.tree events (the last whole tree kept, so a window drawn later gets it), and the
 // window's interactions come back. Lifecycle is a contract: a loop stuck for 20 s or a heap
 // over the limit stops it with the reason; a crash restarts it, three in five minutes stop it
-// ("crashed"); Restart (widget.restart) starts it again. The window sees each state as a
-// widget.tree status.
+// ("crashed"); Restart (widget.restart) starts it again. A widget whose code doesn't load (a
+// syntax error: an `error` on the wire, then an exit before hello) stops with "didn't load" and
+// the error, no strike, until the next save. A save in a package (reload(), widgets/reload.ts)
+// restarts its windows once. The window sees each state as a widget.tree status. A package
+// waiting for a grant is asked once, not per window (asking(), widget.ask: the grants sheet).
 
 import { SUPPORTED_API, WIDGET_API, WIDGET_API_MINOR, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger, widgetPackageData } from "@cmd/protocol/node";
@@ -51,6 +54,8 @@ export interface HostOptions {
   packages: WidgetPackages;
   runtime: WidgetRuntime | null;
   times?: Partial<HostTimes>;
+  /** What the person is asked changed (a package started or stopped waiting for a grant): the Library's entries say it. */
+  onAsk?: () => void;
 }
 
 interface Instance {
@@ -73,6 +78,8 @@ interface Instance {
   config: string;
   pressedAt: number;
   permissions: WidgetPermissions | null;
+  /** The widget's error before it said hello (its main didn't import): an exit then is a load failure, not a crash. */
+  loadError: string | null;
 }
 
 export class WidgetHost {
@@ -83,6 +90,10 @@ export class WidgetHost {
   /** Grants without a state dir (tests): kept in memory. */
   #grants = new Map<string, Grants>();
   #aiUsage: AiUsage;
+  /** Packages the person is asked about with no window waiting (just linked, Allow…). */
+  #asked = new Set<string>();
+  /** Packages the person declined, with what they asked for then: asking more asks again. */
+  #declined = new Map<string, string>();
   #started = false;
   #disposed = false;
   /** Tests: what net.fetch uses. */
@@ -122,7 +133,7 @@ export class WidgetHost {
         else if (needsGrant(pkg.permissions, this.#granted(pkg.name)?.permissions)) {
           this.#stop(inst, null);
           this.#status(inst, { kind: "status", state: "waiting-grant" });
-        }
+        } else if (inst.pkg && JSON.stringify(pkg) !== JSON.stringify(inst.pkg)) this.#relaunch(inst); // its package.json changed
       } else if (inst.status.state === "waiting-grant" || inst.status.reason === "isn't installed") this.#launch(inst);
     }
     this.reconcile();
@@ -163,10 +174,48 @@ export class WidgetHost {
   }
 
   restart(windowId: WindowId): void {
-    const inst = this.#must(windowId);
-    this.#stop(inst, null);
-    inst.crashes = [];
-    this.#launch(inst);
+    this.#relaunch(this.#must(windowId));
+  }
+
+  /**
+   * A package's files changed (a save; widgets/reload.ts, once per burst): its package.json is
+   * read first, so one that now asks for more waits for the person instead of starting; then
+   * each of its windows starts again, a stopped one too (the save may fix what stopped it).
+   */
+  reload(name: string): void {
+    if (!this.#started || this.#disposed) return;
+    const procs = new Map([...this.#all.values()].map((i) => [i, i.proc]));
+    this.#o.packages.scan(); // a changed package.json restarts (or stops) its windows itself
+    for (const inst of this.#all.values()) {
+      if (inst.timers.stop || inst.status.state === "waiting-grant" || parsePackageKind(inst.kind)?.name !== name || inst.proc !== procs.get(inst)) continue;
+      log.info(`widget ${name} reloading`, { window: inst.windowId });
+      this.#relaunch(inst);
+    }
+  }
+
+  /** Ask the person about a package now (true), or stop asking until asked again (`decline`). */
+  ask(name: string, decline = false): void {
+    const pkg = this.#package(name);
+    if (!pkg) throw new Error(`no widget package ${name}`);
+    if (decline) {
+      this.#declined.set(name, JSON.stringify(pkg.permissions));
+      this.#asked.delete(name);
+    } else {
+      this.#declined.delete(name);
+      if (needsGrant(pkg.permissions, this.#granted(name)?.permissions)) this.#asked.add(name);
+    }
+    this.#o.onAsk?.();
+  }
+
+  /** Whether the person is being asked about a package (it needs a grant, a window waits or it was asked about, not declined), and the grant it has. */
+  asking(name: string): { granted: WidgetPermissions | null } | null {
+    const pkg = this.#package(name);
+    if (!pkg) return null;
+    const granted = this.#granted(name)?.permissions ?? null;
+    if (!needsGrant(pkg.permissions, granted)) return null;
+    if (this.#declined.get(name) === JSON.stringify(pkg.permissions)) return null;
+    const waits = [...this.#all.values()].some((i) => !i.timers.stop && i.status.state === "waiting-grant" && parsePackageKind(i.kind)?.name === name);
+    return waits || this.#asked.has(name) ? { granted } : null;
   }
 
   /** Grant a package what it declares (or `permissions`), and start its waiting windows. */
@@ -177,6 +226,9 @@ export class WidgetHost {
     if (this.#o.stateDir) writeGrants(this.#o.stateDir, name, g);
     else this.#grants.set(name, g);
     log.info(`widget package ${name} ${g.version} granted`, { permissions: g.permissions });
+    this.#asked.delete(name);
+    this.#declined.delete(name);
+    this.#o.onAsk?.();
     for (const inst of this.#all.values()) if (inst.pkg?.name === name && !inst.proc) this.#launch(inst);
     return g;
   }
@@ -222,6 +274,7 @@ export class WidgetHost {
       config: "",
       pressedAt: 0,
       permissions: null,
+      loadError: null,
     };
     this.#all.set(w.id, inst);
     this.#launch(inst);
@@ -251,6 +304,7 @@ export class WidgetHost {
     );
     inst.token = token;
     inst.stopping = null;
+    inst.loadError = null;
     inst.tree.reset();
     this.#status(inst, { kind: "status", state: "starting" });
     try {
@@ -282,7 +336,8 @@ export class WidgetHost {
 
   #message(inst: Instance, conn: HostConnection, m: WidgetOut): void {
     if (conn !== inst.conn) return;
-    if (m.kind !== "hello" && !inst.adapter) return; // nothing before hello
+    if (m.kind === "error" && !inst.adapter) inst.loadError = loadError(m.message, m.stack);
+    if (m.kind !== "hello" && !inst.adapter) return; // nothing else before hello
     switch (m.kind) {
       case "hello":
         return this.#hello(inst, m);
@@ -364,11 +419,17 @@ export class WidgetHost {
   #exited(inst: Instance, token: string, e: ExitInfo): void {
     if (inst.token !== token) return;
     const intended = inst.stopping;
+    const loadFailed = inst.loadError;
     this.#cleanup(inst);
     if (this.#disposed) return;
     if (intended !== null) {
       if (intended) this.#status(inst, { kind: "status", state: "stopped", reason: intended });
       return;
+    }
+    if (loadFailed !== null) {
+      // Its code didn't load (a syntax error, a missing import): starting it again would do the same, so it waits for a save.
+      log.warn(`widget ${inst.pkg?.name}/${inst.widget?.id} didn't load: ${loadFailed}`);
+      return this.#status(inst, { kind: "status", state: "stopped", reason: "didn't load", ...(loadFailed ? { detail: loadFailed } : {}) });
     }
     if (/out of memory|heap limit/i.test(e.stderr)) return this.#status(inst, { kind: "status", state: "stopped", reason: "used too much memory" });
     const now = Date.now();
@@ -436,13 +497,28 @@ export class WidgetHost {
       this.#all.delete(id);
     }, this.#t.stopAfterMs);
     inst.timers.stop.unref?.();
+    if (inst.status.state === "waiting-grant") this.#o.onAsk?.();
   }
 
   // ── helpers ────────────────────────────────────────────
 
   #status(inst: Instance, s: WidgetHostStatus): void {
+    const was = inst.status.state;
     inst.status = s;
     this.#emit(inst, s);
+    if ((was === "waiting-grant") !== (s.state === "waiting-grant")) this.#o.onAsk?.();
+  }
+
+  /** Stop it (if running) and start it again, its crashes forgotten. */
+  #relaunch(inst: Instance): void {
+    this.#stop(inst, null);
+    inst.crashes = [];
+    this.#launch(inst);
+  }
+
+  #package(name: string): WidgetPackage | null {
+    const e = this.#o.packages.list().find((x) => x.ok && x.pkg.name === name);
+    return e?.ok ? e.pkg : null;
   }
 
   #emit(inst: Instance, message: Extract<WidgetOut, { kind: "tree" | "patch" }> | WidgetHostStatus): void {
@@ -475,4 +551,11 @@ export class WidgetHost {
     if (!inst) throw new Error(`not a package widget's window: ${id}`);
     return inst;
   }
+}
+
+/** What a load failure shows: the error's message, then the first line of its stack that isn't the message again. */
+export function loadError(message: unknown, stack: unknown): string {
+  const msg = String(message ?? "").trim();
+  const at = typeof stack === "string" ? stack.split("\n").map((l) => l.trim()).find((l) => l.startsWith("at ")) : undefined;
+  return [msg, at].filter(Boolean).join("\n").slice(0, 1000);
 }

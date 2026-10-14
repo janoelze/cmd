@@ -2,6 +2,7 @@
 // (docs/56), then the widgets made with Magic by last use; clients get it again when it
 // changes, once per burst.
 
+import fs from "node:fs";
 import { parsePackageKind, type WidgetEntry } from "@cmd/protocol";
 import { DEFAULT_ICON } from "./package.ts";
 import { createPackages } from "./feature.ts";
@@ -9,6 +10,7 @@ import type { WidgetPackages } from "./packages.ts";
 import type { CoreContext } from "../kernel/context.ts";
 import { createWidgetHost } from "./host/feature.ts";
 import type { WidgetHost } from "./host/host.ts";
+import { PackageReloader } from "./reload.ts";
 
 /** A Widget Library ref: "magic:<widget id>" (made with Magic), "type:<kind>" (a built-in widget) or "pkg:<package>/<widget>" (a package's). */
 export function widgetRef(ref: string): { kind: string; widgetId?: string } {
@@ -38,14 +40,18 @@ export class WidgetLibrary {
   readonly packages: WidgetPackages;
   /** Their widgets' processes (docs/56, "The runtime"; widgets/host/). */
   readonly host: WidgetHost;
+  /** Saves in a package's sources restart its windows (hot reload, widgets/reload.ts). */
+  readonly reloader: PackageReloader;
 
   constructor(core: CoreContext, o: LibraryOptions = {}) {
     this.#core = core;
     this.packages = createPackages(core, () => {
       this.changed();
+      this.reloader?.sync(this.packages.list());
       this.host?.packagesChanged();
     });
-    this.host = createWidgetHost(core, this.packages, { stateDir: o.stateDir ?? null, socket: o.socket ?? null });
+    this.host = createWidgetHost(core, this.packages, { stateDir: o.stateDir ?? null, socket: o.socket ?? null, onAsk: () => this.changed() });
+    this.reloader = new PackageReloader({ onReload: (name) => this.host.reload(name) });
     // Developer widgets come and go from the library with their setting.
     core.settings.bind(["widgets.developer"], () => this.changed());
   }
@@ -60,7 +66,11 @@ export class WidgetLibrary {
       .map((t): WidgetEntry => ({ ref: `type:${t.kind}`, source: "builtin", kind: t.kind, title: t.title, description: t.description, icon: t.icon, ...(t.tags?.length ? { tags: t.tags } : {}), windows: others.filter((w) => w.kind === t.kind).map((w) => w.id) }));
     const pkgs = packages.list().flatMap((e): WidgetEntry[] =>
       e.ok
-        ? e.pkg.widgets.map((w) => ({ ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) }))
+        ? e.pkg.widgets.map((w) => {
+            const ask = this.host.asking(e.pkg.name);
+            const link = linkOf(e.dir);
+            return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
+          })
         : [{ ref: `pkg:${e.folder}`, source: "package", kind: `pkg:${e.folder}`, title: e.folder, icon: DEFAULT_ICON, name: e.folder, problem: e.errors.join("; "), dir: e.dir, windows: [] }],
     );
     const type = windowTypes.get("magic")!;
@@ -92,5 +102,15 @@ export class WidgetLibrary {
 
   dispose(): void {
     if (this.#timer) clearTimeout(this.#timer);
+    this.reloader.close();
+  }
+}
+
+/** The folder a linked package is (its link resolved), or null for a folder of its own. */
+function linkOf(dir: string): string | null {
+  try {
+    return fs.lstatSync(dir).isSymbolicLink() ? fs.realpathSync(dir) : null;
+  } catch {
+    return null;
   }
 }

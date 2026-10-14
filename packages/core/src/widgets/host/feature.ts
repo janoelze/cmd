@@ -1,8 +1,8 @@
 // The widget host as a feature (docs/56; kernel/features.ts): its service is the Widget
 // Library's (`core.library.host`, made beside the packages it runs), started once the packages
 // are read, stopped with the core. Its methods are what a package widget's window calls (the
-// person's interactions, a resync, where it is drawn, Restart) and the grant (`cmd widget grant`
-// today, the grants sheet later).
+// person's interactions, a resync, where it is drawn, Restart), the grant (the grants sheet,
+// `cmd widget grant`) and asking for one (widget.ask: `cmd widget link`, the sheet's Decline).
 
 import os from "node:os";
 import path from "node:path";
@@ -16,7 +16,7 @@ import { WidgetHost } from "./host.ts";
 import { DenoRuntime } from "./runtime.ts";
 
 /** The host over the packages; Deno runs its processes when there is a state dir (else a test sets a runtime). */
-export function createWidgetHost(core: CoreContext, packages: WidgetPackages, o: { stateDir: string | null; socket: string | null }): WidgetHost {
+export function createWidgetHost(core: CoreContext, packages: WidgetPackages, o: { stateDir: string | null; socket: string | null; onAsk?: () => void }): WidgetHost {
   const runtime = o.stateDir
     ? new DenoRuntime({
         deno: () => findDeno({ setting: core.settings.settings["magic.deno"], stateDir: o.stateDir! }),
@@ -24,7 +24,7 @@ export function createWidgetHost(core: CoreContext, packages: WidgetPackages, o:
         sandbox: () => (process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required"),
       })
     : null;
-  return new WidgetHost(core, { stateDir: o.stateDir, socket: o.socket, packages, runtime });
+  return new WidgetHost(core, { stateDir: o.stateDir, socket: o.socket, packages, runtime, onAsk: o.onAsk });
 }
 
 const handlers = (core: CoreContext) =>
@@ -33,6 +33,7 @@ const handlers = (core: CoreContext) =>
     "widget.resync": (p) => (core.library.host.resync(p.windowId), null),
     "widget.env": (p) => (core.library.host.setEnv(p.windowId, p), null),
     "widget.restart": (p) => (core.library.host.restart(p.windowId), null),
+    "widget.ask": (p) => (core.library.host.ask(p.name, !!p.decline), null),
     "widget.grant": (p) => core.library.host.grant(p.name, p.permissions),
   });
 

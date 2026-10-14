@@ -3,6 +3,7 @@
 import type { AgentTurn } from "./activity.ts";
 import type { NameSource } from "./names.ts";
 import type { SettingKey } from "./settings.ts";
+import type { WidgetPermissions } from "./widget-package.ts";
 
 export type PaneId = string;
 export type AgentId = string;
@@ -355,6 +356,12 @@ export interface WidgetEntry {
   api?: number;
   /** Packages: why it can't run ("needs cmd 0.33"); such an entry can't be added. */
   problem?: string;
+  /** Packages: the folder a linked package is (`cmd widget link`); none for one installed in the packages folder. */
+  link?: string;
+  /** Packages: what it asks for (package.json's `cmd.permissions`). */
+  permissions?: WidgetPermissions;
+  /** Packages: the person is being asked to grant `permissions` (the grants sheet); `granted` is the grant it has, if any. */
+  ask?: { granted: WidgetPermissions | null };
 }
 
 export interface FileEntry {

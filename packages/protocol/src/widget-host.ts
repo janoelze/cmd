@@ -17,6 +17,8 @@ export interface WidgetHostStatus {
   kind: "status";
   state: "starting" | "running" | "stopped" | "waiting-grant";
   reason?: string;
+  /** More about a stop, for the window to show: "didn't load" carries the widget's error (its message and first stack line). */
+  detail?: string;
 }
 
 export interface WidgetHostMethods {
@@ -29,6 +31,11 @@ export interface WidgetHostMethods {
   /** Start a stopped package widget's process again (Restart, after "Stopped · crashed"). */
   "widget.restart": { params: { windowId: WindowId }; result: null };
   /** Grant a package what it asks (`permissions` omitted: everything it declares); its waiting windows start. */
+  /**
+   * Ask the person for what a package wants now (the grants sheet: `cmd widget link`, Allow… in a
+   * waiting window), or with `decline`, stop asking until asked again (the sheet's Decline).
+   */
+  "widget.ask": { params: { name: string; decline?: boolean }; result: null };
   "widget.grant": { params: { name: string; permissions?: WidgetPermissions }; result: { version: string; permissions: WidgetPermissions } };
 }
 
