@@ -2,6 +2,28 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.30.0 — 2026-10-14
+
+### New
+
+- **Now Playing widget.** Shows the cover and track your Mac is playing, with play, pause and skip, and a bar you can drag to seek.
+
+### Improved
+
+- The workspace switcher's menu and the Workspace menu list workspaces in the same order, with ⌃1–9 reading down the list.
+- File → Open Recent lists the workspaces you closed recently.
+- A long path a program wraps over several lines opens with one ⌘-click on any of its lines.
+
+### Fixed
+
+- Names in narrow tables, like Live Diff's file list, end in an ellipsis instead of running into the text beside them.
+- Closed terminals in the Navigator's Recent no longer show an agent's spinner in their title.
+- The strip no longer shows a scrollbar under its page dots.
+
+### Removed
+
+- The New Claude Session and New Codex Session commands: open a terminal and type `claude` or `codex` instead.
+
 ## 0.29.0 — 2026-10-13
 
 ### New
