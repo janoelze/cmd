@@ -57,6 +57,7 @@
     "uqr": "^0.1.3"
   },
   "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/turndown": "^5.0.6",

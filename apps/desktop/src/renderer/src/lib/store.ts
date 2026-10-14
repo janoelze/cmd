@@ -14,6 +14,7 @@ import { applyFonts } from "./fonts.ts";
 import { applyLookSettings } from "./look.ts";
 import { applyThemeSettings } from "./theme.ts";
 import { setWindowTypes } from "../windows/registry.ts";
+import { handleWidgetTree } from "../windows/package/live.ts";
 import { handleMagicEvent } from "../windows/magic/magic.ts";
 import { countEvent, perf } from "./perf.ts";
 import { cleanTitle } from "./model.ts";
@@ -526,6 +527,9 @@ function handle(e: CoreEvent): void {
       return;
     case "widget.library":
       set({ library: e.entries });
+      return;
+    case "widget.tree":
+      handleWidgetTree(e);
       return;
     case "window.closedChanged":
       loadClosed();

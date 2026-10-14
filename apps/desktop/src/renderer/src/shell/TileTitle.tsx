@@ -7,7 +7,7 @@
 // macOS document's title bar (drags.ts); a browser window's drags its link.
 
 import { fieldsOf, windowIdOf, type SidebarRow, type WindowFields } from "../lib/model.ts";
-import { stateStr, typeFor, viewFor } from "../windows/registry.ts";
+import { stateStr, typeFor, useWindowChrome, viewFor } from "../windows/registry.ts";
 import { showContextMenu } from "../lib/context.ts";
 import { WindowBar, WindowBarMenu } from "@cmd/ui";
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -78,6 +78,7 @@ export const TileTitle = memo(function TileTitle({
   const action = useWindowStatus(row.win?.id ?? null)?.action;
   const edit = useTitleEdit(row.win?.id ?? null);
   // Docked too: a widget's scope and options shouldn't go away in a sidebar.
+  useWindowChrome();
   const menu = row.win ? viewFor(row.win.kind)?.titleMenu?.(row.win) : undefined;
   // A Place its toolbar already shows (an address, a path) isn't said twice.
   const place = f.place && !bare && !(row.win && viewFor(row.win.kind)?.placeInToolbar) ? f.place : undefined;

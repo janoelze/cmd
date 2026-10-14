@@ -8,7 +8,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts",
-    "./runtime": "./src/runtime.ts"
+    "./runtime": "./src/runtime.ts",
+    "./testing/host": "./src/testing/host.ts",
+    "./testing/fixtures": "./src/testing/fixtures.ts",
+    "./examples/*": "./examples/*"
   },
   "files": [
     "src"

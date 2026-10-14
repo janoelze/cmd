@@ -147,6 +147,9 @@ importers:
         specifier: ^0.1.3
         version: 0.1.3
     devDependencies:
+      '@cmd/widget-api':
+        specifier: workspace:*
+        version: link:../../packages/widget-api
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0

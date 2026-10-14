@@ -2,7 +2,7 @@
 // UI. The core half (what it opens, its state) lives in packages/core/src/windows.
 // Built-ins register in ./builtin.tsx; plugin window types will register the same way.
 
-import { createContext, createElement, lazy, Suspense, type ComponentType } from "react";
+import { createContext, createElement, lazy, Suspense, useSyncExternalStore, type ComponentType } from "react";
 import type { AppWindow, WindowTypeInfo } from "@cmd/protocol";
 import type { MenuEntry } from "../lib/context.ts";
 
@@ -33,7 +33,7 @@ export interface WindowView {
    * A menu button at the right end of the title bar, labelled with the current
    * choice ("This Workspace ▾"): a widget's scope and options. Not shown on sidebars.
    */
-  titleMenu?(win: AppWindow): { label: string; entries: MenuEntry[] };
+  titleMenu?(win: AppWindow): { label: string; entries: MenuEntry[] } | undefined;
 }
 
 /**
@@ -63,6 +63,23 @@ export function lazyView(load: () => Promise<ComponentType<WindowViewProps>>): C
   let View = make();
   const fallback = createElement("div", { style: { flex: 1, background: "var(--well)" } });
   return (props) => createElement(Suspense, { fallback }, createElement(View, props));
+}
+
+/**
+ * A view whose titleMenu, menu or actions read something besides `win` (a package
+ * widget's tree, docs/56) says when that changed; title bars redraw (useWindowChrome).
+ */
+let chromeVersion = 0;
+const chromeListeners = new Set<() => void>();
+export function windowChromeChanged(): void {
+  chromeVersion++;
+  for (const fn of chromeListeners) fn();
+}
+export function useWindowChrome(): number {
+  return useSyncExternalStore(
+    (fn) => (chromeListeners.add(fn), () => void chromeListeners.delete(fn)),
+    () => chromeVersion,
+  );
 }
 
 export function registerWindowView(view: WindowView): void {
