@@ -382,6 +382,7 @@ export class WidgetHost {
     if (typeof m.api !== "number" || m.api < SUPPORTED_API.min || m.api > SUPPORTED_API.max) return this.#kill(inst, `made for ${m.api > SUPPORTED_API.max ? "a newer" : "an older"} cmd`);
     if (m.package !== pkg.name || m.widget !== inst.widget!.id) return this.#kill(inst, "said it was another widget");
     if (inst.timers.hello) clearTimeout(inst.timers.hello);
+    inst.loadError = null; // it loaded: an error before hello didn't stop it, and a later exit is a crash
     inst.adapter = apiV1(this.#core, {
       windowId: inst.windowId,
       workspaceId: () => this.#core.windows.others().find((w) => w.id === inst.windowId)?.workspaceId ?? "",

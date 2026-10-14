@@ -119,6 +119,21 @@ describe("a widget that doesn't load", () => {
     expect(rt.procs).toHaveLength(2);
   });
 
+  it("counts an exit after hello as a crash, even after an error before it", async () => {
+    const { rt, open, isStatus } = await setup();
+    rt.boot = (p) => {
+      p.connect();
+      p.send({ kind: "error", message: "unhandled rejection in module scope", stack: null, componentStack: null });
+      p.hello();
+    };
+    const w = await open();
+    await until(isStatus(w.id, "running"), "running despite the early error");
+    rt.boot = (p) => p.connect().hello();
+    rt.last.crash(1);
+    await until(() => rt.procs.length === 2, "restarted as after a crash");
+    await until(isStatus(w.id, "running"), "running again");
+  });
+
   it("says the error's first line and where, in the package's own words", () => {
     expect(loadError("boom", "Error: boom")).toBe("boom");
     expect(loadError("boom", null)).toBe("boom");
