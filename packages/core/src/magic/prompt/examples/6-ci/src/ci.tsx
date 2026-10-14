@@ -1,6 +1,7 @@
 // The latest GitHub Actions runs of a repository (the API through cmd.net.fetch; the token,
 // if set, is attached by cmd to api.github.com only). The latest run leads the title bar;
-// each workflow's newest failure notifies once; a click opens the run on github.com.
+// each workflow's newest failure notifies once; a click opens the run on github.com, and a failed
+// run's menu has Rerun: a terminal with `gh run rerun` typed, for the person to run (it writes).
 
 import { useEffect } from "react";
 import { Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, useConfig, useData, useNow, cmd, fmt, type Light } from "@cmd/widget-api";
@@ -57,7 +58,12 @@ export default function Ci() {
             {(data ?? []).map((r) => {
               const [word, light] = state(r);
               return (
-                <ListRow key={r.id} onClick={() => void cmd.windows.open(r.url).catch(() => {})} tip="Open on github.com">
+                <ListRow
+                  key={r.id}
+                  onClick={() => void cmd.windows.open(r.url).catch(() => {})}
+                  tip="Open on github.com"
+                  menu={light === "danger" ? [{ label: "Rerun Failed Jobs", run: () => void cmd.terminals.open({ command: `gh run rerun ${r.id} --failed -R ${repo}` }).catch(() => {}) }] : undefined}
+                >
                   <ListRowIcon icon="checkmark.seal" light={light} />
                   <ListRowContent title={r.name} place={r.branch} detail={`${word} · #${r.number} · ${r.event}`} tone={light === "danger" ? "danger" : undefined} />
                   <ListRowEnd>

@@ -2,7 +2,7 @@
 // edit the package's own files, check it (package.json and the types against the API), test
 // it with the fake host, and preview its trees drawn by the app. Two more end the build
 // without a package: `terminal` (an existing program shows it best) and `needs_program`
-// (it needs to run a program, which widgets can't do yet: cmd.run comes later). They work on
+// (it needs a program a widget can't run: cmd.run runs read-only commands only). They work on
 // one package folder; nothing else is reachable, grants.json least of all.
 
 import type { WidgetPermissions } from "@cmd/protocol";
@@ -63,7 +63,7 @@ export const PACKAGE_TOOL_SPECS: ToolSpec[] = [
   {
     name: "needs_program",
     explores: false,
-    description: "Stop without a widget because the request needs to run a program on this Mac (ps, ifconfig, git outside the workspace, a CLI), which widgets can't do yet. Name the programs; cmd tells the person.",
+    description: "Stop without a widget because the request needs a program in a way a widget can't run it: one that changes something, runs until stopped, or isn't read-only (cmd.run runs read-only commands only: `gh run list` yes, `gh run rerun` no). Name the programs; cmd tells the person.",
     schema: obj({ programs: { type: "array", items: { type: "string" } }, reason: { type: "string", description: "One sentence for the person: what it would need to run, and why." } }, ["programs", "reason"]),
   },
 ];

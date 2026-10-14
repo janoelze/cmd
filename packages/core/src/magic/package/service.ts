@@ -291,7 +291,7 @@ export class MagicPackages {
       this.#c.windows.update(id, { title: t.title, state: { phase: "ready", kind: "terminal", command: t.command, icon: t.icon ?? "terminal", size: "m", pkg: undefined, steps: o.steps, summary: r.summary || undefined } });
       return void this.#c.broadcast({ type: "magic.stream", id, progress: { type: "done" } });
     }
-    const why = r.stopped ?? (r.ending?.kind === "needs-program" ? `${r.ending.reason} (It would need to run ${r.ending.programs.join(", ")}, which widgets can't do yet.)` : !v.usable ? (v.problems[0]?.split("\n")[0] ?? "The widget couldn't be built.") : null);
+    const why = r.stopped ?? (r.ending?.kind === "needs-program" ? `${r.ending.reason} (It would need ${r.ending.programs.join(", ")} in a way widgets can't run: only read-only commands.)` : !v.usable ? (v.problems[0]?.split("\n")[0] ?? "The widget couldn't be built.") : null);
     if (why || !v.pkg) return this.#end(id, name, ac, { error: why ?? "The widget couldn't be built.", fresh: o.fresh });
 
     const revs = new PackageRevisions(this.#stateDir, name);

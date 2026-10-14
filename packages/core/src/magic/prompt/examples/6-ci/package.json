@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "The latest GitHub Actions runs of a repository.",
   "type": "module",
-  "devDependencies": { "@cmd/widget-api": "^1.0.0" },
+  "devDependencies": { "@cmd/widget-api": "^1.1.0" },
   "cmd": {
     "api": 1,
     "widgets": [
@@ -19,6 +19,6 @@
         ]
       }
     ],
-    "permissions": { "net": ["api.github.com"] }
+    "permissions": { "net": ["api.github.com"], "act": ["terminals.open"] }
   }
 }

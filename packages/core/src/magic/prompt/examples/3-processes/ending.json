@@ -1,1 +1,0 @@
-{ "tool": "terminal", "input": { "why": "Opening top sorted by CPU", "command": "top -o cpu -s 2 -stats pid,command,cpu,mem", "title": "Top processes", "icon": "cpu" } }

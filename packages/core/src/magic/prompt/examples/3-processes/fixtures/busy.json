@@ -1,0 +1,7 @@
+{
+  "run": {
+    "ps -Ao pid,pcpu,pmem,comm -r": {
+      "stdout": "  PID  %CPU %MEM COMM\n 4211  96.3  2.1 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)\n  812  41.0  0.8 /usr/libexec/WindowServer\n 9921  12.5  4.4 /opt/homebrew/bin/node\n 1203   3.1  0.2 /usr/sbin/mds_stores\n  377   0.0  0.0 /usr/sbin/syslogd\n"
+    }
+  }
+}

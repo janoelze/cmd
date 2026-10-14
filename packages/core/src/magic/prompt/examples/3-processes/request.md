@@ -1,2 +1,2 @@
 Request: what's eating my cpu
-Notes: the numbers come from `ps` or `top`, programs widgets can't run yet, and `top` already shows this live and sorted: a terminal, not a widget.
+Notes: only `ps` knows, and it is read-only, so the widget runs it through `cmd.run` (`run: ["ps"]`) every 5 seconds: `ps -Ao pid,pcpu,pmem,comm -r` (sorted by CPU, no shell: the arguments are a list, and the top 12 are cut in TypeScript, not with `head`). `run` showed the columns. The busiest process leads the title bar; a process over 80% for a while is worth a look, not a notification. A row's menu opens a terminal with `top` typed for the person who wants more (an act: `act: ["terminals.open"]`). fixtures/busy.json answers the command line.

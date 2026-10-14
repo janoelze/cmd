@@ -51,7 +51,7 @@ describe("the prompt's examples", () => {
     expect(system).toContain("#### `cmd.net`");
     expect(system).toContain("#### `ListRowContent`");
     for (const d of EXAMPLES) expect(system).toContain(fs.readFileSync(path.join(d, "request.md"), "utf8").trim().split("\n")[0]!);
-    expect(system).toContain('No package: the build ends with terminal({"why":"Opening top sorted by CPU"');
+    expect(system).toContain('No package: the build ends with terminal({"why":"Following the system log"');
   });
 
   for (const dir of EXAMPLES) {
