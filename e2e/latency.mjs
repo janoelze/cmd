@@ -91,7 +91,7 @@ await win.evaluate(() => {
       const r = t.getBoundingClientRect();
       return `${t.dataset.pane ?? ""}:${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}`;
     });
-    return [tiles.join(";"), innerWidth, devicePixelRatio, document.querySelector("main.windows")?.clientWidth, document.querySelector(".tile.sel")?.getAttribute("data-pane"), document.querySelector(".palette:not([data-closing])") ? "P" : "", document.querySelector(".workspace-trigger .workspace-name")?.textContent, document.querySelectorAll("[data-motion]:not([data-closing])").length].join("|");
+    return [tiles.join(";"), document.querySelector(".tile.sel .xterm-screen")?.style.width, innerWidth, devicePixelRatio, document.querySelector("main.windows")?.clientWidth, document.querySelector(".tile.sel")?.getAttribute("data-pane"), document.querySelector(".palette:not([data-closing])") ? "P" : "", document.querySelector(".workspace-trigger .workspace-name")?.textContent, document.querySelectorAll("[data-motion]:not([data-closing])").length].join("|");
   };
 });
 
@@ -228,21 +228,33 @@ await win.evaluate(() =>
   await win.locator(`.tile[data-pane="${target}"] .xterm-screen`).click();
   await call("pane.write", { paneId: target, data: "clear\r" });
   await sleep(500);
-  let typed = "";
   const letters = "thequickbrownfoxjumpsoverthelazydog";
-  await scenario(
-    "type",
-    async (i) => {
-      typed += letters[i % letters.length];
-      const want = `${typed}`;
-      return timed(() => win.keyboard.press(letters[i % letters.length]), {
-        ready: new Function(`return () => window.__cmdTermScreen(${JSON.stringify(target)}).includes(${JSON.stringify(want)})`)(),
-        settleFrames: 2,
-      });
-    },
-    { runs: 30 },
-  );
-  await win.keyboard.press("Control+C");
+  const typing = async (name) => {
+    let typed = "";
+    await scenario(
+      name,
+      async (i) => {
+        typed += letters[i % letters.length];
+        return timed(() => win.keyboard.press(letters[i % letters.length]), {
+          ready: new Function(`return () => window.__cmdTermScreen(${JSON.stringify(target)}).includes(${JSON.stringify(typed)})`)(),
+          settleFrames: 2,
+        });
+      },
+      { runs: 30 },
+    );
+    await win.keyboard.press("Control+C");
+    await sleep(300);
+  };
+  await typing("type");
+  // The same while three other terminals stream output (agents working beside you): ~4,000 lines a second each.
+  const busy = panes.filter((p) => p !== target).slice(0, 3);
+  if (!only || only.includes("type (busy)")) {
+    for (const p of busy) await call("pane.write", { paneId: p, data: "while :; do seq 1 200; sleep 0.05; done\r" });
+    await sleep(1000);
+    await typing("type (busy)");
+    for (const p of busy) await call("pane.write", { paneId: p, data: "\x03" });
+    await sleep(800);
+  }
 }
 
 await scenario("session.next", () => timed(() => menu("session.next"), { ready: undefined }), { runs: 12 });
