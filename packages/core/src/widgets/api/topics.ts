@@ -163,7 +163,8 @@ function subscribeEvents(core: TopicCore, s: TopicScope, push: (data: WireValue)
   let closed = false;
   const take = (events: DataEvent[]) => {
     if (closed) return;
-    for (const e of events) if (e.workspaceId === s.own() && matchesQuery({ ...clamped, workspaceId: s.own() }, e)) pending.push(e);
+    // An event recorded again within the burst (a command's start, then its end) goes once, as it is now.
+    for (const e of events) if (e.workspaceId === s.own() && matchesQuery({ ...clamped, workspaceId: s.own() }, e)) pending = [...pending.filter((x) => x.id !== e.id), e];
     if (!pending.length || timer) return;
     timer = setTimeout(() => {
       timer = null;

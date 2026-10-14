@@ -35,6 +35,10 @@ describe("Recent Commands", () => {
     expect(tree.rows()).toHaveLength(1);
     expect(tree.sections().map((s) => s.props.title)).toEqual(["Finished"]);
     expect(tree.find("Window").props.status).toBeNull();
+    // Its start and its end in one burst: one row, as it is now.
+    host.emit(command({ command: null as never, ago: 2000, key: "command:2" }), command({ command: "ls", ago: 2000, exitCode: 0, took: 100, key: "command:2" }));
+    await tree.idle();
+    expect(titles(tree.rows())).toEqual(["ls", "pnpm e2e"]);
   });
 
   it("goes to the command's terminal, and Run Again opens a terminal with it typed, not run", async () => {

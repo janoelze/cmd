@@ -276,7 +276,8 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
     deps.show({ ...shown, state: "running" });
     try {
       const r = await plan.run();
-      if (r.target !== undefined) target = r.target;
+      // A window it made (a terminal, an agent's): marked from now, and for a moment after.
+      if (r.target !== undefined && r.target !== target) deps.show({ ...shown, target: (target = r.target), state: "running" });
       end("done");
       return r.value;
     } catch (e) {

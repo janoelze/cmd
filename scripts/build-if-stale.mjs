@@ -42,3 +42,7 @@ if (newer || partial) {
   console.log(`building (${partial ? "out/ has no renderer" : oldestOut ? `${newer} changed` : "no build yet"})`);
   execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
 } else console.log("build is up to date");
+
+// Widget processes import the vendored @cmd/widget-api (scripts/widget-api-bundle.mjs), which
+// pnpm install builds: an API changed since (a pull, an edit) needs it built again, or widgets run the old verbs.
+await (await import("./widget-api-bundle.mjs")).bundleWidgetApi({ ifStale: true });

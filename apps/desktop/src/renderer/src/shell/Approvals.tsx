@@ -33,7 +33,7 @@ function Ask({ ask, open, count }: { ask: ToolActivity; open: boolean; count: nu
       open={open}
       who={who}
       title={a.title}
-      why={ask.why !== ask.tool ? ask.why : undefined}
+      why={ask.why !== ask.tool && ask.why !== a.title ? ask.why : undefined}
       exact={a.exact || undefined}
       scopes={a.scopes.map((value) => ({ value, ...scope[value] }))}
       allow={a.risky ? "Run" : "Allow"}

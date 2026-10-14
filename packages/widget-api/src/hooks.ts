@@ -74,8 +74,11 @@ export function useWindows(query: ApiScopeQuery = {}): ApiWindow[] {
 export function useEvents(query: ApiEventQuery = {}): ApiEvent[] {
   const limit = query.limit ?? 200;
   return useTopic("events", query, [], (prev, next) => {
-    const again = new Set(next.map((e) => e.key).filter((k): k is string => !!k));
-    return [...(again.size ? prev.filter((e) => !e.key || !again.has(e.key)) : prev), ...next].slice(-limit);
+    // The last of each key wins, within the new ones too (a command's start and end in one burst).
+    const latest = new Map<string, number>();
+    next.forEach((e, i) => e.key && latest.set(e.key, i));
+    const fresh = latest.size ? next.filter((e, i) => !e.key || latest.get(e.key) === i) : next;
+    return [...(latest.size ? prev.filter((e) => !e.key || !latest.has(e.key)) : prev), ...fresh].slice(-limit);
   });
 }
 

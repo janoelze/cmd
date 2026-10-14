@@ -243,6 +243,9 @@ const SCENARIOS = {
   "widget-reload": [],
   "widget-config": [],
   "widget-frame": [],
+  "widget-act": [],
+  "widget-commands": [],
+  "widget-timer": [],
   "app-window": [],
 };
 const failures = [];
@@ -2535,6 +2538,178 @@ document.getElementById("count").onclick = () => cmd.state.set("count", (cmd.sta
   await call("window.close", { id: jam.id });
   await call("window.close", { id: viz.id });
 });
+
+// A menu the app pops up (a row's or a title bar's): the entry labelled `label` is chosen, the labels kept.
+const choosing = (label) =>
+  app.evaluate(({ Menu }, label) => {
+    globalThis.__popup ??= Menu.prototype.popup;
+    Menu.prototype.popup = function (o) {
+      globalThis.__lastMenu = this.items.map((i) => i.label).filter(Boolean);
+      this.items.find((i) => i.label === label)?.click();
+      o?.callback?.();
+    };
+  }, label);
+const unchoosing = () => app.evaluate(({ Menu }) => globalThis.__popup && (Menu.prototype.popup = globalThis.__popup));
+
+// API 1.1's acts (docs/56, phase 4): a linked package whose button opens a terminal with a
+// command typed. The press asks through the approval sheet, naming the widget, its package and
+// version; Always keeps it for the package in this workspace (approvals.list), the terminal opens
+// marked with the widget's name, the command typed, not run; the next press runs without a sheet.
+await scenario("widget-act", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const dir = path.join(widgetSrc, "act-demo");
+  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "act-demo", version: "1.2.0", cmd: { api: 1, widgets: [{ id: "main", title: "Act Demo", main: "src/main.tsx" }], permissions: { act: ["terminals.open"] } } }, null, 2));
+  fs.writeFileSync(
+    path.join(dir, "src", "main.tsx"),
+    `import { useState } from "react";
+import { Window, View, Stack, Button, Text, cmd } from "@cmd/widget-api";
+
+export default function Act() {
+  const [said, setSaid] = useState("Ready");
+  const run = () => void cmd.terminals.open({ command: "echo acted-by-widget" }).then(() => setSaid("Opened"), (e) => setSaid(e.code === "denied" ? "Declined" : e.message));
+  return (
+    <Window status={said}>
+      <View>
+        <Stack pad="inset" gap={2}>
+          <Text>Opens a terminal with a command typed.</Text>
+          <Button onClick={run}>Run Tests</Button>
+        </Stack>
+      </View>
+    </Window>
+  );
+}
+`,
+  );
+  const sheet = win.locator(".ui-approval:not([data-closing])");
+  const linked = await cmdCli("widget", "link", dir);
+  check(linked.code === 0, `cmd widget link links it (${JSON.stringify(linked.out.trim().slice(0, 160))})`);
+  // The grant first: it may ask to act, asking each time.
+  await sheet.waitFor({ timeout: 10_000 }).catch(expired("grants sheet"));
+  const grantText = (await sheet.textContent()) ?? "";
+  check(grantText.includes("Type in terminals, asking first"), `the grants sheet says it may act, asking first (${JSON.stringify(grantText.slice(0, 200))})`);
+  const grantShown = Date.now();
+  await until(() => Date.now() - grantShown > 400);
+  await win.keyboard.press("Enter");
+  await gone(".ui-approval");
+  const homeId = (await call("workspace.list")).find((w) => w.home).id;
+  await menu("view.grid"); // the widget and the terminal it opens side by side
+  const w = await call("widget.add", { ref: "pkg:act-demo/main", workspaceId: homeId });
+  await tileIn(w.id);
+  const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+  const terminals = () => call("pane.list").then((l) => l.filter((p) => p.workspaceId === homeId).map((p) => p.id));
+  const before = await terminals();
+  await tile.getByRole("button", { name: "Run Tests" }).waitFor({ timeout: 30_000 });
+  await tile.getByRole("button", { name: "Run Tests" }).click();
+
+  await sheet.waitFor({ timeout: 10_000 }).catch(expired("approval sheet"));
+  const shownAt = Date.now();
+  const text = (await sheet.textContent()) ?? "";
+  await shot(win, "widget-act-sheet.png");
+  check(text.includes("Act Demo") && text.includes("act-demo 1.2.0") && text.includes("Open a terminal with a command typed, not run") && text.includes("echo acted-by-widget") && text.includes("Always"), `the sheet names the widget, its package and version, and exactly what it would type (${JSON.stringify(text.slice(0, 240))})`);
+  check((await terminals()).length === before.length, "nothing opens before the answer");
+  await sheet.getByText("Always", { exact: true }).click();
+  await until(() => Date.now() - shownAt > 400); // past the guard against an Enter already being typed
+  await win.keyboard.press("Enter");
+  await gone(".ui-approval");
+  const opened = (await until(terminals, (l) => l.length === before.length + 1)).find((id) => !before.includes(id));
+  // The terminal it opened carries the widget's name in its title bar while the act runs (and a moment after).
+  const mark = await until(() => win.locator(`.tile[data-pane="${opened}"] .tile-title.acting`).textContent().catch(() => ""), (t) => t.includes("Act Demo"), 5000);
+  await shot(win, "widget-act-mark.png");
+  check(mark.includes("Act Demo: Open a terminal"), `the window acted on shows the acting mark with the widget's name (${JSON.stringify(mark)})`);
+  const typed = await until(() => paneText(opened, 5), (t) => t.includes("echo acted-by-widget"), 15_000);
+  check(typed.includes("echo acted-by-widget") && !/^acted-by-widget$/m.test(typed), `the command is typed at its prompt, not run (${JSON.stringify(typed.trim().slice(-80))})`);
+  const kept = await call("approvals.list", { workspaceId: homeId });
+  check(kept.some((k) => k.key === "show:widget/act-demo"), `Always is kept for the package in this workspace (${kept.map((k) => k.label).join(", ")})`);
+
+  // The next press runs without a sheet.
+  const waits = () => call("approvals.waiting");
+  await tile.getByRole("button", { name: "Run Tests" }).click();
+  const second = await until(terminals, (l) => l.length === before.length + 2, 15_000);
+  check(second.length === before.length + 2 && (await waits()).length === 0 && (await sheet.count()) === 0, "pressed again, it opens another terminal without asking");
+
+  for (const id of (await terminals()).filter((id) => !before.includes(id))) await call("pane.kill", { paneId: id }).catch(() => {});
+  await call("approvals.forget", { workspaceId: homeId, key: "show:widget/act-demo" });
+  await call("window.close", { id: w.id });
+  await cmdCli("widget", "unlink", "act-demo");
+});
+
+// Recent Commands (packages/widgets/commands): the native Commands' job as a package. Commands
+// run in a terminal show as rows, a failure with its exit status and the count in the title bar;
+// Run Again from a row's menu opens a terminal with the command typed, not run (a built-in package
+// follows the permission levels: Show things is Allow, so no sheet).
+await scenario("widget-commands", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  await menu("file.newTerminal");
+  const term = await shellReady();
+  const homeId = term.workspaceId;
+  await menu("view.grid");
+  const w = await call("widget.add", { ref: "pkg:commands/commands", workspaceId: homeId });
+  await tileIn(w.id);
+  const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+  await focusIn(term.id);
+  await win.keyboard.type("false");
+  await win.keyboard.press("Enter");
+  await win.keyboard.type("echo e2e-commands-ok");
+  await win.keyboard.press("Enter");
+  const rows = () => tile.locator(".ui-list-row").allTextContents();
+  const shown = await until(rows, (r) => r.some((t) => t.includes("echo e2e-commands-ok")) && r.some((t) => t.includes("Failed · exit 1")), 20_000);
+  const status = await until(() => tile.locator(".tile-title").textContent(), (t) => t.includes("1 failed"));
+  await shot(win, "widget-commands.png");
+  check(shown.some((t) => /false/.test(t) && t.includes("Failed · exit 1")) && status.includes("1 failed"), `it lists the commands, the failure with its exit status and the count in its title bar (${shown.map((t) => t.slice(0, 40)).join(" | ")}; ${status})`);
+
+  const before = await call("pane.list").then((l) => l.map((p) => p.id));
+  await select(w.id); // in view: the terminal typed into was selected
+  await choosing("Run Again");
+  await tile.locator(".ui-list-row", { hasText: "echo e2e-commands-ok" }).click({ button: "right" });
+  const labels = await until(() => app.evaluate(() => globalThis.__lastMenu ?? []), (l) => l.includes("Run Again"), 5000);
+  await unchoosing();
+  const opened = (await until(() => call("pane.list").then((l) => l.map((p) => p.id)), (l) => l.length === before.length + 1, 10_000)).find((id) => !before.includes(id));
+  const typed = await until(() => paneText(opened, 5), (t) => t.includes("echo e2e-commands-ok"), 15_000);
+  check(labels.includes("Show Terminal") && typed.includes("echo e2e-commands-ok") && !/^e2e-commands-ok$/m.test(typed), `Run Again opens a terminal with the command typed, not run (${labels.join(", ")}; ${JSON.stringify(typed.trim().slice(-60))})`);
+  await shot(win, "widget-commands-run-again.png");
+  await call("pane.kill", { paneId: opened }).catch(() => {});
+  await call("pane.kill", { paneId: term.id }).catch(() => {});
+  await call("window.close", { id: w.id });
+});
+
+// Countdown (packages/widgets/timer): the native Timer's job as a package. Set to 3 seconds and
+// started in one workspace, it rings through cmd.notify while another workspace is shown.
+await scenario("widget-timer", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const where = path.join(home, "timer-ws");
+  fs.mkdirSync(where, { recursive: true });
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === "timer-ws");
+  const w = await call("widget.add", { ref: "pkg:timer/timer", workspaceId: ws.id });
+  await tileIn(w.id);
+  const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+  const field = tile.getByPlaceholder("Length: 10, 1:30, 90s");
+  await field.waitFor({ timeout: 30_000 });
+  await field.fill("3s");
+  await field.press("Enter");
+  await until(() => tile.textContent(), (t) => t.includes("0:03"), 10_000);
+  await tile.getByRole("button", { name: "Start" }).click();
+  await until(() => tile.locator(".tile-title").textContent(), (t) => /ends \d\d:\d\d/.test(t), 10_000);
+  await shot(win, "widget-timer.png");
+  const startedAt = Date.now();
+  await menu("workspace.prev");
+  await until(chip, (c) => c !== "timer-ws");
+  const rang = await until(
+    () => call("data.query", { query: { types: ["notification"], at: [startedAt - 1000, Date.now() + 60_000], order: "desc", limit: 20 } }).then((l) => l.find((e) => e.data?.title === "3 s timer · done") ?? null),
+    (e) => !!e,
+    20_000,
+  );
+  const late = rang ? rang.at - startedAt : null;
+  check(!!rang && late !== null && late < 6000, `it rings while another workspace is shown, on time (${rang ? `“${rang.data.title}” after ${late} ms` : "no notification"})`);
+  await call("window.close", { id: w.id });
+  await call("workspace.close", { id: ws.id });
+});
+
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web
 // link that gets that far opens in a browser window instead (main/web-session.ts). Last:

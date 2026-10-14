@@ -54,7 +54,8 @@ export default function Countdown() {
   const running = t.endsAt !== null;
   const paused = !running && t.left !== null;
   const now = useNow(running ? 250 : 60_000);
-  const remaining = running ? Math.max(0, (t.endsAt! - now) / 1000) : paused ? t.left! : t.rang ? 0 : t.duration;
+  // useNow re-renders it; the time itself is read now (a tick may be a minute old when Start is pressed).
+  const remaining = running ? Math.max(0, (t.endsAt! - Math.max(now, Date.now())) / 1000) : paused ? t.left! : t.rang ? 0 : t.duration;
   const phase = running ? "running" : paused ? "paused" : t.rang ? "done" : "idle";
 
   // The end, on time: a timeout to the millisecond, from the widget's own process (any workspace).
