@@ -91,7 +91,7 @@ Researched 2026-10-14 from primary sources (a report with URLs is in Sources). T
     "widgets": [
       { "id": "ci", "title": "CI", "icon": "checkmark.seal", "main": "src/ci.tsx", "size": "m",
         "config": [{ "key": "repo", "title": "Repository", "type": "string", "default": "" },
-                   { "key": "token", "title": "Token", "type": "string", "secret": true }] }
+                   { "key": "token", "title": "Token", "type": "string", "secret": true, "host": "api.github.com" }] }
     ],
     "permissions": {
       "net": ["api.github.com"],
@@ -104,6 +104,7 @@ Researched 2026-10-14 from primary sources (a report with URLs is in Sources). T
 }
 ```
 
+- A secret field says where it is sent: `host` (required, and in `net`), `header` (default `Authorization`) and `scheme` (default `Bearer`; `""` sends the value alone). The core attaches it to `cmd.net.fetch` calls with `auth: "token"` to that host only; the widget never sees it.
 - `cmd.api` is the API major the code is written against; the `@cmd/widget-api` devDependency carries the types for it, and `cmd widget check` refuses a mismatch (as `vsce` does for `engines.vscode` against `@types/vscode`).
 - `engines.cmd` is the oldest cmd that runs it; cmd refuses to install a newer requirement and the Library says "needs cmd 0.33" instead of failing later.
 - A package holds one or more widgets (`cmd.widgets[]`, like Raycast's `commands[]`): a "GitHub" package can ship CI, Pull Requests and Issues. Each is a window type `pkg:<package>/<widget>` with the `role: "widget"`, `description`, `icon` and `config` the Library already shows.
