@@ -6,7 +6,7 @@
 
 Some people want cmd to feel more like an IDE, with a file tree down the left. We could build a file-tree sidebar. Then someone wants the CI runs on the right, then a notes panel, and every one would be a special case. Instead, we embrace the window concept all the way: **any window can become a sidebar.**
 
-Right-click a window's title bar → **Make Sidebar** → **Left** or **Right**. The window leaves the board and docks to that edge of the app window. It keeps its full height, you can drag its width, and it floats a little apart from the edge, like the sidebars in recent macOS. It is still the same window: same title bar, same menu, same state. Return it to the board and it goes back into the layout.
+Right-click a window's title bar → **Attach as Sidebar** → **Left** or **Right**. The window leaves the board and docks to that edge of the app window. It keeps its full height, you can drag its width, and it floats a little apart from the edge, like the sidebars in recent macOS. It is still the same window: same title bar, same menu, same state. Return it to the board and it goes back into the layout.
 
 Sidebars belong to a workspace. One project might keep a file browser on the left and a CI widget on the right, while another keeps only the default left sidebar.
 
@@ -46,10 +46,11 @@ Today's sidebar becomes a built-in widget, the **Navigator** (working name), doc
 
 | Where | What |
 |---|---|
-| Title bar menu of a board window | **Make Sidebar ▸ Left / Right**. If that side already holds a window, that window goes back to the board. |
-| Title bar menu of a sidebar | **Move to Right Sidebar** (or Left), **Move to Board** |
+| Title bar menu of a board window | **Attach as Sidebar ▸ Left / Right**. If that side already holds a window, that window goes back to the board. |
+| Title bar menu of a sidebar | **Attach as Sidebar ▸ Left / Right** (its side ticked), **Detach Sidebar** |
 | Window menu | The same items, for the selected window (every shortcut needs a real menu item) |
 | View menu | **Show Left Sidebar** (⌃⌘S, the `view.sidebar` command today) and **Show Right Sidebar**: these hide and show a side, they don't close its window |
+| View menu, top bar | **Show Sidebars** (⌥⌘S, `view.sidebars`; the top bar's rightmost button): hides every side at once for an undistracted board, and brings back the same ones. Per workspace, like the rest of the sidebars |
 | ⌘W on a sidebar | Closes the window, the same as everywhere else. The side becomes empty. |
 
 Later: drag a title bar to the left or right edge of the app window, and a drop zone shows where it will dock (phase 5).
@@ -60,7 +61,8 @@ The labels follow the copywriting skill: Title Case for menu items, a verb first
 
 - **Board** is the main area where windows sit in a layout (focus, grid, strip, canvas). It isn't "the desk".
 - **Sidebar** is a window docked left or right. People say "the left sidebar", never "the dock", because the Dock is macOS's. `docks` stays an internal name.
-- Menu items: **Make Sidebar ▸ Left / Right**, **Move to Left Sidebar**, **Move to Right Sidebar**, **Move to Board**, **Show Left Sidebar**, **Show Right Sidebar**.
+- Menu items: **Attach as Sidebar ▸ Left / Right** (title bar menus), **Attach as Left Sidebar**, **Attach as Right Sidebar**, **Detach Sidebar** (Window menu), **Show Left Sidebar**, **Show Right Sidebar**, **Show Sidebars**.
+- **Attach** and **detach** are the verbs for docking and undocking, everywhere (2026-10-14; it was "Make Sidebar", "Move to … Sidebar" and "Move to Board").
 - Tooltip on a sidebar's inner edge: "Drag to resize · double-click to reset", as the sidebar's edge says today.
 
 "Desk" is already in the app and the docs, and should become "board" in the same change so the two words never ship side by side:

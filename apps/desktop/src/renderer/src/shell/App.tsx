@@ -21,7 +21,7 @@ import { boardOf } from "./board/board.ts";
 import { Dock } from "./board/Dock.tsx";
 import { dockWidths, DOCK_WIDTH, MIN_BOARD, SIDES } from "./board/docks.ts";
 import { MainView } from "./board/MainView.tsx";
-import { useFirstNavigator, useSliding } from "./board/sidebars.ts";
+import { anySideShown, useFirstNavigator, useSliding } from "./board/sidebars.ts";
 import { setDocks, setStripWidth } from "./board/view.ts";
 import { reopenClosed, useRememberClosed } from "./closed.ts";
 import { commandContext, runCommand, MenuStateSync, useWindowShortcuts } from "./commands/registry.ts";
@@ -132,6 +132,7 @@ export function App() {
       <TopBar
         workspaceBar={<WorkspaceBar workspaces={ctx.workspaces} current={all.workspaceId} attention={waiting} onShow={showWorkspace} onMenu={workspaceMenu} onPicker={() => openSheet({ kind: "picker", picker: { kind: "workspace" } })} />}
         mode={board.mode}
+        sidebars={anySideShown(board.docks)}
         run={run}
         onNew={() => run("file.new")}
       />

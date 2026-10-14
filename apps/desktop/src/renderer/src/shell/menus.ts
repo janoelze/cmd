@@ -35,12 +35,14 @@ const muteEntry = (paneId: PaneId): MenuEntry => {
   return { label: muted ? "Unmute Notifications" : "Mute Notifications", run: () => void cmd.call("pane.setMuted", { paneId, muted: !muted }).catch(() => {}) };
 };
 
-/** On the board: Make Sidebar ▸ Left / Right; on a sidebar: the other side, or back (docs/21-sidebars.md). */
+/** Attach as Sidebar ▸ Left / Right (the side it is on ticked); on a sidebar also Detach Sidebar (docs/21-sidebars.md). */
 const sidebarEntries = (id: string): MenuEntry[] => {
-  const t: Target = { windowId: id };
-  if (!sideOf(boardOf(getState()).docks, id))
-    return [{ label: "Make Sidebar", submenu: SIDES.map((sd) => ({ label: sd === "left" ? "Left" : "Right", run: () => setDocks((d) => dock(d, id, sd)) })) }];
-  return [commandItem("window.dockLeft", t), commandItem("window.dockRight", t), commandItem("window.undock", t)].filter((e) => e.enabled !== false);
+  const side = sideOf(boardOf(getState()).docks, id);
+  const attach: MenuEntry = {
+    label: "Attach as Sidebar",
+    submenu: SIDES.map((sd) => ({ label: sd === "left" ? "Left" : "Right", checked: side === sd, run: () => setDocks((d) => dock(d, id, sd)) })),
+  };
+  return side ? [attach, commandItem("window.undock", { windowId: id })] : [attach];
 };
 
 export function rowMenu(r: SidebarRow): void {

@@ -1,7 +1,7 @@
 // The top bar (docs/21-sidebars.md): the app window's drag region, full width,
 // over the sidebars and the board. The workspace switcher in the middle, like a
 // window title; at the right end Search (the palette's search), the view modes,
-// a divider and New…, as plain buttons like the footer's.
+// a divider, New… and Show Sidebars, as plain buttons like the footer's.
 
 import { ICON, IconButton } from "@cmd/ui";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
@@ -19,6 +19,8 @@ interface Props {
   /** The workspace switcher (WorkspaceBar). */
   workspaceBar: React.ReactNode;
   mode: ViewMode;
+  /** Some sidebar is shown (Show Sidebars). */
+  sidebars: boolean;
   run: (id: CommandId) => void;
   onNew: () => void;
 }
@@ -47,6 +49,14 @@ export function TopBar(p: Props) {
         </div>
         <span className="bar-sep" aria-hidden />
         <IconButton icon="plus" label="New…" shortcut={prettyAccelerator(keys.bindings["file.new"]?.[0])} iconSize={ICON.bar} onClick={p.onNew} />
+        <IconButton
+          icon="sidebar.left"
+          label={p.sidebars ? "Hide Sidebars" : "Show Sidebars"}
+          shortcut={prettyAccelerator(keys.bindings["view.sidebars"]?.[0])}
+          iconSize={ICON.bar}
+          pressed={p.sidebars}
+          onClick={() => p.run("view.sidebars")}
+        />
       </div>
     </header>
   );

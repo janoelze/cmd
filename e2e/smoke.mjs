@@ -2060,7 +2060,7 @@ await scenario("sidebars", async () => {
   // The workspace's layout is saved debounced.
   const storedRight = await until(async () => (await homeView()).docks?.right?.id, (id) => id === markerPane);
   await until(onBoard, (n) => n === 0, 5000);
-  check((await onBoard()) === 0 && storedRight === markerPane, "Move to Right Sidebar docks the window, out of the board");
+  check((await onBoard()) === 0 && storedRight === markerPane, "Attach as Right Sidebar docks the window, out of the board");
   await shot(win, "9-sidebars.png");
   await menu("view.rightSidebar");
   await gone(".dock-right");
@@ -2068,6 +2068,14 @@ await scenario("sidebars", async () => {
   check((await win.locator(".dock-right").count()) === 0 && (await onBoard()) === 0, "Show Right Sidebar hides the side; the window stays docked");
   await menu("view.rightSidebar");
   await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
+  await still(200);
+  // Show Sidebars hides both sides at once, then brings back the same ones.
+  await menu("view.sidebars");
+  await until(() => countOf(".dock-left, .dock-right"), (n) => n === 0, 5000);
+  check((await countOf(".dock-left, .dock-right")) === 0, "Show Sidebars hides every side");
+  await menu("view.sidebars");
+  await win.waitForSelector(`.dock-right .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
+  await win.waitForSelector(".dock-left", { timeout: 10_000 });
   await still(200);
   // Canvas: one canvas under the sidebars; fitting keeps the windows between them.
   await menu("view.canvas");
@@ -2084,12 +2092,12 @@ await scenario("sidebars", async () => {
     `the canvas spans the window under the sidebars, and Fit keeps windows between them (${stage.width} / ${vw})`);
   await menu("view.grid");
   await win.waitForSelector(".main.mode-grid", { timeout: 10_000 });
-  await until(selected, (s) => s === markerPane); // what Move to Board acts on
+  await until(selected, (s) => s === markerPane); // what Detach Sidebar acts on
   await menu("window.undock");
   await win.waitForSelector(`.windows-track > .tile[data-pane="${markerPane}"]`, { timeout: 10_000 });
   await gone(".dock-right");
   await until(() => countOf(".dock-right"), (n) => n === 0, 5000);
-  check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Move to Board brings it back; the Navigator stays on the left");
+  check((await win.locator(".dock-right").count()) === 0 && (await win.locator(".dock-left .navigator").count()) === 1, "Detach Sidebar brings it back; the Navigator stays on the left");
 });
 
 // ── remembered UI state across an app restart (the core keeps running) ──
