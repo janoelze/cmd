@@ -46,7 +46,7 @@ export const remoteHandlers = (core: CoreContext) =>
           if (push) result.push = push;
         }
         const state = core.server.state(conn);
-        core.server.subscribe(conn, (e) => remoteEvent(e, core.server.policy(), state.follows, state.watches));
+        core.server.subscribe(conn, (e) => remoteEvent(e, core.server.policy(), state.follows, state.watches, conn.access === "control" ? "control" : "view"));
         core.magic.resume();
       }
       return result;

@@ -535,3 +535,59 @@ export const API_ELEMENT_NAMES = Object.keys(API_ELEMENTS) as ApiElement[];
 
 /** A menu entry in a prop (`Window menu`, `ListRow menu`): data, with `run` as a handler. */
 export type WireMenuEntry = { label: string; run?: HandlerRef; checked?: boolean; disabled?: boolean; submenu?: WireMenuEntry[] } | { separator: true };
+
+// ── remote ──────────────────────────────────────────────
+
+const isHandlerRef = (v: WireValue): v is HandlerRef => !!v && typeof v === "object" && !Array.isArray(v) && typeof (v as { $handler?: unknown }).$handler === "number";
+
+/** A prop value without handler refs: a ref goes, and so does a menu entry's or an action's `run` with it. */
+function stripValue(v: WireValue): WireValue | undefined {
+  if (isHandlerRef(v)) return undefined;
+  if (Array.isArray(v)) return v.map(stripValue).filter((x): x is WireValue => x !== undefined);
+  if (v && typeof v === "object") {
+    const out: { [key: string]: WireValue } = {};
+    for (const [k, x] of Object.entries(v)) {
+      const s = stripValue(x);
+      if (s !== undefined) out[k] = s;
+    }
+    return out;
+  }
+  return v;
+}
+
+function stripProps(props: Record<string, WireValue>): Record<string, WireValue> {
+  const out: Record<string, WireValue> = {};
+  for (const [k, v] of Object.entries(props)) {
+    const s = stripValue(v);
+    if (s !== undefined) out[k] = s;
+  }
+  return out;
+}
+
+function stripNode(n: TreeNode): TreeNode {
+  return n.type === "#text" ? n : { ...n, props: stripProps(n.props), children: n.children.map(stripNode) };
+}
+
+/**
+ * A widget's tree or patch as a view-scope device gets it (docs/56, "Remote"): no handler
+ * refs anywhere, so nothing on it can be pressed. A props op's set loses its handlers and
+ * unsets those props instead, so a handler sent before can't linger. Anything else passes.
+ */
+export function withoutHandlers<M extends WidgetTree | WidgetPatch | { kind: string }>(m: M): M {
+  if (m.kind === "tree") {
+    const t = m as unknown as WidgetTree;
+    return { ...t, nodes: t.nodes.map(stripNode) } as unknown as M;
+  }
+  if (m.kind === "patch") {
+    const p = m as unknown as WidgetPatch;
+    const ops = p.ops.map((op): PatchOp => {
+      if (op.op === "insert") return { ...op, node: stripNode(op.node) };
+      if (op.op !== "props") return op;
+      const set = stripProps(op.set);
+      const gone = Object.keys(op.set).filter((k) => !(k in set));
+      return { ...op, set, unset: [...op.unset, ...gone] };
+    });
+    return { ...p, ops } as unknown as M;
+  }
+  return m;
+}

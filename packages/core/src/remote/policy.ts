@@ -19,6 +19,7 @@ import type { WorkspaceManager } from "../workspaces/manager.ts";
 import type { WindowManager } from "../windows/index.ts";
 import type { WindowTypes } from "../windows/types.ts";
 import { validEndpoint } from "./webpush.ts";
+import { withoutHandlers } from "@cmd/protocol/widget-tree";
 
 /** view: any paired device; control: control-scope devices; never: only the Mac. */
 export type Access = "view" | "control" | "never";
@@ -139,8 +140,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "widget.rename": "never",
   "widget.duplicate": "never",
   "widget.delete": "never",
-  // widget packages (docs/56): the app's window and the CLI; remote draws trees later (phase 1, Remote)
-  "widget.interact": "never",
+  // widget packages (docs/56): a press reaches the Mac from a control-scope device; trees reach a device that follows the window, without handlers below control scope (remoteEvent, withoutHandlers)
+  "widget.interact": "control",
   "widget.resync": "never",
   "widget.env": "never",
   "widget.restart": "never",
@@ -313,6 +314,11 @@ const ARGS: { [M in Method]?: Check<M> } = {
   "magic.run": (p, ctx) => {
     magicWidget(ctx, p.id);
     text(p.prompt);
+  },
+  "widget.interact": (p, ctx) => {
+    window(ctx, p.windowId);
+    if (!Number.isInteger(p.handler) || typeof p.event !== "string" || p.event.length > 64) throw new RemoteDenied("not an interaction");
+    if (JSON.stringify(p.value ?? null).length > MAX_WRITE) throw new RemoteDenied("value too large");
   },
   "magic.cancel": (p, ctx) => magicWidget(ctx, p.id),
   "magic.refresh": (p, ctx) => magicWidget(ctx, p.id),
@@ -490,10 +496,15 @@ export function remoteResult(method: string, r: unknown, ctx: PolicyContext): un
   }
 }
 
-/** An event as a device gets it, or null when it isn't told (remoteEventVisible, then what's outside open workspaces). */
-export function remoteEvent(e: CoreEvent, ctx: PolicyContext, follows: ReadonlySet<string>, watches: readonly string[]): CoreEvent | null {
+/**
+ * An event as a device gets it, or null when it isn't told (remoteEventVisible, then what's outside open workspaces).
+ * `scope`: the device's; a widget's tree reaches anything short of control scope without its handlers.
+ */
+export function remoteEvent(e: CoreEvent, ctx: PolicyContext, follows: ReadonlySet<string>, watches: readonly string[], scope?: RemoteScope): CoreEvent | null {
   if (!remoteEventVisible(e, follows, watches)) return null;
   switch (e.type) {
+    case "widget.tree":
+      return scope === "control" ? e : { ...e, message: withoutHandlers(e.message) };
     case "pane.updated":
       return inOpen(ctx, e.pane.workspaceId) ? e : null;
     case "agent.updated":
@@ -522,6 +533,8 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "magic.data":
     case "magic.stream":
       return follows.has(e.id);
+    case "widget.tree":
+      return follows.has(e.windowId);
     case "fs.changed":
       return watches.some((w) => e.path === w || e.path.startsWith(w.endsWith("/") ? w : w + "/"));
     case "pane.updated":
@@ -548,7 +561,6 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.pairEnded":
     case "remote.input":
     case "widget.library":
-    case "widget.tree": // the phone draws trees later (docs/56, phase 1's Remote)
     case "window.closedChanged": // window.closed and window.reopen aren't remote
     case "actions.changed":
     case "stats.changed":

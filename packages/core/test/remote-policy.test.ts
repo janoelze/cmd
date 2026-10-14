@@ -235,3 +235,49 @@ describe("remote policy table", () => {
     expect(remoteEventVisible({ type: "secrets.updated", status: core.secrets.status() }, new Set(), [])).toBe(false);
   });
 });
+
+describe("widget trees to devices (docs/56, Remote)", () => {
+  const run = { $handler: 7 };
+  const tree: CoreEvent = {
+    type: "widget.tree",
+    windowId: "w1",
+    message: {
+      kind: "tree",
+      rev: 1,
+      nodes: [
+        { id: 1, type: "Window", props: { status: "1 waiting", menu: [{ label: "All Workspaces", checked: false, run }] }, children: [
+          { id: 2, type: "ListRow", props: { onClick: { $handler: 8 }, menu: [{ label: "Mark Seen", run: { $handler: 9 } }] }, children: [{ id: 3, type: "ListRowContent", props: { title: "Tours" }, children: [] }] },
+          { id: 4, type: "EmptyState", props: { title: "No agents", action: { label: "Start", run: { $handler: 10 } } }, children: [] },
+        ] },
+      ],
+    },
+  };
+  const patch: CoreEvent = { type: "widget.tree", windowId: "w1", message: { kind: "patch", rev: 2, ops: [{ op: "props", id: 2, set: { onClick: { $handler: 11 }, dim: true }, unset: [] }, { op: "insert", parent: 1, index: 0, node: { id: 5, type: "Button", props: { onClick: { $handler: 12 } }, children: [] } }] } };
+
+  it("is told only to devices that follow the window", () => {
+    expect(remoteEvent(tree, ctx, new Set(), [])).toBeNull();
+    expect(remoteEvent(tree, ctx, new Set(["w1"]), [], "control")).not.toBeNull();
+  });
+
+  it("carries no handler ids to view scope, trees and patches alike", () => {
+    for (const e of [tree, patch]) {
+      const view = remoteEvent(e, ctx, new Set(["w1"]), [], "view");
+      expect(JSON.stringify(view)).not.toContain("$handler");
+      // Without a scope it fails closed, as view.
+      expect(JSON.stringify(remoteEvent(e, ctx, new Set(["w1"]), []))).not.toContain("$handler");
+    }
+    const view = remoteEvent(tree, ctx, new Set(["w1"]), [], "view") as Extract<CoreEvent, { type: "widget.tree" }>;
+    // What isn't a handler stays: the status, the menu's labels, the row's text.
+    expect(JSON.stringify(view)).toContain("All Workspaces");
+    expect(JSON.stringify(view)).toContain("Tours");
+    // A props op's handler becomes an unset, so one sent earlier doesn't linger.
+    const p = remoteEvent(patch, ctx, new Set(["w1"]), [], "view") as Extract<CoreEvent, { type: "widget.tree" }>;
+    expect(p.message.kind === "patch" && p.message.ops[0]).toEqual({ op: "props", id: 2, set: { dim: true }, unset: ["onClick"] });
+  });
+
+  it("keeps handlers for control scope, whose presses confirm on the Mac", () => {
+    expect(JSON.stringify(remoteEvent(tree, ctx, new Set(["w1"]), [], "control"))).toContain("$handler");
+    expect(REMOTE_ACCESS["widget.interact"]).toBe("control");
+    expect(denied("widget.interact", { windowId: "w1", handler: 8, event: "onClick" }, "view")).toMatch(/needs control/);
+  });
+});
