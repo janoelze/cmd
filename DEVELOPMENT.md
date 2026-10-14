@@ -205,6 +205,7 @@ The host key and route live in `$CMD_HOME/remote/host.json`, paired devices in S
 - Packaging, CI and GitHub releases
 
 **In progress**
+- Widgets V3 (docs/56), phase 1: packages in `~/.cmd/widgets` and the built-in ones in `packages/widgets`, the widget API (`@cmd/widget-api`, its reference generated into its README), one Deno process per widget window, trees drawn with the kit, and Agents as the first built-in package (the native Agent Activity stays until it has proven itself), the grants sheet, `cmd widget link` and hot reload
 - Remote access (docs/13): crypto, relay, core gateway, policy, `cmd remote`, and in the app the Remote Access settings page, the approval sheet and the status bar indicator are in; the web client is a prototype (pair, Now, a terminal with key row and compose bar); next are hosting it, push, and fit-to-phone; direct access over Tailscale or your own URL (docs/38) is built and works on a real tailnet
 
 **Next**

@@ -107,6 +107,8 @@ When Magic decides a request is a command (`btop`, `watch …`), it opens a real
 
 ## Under the hood: widgets are windows
 
+Package widgets (a `package.json`, the widget API, a process of their own, trees drawn with the kit) are [56-widgets-v3.md](56-widgets-v3.md)'s; this section is the Library's side and the widgets made before them.
+
 People see two things; the code mostly sees one. A widget on the board is an `AppWindow` like any other: same layouts, title bar, focus, persistence, sync and `viewFor`. What is new is that a widget also exists *without* a window.
 
 Three layers:
