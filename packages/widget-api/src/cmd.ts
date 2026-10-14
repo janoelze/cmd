@@ -100,9 +100,10 @@ export const cmd = {
     /** One agent by id, or null. @since 1.0 */
     get: VERBS["agents.get"],
     /**
-     * Starts a coding agent on a task, in a terminal of its own in this workspace. Asks the
-     * person first (the sheet names the widget); works only right after they pressed
-     * something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`).
+     * Starts a coding agent on a task, in a terminal of its own in this workspace. The prompt
+     * is typed text: it asks every time, showing the prompt, and is never kept for always.
+     * Works only right after they pressed something in the widget, once per press. Needs
+     * `act: ["agents"]` (or `"agents.start"`).
      * @since 1.1
      */
     start: VERBS["agents.start"],

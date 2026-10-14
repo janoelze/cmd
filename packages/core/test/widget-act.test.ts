@@ -155,7 +155,7 @@ describe("acting widgets (API 1.1)", () => {
     const t = await setup();
     // agents.start: a Claude in a terminal of its own, in the folder asked.
     const start = await t.act("agents.start", [{ prompt: "write the tests", cwd: "web" }]);
-    expect(start.ask.approval).toMatchObject({ permission: "agents", title: "Start Claude on a task in web", exact: "write the tests" });
+    expect(start.ask.approval).toMatchObject({ permission: "agents", title: "Start Claude on a task in web", exact: "write the tests", scopes: ["once"] });
     const started = (start.result as unknown as { value: { id: string; terminalId: string } }).value;
     expect(t.core.agents.get(started.id)).toMatchObject({ kind: "claude", workspaceId: t.ws.id });
     expect(t.core.panes.get(started.terminalId)?.cwd).toBe(path.join(t.repo, "web"));
@@ -208,13 +208,19 @@ describe("acting widgets (API 1.1)", () => {
     expect(logged).toMatchObject({ workspaceId: t.ws.id, data: expect.objectContaining({ caller: "Demo", widget: "demo 1.0.0", tool: "terminals.type", state: "done", allowed: true }) });
   });
 
-  it("asks for typed text every time, never kept, whatever was answered", async () => {
+  it("asks for typed text every time (an agent's prompt too), never kept, whatever was answered", async () => {
     const t = await setup();
     const one = await t.act("terminals.type", [t.term.id, "ls"], true, "always" as never);
     expect(one.ask.approval?.scopes).toEqual(["once"]);
     expect(await t.core.call("approvals.list", { workspaceId: t.ws.id })).toEqual([]);
     const two = await t.act("terminals.type", [t.term.id, "ls"]);
     expect(two.ask.id).not.toBe(one.ask.id);
+    // An agent's prompt is typed text too: the whole act when agents run with their permissions skipped.
+    const agent = await t.act("agents.start", [{ prompt: "delete the backups" }], true, "always" as never);
+    expect(agent.ask.approval).toMatchObject({ permission: "agents", exact: "delete the backups", scopes: ["once"] });
+    expect(await t.core.call("approvals.list", { workspaceId: t.ws.id })).toEqual([]);
+    const again = await t.act("agents.start", [{ prompt: "delete the backups" }]);
+    expect(again.ask.approval?.scopes).toEqual(["once"]);
     // A line only: Return, Escape and other control characters would act by themselves.
     t.press();
     expect((await t.refused("terminals.type", t.term.id, "ls\rrm -rf build")).code).toBe("invalid");

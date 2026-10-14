@@ -152,6 +152,9 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       const where = path.relative(own().root || os.homedir(), cwd);
       return {
         approval: { permission: "agents", title: `Start ${kindLabel(kind)} on a task${where ? ` in ${where}` : ""}`, exact: prompt },
+        // The prompt is the whole act (agents often run with their permissions skipped): typed text, asked every
+        // time and never kept, for a person's package; a built-in one follows the levels.
+        typed: !scope.pkg.builtin,
         target: null,
         async run() {
           const a = await core.call("agent.spawn", { kind, prompt, workspaceId: own().id, cwd, parentId: null });

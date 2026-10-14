@@ -56,7 +56,7 @@ Coding agents (Claude, Codex, …). Needs `workspace: ["read"]`.
 |---|---|---|---|
 | `cmd.agents.list(query?: ApiScopeQuery \| undefined): Promise<ApiAgent[]>` | 1.0 | `workspace: ["read"]` | The agents of this workspace, or of all with `{ scope: "all" }` (needs `workspace: ["all"]`). |
 | `cmd.agents.get(id: string): Promise<ApiAgent \| null>` | 1.0 | `workspace: ["read"]` | One agent by id, or null. |
-| `cmd.agents.start(req: ApiAgentStart): Promise<ApiStarted>` | 1.1 | `act: ["agents"]`, asks | Starts a coding agent on a task, in a terminal of its own in this workspace. Asks the person first (the sheet names the widget); works only right after they pressed something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`). |
+| `cmd.agents.start(req: ApiAgentStart): Promise<ApiStarted>` | 1.1 | `act: ["agents"]`, asks | Starts a coding agent on a task, in a terminal of its own in this workspace. The prompt is typed text: it asks every time, showing the prompt, and is never kept for always. Works only right after they pressed something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`). |
 | `cmd.agents.send(id: string, text: string): Promise<null>` | 1.1 | `act: ["agents"]`, asks | Sends a message to an agent of this workspace, as if typed into its terminal. Typed text always asks, every time. Needs `act: ["agents"]` (or `"agents.send"`); only after a press. |
 | `cmd.agents.stop(id: string): Promise<null>` | 1.1 | `act: ["agents"]`, asks | Stops an agent of this workspace. Asks first; only after a press. Needs `act: ["agents"]` (or `"agents.stop"`). |
 | `cmd.agents.use(query?: ApiScopeQuery): ApiAgent[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useAgents()`. |
