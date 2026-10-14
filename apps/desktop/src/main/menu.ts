@@ -8,15 +8,20 @@ import { menuTemplate } from "./menu-template.ts";
 type Send = (id: string) => void;
 
 let lastState: MenuState | null = null;
+let built: { send: Send; bindings: Keybindings; openRecent: (path: string) => void; lists: string } | null = null;
 
-export function buildMenu(send: Send, bindings: Keybindings): void {
-  const template = menuTemplate(send, bindings, { mac: process.platform === "darwin", appName: app.name });
+export function buildMenu(send: Send, bindings: Keybindings, openRecent: (path: string) => void): void {
+  const lists = lastState?.lists;
+  built = { send, bindings, openRecent, lists: JSON.stringify(lists ?? null) };
+  const template = menuTemplate(send, bindings, { mac: process.platform === "darwin", appName: app.name, lists, openRecent });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   if (lastState) applyMenuState(lastState);
 }
 
 export function applyMenuState(state: MenuState): void {
   lastState = state;
+  // Labels can't change on a built menu: new workspace lists rebuild it (rare: a workspace opened, closed or renamed).
+  if (built && state.lists && JSON.stringify(state.lists) !== built.lists) return buildMenu(built.send, built.bindings, built.openRecent);
   const menu = Menu.getApplicationMenu();
   if (!menu) return;
   for (const [id, v] of Object.entries(state.checked)) {

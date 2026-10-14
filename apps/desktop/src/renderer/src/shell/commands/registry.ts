@@ -20,6 +20,7 @@ import { getState, useStore, type State } from "../../lib/store.ts";
 import { useWindowActions, windowActions, type WindowActions } from "../../lib/windowActions.ts";
 import { boardOf, type Board } from "../board/board.ts";
 import { terminals } from "../../windows/terminal/terminals.ts";
+import { recentLabels, useRecentWorkspaces } from "../workspaces.tsx";
 import { sideOf, type Side } from "../board/docks.ts";
 import { stateStr } from "../../windows/registry.ts";
 
@@ -140,8 +141,8 @@ export function runCommand(id: string, via: Via = "other", target?: Target): voi
   void cmd.call("data.record", { event: { id: `user.command:${crypto.randomUUID()}`, at: Date.now(), type: "user.command", source: "user", data: { command: id, via } } }).catch(() => {});
 }
 
-/** The menu bar's state: every command enabled as it applies, the checkable ones checked. */
-export function menuState(c: CommandContext): MenuState {
+/** The menu bar's state: every command enabled as it applies, the checkable ones checked, and the lists of workspaces. */
+export function menuState(c: CommandContext, recent: Workspace[] = []): MenuState {
   const checked: MenuState["checked"] = {};
   const enabled: MenuState["enabled"] = {};
   for (const spec of COMMANDS as readonly CommandSpec[]) {
@@ -149,7 +150,8 @@ export function menuState(c: CommandContext): MenuState {
     enabled[spec.id as CommandId] = !!command && (command.when?.(c) ?? true);
     if (command?.checked) checked[spec.id as CommandId] = command.checked(c);
   }
-  return { checked, enabled };
+  const lists = { workspaces: c.workspaces.slice(0, 9).map((sp) => sp.name), recent: recentLabels(recent, 10).map((r) => ({ path: r.workspace.root, label: r.label })) };
+  return { checked, enabled, lists };
 }
 
 let lastMenu = "";
@@ -170,11 +172,12 @@ export function useMenuState(): void {
   const ai = useAiStatus();
   const textSelected = useSyncExternalStore(terminals.onSelection, terminals.selectionVersion);
   const focus = useSyncExternalStore(onFocus, () => focusVersion);
+  const recent = useRecentWorkspaces();
   useEffect(() => {
-    const m = menuState(commandContext({}, state));
+    const m = menuState(commandContext({}, state), recent);
     const json = JSON.stringify(m);
     if (json !== lastMenu) (lastMenu = json), cmd.setMenuState(m);
-  }, [state, actions, ai, textSelected, focus]);
+  }, [state, actions, ai, textSelected, focus, recent]);
 }
 
 /** A window's own shortcuts (CommandSpec.scope "window"): run here while they apply, not by the menu, so other windows keep the keys. */

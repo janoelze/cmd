@@ -2221,6 +2221,8 @@ await scenario("workspaces", async () => {
   const workspaceItems = () => countOf(".workspace-menu .workspace-item:not(.workspace-item-open)");
   const listed = await until(workspaceItems, (n) => n === 2, 5000);
   check(listed === 2, `the switcher's menu lists both workspaces (${listed})`);
+  const rows = await win.locator(".workspace-menu .workspace-item:not(.workspace-item-open)").allTextContents();
+  check(rows[0]?.includes("Home") && rows[1]?.includes("proj"), `the switcher's menu keeps the switcher's order, not recency (${rows.join(" | ")})`);
   await shot(win, "8-workspace-menu.png");
   await win.keyboard.press("Escape");
   // Change Icon…: the grid picker sets an SF Symbol on the workspace, shown in the switcher.
@@ -2243,8 +2245,15 @@ await scenario("workspaces", async () => {
   await win.locator(".workspace-trigger").click();
   await win.locator(".workspace-menu").waitFor();
   const left = await until(workspaceItems, (n) => n === 1, 5000);
-  await win.keyboard.press("Escape");
+  const recentRow = await until(() => win.locator(".workspace-menu .workspace-recent").allTextContents(), (r) => r.some((t) => t.includes("proj")), 5000);
+  await shot(win, "8-workspace-recent.png");
   check(still === 0 && left === 1, `closing a workspace ends its terminals and leaves the switcher (${still} terminals, ${left} Workspaces)`);
+  check(recentRow.some((t) => t.includes("proj")), `a closed workspace shows under Recent in the switcher's menu (${recentRow.join(" | ")})`);
+  // Recent reopens it here.
+  await win.locator(".workspace-menu .workspace-recent", { hasText: "proj" }).click();
+  check((await until(chip, (c) => c === "proj")) === "proj", "choosing a recent workspace reopens and shows it");
+  await win.evaluate((id) => window.cmd.call("workspace.close", { id }), sp.id);
+  await until(chip, (c) => c === "Home");
 });
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web

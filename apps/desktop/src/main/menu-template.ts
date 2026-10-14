@@ -3,12 +3,12 @@
 // Pure (Electron's types only), so a test can check every command is placed exactly once.
 
 import type { MenuItemConstructorOptions } from "electron";
-import { COMMANDS, type CommandSpec, type ContextItem, type Keybindings } from "../shared/commands.ts";
+import { COMMANDS, type CommandSpec, type ContextItem, type Keybindings, type MenuLists } from "../shared/commands.ts";
 
 type Send = (id: string) => void;
 type Role = NonNullable<MenuItemConstructorOptions["role"]>;
-/** A group of a menu: a command slot ("File/new"), roles and slots in one run, or a slot as a submenu. */
-type Part = string | { role: Role } | { submenu: string; slot: string };
+/** A group of a menu: a command slot ("File/new"), roles and slots in one run, a slot as a submenu, or File → Open Recent. */
+type Part = string | { role: Role } | { submenu: string; slot: string } | { recent: true };
 type Menu = { label?: string; role?: Role; groups: Part[][] };
 
 const r = (role: Role) => ({ role });
@@ -19,7 +19,7 @@ function layout(mac: boolean, appName: string): Menu[] {
     ...(mac ? [{ label: appName, groups: [[r("about"), "App/updates"], ["App/settings"], [r("services")], [r("hide"), r("hideOthers"), r("unhide")], [r("quit")]] }] : []),
     {
       label: "File",
-      groups: [["File/new"], ["File/agents"], ["File/windows"], ["File/workspace"], ["File/save"], ["File/files"], ["File/close"], ["File/settings"], ...(mac ? [] : [["App/settings"], [r("quit")]])],
+      groups: [["File/new"], ["File/agents"], ["File/windows"], ["File/workspace", { recent: true }], ["File/save"], ["File/files"], ["File/close"], ["File/settings"], ...(mac ? [] : [["App/settings"], [r("quit")]])],
     },
     { label: "Edit", groups: [[r("undo"), r("redo")], [r("cut"), "Edit/copy", r("paste"), "Edit/select"], ["Edit/find"], ["Edit/text", { submenu: "Lines", slot: "Edit/lines" }, { submenu: "Code Folding", slot: "Edit/folding" }], ["Edit/terminal"]] },
     { label: "View", groups: [["View/layout"], ["View/sidebars"], ["View/palette"], ["View/zoom"], ["View/editor"], [r("togglefullscreen")], ["@developer"]] },
@@ -31,9 +31,21 @@ function layout(mac: boolean, appName: string): Menu[] {
   ];
 }
 
+/** What the menu bar is built with besides the commands: the lists of workspaces, and opening a recent one. */
+export interface MenuOptions {
+  mac: boolean;
+  appName: string;
+  lists?: MenuLists;
+  openRecent?: (path: string) => void;
+}
+
 /** A command's menu items: the item, and hidden ones for its other shortcuts. */
-function items(c: CommandSpec, send: Send, bindings: Keybindings): MenuItemConstructorOptions[] {
+function items(c: CommandSpec, send: Send, bindings: Keybindings, lists?: MenuLists): MenuItemConstructorOptions[] {
   const [first, ...rest] = bindings[c.id] ?? [];
+  // ⌃1–9 show as the open workspaces' names; the rest stay hidden, their keys still bound.
+  const n = /^workspace\.select(\d)$/.exec(c.id);
+  const name = n && lists?.workspaces[Number(n[1]) - 1];
+  if (name) c = { ...c, label: name, hidden: false };
   // A window's own shortcut shows in the menu but is the renderer's to run (CommandSpec.scope).
   const own = c.scope === "window" ? { registerAccelerator: false } : {};
   const main: MenuItemConstructorOptions = { id: c.id, label: c.label, accelerator: first, type: c.checkable, click: () => send(c.id), ...own, ...(c.hidden ? { visible: false, acceleratorWorksWhenHidden: true } : {}) };
@@ -42,13 +54,22 @@ function items(c: CommandSpec, send: Send, bindings: Keybindings): MenuItemConst
   return [main, ...aliases];
 }
 
-export function menuTemplate(send: Send, bindings: Keybindings, o: { mac: boolean; appName: string }): MenuItemConstructorOptions[] {
+/** File → Open Recent: closed workspaces, most recently closed first. */
+function recentMenu(o: MenuOptions): MenuItemConstructorOptions {
+  const recent = o.lists?.recent ?? [];
+  return {
+    label: "Open Recent",
+    submenu: recent.length ? recent.map((r) => ({ label: r.label, click: () => o.openRecent?.(r.path) })) : [{ label: "No Recent Workspaces", enabled: false }],
+  };
+}
+
+export function menuTemplate(send: Send, bindings: Keybindings, o: MenuOptions): MenuItemConstructorOptions[] {
   const bySlot = new Map<string, CommandSpec[]>();
   for (const c of COMMANDS as readonly CommandSpec[]) bySlot.set(c.menu, [...(bySlot.get(c.menu) ?? []), c]);
   const part = (p: Part): MenuItemConstructorOptions[] => {
-    if (typeof p !== "string") return "submenu" in p ? [{ label: p.submenu, submenu: (bySlot.get(p.slot) ?? []).flatMap((c) => items(c, send, bindings)) }] : [p];
+    if (typeof p !== "string") return "recent" in p ? [recentMenu(o)] : "submenu" in p ? [{ label: p.submenu, submenu: (bySlot.get(p.slot) ?? []).flatMap((c) => items(c, send, bindings)) }] : [p];
     if (p === "@developer") return [{ label: "Developer", submenu: [{ role: "reload" }, { role: "toggleDevTools" }] }];
-    return (bySlot.get(p) ?? []).flatMap((c) => items(c, send, bindings));
+    return (bySlot.get(p) ?? []).flatMap((c) => items(c, send, bindings, o.lists));
   };
   return layout(o.mac, o.appName).map((m) => {
     const groups = m.groups.map((g) => g.flatMap(part)).filter((g) => g.length);
@@ -59,7 +80,7 @@ export function menuTemplate(send: Send, bindings: Keybindings, o: { mac: boolea
 
 /** Every slot the layout places (for the test: a command in another slot isn't in the menu). */
 export function menuSlots(mac: boolean): string[] {
-  return layout(mac, "cmd").flatMap((m) => m.groups.flat().flatMap((p) => (typeof p === "string" ? [p] : "submenu" in p ? [p.slot] : [])));
+  return layout(mac, "cmd").flatMap((m) => m.groups.flat().flatMap((p) => (typeof p === "string" ? [p] : "slot" in p ? [p.slot] : [])));
 }
 
 /** A context menu's template; an entry that is an app command shows its shortcut, which the menu bar runs (not this menu). */

@@ -3,12 +3,12 @@
 // pickers reuse the command palette: ⌘O opens or switches workspaces, plus "Move
 // to Workspace" and "Rename Workspace".
 
-import { useEffect, useState, type ComponentProps } from "react";
+import { useEffect, useState, useSyncExternalStore, type ComponentProps } from "react";
 import type { Agent, Workspace, WorkspaceId } from "@cmd/protocol";
 import { agentName } from "@cmd/protocol";
 import { cmd } from "../lib/bridge.ts";
 import { byActivity, byProject, shortPath, workspaceDetail } from "../lib/model.ts";
-import { getState, useStoreValue } from "../lib/store.ts";
+import { getState, onState, useStoreValue } from "../lib/store.ts";
 import type { Palette, PaletteItem } from "./Palette.tsx";
 
 /** workspace: ⌘O; with newWindow (New Window…), ↵ opens the workspace in a window of its own. */
@@ -39,6 +39,38 @@ async function browse(newWindow = false): Promise<void> {
   if (dir) await openWorkspace(dir, newWindow);
 }
 
+// Recent workspaces: the closed ones whose folder is still there, most recently closed first.
+// Read again whenever the open ones change (one closing or reopening), for the switcher's menu
+// and File → Open Recent.
+let recent: Workspace[] = [];
+const recentListeners = new Set<() => void>();
+let openKey = "";
+onState(() => {
+  const key = [...getState().workspaces.keys()].join();
+  if (key === openKey) return;
+  openKey = key;
+  void cmd.call("workspace.list", { closed: true }).then(
+    (l) => {
+      recent = l.filter((x) => x.closedAt !== null && !x.gone).sort((a, b) => b.closedAt! - a.closedAt!);
+      for (const fn of recentListeners) fn();
+    },
+    () => {},
+  );
+});
+const onRecent = (fn: () => void) => (recentListeners.add(fn), () => void recentListeners.delete(fn));
+
+export function useRecentWorkspaces(): Workspace[] {
+  return useSyncExternalStore(onRecent, () => recent);
+}
+
+/** The first `n` recent workspaces, each labelled by name, with its folder where two share one. */
+export function recentLabels(list: Workspace[], n: number): { workspace: Workspace; label: string }[] {
+  const shown = list.slice(0, n);
+  const count = new Map<string, number>();
+  for (const sp of shown) count.set(sp.name, (count.get(sp.name) ?? 0) + 1);
+  return shown.map((sp) => ({ workspace: sp, label: count.get(sp.name)! > 1 ? `${sp.name} — ${shortPath(sp.root)}` : sp.name }));
+}
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /** Close a workspace: its terminals end and its windows go; it stays in ⌘O's Recent. */
@@ -55,7 +87,7 @@ export async function closeWorkspace(workspace: Workspace): Promise<void> {
       detail:
         `Its ${what} will be closed.` +
         (agents.length ? ` ${plural(agents.length, "agent")} will end; Claude and Codex sessions can be resumed.` : "") +
-        ` Open Workspace (⌘O) brings the workspace back later.`,
+        ` It stays under Recent, to open again later.`,
       confirm: "Close Workspace",
     });
     if (!ok) return;
@@ -64,6 +96,9 @@ export async function closeWorkspace(workspace: Workspace): Promise<void> {
   if (!getState().workspaces.has(workspace.id)) return;
   await cmd.call("workspace.close", { id: workspace.id });
 }
+
+/** Temporary folders (an agent's scratchpad, a test's): never a project to open as a workspace. */
+const temporary = (p: string) => /^\/(private\/)?(tmp|var\/folders)(\/|$)/.test(p);
 
 /** Palette input that names a folder: absolute, ~ or relative (to the home folder). */
 const looksLikePath = (q: string) => /^(~|\/|\.{1,2}(\/|$))/.test(q.trim());
@@ -85,7 +120,7 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
     // A closed workspace whose folder is gone has nothing left to open.
     void cmd.call("workspace.list", { closed: true }).then((l) => live && setRecent(l.filter((x) => x.closedAt !== null && !x.gone)), () => {});
     void cmd.call("data.view", { query: { view: "sessions", limit: 50 } }).then(
-      (rows) => live && setFolders([...new Set(rows.map((r) => r.cwd).filter((c): c is string => !!c))]),
+      (rows) => live && setFolders([...new Set(rows.map((r) => r.cwd).filter((c): c is string => !!c && !temporary(c)))]),
       () => {},
     );
     return () => void (live = false);
@@ -185,12 +220,12 @@ export function usePickers(picker: Picker | null, close: () => void): PalettePro
         run: () => void openWorkspace(f, apart),
         runAlt: () => void openWorkspace(f, true),
       })),
-    { id: "browse", group: "Commands", label: "Browse for a Folder…", run: () => void browse(apart), runAlt: () => void browse(true) },
+    { id: "browse", group: "Commands", label: "Choose a Folder…", run: () => void browse(apart), runAlt: () => void browse(true) },
   ];
   return {
     items,
     onClose: close,
-    placeholder: apart ? "Open a workspace in a new window, or type a folder" : "Switch to a workspace, or open a folder (~/src/…)",
+    placeholder: apart ? "Open a workspace in a new window, or type a folder" : "Open a workspace, or type a folder (~/src/…)",
     emptyText: "Nothing matches. Type a path to open a folder.",
     footer: apart ? (
       <>

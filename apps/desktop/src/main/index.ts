@@ -980,7 +980,7 @@ app.whenReady().then(async () => {
   // Its bundle (about 570 KB) is parsed on this thread; its first check is 30 s away anyway.
   setTimeout(() => void startUpdater(), 5000);
   const send = commandSender(() => (workbenchOnly ? null : workspaces.reopen()), { openSettings, checkForUpdates, isUtility, appWindows });
-  refreshMenu = () => buildMenu(send, recordingShortcut ? {} : keybindings.bindings);
+  refreshMenu = () => buildMenu(send, recordingShortcut ? {} : keybindings.bindings, (root) => workspaces.openRecent(root));
   refreshMenu();
   watchKeybindings((next) => {
     keybindings = next;

@@ -152,11 +152,13 @@ export const COMMANDS = spec([
   { id: "workspace.icon", label: "Change Workspace Icon…", menu: "Workspace/edit" },
   { id: "workspace.reveal", label: "Show Workspace Folder in Finder", menu: "Workspace/edit" },
   { id: "workspace.close", label: "Close Workspace…", menu: "Workspace/close" },
-  // Ctrl+1–9 like Arc's spaces; ⌘1–9 stay for sessions.
+  // Ctrl+1–9 like Arc's spaces; ⌘1–9 stay for sessions. The menu shows them under the open
+  // workspaces' names (MenuState.lists), hidden where there is none.
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
     id: `workspace.select${n}`,
     label: `Switch to Workspace ${n}`,
     keys: [`Ctrl+${n}`],
+    checkable: "checkbox" as const,
     paletteHidden: true,
     menu: "Workspace/select",
     hidden: true,
@@ -175,6 +177,14 @@ export const COMMAND_BY_ID = new Map<string, CommandSpec>((COMMANDS as readonly 
 export interface MenuState {
   checked: Partial<Record<CommandId, boolean>>;
   enabled: Partial<Record<CommandId, boolean>>;
+  /** The menus made of workspaces; main rebuilds the menu bar when they change. */
+  lists?: MenuLists;
+}
+
+/** The Workspace menu's open workspaces (switcher order, the first nine: ⌃1–9) and File → Open Recent's closed ones. */
+export interface MenuLists {
+  workspaces: string[];
+  recent: { path: string; label: string }[];
 }
 
 /**

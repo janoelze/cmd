@@ -53,6 +53,8 @@ export class WorkspaceWindows {
   /** The workspace of the most recently focused window: reopened when the last window was closed. */
   #last = HOME_WORKSPACE_ID;
   #quitting = false;
+  /** The core, while followCore is connected. */
+  #core: Awaited<ReturnType<typeof connect>>["client"] | null = null;
   #saveTimer: NodeJS.Timeout | undefined;
   #placements: Placements = {};
   /** The display setup windows were last placed for. */
@@ -259,6 +261,11 @@ export class WorkspaceWindows {
     } catch {}
   }
 
+  /** File → Open Recent: reopen a closed workspace; the core's workspace.show then places it. */
+  openRecent(root: string): void {
+    void this.#core?.call("workspace.open", { path: root, show: true }).catch((err: Error) => log.warn(`open recent ${root}: ${err.message}`));
+  }
+
   /**
    * Follow the core's workspace.show events (`cmd .` in any shell): bring the app
    * forward and show the workspace in the frontmost window. Also follows the
@@ -268,6 +275,7 @@ export class WorkspaceWindows {
     const attach = async () => {
       try {
         const conn = await connect(socketPath);
+        this.#core = conn.client;
         conn.client.onEvent((e) => {
           if (e.type === "settings.updated") this.#ownWindow = e.snapshot.settings["workspaces.ownWindow"];
           if (e.type !== "workspace.show") return;
@@ -279,7 +287,7 @@ export class WorkspaceWindows {
         await conn.client.call("events.subscribe", { types: ["workspace.show", "settings.updated"] });
         this.#ownWindow = (await conn.client.call("settings.get", {})).settings["workspaces.ownWindow"];
         // Soon after a restart (Restart Core), or `cmd .` goes unheard meanwhile.
-        conn.closed.then(() => setTimeout(attach, 250));
+        conn.closed.then(() => ((this.#core = null), setTimeout(attach, 250)));
       } catch {
         setTimeout(attach, 250);
       }

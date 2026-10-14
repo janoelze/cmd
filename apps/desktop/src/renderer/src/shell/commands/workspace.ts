@@ -25,7 +25,10 @@ const step = (d: number): Command => ({
 });
 
 /** ⌃1–⌃9 like Arc's spaces. */
-const nth = (n: number): Command => ({ run: (c) => c.workspaces[n - 1] && showWorkspace(c.workspaces[n - 1]!.id) });
+const nth = (n: number): Command => ({
+  run: (c) => c.workspaces[n - 1] && showWorkspace(c.workspaces[n - 1]!.id),
+  checked: (c) => c.workspaces[n - 1]?.id === c.state.workspaceId,
+});
 
 registerCommands({
   "workspace.next": step(1),

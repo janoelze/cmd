@@ -1,10 +1,10 @@
 // The workspace switcher in the top bar (docs/11-workspaces.md, 21-sidebars.md): a button
-// with the shown workspace's icon and name that drops down a menu of the open workspaces,
-// most recently active first (model.ts byActivity, frozen while the menu is open; the
-// shortcuts stay switcher order, ⌃1–9), one line each: icon, name, folder, and a dot when
-// something in it needs you or finished unseen. The button carries the same mark
-// for the other workspaces, so a background workspace that wants you shows without
-// opening the menu.
+// with the shown workspace's icon and name that drops down a menu of the open workspaces in
+// the switcher's order (⌃1–9; rows never move, a dot says where something happened), one line
+// each: icon, name, folder, and a dot when something in it needs you or finished unseen.
+// Then the three most recently closed (Recent) and Open Workspace… (⌘O). The
+// button carries the same mark for the other workspaces, so a background workspace that
+// wants you shows without opening the menu.
 
 import { useRef, useState } from "react";
 import { useWholePixelWidth } from "../lib/pixels.ts";
@@ -12,8 +12,8 @@ import { Badge, Menu, StatusDot, type MenuItemProps } from "@cmd/ui";
 import type { Workspace, WorkspaceId } from "@cmd/protocol";
 import { ICON, Symbol } from "../components/Symbol.tsx";
 import { WorkspaceIcon } from "./WorkspaceIcon.tsx";
-import { byActivity, workspaceDetail } from "../lib/model.ts";
-import { getState } from "../lib/store.ts";
+import { workspaceDetail } from "../lib/model.ts";
+import { openWorkspace, recentLabels, useRecentWorkspaces } from "./workspaces.tsx";
 
 type Attention = "needs" | "unseen";
 
@@ -29,12 +29,7 @@ interface Props {
 
 export function WorkspaceBar(p: Props) {
   const [open, setOpen] = useState(false);
-  // The menu's order, taken when it opens: an agent finishing meanwhile doesn't move the rows.
-  const [order, setOrder] = useState<WorkspaceId[]>([]);
-  const toggle = (on: boolean) => {
-    if (on) setOrder(byActivity({ ...getState(), workspaces: new Map(p.workspaces.map((sp) => [sp.id, sp])) }, p.current).map((sp) => sp.id));
-    setOpen(on);
-  };
+  const recent = recentLabels(useRecentWorkspaces(), 3);
   const button = useRef<HTMLButtonElement>(null);
   const name = useRef<HTMLSpanElement>(null);
   useWholePixelWidth(name); // the badge and chevron after it stay crisp
@@ -42,12 +37,8 @@ export function WorkspaceBar(p: Props) {
   // The strongest mark among the other workspaces, and how many have one.
   const others = p.workspaces.filter((sp) => sp.id !== p.current && p.attention.has(sp.id));
   const mark: Attention | undefined = others.some((sp) => p.attention.get(sp.id) === "needs") ? "needs" : others.length ? "unseen" : undefined;
-  // Every open workspace (most recently active first), then "Open Workspace…".
-  const rank = new Map(order.map((id, i) => [id, i]));
-  const listed = [...p.workspaces].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity));
-  const items: MenuItemProps[] = listed.map((sp) => {
+  const items: MenuItemProps[] = p.workspaces.map((sp, i) => {
     const on = sp.id === p.current;
-    const i = p.workspaces.indexOf(sp); // its switcher place, for ⌃1–9
     const attn = on ? undefined : p.attention.get(sp.id);
     return {
       label: sp.name,
@@ -64,6 +55,15 @@ export function WorkspaceBar(p: Props) {
       onContextMenu: () => p.onMenu(sp),
     };
   });
+  // Recent: ↵ reopens the closed workspace here, ⌘↵ in a new window.
+  const recentItems: MenuItemProps[] = recent.map(({ workspace: sp, label }) => ({
+    label,
+    text: label,
+    detail: `\u200e${workspaceDetail(sp)}\u200e`,
+    icon: <WorkspaceIcon workspace={sp} />,
+    className: "workspace-recent",
+    onSelect: ({ metaKey }) => void openWorkspace(sp.root, metaKey),
+  }));
   // No workspaces yet: the core hasn't sent its first snapshot (there's always Home
   // after it), so there is nothing to pick and the picker couldn't open one.
   if (!p.workspaces.length)
@@ -80,10 +80,10 @@ export function WorkspaceBar(p: Props) {
         aria-haspopup="menu"
         aria-expanded={open}
         data-tip={shown ? workspaceDetail(shown) : undefined}
-        onClick={() => toggle(!open)}
+        onClick={() => setOpen(!open)}
         onContextMenu={(e) => (e.preventDefault(), setOpen(false), shown && p.onMenu(shown))}
         onKeyDown={(e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault(), toggle(true);
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault(), setOpen(true);
         }}
       >
         {shown && <WorkspaceIcon workspace={shown} />}
@@ -107,7 +107,12 @@ export function WorkspaceBar(p: Props) {
         inline
         width="content"
         maxWidth={400}
-        items={[...items, null, { label: "Open Workspace…", icon: "plus", shortcut: "⌘O", className: "workspace-item workspace-item-open", onSelect: p.onPicker }]}
+        items={[
+          ...items,
+          ...(recentItems.length ? [null, "Recent", ...recentItems] : []),
+          null,
+          { label: "Open Workspace…", icon: "plus", shortcut: "⌘O", className: "workspace-item workspace-item-open", onSelect: p.onPicker },
+        ]}
       />
     </div>
   );

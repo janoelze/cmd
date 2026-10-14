@@ -78,20 +78,21 @@ A workspace's identity is its root, so matching has to treat every spelling of a
 
 - **Workspace switcher** centered at the bottom of the sidebar (like Arc), or under the traffic lights when the sidebar is hidden (`components/WorkspaceBar.tsx`):
   - A full-width button with the shown workspace's icon and name; a count in the state colour when other workspaces need you or finished unseen.
-  - Clicking it drops down a menu of the open workspaces, most recently active first, the shown one last (icon, name, folder, ⌃1–9 by switcher order), the icon marked with a dot in the state colour when something in the workspace needs you or finished unseen, then "Open Workspace…" (⌘O). Arrow keys and type-ahead move, ⏎ shows, ⌘⏎ (or ⌘-click) opens in a new window. Right-click a workspace (or the button) for Rename, Change Icon, Show in Finder, Open in New Window, Close. Reordering is not built yet.
+  - Clicking it drops down a menu of the open workspaces in the switcher's order, the shown one checked (icon, name, folder, ⌃1–9), the icon marked with a dot in the state colour when something in the workspace needs you or finished unseen; rows never move by recency, so the numbers read down the list. Then **Recent**, the three most recently closed workspaces (choosing one reopens it), then "Open Workspace…" (⌘O). Arrow keys and type-ahead move, ⏎ shows, ⌘⏎ (or ⌘-click) opens in a new window. Right-click a workspace (or the button) for Rename, Change Icon, Show in Finder, Open in New Window, Close. Reordering is not built yet.
   - A menu rather than a dot per workspace, so it stays usable with many workspaces.
 - **Icons:** each workspace has an SF Symbol. Change Icon… (Workspace menu, right-click, `cmd workspace icon [SPACE] SYMBOL`) opens a filterable grid; any SF Symbol name typed in full works too, and "Use the default" goes back to the folder (house for Home).
-- **⌘O: Workspace picker** (fuzzy):
-  - Lists open workspaces, most recently active first (the latest of: last shown, an agent in it starting, finishing or asking, something in it wanting attention), the shown one last; then recent (closed) Workspaces, then cwds from recent transcripts and a typed path; "Browse…" opens the native folder dialog.
+- **One word.** The thing is a *workspace*; a folder is only where one lives, named where you point at a place on disk (a typed path, Choose a Folder…, a row's path). VS Code mixes the two ("Open Folder…" opens a workspace, and its docs concede the terms are used interchangeably); Zed and Codex use one word (project), Conductor two for two different things (a repository, and a workspace made from it as a worktree).
+- **⌘O: Open Workspace…, the workspace picker** (fuzzy):
+  - Lists open workspaces, most recently active first (the latest of: last shown, an agent in it starting, finishing or asking, something in it wanting attention), the shown one last; then recent (closed) Workspaces, then cwds from recent transcripts (temporary folders left out: agents' scratchpads) and a typed path; "Choose a Folder…" opens the native folder dialog.
   - ⏎ shows the workspace in this window; ⌘⏎ opens it in a new app window.
   - This one picker both switches and opens, like sesh.
-- **⌃1–9** switch by the switcher's order (as in Arc). ⌘1–9 stay for sessions. That order is user-chosen and never reshuffled by recency; only the menu and ⌘O list by recency, since you usually switch to where an agent just finished.
+- **⌃1–9** switch by the switcher's order (as in Arc). ⌘1–9 stay for sessions. That order is user-chosen and never reshuffled by recency: the switcher's menu and the Workspace menu keep it too, with a dot for where something happened. Only ⌘O lists by recency, since searching is for going anywhere.
 - **⌃⌘[ / ⌃⌘]** go to the previous or next workspace. **Last Workspace** (like `sesh last`) exists without a default shortcut.
 - The sidebar, grid, strip and canvas show only the current workspace. The sidebar search gets a "all workspaces" toggle.
 - The app window title is the workspace name, so the macOS Window menu and Mission Control are useful.
 - New menu items, all real menu items as required:
-  - File → Open Workspace… (⌘O)
-  - A **Workspace** menu: Next, Previous, Last, Move Window to Workspace…, Rename Workspace…, Show Workspace Folder in Finder, Close Workspace…
+  - File → Open Workspace… (⌘O) and Open Recent ▸ (the ten most recently closed workspaces, reopened through the core's `workspace.open { show }`).
+  - A **Workspace** menu: Next, Previous, Last, then the open workspaces by name with ⌃1–9 and the shown one checked (the renderer reports them in `MenuState.lists`, and main rebuilds the menu bar when they change), Move Window to Workspace…, Rename Workspace…, Show Workspace Folder in Finder, Close Workspace…
   - "Move to Workspace…" in a window's context menu.
 
 ## Data model

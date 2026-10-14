@@ -30,6 +30,21 @@ describe("the menu bar", () => {
     }
   });
 
+  it("lists the open workspaces under ⌃1–9 and the closed ones in File → Open Recent", () => {
+    const opened: string[] = [];
+    const lists = { workspaces: ["Home", "cmd"], recent: [{ path: "/src/blog", label: "blog" }] };
+    const items = flat(menuTemplate(() => {}, DEFAULT_KEYBINDINGS, { mac: true, appName: "cmd", lists, openRecent: (p) => opened.push(p) }));
+    expect(items.find((i) => i.id === "workspace.select2")).toMatchObject({ label: "cmd", type: "checkbox" });
+    expect(items.find((i) => i.id === "workspace.select2")?.visible).not.toBe(false);
+    expect(items.find((i) => i.id === "workspace.select3")).toMatchObject({ visible: false, acceleratorWorksWhenHidden: true });
+    const recent = items.find((i) => i.label === "Open Recent")!;
+    const blog = (recent.submenu as MenuItemConstructorOptions[])[0]!;
+    blog.click!(undefined as never, undefined, undefined as never);
+    expect(opened).toEqual(["/src/blog"]);
+    const none = flat(menuTemplate(() => {}, DEFAULT_KEYBINDINGS, { mac: true, appName: "cmd" })).find((i) => i.label === "Open Recent")!;
+    expect(none.submenu).toEqual([{ label: "No Recent Workspaces", enabled: false }]);
+  });
+
   it("shows a context-menu entry's shortcut when it is a command, without taking the key", () => {
     const [cmdItem, plain] = contextTemplate([{ id: "0", label: "Copy Session ID", accelerator: "Alt+Cmd+C" }, { id: "1", label: "Paste" }], () => {});
     expect(cmdItem).toMatchObject({ accelerator: "Alt+Cmd+C", registerAccelerator: false });
