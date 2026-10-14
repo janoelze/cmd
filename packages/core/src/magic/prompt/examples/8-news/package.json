@@ -1,0 +1,21 @@
+{
+  "name": "news-berlin",
+  "version": "1.0.0",
+  "description": "The latest headlines about a topic, from Google News.",
+  "type": "module",
+  "devDependencies": { "@cmd/widget-api": "^1.0.0" },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "news",
+        "title": "News · Berlin",
+        "icon": "newspaper",
+        "main": "src/news.tsx",
+        "size": "m",
+        "config": [{ "key": "query", "title": "Search", "type": "string", "default": "Berlin" }]
+      }
+    ],
+    "permissions": { "net": ["news.google.com"] }
+  }
+}

@@ -5,6 +5,7 @@ import { parsePackageKind } from "@cmd/protocol";
 import type { CoreContext } from "../kernel/context.ts";
 import { slice } from "../kernel/handlers.ts";
 import { magicRef, widgetRef } from "./library.ts";
+import { magicPackages } from "../magic/package/service.ts";
 
 export const widgetHandlers = (core: CoreContext) =>
   slice({
@@ -24,7 +25,8 @@ export const widgetHandlers = (core: CoreContext) =>
       const id = core.magic.duplicateWidget(magicRef(p.ref));
       return core.library.entries().find((e) => e.ref === `magic:${id}`)!;
     },
-    "widget.delete": (p) => (core.magic.deleteWidget(magicRef(p.ref)), null),
+    // A package made with Magic goes with its folder (magic/package/service.ts); others aren't the Library's to delete.
+    "widget.delete": (p) => (parsePackageKind(p.ref) ? magicPackages(core).remove(parsePackageKind(p.ref)!.name) : core.magic.deleteWidget(magicRef(p.ref)), null),
     // A widget's data.ts says it on the widgets socket (kernel/server.ts), not here.
     "widget.hello": () => {
       throw new Error("widget.hello is for the widgets socket");

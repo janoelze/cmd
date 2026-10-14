@@ -3,11 +3,13 @@
 
 import type { CoreContext } from "../kernel/context.ts";
 import { IN_CORE, slice } from "../kernel/handlers.ts";
+import { magicPackages } from "./package/service.ts";
 
 export const magicHandlers = (core: CoreContext) =>
   slice({
-    "magic.run": (p) => (core.magic.run(p.id, p.prompt), null),
-    "magic.cancel": (p) => (core.magic.cancel(p.id), null),
+    // A new request is a widget package (package/service.ts); the fast paths and changes to widgets made before packages stay here.
+    "magic.run": (p) => (magicPackages(core).takes(p.id, p.prompt) ? magicPackages(core).run(p.id, p.prompt) : core.magic.run(p.id, p.prompt), null),
+    "magic.cancel": (p) => (magicPackages(core).building(p.id) ? magicPackages(core).cancel(p.id) : core.magic.cancel(p.id), null),
     "magic.refresh": (p) => (core.magic.refresh(p.id), null),
     "magic.setRefresh": (p) => (core.magic.setRefresh(p.id, p.seconds), null),
     "magic.media": (p) => (core.magic.media(p.id, p.allow), null),

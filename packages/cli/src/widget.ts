@@ -11,7 +11,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { ENV, type WidgetEntry } from "@cmd/protocol";
 import { connect, defaultSocketPath } from "@cmd/protocol/node";
-import { PREVIEW_THEMES, PROMPT_DIR, RUNTIME_DIR, checkWidget, previewCases, previewPage, previewRender, runWidgetData, verifyWidget, writeDenoConfig } from "@cmd/core/magic";
+import { PREVIEW_THEMES, V2_PROMPT_DIR, RUNTIME_DIR, checkWidget, previewCases, previewPage, previewRender, runWidgetData, verifyWidget, writeDenoConfig } from "@cmd/core/magic";
 import { cmdVersion, isPackageDir, readPackage } from "@cmd/core/widgets/package";
 import { HOST_SUBS, WIDGET_HOST_HELP, widgetHostCommand } from "./widget-host.ts";
 import { LINK_SUBS, WIDGET_LINK_HELP, widgetLinkCommand } from "./widget-link.ts";
@@ -88,9 +88,9 @@ This folder is one of cmd's Magic widgets. The full contract (files, the
 \`cmd\` module for data.ts, the view's \`cmd\` object, the kit's CSS classes and
 how widgets should look) is in:
 
-  ${path.join(PROMPT_DIR, "prompt.md")}
+  ${path.join(V2_PROMPT_DIR, "prompt.md")}
 
-Finished examples: ${path.join(PROMPT_DIR, "examples")}/
+Finished examples: ${path.join(V2_PROMPT_DIR, "examples")}/
 
 Work like this:
 1. Edit manifest.json, data.ts, view.html and view.ts.

@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PERMISSION_KEYS, SUPPORTED_API, noPermissions, packageKind, type WidgetPermissions } from "@cmd/protocol";
+import { PERMISSION_KEYS, SUPPORTED_API, noPermissions, packageKind, type MagicMark, type WidgetPermissions } from "@cmd/protocol";
 import { POLICY, declarable } from "../data/policy.ts";
 import { ESCAPES } from "../magic/policy.ts";
 import { expandPath, magicDenyPaths, privateMatcher } from "../lib/paths-deny.ts";
@@ -65,6 +65,8 @@ export interface WidgetPackage {
   dir: string;
   /** Ships with cmd (packages.ts's built-in root): granted what it declares. */
   builtin?: boolean;
+  /** Made with Magic (cmd.magic, written by cmd after each build; docs/56 "Magic on V3"). */
+  magic?: MagicMark;
 }
 
 export type PackageResult = { ok: true; pkg: WidgetPackage } | { ok: false; errors: string[] };
@@ -297,7 +299,15 @@ export function parsePackage(json: unknown, dir: string, o: ParseOptions = {}): 
   }
 
   if (errors.length) return { ok: false, errors };
-  return { ok: true, pkg: { name: name as string, version: version as string, ...(description ? { description } : {}), ...(engines ? { engines } : {}), api: api as number, widgets, permissions: perms, experimental, dir } };
+  const magic = markOf(json);
+  return { ok: true, pkg: { name: name as string, version: version as string, ...(description ? { description } : {}), ...(engines ? { engines } : {}), api: api as number, widgets, permissions: perms, experimental, dir, ...(magic ? { magic } : {}) } };
+}
+
+/** A package.json's mark of a package made with Magic (cmd.magic), or null. */
+export function markOf(json: unknown): MagicMark | null {
+  const m = (json as { cmd?: { magic?: Partial<MagicMark> } } | null)?.cmd?.magic;
+  if (!m || typeof m !== "object" || typeof m.request !== "string" || typeof m.madeAt !== "string") return null;
+  return { request: m.request.slice(0, 2000), madeAt: m.madeAt, revisions: typeof m.revisions === "number" ? m.revisions : 0 };
 }
 
 /** A folder holds a widget package: a package.json with a "cmd" block. */

@@ -108,6 +108,7 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "magic.secret": "never",
   "magic.state": "never",
   "magic.fix": "never",
+  "magic.editPackage": "never",
   "magic.mute": "never",
   "magic.runtime": "never",
   "magic.installRuntime": "never",

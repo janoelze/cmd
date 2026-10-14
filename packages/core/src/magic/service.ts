@@ -138,6 +138,7 @@ export class MagicService {
   #installing: Promise<MagicRuntime> | null = null;
   #disposed = false;
 
+  /** What it was made with: MagicPackages (package/service.ts) builds with the same backend, state dir and sandbox. */ readonly made = (): MagicServiceOptions => this.#o;
   constructor(o: MagicServiceOptions) {
     this.#o = o;
     this.#stateDir = o.stateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-"));

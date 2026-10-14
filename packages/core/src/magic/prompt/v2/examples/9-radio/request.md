@@ -1,0 +1,2 @@
+Request: a drum and bass web radio player
+Notes: Bassdrive streams 24/7 at https://bassdrive.radioca.st/stream; `fetch` showed an audio/mpeg stream that sends access-control-allow-origin, so the level meter (an analyser on the audio) works. No data.ts: the stream is the data. A player is an instrument: the station at the top, one big play button in the middle, a small volume slider along the bottom.

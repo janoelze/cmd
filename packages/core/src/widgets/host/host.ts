@@ -94,6 +94,8 @@ export class WidgetHost {
   #asked = new Set<string>();
   /** Packages the person declined, with what they asked for then: asking more asks again. */
   #declined = new Map<string, string>();
+  /** Who wants to hear the person's answer about a package (a Magic build waiting at its permission step). */
+  #answers = new Set<(name: string, allow: boolean) => void>();
   #started = false;
   #disposed = false;
   /** Tests: what net.fetch uses. */
@@ -203,6 +205,7 @@ export class WidgetHost {
     if (decline) {
       this.#declined.set(name, JSON.stringify(pkg.permissions));
       this.#asked.delete(name);
+      for (const fn of [...this.#answers]) fn(name, false);
     } else {
       this.#declined.delete(name);
       if (needsGrant(pkg.permissions, this.#granted(name)?.permissions)) this.#asked.add(name);
@@ -233,7 +236,19 @@ export class WidgetHost {
     this.#declined.delete(name);
     this.#o.onAsk?.();
     for (const inst of this.#all.values()) if (inst.pkg?.name === name && !inst.proc) this.#launch(inst);
+    for (const fn of [...this.#answers]) fn(name, true);
     return g;
+  }
+
+  /** The grant a package has (built-in: what it declares), or null. */
+  granted(name: string): Grants | null {
+    return this.#granted(name);
+  }
+
+  /** Hear each answer to the grants sheet (Allow: true, Decline: false) until the returned function is called. */
+  onAnswer(fn: (name: string, allow: boolean) => void): () => void {
+    this.#answers.add(fn);
+    return () => void this.#answers.delete(fn);
   }
 
   /** Process states by window (tests, diagnostics). */
@@ -475,8 +490,9 @@ export class WidgetHost {
   }
 
   #updated(w: AppWindow): void {
-    if (!parsePackageKind(w.kind)) return;
     const inst = this.#all.get(w.id);
+    // A window that switched to another kind (Edit with Magic) is gone for its package.
+    if (!parsePackageKind(w.kind)) return void (inst && inst.kind !== w.kind && this.#removed(w.id));
     if (!inst) return this.#open(w);
     if (inst.timers.stop) {
       clearTimeout(inst.timers.stop);

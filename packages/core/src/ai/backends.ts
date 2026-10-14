@@ -31,6 +31,8 @@ export interface BackendRun {
   onText: (delta: string) => void;
   /** A new model turn starts: text so far was preamble, not the answer. */
   onTurn: () => void;
+  /** Each model step's usage as it finishes (a build's token ceiling stops it mid-run). */
+  onUsage?: (u: Usage) => void;
 }
 
 export interface BackendResult {
@@ -125,6 +127,8 @@ export function aiBackend(o: AiBackendOptions): Backend {
         } else if (part.type === "text-delta") {
           text += part.text;
           r.onText(part.text);
+        } else if (part.type === "finish-step") {
+          r.onUsage?.(usageOf(part.usage));
         } else if (part.type === "error") {
           throw part.error instanceof Error ? part.error : new Error(String(part.error));
         }

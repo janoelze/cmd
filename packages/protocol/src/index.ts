@@ -31,5 +31,6 @@ export * from "./stats.ts";
 export * from "./nowplaying.ts";
 export * from "./format.ts";
 export * from "./widget-package.ts";
+export * from "./magic-package.ts";
 export * from "./widget-tree.ts";
 export * from "./widget-host.ts";

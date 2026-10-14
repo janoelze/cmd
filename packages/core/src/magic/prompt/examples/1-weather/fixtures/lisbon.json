@@ -1,0 +1,15 @@
+{
+  "config": { "city": "Lisbon" },
+  "fetch": {
+    "https://geocoding-api.open-meteo.com/v1/search?name=Lisbon&count=1": {
+      "body": { "results": [{ "name": "Lisbon", "country_code": "PT", "latitude": 38.72, "longitude": -9.13 }] }
+    },
+    "https://api.open-meteo.com/v1/forecast?latitude=38.72&longitude=-9.13&current=temperature_2m,weather_code&hourly=temperature_2m&daily=temperature_2m_max,temperature_2m_min,weather_code&forecast_days=6&timezone=auto": {
+      "body": {
+        "current": { "temperature_2m": 21.6, "weather_code": 2 },
+        "hourly": { "time": ["2026-10-14T00:00"], "temperature_2m": [18, 17.5, 17, 16.8, 16.5, 16.4, 16.9, 18, 19.5, 21, 22.4, 23.6, 24.1, 24.3, 23.8, 23, 22, 21, 20, 19.4, 19, 18.7, 18.4, 18.1] },
+        "daily": { "time": ["2026-10-14", "2026-10-15", "2026-10-16"], "temperature_2m_max": [24, 25, 21], "temperature_2m_min": [16, 17, 15], "weather_code": [2, 0, 61] }
+      }
+    }
+  }
+}

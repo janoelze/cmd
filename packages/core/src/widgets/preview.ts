@@ -6,13 +6,16 @@
 // and a core without an app use Playwright's Chromium.
 
 import fs from "node:fs";
-import { MAGIC_SIZES, WIDGET_MEASURE, widgetCsp, widgetTokens, type ThemeLike } from "@cmd/protocol";
+import path from "node:path";
+import { MAGIC_SIZES, WIDGET_MEASURE, widgetCsp, widgetTokens, type MagicPreviewTree, type ThemeLike } from "@cmd/protocol";
 import { widgetHtml } from "../magic/host.ts";
 import type { WidgetManifest } from "./manifest.ts";
 
 export interface PreviewRequest {
-  /** A complete page (widgetHtml with the data inlined and a CSP). */
-  page: string;
+  /** A complete page (widgetHtml with the data inlined and a CSP), or */
+  page?: string;
+  /** a package widget's tree, drawn by the app's kit (renderer/preview.html; magic/package/preview.ts). */
+  tree?: MagicPreviewTree;
   width: number;
   height: number;
   /** Return a PNG (base64). */
@@ -162,10 +165,21 @@ export async function playwrightPreviewer(): Promise<Previewer | null> {
           const errors: string[] = [];
           page.on("pageerror", (e) => errors.push(e.message));
           page.on("console", (m) => m.type() === "error" && !/Content Security Policy/.test(m.text()) && errors.push(m.text()));
-          await page.route("**/*", (route) => route.abort());
-          await page.setContent(r.page, { waitUntil: "load" });
-          await page.waitForTimeout(500);
-          const m = (await page.evaluate(MEASURE)) as Omit<PreviewShot, "png">;
+          let m: Omit<PreviewShot, "png">;
+          if (r.tree) {
+            // The built renderer's preview page draws the tree; it may load its own files, nothing else.
+            const { PREVIEW_PAGE, drawTree } = await import("../magic/package/preview.ts");
+            const dir = `file://${path.dirname(PREVIEW_PAGE)}/`;
+            await page.route("**/*", (route) => (route.request().url().startsWith(dir) ? route.continue() : route.abort()));
+            if (!fs.existsSync(PREVIEW_PAGE)) throw new Error("the app isn't built (pnpm build), so trees can't be drawn here");
+            await page.goto(`file://${PREVIEW_PAGE}`, { waitUntil: "load" });
+            m = (await page.evaluate(drawTree(r.tree))) as Omit<PreviewShot, "png">;
+          } else {
+            await page.route("**/*", (route) => route.abort());
+            await page.setContent(r.page ?? "", { waitUntil: "load" });
+            await page.waitForTimeout(500);
+            m = (await page.evaluate(MEASURE)) as Omit<PreviewShot, "png">;
+          }
           const png = r.shot ? (await page.screenshot()).toString("base64") : undefined;
           out.push({ ...m, errors: [...m.errors, ...errors], png });
           await page.close();

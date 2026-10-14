@@ -16,6 +16,7 @@ const SYSTEM = [
   "lock",
   "loginpath",
   "magic",
+  "magic-packages",
   "pty-leak",
   "resources",
   "shells",

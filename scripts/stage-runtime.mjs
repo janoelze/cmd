@@ -23,6 +23,8 @@ fs.writeFileSync(path.join(out, ".checkout"), root + "\n");
 for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packages/core/${p}`, `packages/core/${p}`);
 // @cmd/widget-api vendored for Deno (scripts/widget-api-bundle.mjs): package widgets' processes import it (widgets/host/runtime.ts).
 copy("packages/widget-api/dist/deno", "packages/widget-api/dist/deno");
+// Its README's generated reference is what Magic's agent reads of the API (magic/package/prompt.ts).
+copy("packages/widget-api/README.md", "packages/widget-api/README.md");
 // The built-in widget packages (packages/widgets/<name>, widgets/packages.ts's built-in root): what a
 // package ships, without node_modules (the runtime imports @cmd/widget-api from the bundle above).
 for (const name of fs.readdirSync(path.join(root, "packages/widgets"))) {

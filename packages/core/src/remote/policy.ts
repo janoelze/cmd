@@ -129,6 +129,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.secret": "never",
   "magic.state": "never",
   "magic.fix": "never", // spends API keys; from the Mac only for now
+  "magic.editPackage": "never",
   "magic.mute": "never",
   "magic.runtime": "never",
   "magic.installRuntime": "never",

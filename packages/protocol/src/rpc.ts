@@ -20,6 +20,7 @@ import type { ArrangeEvent, ArrangeMethods } from "./arrange.ts";
 import type { RemoteMethods } from "./remote.ts";
 import type { CoreHello } from "./version.ts";
 import type { WidgetHostEvent, WidgetHostMethods } from "./widget-host.ts";
+import type { MagicPackageMethods } from "./magic-package.ts";
 
 export interface CoreInfo {
   pid: number;
@@ -86,7 +87,7 @@ export interface Placement {
 }
 
 /** Every method: the core's own, plus each feature's (declared in its own file, merged here). */
-export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, StatsMethods, NowPlayingMethods, OperatorMethods, ToolsMethods, PagesMethods, ArrangeMethods, WidgetHostMethods {
+export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, StatsMethods, NowPlayingMethods, OperatorMethods, ToolsMethods, PagesMethods, ArrangeMethods, WidgetHostMethods, MagicPackageMethods {
   /** What a client asks first: which protocol the core speaks and what it can do (CoreHello). */
   "core.hello": { params: {}; result: CoreHello };
   /** Diagnostics for the Settings window's Updates & About page. */

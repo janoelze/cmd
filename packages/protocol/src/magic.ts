@@ -4,6 +4,7 @@
 
 import { DEFAULT_SETTINGS } from "./settings.ts";
 import type { Attention } from "./model.ts";
+import type { MagicPackageBuild, MagicPreviewTree } from "./magic-package.ts";
 
 export type MagicSource = { type: "fetch"; url: string; headers?: Record<string, string> } | { type: "command"; command: string; cwd?: string };
 
@@ -129,6 +130,8 @@ export interface MagicState {
   mediaDenied?: string[];
   /** The build waits for the person: download Deno (magic.installRuntime) or not now (magic.skipRuntime). */
   askRuntime?: boolean;
+  /** A build that makes (or changes) a widget package (docs/56, "Magic on V3"). */
+  pkg?: MagicPackageBuild;
 }
 
 /** A config field of a widget (its manifest), as the settings pane shows it. */
@@ -174,7 +177,10 @@ export interface MagicWidgetInfo {
 
 /** One render the core asks the app to make offscreen and measure. */
 export interface MagicPreviewRequest {
-  page: string;
+  /** A page to load (a cmd:2 widget's view), or */
+  page?: string;
+  /** a package widget's tree, drawn by the app's kit. */
+  tree?: MagicPreviewTree;
   width: number;
   height: number;
   shot?: boolean;

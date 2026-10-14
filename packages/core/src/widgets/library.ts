@@ -43,6 +43,10 @@ export class WidgetLibrary {
   readonly host: WidgetHost;
   /** Saves in a package's sources restart its windows (hot reload, widgets/reload.ts). */
   readonly reloader: PackageReloader;
+  /** Packages a Magic build is writing (magic/package/service.ts): not listed until they are valid. */
+  readonly building = new Set<string>();
+  /** A Magic package's last screenshot, by name (magic/package/service.ts sets it). */
+  shotOf: (name: string) => string | undefined = () => undefined;
 
   constructor(core: CoreContext, o: LibraryOptions = {}) {
     this.#core = core;
@@ -71,9 +75,12 @@ export class WidgetLibrary {
             const ask = this.host.asking(e.pkg.name);
             const link = linkOf(e.dir);
             const config = w.config.length ? { config: configFields(w), secrets: w.config.some((f) => f.secret) ? this.host.config.secretsSet(e.pkg.name, w.id) : [] } : {};
-            return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), ...(e.builtin ? { builtin: true } : {}), ...config, windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
+            const magic = e.pkg.magic ? { magic: e.pkg.magic, request: e.pkg.magic.request, createdAt: Date.parse(e.pkg.magic.madeAt) || undefined, shot: this.shotOf(e.pkg.name) } : {};
+            return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), ...(e.builtin ? { builtin: true } : {}), ...config, ...magic, windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
           })
-        : [{ ref: `pkg:${e.folder}`, source: "package", kind: `pkg:${e.folder}`, title: e.folder, icon: DEFAULT_ICON, name: e.folder, problem: e.errors.join("; "), dir: e.dir, windows: [] }],
+        : this.building.has(e.folder)
+          ? []
+          : [{ ref: `pkg:${e.folder}`, source: "package", kind: `pkg:${e.folder}`, title: e.folder, icon: DEFAULT_ICON, name: e.folder, problem: e.errors.join("; "), dir: e.dir, windows: [] }],
     );
     const type = windowTypes.get("magic")!;
     const yours = magic.library().map((e): WidgetEntry => ({

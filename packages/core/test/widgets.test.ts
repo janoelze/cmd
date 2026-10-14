@@ -79,7 +79,7 @@ describe("data.ts's network (AR1-11-03)", () => {
 const fakePreviewer: Previewer = {
   name: "fake",
   async render(requests) {
-    return requests.map((r) => ({ errors: r.page.includes("BROKEN") ? ["ReferenceError: BROKEN is not defined"] : [], text: 10, nodes: 5, drawn: false, scrollW: r.width, scrollH: r.height, png: r.shot ? "iVBORw0KGgo=" : undefined }));
+    return requests.map((r) => ({ errors: r.page?.includes("BROKEN") ? ["ReferenceError: BROKEN is not defined"] : [], text: 10, nodes: 5, drawn: false, scrollW: r.width, scrollH: r.height, png: r.shot ? "iVBORw0KGgo=" : undefined }));
   },
 };
 

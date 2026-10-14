@@ -1,5 +1,7 @@
-// The Magic system prompt: prompt/prompt.md, then the example widgets in
-// prompt/examples/<name>/ (request.md and the widget's files). Read from disk on
+// The Magic system prompt of cmd:2 widgets (manifest.json, data.ts, view.html): prompt/v2/prompt.md,
+// then the example widgets in prompt/v2/examples/<name>/ (request.md and the widget's files),
+// for changing the widgets made before packages (docs/56; new widgets are packages:
+// package/prompt.ts; this goes with the old runtime in phase 2b). Read from disk on
 // every call, so editing them applies on the next `cmd magic` run. The system
 // prompt stays byte-stable between requests (it is cached); everything per
 // request goes into the user message.
@@ -11,14 +13,16 @@ import { fileURLToPath } from "node:url";
 import { CURRENT_KIT, KIT1_RENAMES, kitVersion } from "@cmd/protocol";
 
 export const PROMPT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "prompt");
+/** cmd:2's prompt and examples. */
+export const V2_PROMPT_DIR = path.join(PROMPT_DIR, "v2");
 
 /** The order an example's files are shown in. */
 const EXAMPLE_ORDER = ["manifest.json", "data.ts", "view.html", "view.ts"];
 
 /** The system prompt; `file` replaces prompt.md (prompt variants for evals). */
 export function buildSystem(file?: string): string {
-  const main = fs.readFileSync(file ?? path.join(PROMPT_DIR, "prompt.md"), "utf8").trim();
-  const dir = path.join(PROMPT_DIR, "examples");
+  const main = fs.readFileSync(file ?? path.join(V2_PROMPT_DIR, "prompt.md"), "utf8").trim();
+  const dir = path.join(V2_PROMPT_DIR, "examples");
   const examples = fs
     .readdirSync(dir, { withFileTypes: true })
     .filter((d) => d.isDirectory())

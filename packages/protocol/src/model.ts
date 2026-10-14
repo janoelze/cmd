@@ -4,6 +4,7 @@ import type { AgentTurn } from "./activity.ts";
 import type { NameSource } from "./names.ts";
 import type { SettingKey } from "./settings.ts";
 import type { WidgetConfigField, WidgetPermissions } from "./widget-package.ts";
+import type { MagicMark } from "./magic-package.ts";
 
 export type PaneId = string;
 export type AgentId = string;
@@ -367,6 +368,8 @@ export interface WidgetEntry {
   /** Packages: the widget's config fields (its Configure sheet), and which of its secret fields are set (keys only). */
   config?: WidgetConfigField[];
   secrets?: string[];
+  /** Packages made with Magic (package.json's cmd.magic): listed under Your Widgets. */
+  magic?: MagicMark;
 }
 
 export interface FileEntry {

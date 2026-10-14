@@ -1,0 +1,21 @@
+{
+  "name": "vpn",
+  "version": "1.0.0",
+  "description": "Whether your traffic leaves through the VPN: the address and network the internet sees.",
+  "type": "module",
+  "devDependencies": { "@cmd/widget-api": "^1.0.0" },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "vpn",
+        "title": "VPN",
+        "icon": "lock.shield",
+        "main": "src/vpn.tsx",
+        "size": "s",
+        "config": [{ "key": "provider", "title": "Your provider", "type": "string", "default": "Deutsche Telekom", "description": "Who the internet sees without the VPN." }]
+      }
+    ],
+    "permissions": { "net": ["ipinfo.io"] }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "branch": "feature/checkout-rounding-and-a-long-branch-name",
+  "upstream": "origin/feature/checkout-rounding-and-a-long-branch-name",
+  "ahead": 3,
+  "behind": 1,
+  "changes": [
+    { "path": "src/checkout/total.ts", "status": "M", "added": 24, "removed": 7 },
+    { "path": "src/checkout/very/deeply/nested/folder/structure/rounding-helpers.test.ts", "status": "?", "added": 0, "removed": 0 },
+    { "path": "README.md", "status": "D", "added": 0, "removed": 40 }
+  ],
+  "vsRemote": [{ "path": "src/checkout/total.ts", "status": "M", "added": 120, "removed": 33 }],
+  "hot": [{ "path": "src/checkout/total.ts", "commits": 14 }, { "path": "package.json", "commits": 9 }]
+}

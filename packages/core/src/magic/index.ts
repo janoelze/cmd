@@ -7,7 +7,13 @@ export { execArgv, execCommand, sandboxAvailable, sandboxProfile, type SandboxMo
 export { runSource, preview, type MagicSource, type SourceResult } from "./sources.ts";
 export { TOOL_SPECS, toolsFor, runTool } from "./tools.ts";
 export { WIDGET_TOOL_SPECS, runWidgetTool } from "./widget-tools.ts";
-export { buildSystem, buildRequest, PROMPT_DIR, type Workspace } from "./prompt.ts";
+export { buildSystem, buildRequest, PROMPT_DIR, V2_PROMPT_DIR, type Workspace } from "./prompt.ts";
 export { widgetHtml, widgetTokens, SIZES, type ThemeLike } from "./host.ts";
 export { readSecrets, SecretsService } from "../kernel/secrets.ts";
 export * from "../widgets/index.ts";
+export { buildPackage, verifyPackage, type PackageBuildOptions, type PackageBuildResult, type PackageVerdict } from "./package/build.ts";
+export { checkoutToolchain, type Toolchain } from "./package/toolchain.ts";
+export { buildPackageSystem, buildPackageRequest, promptHash, examples, exampleFiles } from "./package/prompt.ts";
+export { scriptedBackend, type Script, type ScriptTurn } from "./package/scripted.ts";
+export { slugOf } from "./package/service.ts";
+export { PACKAGE_TOOL_SPECS } from "./package/tools.ts";

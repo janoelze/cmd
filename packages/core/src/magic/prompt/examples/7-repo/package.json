@@ -1,0 +1,12 @@
+{
+  "name": "shop-changes",
+  "version": "1.0.0",
+  "description": "This workspace's uncommitted changes and how far it is from its remote.",
+  "type": "module",
+  "devDependencies": { "@cmd/widget-api": "^1.0.0" },
+  "cmd": {
+    "api": 1,
+    "widgets": [{ "id": "changes", "title": "shop · changes", "icon": "arrow.triangle.branch", "main": "src/changes.tsx", "size": "l" }],
+    "permissions": { "workspace": ["read"] }
+  }
+}
