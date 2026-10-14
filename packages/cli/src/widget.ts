@@ -3,7 +3,8 @@
 // it (types, a data run, renders), run its data, render it. So a widget can be
 // built by hand or by any coding agent (Claude Code, Codex) with cmd's rules.
 // `list` and `add` ask the running core about the Widget Library (docs/16-widgets.md).
-// `check` on a widget package (a package.json with a "cmd" block, docs/56) checks its package.json.
+// `check` on a widget package (a package.json with a "cmd" block, docs/56) checks its package.json;
+// `link` and `unlink` put one in the Library from its folder and take it out (widget-link.ts).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -13,6 +14,7 @@ import { connect, defaultSocketPath } from "@cmd/protocol/node";
 import { PREVIEW_THEMES, PROMPT_DIR, RUNTIME_DIR, checkWidget, previewCases, previewPage, previewRender, runWidgetData, verifyWidget, writeDenoConfig } from "@cmd/core/magic";
 import { cmdVersion, isPackageDir, readPackage } from "@cmd/core/widgets/package";
 import { HOST_SUBS, WIDGET_HOST_HELP, widgetHostCommand } from "./widget-host.ts";
+import { LINK_SUBS, WIDGET_LINK_HELP, widgetLinkCommand } from "./widget-link.ts";
 import { bold, dim, green, openFile, printVerdict, red, sandboxNote, widgetContext } from "./magic.ts";
 
 export const WIDGET_HELP = `cmd widget — make, check, run and preview Magic widgets
@@ -27,11 +29,13 @@ usage: cmd widget new <dir>        a new widget folder (manifest.json, data.ts, 
        cmd widget list             the Widget Library: built-in widgets, then yours by last use
        cmd widget add <widget>     put one in this terminal's workspace: a ref from list,
                                    a widget id, or a title
+${WIDGET_LINK_HELP}
 ${WIDGET_HOST_HELP}
 
   --config key=value   a config value for the run (repeatable)
   --cwd DIR            where run() starts by default (default: the current folder)
   --unsandboxed        run without sandbox-exec (Deno's permissions still apply)
+  --force              unlink: remove a package that isn't a link
   --open               open the screenshot (preview)
   --json               machine-readable output
 
@@ -112,6 +116,7 @@ function configArgs(list: string[] | undefined): Record<string, unknown> {
 
 export async function widgetCommand(argv: string[]): Promise<number> {
   if (HOST_SUBS.includes(argv[0] ?? "") && !argv.includes("--help") && !argv.includes("-h")) return widgetHostCommand(argv);
+  if (LINK_SUBS.includes(argv[0] ?? "") && !argv.includes("--help") && !argv.includes("-h")) return widgetLinkCommand(argv);
   const { values: o, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
