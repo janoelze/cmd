@@ -6,6 +6,7 @@
 import type { WindowId } from "./model.ts";
 import type { WidgetEnv, WidgetPatch, WidgetTree } from "./widget-tree.ts";
 import type { WidgetPermissions } from "./widget-package.ts";
+import type { Def } from "./settings.ts";
 
 /**
  * A package widget's process as its window shows it: starting, running, stopped (with why:
@@ -33,3 +34,8 @@ export interface WidgetHostMethods {
 
 /** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window. */
 export type WidgetHostEvent = { type: "widget.tree"; windowId: WindowId; message: WidgetTree | WidgetPatch | WidgetHostStatus };
+
+/** The widget host's settings, taken into SETTINGS_SCHEMA (placed in the Settings window's Magic Widgets page). */
+export const WIDGET_HOST_SETTINGS = {
+  "widgets.aiBudget": { title: "AI budget per widget", type: "number", unit: "tokens a day", default: 200000, min: 0, step: 10000, description: "How much of your AI one widget may use a day. 0: no limit." },
+} as const satisfies Record<string, Def>;

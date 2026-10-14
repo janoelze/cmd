@@ -131,7 +131,7 @@ export const SETTINGS_PAGES: Page[] = [
     sections: [
       { title: "While building", items: ["magic.explore", "magic.showSteps"] },
       { title: "Running widgets", items: ["magic.autoFix", "magic.deno"] },
-      { title: "Widget Library", items: ["widgets.developer"] },
+      { title: "Widget Library", items: ["widgets.developer", "widgets.aiBudget"] },
       actionsSettings,
     ],
   },

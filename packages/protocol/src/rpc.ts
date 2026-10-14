@@ -360,7 +360,6 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   /** Delete a widget made with Magic: its folder, revisions and secrets. Refused while a window shows it. */
   "widget.delete": { params: { ref: string }; result: null };
 
-
   /** Directory listing for file windows (dirs first, then by name). */
   "fs.list": { params: { path: string }; result: { path: string; parent: string | null; entries: FileEntry[] } };
   /** Which of these paths exist, resolved against `cwd` (~ expanded): the absolute path, or null. For terminal links. */

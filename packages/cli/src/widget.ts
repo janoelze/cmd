@@ -12,6 +12,7 @@ import { ENV, type WidgetEntry } from "@cmd/protocol";
 import { connect, defaultSocketPath } from "@cmd/protocol/node";
 import { PREVIEW_THEMES, PROMPT_DIR, RUNTIME_DIR, checkWidget, previewCases, previewPage, previewRender, runWidgetData, verifyWidget, writeDenoConfig } from "@cmd/core/magic";
 import { cmdVersion, isPackageDir, readPackage } from "@cmd/core/widgets/package";
+import { HOST_SUBS, WIDGET_HOST_HELP, widgetHostCommand } from "./widget-host.ts";
 import { bold, dim, green, openFile, printVerdict, red, sandboxNote, widgetContext } from "./magic.ts";
 
 export const WIDGET_HELP = `cmd widget — make, check, run and preview Magic widgets
@@ -26,6 +27,7 @@ usage: cmd widget new <dir>        a new widget folder (manifest.json, data.ts, 
        cmd widget list             the Widget Library: built-in widgets, then yours by last use
        cmd widget add <widget>     put one in this terminal's workspace: a ref from list,
                                    a widget id, or a title
+${WIDGET_HOST_HELP}
 
   --config key=value   a config value for the run (repeatable)
   --cwd DIR            where run() starts by default (default: the current folder)
@@ -109,6 +111,7 @@ function configArgs(list: string[] | undefined): Record<string, unknown> {
 }
 
 export async function widgetCommand(argv: string[]): Promise<number> {
+  if (HOST_SUBS.includes(argv[0] ?? "") && !argv.includes("--help") && !argv.includes("-h")) return widgetHostCommand(argv);
   const { values: o, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,

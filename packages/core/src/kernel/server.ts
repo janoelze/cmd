@@ -351,7 +351,8 @@ export class CoreServer {
       this.#widgetConns.set(conn, id);
       // A package widget's process: from the next line on, the widget wire (after this answer goes out).
       if (id.attach) this.#hosted.set(conn, id.attach((line) => conn.send(line), () => conn.close()));
-      return { widgetId: id.widgetId, workspaceId: id.workspaceId };
+      const { attach: _taken, ...who } = id;
+      return who;
     }
     const who = this.#widgetConns.get(conn);
     if (!who) throw new Error("say widget.hello first");

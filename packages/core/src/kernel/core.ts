@@ -239,7 +239,7 @@ export class Core {
     recordWindows(this.data, this.windows);
     recordWorkspaces(this.data, this.workspaces);
     recordNotifications(this.data, this.notifications);
-    this.library = new WidgetLibrary(ctx);
+    this.library = new WidgetLibrary(ctx, { stateDir: state, socket: path.isAbsolute(opts.socketPath) ? widgetsSocketPath(opts.socketPath) : null });
     this.previews = new PreviewBroker(opts.magicPreviewer);
     this.server.onClosed((conn) => this.previews.closed(conn));
     this.magic = createMagic(ctx, { widgetSocket: path.isAbsolute(opts.socketPath) ? widgetsSocketPath(opts.socketPath) : null, backend: opts.magicBackend, stateDir: state, deno: opts.magicDeno, installDeno: opts.magicInstallDeno });

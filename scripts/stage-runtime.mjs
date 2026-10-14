@@ -21,6 +21,8 @@ fs.mkdirSync(out, { recursive: true });
 fs.writeFileSync(path.join(out, ".checkout"), root + "\n");
 // widget-runtime: the Deno side of Magic widgets (cmd.ts, runner.ts), run by Deno from there.
 for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packages/core/${p}`, `packages/core/${p}`);
+// @cmd/widget-api vendored for Deno (scripts/widget-api-bundle.mjs): package widgets' processes import it (widgets/host/runtime.ts).
+copy("packages/widget-api/dist/deno", "packages/widget-api/dist/deno");
 // Workspace packages the core imports (@cmd/protocol, @cmd/remote-crypto): their
 // TypeScript is copied next to the core, and node_modules gets a small JavaScript
 // package per entry point that re-exports it from there (Node won't strip types

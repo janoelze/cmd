@@ -8,6 +8,7 @@
 
 import { ACTIONS_SETTINGS } from "./actions.ts";
 import { PERMISSION_SETTINGS } from "./tools.ts";
+import { WIDGET_HOST_SETTINGS } from "./widget-host.ts";
 import { currentKey, SETTINGS_MIGRATIONS, type SettingsMigration } from "./settings-migrations.ts";
 
 /** When a change takes effect, for keys that can't apply to what is already running. Omitted = immediately. */
@@ -266,8 +267,7 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "Your AI provider sums up what the agent did.",
   },
-  ...ACTIONS_SETTINGS,
-  ...PERMISSION_SETTINGS,
+  ...ACTIONS_SETTINGS, ...PERMISSION_SETTINGS, ...WIDGET_HOST_SETTINGS,
   "widgets.developer": { title: "Developer widgets", type: "boolean", default: false, description: "Offer widgets that show what cmd records and does.", details: "Like the Event Stream. Safe to use; mostly useful when working on cmd or reporting a problem." },
   "notifications.widgets": { title: "Widgets report something", type: "boolean", default: true, description: "When a Magic widget reports news." },
   "notifications.dockBadge": { title: "Badge the Dock icon", type: "boolean", default: true, description: "Show the attention count on the Dock icon." },

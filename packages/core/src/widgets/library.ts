@@ -7,6 +7,8 @@ import { DEFAULT_ICON } from "./package.ts";
 import { createPackages } from "./feature.ts";
 import type { WidgetPackages } from "./packages.ts";
 import type { CoreContext } from "../kernel/context.ts";
+import { createWidgetHost } from "./host/feature.ts";
+import type { WidgetHost } from "./host/host.ts";
 
 /** A Widget Library ref: "magic:<widget id>" (made with Magic), "type:<kind>" (a built-in widget) or "pkg:<package>/<widget>" (a package's). */
 export function widgetRef(ref: string): { kind: string; widgetId?: string } {
@@ -23,17 +25,27 @@ export function magicRef(ref: string): string {
   return r.widgetId;
 }
 
-type LibraryCore = Pick<CoreContext, "windows" | "windowTypes" | "magic" | "settings" | "broadcast" | "watched">;
+/** Where package widgets' processes find the instance's grants and the widgets socket. */
+export interface LibraryOptions {
+  stateDir?: string | null;
+  socket?: string | null;
+}
 
 export class WidgetLibrary {
-  #core: LibraryCore;
+  #core: CoreContext;
   #timer: ReturnType<typeof setTimeout> | null = null;
   /** Widget packages (docs/56): read and watched from their startup job (widgets/feature.ts). */
   readonly packages: WidgetPackages;
+  /** Their widgets' processes (docs/56, "The runtime"; widgets/host/). */
+  readonly host: WidgetHost;
 
-  constructor(core: LibraryCore) {
+  constructor(core: CoreContext, o: LibraryOptions = {}) {
     this.#core = core;
-    this.packages = createPackages(core, () => this.changed());
+    this.packages = createPackages(core, () => {
+      this.changed();
+      this.host?.packagesChanged();
+    });
+    this.host = createWidgetHost(core, this.packages, { stateDir: o.stateDir ?? null, socket: o.socket ?? null });
     // Developer widgets come and go from the library with their setting.
     core.settings.bind(["widgets.developer"], () => this.changed());
   }
