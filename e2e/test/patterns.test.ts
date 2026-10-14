@@ -19,7 +19,7 @@ const linesWith = (lines: string[], re: RegExp) => lines.flatMap((l, i) => (re.t
 const FIXED_WAITS: Record<string, number> = {
   "a11y-audit.mjs": 3,
   "drops.mjs": 8,
-  "smoke.mjs": 13,
+  "smoke.mjs": 12,
   "startup-profile.mjs": 1,
   "startup.mjs": 2,
   "web.mjs": 1,
