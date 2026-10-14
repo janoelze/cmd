@@ -187,9 +187,11 @@ const READ_ONLY: Record<string, ArgRule> = {
   softwareupdate: (a) => (has(a, "-l", "--list") ? null : "only softwareupdate --list"),
   sqlite3: (a) => (has(a, "-readonly") ? null : "needs -readonly"),
   log: sub(["show"], "log"),
-  kubectl: sub(["get", "describe", "top", "version", "config"], "kubectl"),
+  // --server, --hostname, a URL: another host than the CLI's own would get what it's asked (and the network is open on 443 for its login).
+  kubectl: (a) => (has(a, "--server", "-s", "--kubeconfig") ? "would talk to another server" : sub(["get", "describe", "top", "version", "config"], "kubectl")(a)),
   gh: (a) => {
     const [s, v] = a.filter((x) => !x.startsWith("-"));
+    if (has(a, "--hostname") || a.some((x) => /^[a-z][a-z0-9+.-]*:\/\//i.test(x) && !/^https:\/\/(api\.)?github\.com\//i.test(x))) return "would talk to another host";
     if (has(a, "--show-token", "-t") && s === "auth") return "would print the token";
     if (s === "api") return has(a, "-X", "--method", "-f", "-F", "--field", "--raw-field", "--input") ? "only GET via gh api" : null;
     if (s === "auth") return v === "status" ? null : "only gh auth status";
@@ -199,6 +201,7 @@ const READ_ONLY: Record<string, ArgRule> = {
   },
   glab: (a) => {
     const [s, v] = a.filter((x) => !x.startsWith("-"));
+    if (has(a, "--hostname") && s === "api") return "would talk to another host";
     if (s === "auth") return v === "status" && !has(a, "-t", "--show-token") ? null : "only glab auth status (without the token)";
     if (s === "api") return has(a, "-X", "--method", "-f", "-F", "--field", "--raw-field", "--input") ? "only GET via glab api" : null;
     if (s === "config") return "may print the token";
