@@ -9,7 +9,7 @@ import { usePersisted, useStoreValue } from "../lib/store.ts";
 import { ICON } from "./Symbol.tsx";
 import { DirtyDot, Slot } from "./Slot.tsx";
 import { useFields } from "../shell/TileTitle.tsx";
-import { ago, labelOf, project, shortPath, whereOf, windowIdOf, type SidebarRow } from "../lib/model.ts";
+import { ago, cleanTitle, labelOf, project, shortPath, whereOf, windowIdOf, type SidebarRow } from "../lib/model.ts";
 import { RemoteBadge } from "./Remote.tsx";
 import { typeFor } from "../windows/registry.ts";
 import { countRender } from "../lib/perf.ts";
@@ -159,7 +159,8 @@ export function HistoryRow(p: { hit: SearchHit; now: number; onOpen: (h: SearchH
 /** A closed window, reopened where it was on click (⇧⌘T reopens the newest). */
 export function ClosedRow(p: { win: ClosedWindow; now: number; onOpen: (id: WindowId) => void }) {
   const w = p.win;
-  const title = w.title || "Untitled";
+  // A terminal keeps its last title, an agent's spinner glyph (✳ ⠋ …) included.
+  const title = (w.kind === "terminal" ? cleanTitle(w.title) : w.title) || "Untitled";
   return (
     <ListRow
       className="history"

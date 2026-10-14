@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, AppWindow, Pane } from "@cmd/protocol";
-import { fieldsOf, setCmdNames, type SidebarRow } from "../src/renderer/src/lib/model.ts";
+import { cleanTitle, fieldsOf, setCmdNames, type SidebarRow } from "../src/renderer/src/lib/model.ts";
 import { registerWindowView, setWindowTypes } from "../src/renderer/src/windows/registry.ts";
 
 // Window title fields (docs/10-window-titles.md): one meaning per field, for every type.
@@ -93,5 +93,14 @@ describe("window fields", () => {
     const f = fieldsOf(row({ win: win({ kind: "browser", title: "github.com" }) }), undefined, 0);
     expect(f.name).toBe("github.com");
     expect(f.place).toBeUndefined();
+  });
+});
+
+describe("cleanTitle", () => {
+  it("drops an agent's spinner glyph and Windows' Administrator prefix", () => {
+    expect(cleanTitle("✳ CI flakes")).toBe("CI flakes");
+    expect(cleanTitle("⠐ Strip view horizontal scrollbar")).toBe("Strip view horizontal scrollbar");
+    expect(cleanTitle("Administrator: pwsh")).toBe("pwsh");
+    expect(cleanTitle("zed/crates/gpui at main")).toBe("zed/crates/gpui at main");
   });
 });
