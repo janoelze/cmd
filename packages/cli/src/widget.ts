@@ -11,7 +11,7 @@ import { parseArgs } from "node:util";
 import { ENV, type WidgetEntry } from "@cmd/protocol";
 import { connect, defaultSocketPath } from "@cmd/protocol/node";
 import { PREVIEW_THEMES, PROMPT_DIR, RUNTIME_DIR, checkWidget, previewCases, previewPage, previewRender, runWidgetData, verifyWidget, writeDenoConfig } from "@cmd/core/magic";
-import { isPackageDir, readPackage } from "@cmd/core/widgets/package";
+import { cmdVersion, isPackageDir, readPackage } from "@cmd/core/widgets/package";
 import { bold, dim, green, openFile, printVerdict, red, sandboxNote, widgetContext } from "./magic.ts";
 
 export const WIDGET_HELP = `cmd widget — make, check, run and preview Magic widgets
@@ -174,7 +174,7 @@ export async function widgetCommand(argv: string[]): Promise<number> {
     return 0;
   }
 
-  if (sub === "check" && (isPackageDir(dir) || (!fs.existsSync(path.join(dir, "manifest.json")) && fs.existsSync(path.join(dir, "package.json"))))) return checkPackage(dir, !!o.json);
+  if (sub === "check" && (isPackageDir(dir) || (!fs.existsSync(path.join(dir, "manifest.json")) && fs.existsSync(path.join(dir, "package.json"))))) return await checkPackage(dir, !!o.json);
 
   if (!fs.existsSync(path.join(dir, "manifest.json"))) {
     console.error(red(`${dir} has no manifest.json (make one with: cmd widget new <dir>)`));
@@ -261,9 +261,23 @@ export async function widgetCommand(argv: string[]): Promise<number> {
   return 1;
 }
 
-/** `cmd widget check` on a widget package: 0 when it's valid, 2 with each problem (its field first) when not. */
-function checkPackage(dir: string, json: boolean): number {
-  const r = readPackage(dir);
+/** The running cmd's version from its core (the packaged CLI knows none of its own); null when no core answers. */
+async function coreVersion(): Promise<string | null> {
+  const conn = await connect().catch(() => null);
+  if (!conn) return null;
+  conn.close();
+  const app = conn.hello?.app;
+  return app && app !== "source" ? app : null;
+}
+
+/**
+ * `cmd widget check` on a widget package: 0 when it's valid, 2 with each problem (its field first) when not.
+ * engines.cmd is checked against this cmd's version, else the running core's, else not at all (and it says so).
+ */
+export async function checkPackage(dir: string, json: boolean, local: string | null = cmdVersion(), ask: () => Promise<string | null> = coreVersion): Promise<number> {
+  const version = local ?? (await ask());
+  if (!version) process.stderr.write(dim("engines.cmd not checked: no cmd running\n"));
+  const r = readPackage(dir, { cmdVersion: version });
   if (json) console.log(JSON.stringify(r.ok ? { ok: true, name: r.pkg.name, version: r.pkg.version, api: r.pkg.api, kinds: r.pkg.widgets.map((w) => w.kind) } : { ok: false, problems: r.errors }));
   else if (r.ok) console.log(`${green("✓")} ${r.pkg.name} ${r.pkg.version} ${dim(`· API ${r.pkg.api} · ${r.pkg.widgets.map((w) => w.kind).join(", ")}`)}`);
   else {

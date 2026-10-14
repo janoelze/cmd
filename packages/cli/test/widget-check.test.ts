@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { widgetCommand } from "../src/widget.ts";
+import { checkPackage, widgetCommand } from "../src/widget.ts";
 
 const fixtures = path.join(import.meta.dirname, "fixtures", "widgets");
 
@@ -49,6 +49,23 @@ describe("cmd widget check on packages", () => {
       expect(r.code).toBe(2);
       expect(r.err).toContain(`  ${field}: `);
     });
+
+  it("asks the running cmd for its version when it has none of its own, and says when nobody answers", async () => {
+    const err: string[] = [];
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((s) => (err.push(String(s)), true));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(await checkPackage(path.join(fixtures, "bad-engines"), false, null, async () => "0.30.0")).toBe(2);
+      expect(err.join("")).not.toContain("not checked");
+      expect(await checkPackage(path.join(fixtures, "bad-engines"), false, null, async () => null)).toBe(0);
+      expect(err.join("")).toContain("engines.cmd not checked: no cmd running");
+    } finally {
+      write.mockRestore();
+      error.mockRestore();
+      log.mockRestore();
+    }
+  });
 
   it("exits with those codes as a process", () => {
     const main = path.join(import.meta.dirname, "..", "src", "main.ts");
