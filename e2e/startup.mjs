@@ -51,7 +51,14 @@ async function close(app) {
 }
 
 const marks = (page) =>
-  page.evaluate(() => Object.fromEntries(performance.getEntriesByType("mark").filter((m) => m.name.startsWith("boot:")).map((m) => [m.name, performance.timeOrigin + m.startTime])));
+  page.evaluate(() => {
+    const at = (t) => performance.timeOrigin + t;
+    const nav = performance.getEntriesByType("navigation")[0];
+    // The page's own steps: its process asked for the page, the HTML in, parsed (scripts run), the main bundle fetched.
+    const bundle = performance.getEntriesByType("resource").find((r) => /\/assets\/index-[^/]*\.js/.test(r.name));
+    const steps = { "boot:page-start": at(0), "boot:html": at(nav.responseEnd), "boot:dom-interactive": at(nav.domInteractive), ...(bundle ? { "boot:bundle-fetched": at(bundle.responseEnd) } : {}) };
+    return { ...steps, ...window.cmd?.boot?.(), ...Object.fromEntries(performance.getEntriesByType("mark").filter((m) => m.name.startsWith("boot:")).map((m) => [m.name, at(m.startTime)])) };
+  });
 
 /** One launch: every mark in ms since the launch call. */
 async function timed() {
@@ -80,6 +87,7 @@ async function timed() {
 }
 
 const out = path.join(root, ".cmd-dev/perf/results.jsonl");
+fs.mkdirSync(path.dirname(out), { recursive: true });
 const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
 const only = arg("only", null);
 for (const kind of ["warm", "core", "cold"].filter((k) => !only || k === only)) {

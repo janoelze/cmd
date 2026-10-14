@@ -27,7 +27,7 @@ export async function startProfile(cdp) {
     const parent = new Map();
     for (const n of profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
     const nameOf = (n) => `${n.callFrame.functionName || "(anon)"}:${n.callFrame.lineNumber + 1}`;
-    for (const [k] of top.slice(0, 3)) {
+    for (const [k] of top.slice(0, Number(process.env.PROFILE_CALLERS ?? 3))) {
       const chains = new Map();
       for (const n of profile.nodes) {
         if (keyOf(n.callFrame) !== k) continue;

@@ -1,6 +1,6 @@
 # Performance and resource usage
 
-**Status:** partly built: the audit and a log of wins; PTY host throughput, code cache and flow control open.
+**Status:** partly built: the audit and a log of wins; flow control open; a code cache tried without gain; PTY host throughput bound by its headless xterm.
 
 > Status (2026-10-14): audit done; two rounds of fixes (see Wins), the second measured with `e2e/latency.mjs`. The rule: the UI looks and behaves the same; it only costs less. Wins are logged at the bottom with before/after numbers.
 
@@ -63,8 +63,14 @@ The core itself boots in ~200 ms (365 ms when it also starts the PTY host), in p
 
 Cold starts (core and PTY host stopped, shells resurrected) vary by ±200 ms between runs: six login shells start at once.
 
+Where the window's own start goes (warm, 6 terminals, `e2e/startup.mjs` now also reads the page's navigation timing and the preload's steps, `window.cmd.boot()`): the page starts as the window is created (~250 ms); Node starts in the renderer for the preload (~50 ms, its imports cost ~1 ms); the preload connects ~5 ms after; the renderer's bundle runs ~40 ms after the DOM is interactive; tiles paint ~30 ms later; the terminals take ~170 ms more, mostly per terminal: xterm's DOM renderer measuring before WebGL replaces it, a WebGL context (~2 ms) with its shaders (~2 ms of waiting for compile and link), the glyph atlas.
+
+Tried and dropped:
+- **A V8 code cache via an `app://` scheme** (`codeCache: true`): no measurable change from window to renderer script (93 ms both ways); the bundle's compile isn't what the window waits for.
+- **Not waiting for each shader's compile status** (a Vite patch): ~3 ms a launch, as the link status then waits instead. Not worth a patch.
+- **Measuring the workspace name a frame later**: the first layout it forces is needed anyway.
+
 Left to try:
-- **A V8 code cache for the renderer**, via a privileged `app://` scheme instead of `file://`: an estimated 20–80 ms per window. `localStorage` moves with the origin and needs a one-time migration.
 - **A pre-bundled core in packaged builds** (esbuild at staging time): about 50 ms less to boot the core, mostly off the critical path.
 - **One terminal in the first paint.** Open and fill the selected terminal before the others, deferring the rest by a frame each, so the one in view shows sooner. Total work stays the same.
 
@@ -137,6 +143,7 @@ Measured with the bench and `e2e/perf.mjs` on the same machine. "UI" rows are th
 | 21 | Tree rows lay out only on screen (`content-visibility: auto`); the workspace name is measured when it changes, not after every render (that forced a layout of the whole window) | opening a folder of 2,000 files: 342 ms of long frames | 54 ms |
 | 22 | A long file list is drawn 300 rows a frame (`windows/files/rows.ts`), the rest's room kept below; a shared collator and today's bounds instead of one per row | 54 ms, worst frame 50 ms | no frame over one refresh; the first rows on the next frame |
 | 23 | Settings stays loaded once opened: closing hides it | each ⌘, ~150–180 ms to its first frame | the first ~160 ms, then ~25 ms |
+| 24 | The core's OSC scanner jumps over plain text to the next control character instead of stepping every one | a 29 MB flood: ~170 ms of the core's CPU in the scanner | ~70 ms (plain text gains more; the PTY host still bounds throughput at ~54 MB/s) |
 
 Interaction latency after these (`e2e/latency.mjs`, 120 Hz, median): a keystroke's echo on screen 4 ms (5 ms with three other terminals streaming, p95 8 ms); palette open 4 ms; selecting another window 6 ms; mode switches 2–13 ms to the first frame, no long animation frames; the worst frame of any board transition 25 ms.
 

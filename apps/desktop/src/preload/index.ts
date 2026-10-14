@@ -37,6 +37,9 @@ export interface AppInfo {
   crashes: CrashStatus;
 }
 
+/** Boot steps of the preload (e2e/startup.mjs): its world has its own performance timeline, so the page reads them here. */
+const boot: Record<string, number> = { "boot:preload": performance.timeOrigin + performance.now() };
+const bootMark = (name: string) => (boot[name] = performance.timeOrigin + performance.now());
 type Status = "connecting" | "connected" | "disconnected";
 
 /**
@@ -64,11 +67,13 @@ function open(): Promise<Connection> {
   setStatus("connecting");
   ready = (async () => {
     await checked;
+    bootMark("boot:core-checked");
     // The window opens while the core starts (main/index.ts), so the first
     // attempts fail; retry quickly at first, then back off to 500 ms.
     for (let attempt = 0; ; attempt++) {
       try {
         const c = await connect(socketPath);
+        bootMark("boot:socket");
         conn = c;
         c.client.onEvent((e) => {
           for (const fn of eventListeners) fn(e);
@@ -90,6 +95,8 @@ function open(): Promise<Connection> {
 if (ownPage) open();
 
 const api = {
+  /** When the preload's steps happened (epoch ms), for e2e/startup.mjs. */
+  boot: () => ({ ...boot }),
   /** The user's home folder ($HOME counts, so a tour's fixture home is "~" too). */
   homeDir: os.homedir(),
   /** The system's "Show scroll bars": "always", or "fade" after scrolling (Automatic and When scrolling). */
@@ -300,5 +307,6 @@ const api = {
 
 export type CmdBridge = typeof api;
 
+bootMark("boot:preload-done");
 if (ownPage) contextBridge.exposeInMainWorld("cmd", api);
 else console.warn(`window.cmd is only for cmd's own pages, not ${location.href.slice(0, 200)}`);
