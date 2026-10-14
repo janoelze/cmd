@@ -146,7 +146,8 @@ export const SETTINGS_SCHEMA = {
   "terminal.webglPool": {
     title: "WebGL terminals",
     type: "number",
-    default: 8,
+    // Of Chromium's ~16 live WebGL contexts; past it, showing a terminal costs ~25 ms (a new one).
+    default: 12,
     min: 0,
     max: 14,
     description: "Most terminals drawn with WebGL at once.",

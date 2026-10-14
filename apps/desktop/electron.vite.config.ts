@@ -9,7 +9,7 @@ import { workbenchCatalog } from "./src/renderer/src/workbench/catalog/plugin.ts
 // xterm maps a mouse event to a cell from getBoundingClientRect() (screen px) and its
 // cell size (layout px), so under a CSS scale() (the canvas zoom) selection, links and
 // mouse reporting land on the wrong cells. Undo the element's scale where it does that.
-// Excluded from dep pre-bundling below so this applies in dev too.
+// Excluded from dep pre-bundling below so this applies in dev too (as is the WebGL addon's patch).
 const XTERM_COORDS = "return[t.clientX-i.left-n,t.clientY-i.top-o]}";
 function xtermScaledCoords(): Plugin {
   return {
@@ -20,6 +20,25 @@ function xtermScaledCoords(): Plugin {
       return code.replace(
         XTERM_COORDS,
         "return[(t.clientX-i.left)/(e.offsetWidth?i.width/e.offsetWidth:1)-n,(t.clientY-i.top)/(e.offsetHeight?i.height/e.offsetHeight:1)-o]}",
+      );
+    },
+  };
+}
+
+// The WebGL addon sizes its canvas to the cells' device pixels (cols × cell width, maybe
+// odd), its CSS size to that over the pixel ratio, rounded, and a ResizeObserver then sets
+// the canvas to the device pixels of that CSS size: one more when the first was odd. So
+// every resize allocated and drew the canvas twice. Size it to what the observer will say.
+const WEBGL_CANVAS_SIZE = "this._canvas.width=this.dimensions.device.canvas.width,this._canvas.height=this.dimensions.device.canvas.height,";
+function xtermWebglCanvasSize(): Plugin {
+  return {
+    name: "xterm-webgl-canvas-size",
+    transform(code, id) {
+      if (!/@xterm[/+]addon-webgl.*[/]lib[/]addon-webgl\.mjs$/.test(id)) return;
+      if (!code.includes(WEBGL_CANVAS_SIZE)) throw new Error("xterm-webgl-canvas-size: handleResize changed, update the patch");
+      return code.replace(
+        WEBGL_CANVAS_SIZE,
+        "this._canvas.width=Math.round(this.dimensions.css.canvas.width*this._devicePixelRatio),this._canvas.height=Math.round(this.dimensions.css.canvas.height*this._devicePixelRatio),",
       );
     },
   };
@@ -98,10 +117,11 @@ export default defineConfig({
   renderer: {
     define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
     // The UI Workbench's catalog (docs/48), dev server only.
-    plugins: [react(), xtermScaledCoords(), pdfjsAssets(), workbenchCatalog(resolve(import.meta.dirname, "../.."))],
-    optimizeDeps: { exclude: ["@xterm/xterm"] },
+    plugins: [react(), xtermScaledCoords(), xtermWebglCanvasSize(), pdfjsAssets(), workbenchCatalog(resolve(import.meta.dirname, "../.."))],
+    optimizeDeps: { exclude: ["@xterm/xterm", "@xterm/addon-webgl"] },
     build: {
-      minify: true,
+      // CMD_NO_MINIFY=1: readable function names in profiles (e2e/latency.mjs --profile).
+      minify: !process.env.CMD_NO_MINIFY,
       rollupOptions: {
         input: { index: resolve(import.meta.dirname, "src/renderer/index.html"), settings: resolve(import.meta.dirname, "src/renderer/settings.html") },
       },
