@@ -17,12 +17,13 @@ import { isCurrentCore, KIT_FILES, PROTOCOL, SETTINGS_TEMPLATE, SYSTEM_SOUNDS, k
 import { cmdHome, connect, CORE_REFUSED_EXIT, coreLocked, coreRefusal, coreSocketPath, enterInstance, foreignHome, foreignHomeText, hasDevMarker, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { contextTemplate } from "./menu-template.ts";
-import { SETTINGS_TITLEBAR_HEIGHT, TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
+import { TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { buildInstance, readFlavor } from "./flavor.ts";
 import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, themeQuery, type Appearance } from "./appearance.ts";
+import { isSettings, isUtility, openUtility, utilityWindow } from "./utility.ts";
 import { setDockIcon, startDockIcon } from "./dock-icon.ts";
 import { WorkspaceWindows, type Bounds } from "./workspaces.ts";
 import { handleCertificates } from "./certificates.ts";
@@ -523,50 +524,7 @@ function createWindow(workspaceId: string, b: Bounds): BrowserWindow {
 
 const workspaces = new WorkspaceWindows(createWindow);
 
-// ── utility windows ─────────────────────────────────────
-// One native Settings window (⌘,), like a macOS app's: a sidebar of categories,
-// drawn like the main window's; in dev builds, the Workbench. Each has its own
-// page and bundle (renderer/<page>.html).
-
-type UtilityPage = "settings" | "workbench";
-const utility = new Map<UtilityPage, BrowserWindow>();
-const isSettings = (w: BrowserWindow | null | undefined) => !!w && w === utility.get("settings");
-/** Settings or the Workbench: not an app window. */
-const isUtility = (w: BrowserWindow | null | undefined) => !!w && [...utility.values()].includes(w);
-
-/** at: a page inside the window to show (Settings: "remote", "remote/pair"). */
-function openUtility(page: UtilityPage, o: { title: string; width: number; height: number; minWidth: number; minHeight: number }, at?: string): BrowserWindow {
-  const open = utility.get(page);
-  if (open && !open.isDestroyed()) {
-    open.show();
-    open.focus();
-    if (at) open.webContents.send("settings-page", at);
-    return open;
-  }
-  const win = new BrowserWindow({
-    ...o,
-    show: false,
-    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: trafficLights(SETTINGS_TITLEBAR_HEIGHT) } : {}),
-    backgroundColor: savedAppearance().background,
-    fullscreenable: false,
-    webPreferences: {
-      preload: path.join(here, "../preload/index.cjs"),
-      sandbox: false,
-      contextIsolation: true,
-      // Stories of the browser and YouTube windows show real pages.
-      webviewTag: page === "workbench",
-    },
-  });
-  utility.set(page, win);
-  win.on("closed", () => utility.get(page) === win && utility.delete(page));
-  // `pnpm workbench --headless`: an agent drives it without taking over the screen (no window, no Dock icon: whenReady).
-  win.once("ready-to-show", () => (page !== "workbench" || !process.env.CMD_WORKBENCH_HIDDEN) && win.show());
-  const search = `?${new URLSearchParams({ ...(at ? { [page === "workbench" ? "story" : "page"]: at } : {}), ...themeQuery() })}`;
-  if (process.env.ELECTRON_RENDERER_URL) win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html${search}`);
-  else win.loadFile(path.join(here, `../renderer/${page}.html`), { search });
-  return win;
-}
-
+// ── utility windows (utility.ts) ────────────────────────
 const openSettings = (at?: string) => openUtility("settings", { title: "Settings", width: 860, height: 620, minWidth: 700, minHeight: 440 }, at);
 /** Dev only: `pnpm workbench [story]` (scripts/workbench.mjs) sets CMD_WORKBENCH and gets this window instead of the app's. */
 const workbench = process.env.ELECTRON_RENDERER_URL ? process.env.CMD_WORKBENCH : undefined;
@@ -741,7 +699,7 @@ ipcMain.on("renderer-error", (e, r: { kind: string; message: string; stack: stri
   if (rendererErrors.has(key)) return;
   rendererErrors.add(key);
   const from = BrowserWindow.fromWebContents(e.sender);
-  const page = isSettings(from) ? "settings" : from && from === utility.get("workbench") ? "workbench" : "app";
+  const page = isSettings(from) ? "settings" : from && from === utilityWindow("workbench") ? "workbench" : "app";
   recordCrash("renderer", r.kind, r.message, r.stack, { page });
 });
 /** Settings → Updates & About: the app's side of the diagnostics (core.info is the core's). */

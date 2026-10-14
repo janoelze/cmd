@@ -134,7 +134,12 @@ Measured with the bench and `e2e/perf.mjs` on the same machine. "UI" rows are th
 | 18 | The first frame's theme comes from the main process (`?theme=`) instead of localStorage | localStorage's first use blocked the renderer 16 ms before the first paint | tiles painted (warm) 419 → 388 ms |
 | 19 | Rows are reused across rebuilds while their parts are the same; `TileTitle` and `SessionRow` memoised with stable props | a new terminal: 91 title and 75 sidebar row renders; a selection change: 18 titles | 12 and 36; 3.5 |
 | 20 | A flood's scrolls reach the kit once a frame, and xterm's scrollbar keeps one hide timer (a Vite patch) | ~70 ms a second of setTimeout/clearTimeout in a flood | none |
+| 21 | Tree rows lay out only on screen (`content-visibility: auto`); the workspace name is measured when it changes, not after every render (that forced a layout of the whole window) | opening a folder of 2,000 files: 342 ms of long frames | 54 ms |
+| 22 | A long file list is drawn 300 rows a frame (`windows/files/rows.ts`), the rest's room kept below; a shared collator and today's bounds instead of one per row | 54 ms, worst frame 50 ms | no frame over one refresh; the first rows on the next frame |
+| 23 | Settings stays loaded once opened: closing hides it | each ⌘, ~150–180 ms to its first frame | the first ~160 ms, then ~25 ms |
 
 Interaction latency after these (`e2e/latency.mjs`, 120 Hz, median): a keystroke's echo on screen 4 ms (5 ms with three other terminals streaming, p95 8 ms); palette open 4 ms; selecting another window 6 ms; mode switches 2–13 ms to the first frame, no long animation frames; the worst frame of any board transition 25 ms.
+
+The latency run also times the editor, the file browser, browser windows, Settings and dragging (strip edges, canvas windows and corners). After 21–23 no scenario has a frame over one refresh except opening a 15,000-line file in the editor (one frame of ~34 ms: CodeMirror's first parse and the window's mount). Typing in the editor shows the character on the next frame; opening a window re-renders the shell ~9 times (one store change each: the window, its workspace, focus…), each cheap enough to stay inside a frame.
 
 Already fine: no frame over 33 ms while flooding (25 MB through `cat`) or scrolling 10,000 lines of scrollback (p95 frame 9 ms at 120 Hz); the core serializes each broadcast once for all connections.
