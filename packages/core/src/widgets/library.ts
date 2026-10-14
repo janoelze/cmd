@@ -1,11 +1,14 @@
-// The Widget Library (docs/16-widgets.md): built-in widget types, then the widgets made with
-// Magic by last use; clients get it again when it changes, once per burst.
+// The Widget Library (docs/16-widgets.md): built-in widget types, then packages' widgets
+// (docs/56), then the widgets made with Magic by last use; clients get it again when it
+// changes, once per burst.
 
-import type { WidgetEntry } from "@cmd/protocol";
+import { parsePackageKind, type WidgetEntry } from "@cmd/protocol";
+import { DEFAULT_ICON } from "./package.ts";
 import type { CoreContext } from "../kernel/context.ts";
 
-/** A Widget Library ref: "magic:<widget id>" (made with Magic) or "type:<kind>" (a built-in widget). */
+/** A Widget Library ref: "magic:<widget id>" (made with Magic), "type:<kind>" (a built-in widget) or "pkg:<package>/<widget>" (a package's). */
 export function widgetRef(ref: string): { kind: string; widgetId?: string } {
+  if (parsePackageKind(ref)) return { kind: ref };
   const m = /^(magic|type):([\w-]+)$/.exec(ref);
   if (!m) throw new Error(`not a widget: ${ref}`);
   return m[1] === "magic" ? { kind: "magic", widgetId: m[2] } : { kind: m[2]! };
@@ -18,7 +21,7 @@ export function magicRef(ref: string): string {
   return r.widgetId;
 }
 
-type LibraryCore = Pick<CoreContext, "windows" | "windowTypes" | "magic" | "settings" | "broadcast" | "watched">;
+type LibraryCore = Pick<CoreContext, "windows" | "windowTypes" | "magic" | "packages" | "settings" | "broadcast" | "watched">;
 
 export class WidgetLibrary {
   #core: LibraryCore;
@@ -31,12 +34,17 @@ export class WidgetLibrary {
   }
 
   entries(): WidgetEntry[] {
-    const { windows, windowTypes, magic, settings } = this.#core;
+    const { windows, windowTypes, magic, packages, settings } = this.#core;
     const others = windows.others();
     const builtin = windowTypes
       .all()
-      .filter((t) => t.role === "widget" && t.kind !== "magic" && (!t.tags?.includes("developer") || settings.settings["widgets.developer"]))
+      .filter((t) => t.role === "widget" && t.kind !== "magic" && !parsePackageKind(t.kind) && (!t.tags?.includes("developer") || settings.settings["widgets.developer"]))
       .map((t): WidgetEntry => ({ ref: `type:${t.kind}`, source: "builtin", kind: t.kind, title: t.title, description: t.description, icon: t.icon, ...(t.tags?.length ? { tags: t.tags } : {}), windows: others.filter((w) => w.kind === t.kind).map((w) => w.id) }));
+    const pkgs = packages.list().flatMap((e): WidgetEntry[] =>
+      e.ok
+        ? e.pkg.widgets.map((w) => ({ ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) }))
+        : [{ ref: `pkg:${e.folder}`, source: "package", kind: `pkg:${e.folder}`, title: e.folder, icon: DEFAULT_ICON, name: e.folder, problem: e.errors.join("; "), dir: e.dir, windows: [] }],
+    );
     const type = windowTypes.get("magic")!;
     const yours = magic.library().map((e): WidgetEntry => ({
       ref: `magic:${e.id}`,
@@ -52,7 +60,7 @@ export class WidgetLibrary {
       usedAt: e.usedAt,
       windows: e.windows,
     }));
-    return [...builtin, ...yours];
+    return [...builtin, ...pkgs, ...yours];
   }
 
   /** Tell clients the library changed; changes in a burst (a build, closing a workspace) go out once. */

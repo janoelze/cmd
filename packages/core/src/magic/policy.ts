@@ -12,6 +12,9 @@ import { isDeniedPath, magicDenyPaths } from "../lib/paths-deny.ts";
 // The private paths moved to paths-deny.ts (shared with remote access); kept here for Magic's imports.
 export { DEFAULT_DENY_PATHS, expandPath, isDeniedPath } from "../lib/paths-deny.ts";
 
+/** Programs that would let a widget run anything (shells, interpreters, launchers): never declared in a widget's `run`. */
+export const ESCAPES: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "fish", "deno", "node", "python", "python3", "ruby", "perl", "osascript", "sudo", "env", "xargs", "open", "bun", "npx"]);
+
 export type Verdict = { level: "allow" | "ask" | "deny"; reason: string };
 
 // ── tokenizer ─────────────────────────────────────────────

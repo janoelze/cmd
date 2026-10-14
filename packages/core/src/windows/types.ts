@@ -65,6 +65,11 @@ export class WindowTypes {
     this.#types.set(type.kind, type as unknown as WindowType);
   }
 
+  /** Take a type away (a widget package removed); its windows stay, as windows of a kind nobody serves. */
+  unregister(kind: string): void {
+    this.#types.delete(kind);
+  }
+
   get(kind: string): WindowType | undefined {
     return this.#types.get(kind);
   }

@@ -28,6 +28,7 @@ import type { WorkspaceManager } from "../workspaces/manager.ts";
 import type { WidgetTokens } from "../data/widgets.ts";
 import type { PreviewBroker } from "../widgets/previews.ts";
 import type { WidgetLibrary } from "../widgets/library.ts";
+import type { WidgetPackages } from "../widgets/packages.ts";
 import type { AgentSetup } from "../agents/setup.ts";
 import type { Search } from "../search/search.ts";
 import type { Subscriptions } from "../data/subscriptions.ts";
@@ -77,6 +78,7 @@ export interface Services {
   agentSetup: AgentSetup;
   search: Search;
   library: WidgetLibrary;
+  packages: WidgetPackages;
   previews: PreviewBroker;
   windowOps: WindowOps;
   remote: RemoteService;
@@ -105,7 +107,7 @@ export interface CoreActions {
 
 export type CoreContext = Services & CoreActions;
 
-const SERVICES: (keyof Services)[] = ["settings", "store", "scheduler", "data", "views", "sessions", "usage", "secrets", "ai", "panes", "commands", "agents", "homes", "naming", "transcripts", "notifications", "workspaces", "windowTypes", "windows", "closed", "timers", "summaries", "journal", "magic", "actions", "widgetTokens", "server", "subscriptions", "agentSetup", "search", "library", "previews", "windowOps", "remote", "resources", "processes", "watches", "sqlite", "stats"];
+const SERVICES: (keyof Services)[] = ["settings", "store", "scheduler", "data", "views", "sessions", "usage", "secrets", "ai", "panes", "commands", "agents", "homes", "naming", "transcripts", "notifications", "workspaces", "windowTypes", "windows", "closed", "timers", "summaries", "journal", "magic", "actions", "widgetTokens", "server", "subscriptions", "agentSetup", "search", "library", "packages", "previews", "windowOps", "remote", "resources", "processes", "watches", "sqlite", "stats"];
 
 /** The context over `owner`'s services (read when used, so a service may take the context before the ones it calls exist). */
 export function contextOf(owner: Partial<Services>, actions: CoreActions): CoreContext {

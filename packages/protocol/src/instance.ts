@@ -167,6 +167,23 @@ export function configDir(): string {
 }
 
 /**
+ * Widget packages (docs/56): $CMD_WIDGETS_HOME, else ~/.cmd/widgets, shared by every
+ * instance on the Mac. What is about a package but not of it (grants, state) is per
+ * instance: widgetPackageData().
+ */
+export function widgetsHome(): string {
+  return process.env.CMD_WIDGETS_HOME || path.join(os.homedir(), ".cmd", "widgets");
+}
+
+/**
+ * An instance's own data about a package (grants.json): <state dir>/widget-packages/<name>.
+ * Not <state dir>/widgets, which holds Magic's widgets until phase 2 of docs/56 moves them.
+ */
+export function widgetPackageData(stateDir: string, name: string): string {
+  return path.join(stateDir, "widget-packages", name);
+}
+
+/**
  * The socket this instance's core listens on: $CMD_HOME/core.sock, else the
  * per-user temp dir (cmd or cmd-dev). The temp dir (/var/folders/…) stays
  * reachable from sandboxed agents, unlike ~/Library. Never $CMD_SOCKET.

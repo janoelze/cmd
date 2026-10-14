@@ -156,9 +156,9 @@ function buildRowsOf(s: State, intern: (r: SidebarRow) => SidebarRow): SidebarRo
 export const SECTIONS = ["needs", "agents", "windows", "widgets"] as const;
 export type Section = (typeof SECTIONS)[number];
 
-/** A widget, not a window (docs/16-widgets.md): its type says so; Magic widgets also before the types load. */
+/** A widget, not a window (docs/16-widgets.md): its type says so; Magic's and packages' (docs/56) also before the types load. */
 export function isWidget(w: AppWindow | null | undefined): boolean {
-  return !!w && (w.kind === "magic" || typeFor(w.kind)?.role === "widget");
+  return !!w && (w.kind === "magic" || w.kind.startsWith("pkg:") || typeFor(w.kind)?.role === "widget");
 }
 
 /** Needs you: an agent (or one of its workers) waiting for input. Else agents, then windows, then widgets. */

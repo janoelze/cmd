@@ -328,9 +328,9 @@ export interface WindowTypeInfo {
 
 /** A widget in the Widget Library (docs/16-widgets.md): a built-in widget type, or one made with Magic. */
 export interface WidgetEntry {
-  /** "magic:<widget id>" for widgets made with Magic, "type:<kind>" for built-in widgets. */
+  /** "magic:<widget id>" for widgets made with Magic, "type:<kind>" for built-in widgets, "pkg:<package>/<widget>" for a package's (docs/56). */
   ref: string;
-  source: "builtin" | "yours";
+  source: "builtin" | "yours" | "package";
   /** The window kind that shows it. */
   kind: WindowKind;
   title: string;
@@ -349,6 +349,12 @@ export interface WidgetEntry {
   usedAt?: number;
   /** Windows showing it now. */
   windows: WindowId[];
+  /** Packages: the package's name, version and widget API major. */
+  name?: string;
+  version?: string;
+  api?: number;
+  /** Packages: why it can't run ("needs cmd 0.33"); such an entry can't be added. */
+  problem?: string;
 }
 
 export interface FileEntry {

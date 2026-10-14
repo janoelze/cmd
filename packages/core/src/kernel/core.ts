@@ -51,7 +51,7 @@ import { createTimers, type TimerAlarms } from "../windows/timers.ts";
 import { createWorkspaces, type WorkspaceManager } from "../workspaces/manager.ts";
 import type { Connection, Served } from "./connection.ts";
 import { contextOf, type CoreContext } from "./context.ts";
-import { ALL, createStats, featureHandlers } from "./features.ts";
+import { ALL, createPackages, createStats, featureHandlers } from "./features.ts";
 import { sliceHandlers } from "./slices.ts";
 import { IN_CORE, type Call, type Handlers } from "./handlers.ts";
 import { coreHello } from "./hello.ts";
@@ -183,6 +183,7 @@ export class Core {
   readonly sqlite = new SqliteService();
   readonly widgetTokens = new WidgetTokens();
   readonly stats = createStats(this.#ctx);
+  readonly packages = createPackages(this.#ctx);
   #opts: CoreOptions;
   #paneOutput: PaneOutputRecorder;
   #workspacesTimer: NodeJS.Timeout | undefined;

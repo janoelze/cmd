@@ -4,19 +4,10 @@
 
 import { KIT_FILES, kitVersion } from "@cmd/protocol";
 import { POLICY, declarable } from "../data/policy.ts";
+import { ESCAPES } from "../magic/policy.ts";
+import { parseConfigFields, type ConfigField, type WidgetSize } from "./package.ts";
 
-export type WidgetSize = "s" | "m" | "l" | "wide";
-
-export interface ConfigField {
-  key: string;
-  title: string;
-  type: "string" | "number" | "boolean" | "enum";
-  default?: string | number | boolean;
-  options?: string[];
-  /** Kept in cmd's secrets (never in the widget folder or the window state); reaches data.ts only. */
-  secret?: boolean;
-  description?: string;
-}
+export type { ConfigField, WidgetSize } from "./package.ts";
 
 export interface WidgetManifest {
   /** Manifest format. */
@@ -49,9 +40,6 @@ export interface WidgetManifest {
   /** The kit version its view is drawn with (KIT_FILES in @cmd/protocol); absent in the file: 1. */
   kit: number;
 }
-
-/** Programs that would give data.ts everything: running them is never declared away. */
-const ESCAPES = new Set(["sh", "bash", "zsh", "fish", "deno", "node", "python", "python3", "ruby", "perl", "osascript", "sudo", "env", "xargs", "open", "bun", "npx"]);
 
 export const MIN_REFRESH = 2;
 
@@ -88,21 +76,7 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
   for (const c of events) if (!may.includes(c as never)) errors.push(`permissions.events: "${c}" ${c in POLICY.widget ? "can't be read by widgets" : "is not a class of events"} (${may.join(", ")})`);
   const media = strs(m.media, 12);
   for (const o of media) if (!/^https:\/\/[^/\s]+\/?$/.test(o)) errors.push(`media: "${o}" is not an https origin`);
-  const config: ConfigField[] = [];
-  for (const c of Array.isArray(m.config) ? m.config : []) {
-    const f = c as Record<string, unknown>;
-    if (!f || typeof f.key !== "string" || !/^[A-Za-z_][\w]*$/.test(f.key)) {
-      errors.push(`config: each field needs a key (letters, digits, _)`);
-      continue;
-    }
-    const type = f.type === "number" || f.type === "boolean" || f.type === "enum" ? f.type : "string";
-    const field: ConfigField = { key: f.key, title: typeof f.title === "string" ? f.title : f.key, type };
-    if (["string", "number", "boolean"].includes(typeof f.default)) field.default = f.default as string | number | boolean;
-    if (type === "enum") field.options = strs(f.options);
-    if (f.secret === true) field.secret = true;
-    if (typeof f.description === "string") field.description = f.description;
-    config.push(field);
-  }
+  const config = parseConfigFields(m.config, "config", errors);
   if (m.kit !== undefined && !(typeof m.kit === "number" && m.kit in KIT_FILES)) errors.push(`kit: ${JSON.stringify(m.kit)} is not a kit version (${Object.keys(KIT_FILES).join(", ")})`);
   if (errors.length) return { ok: false, errors };
   return {

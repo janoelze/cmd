@@ -30,3 +30,4 @@ export * from "./arrange.ts";
 export * from "./stats.ts";
 export * from "./nowplaying.ts";
 export * from "./format.ts";
+export * from "./widget-package.ts";
