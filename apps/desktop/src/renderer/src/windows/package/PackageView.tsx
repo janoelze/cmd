@@ -2,7 +2,8 @@
 // process sends, drawn with the kit through the element table (elements.tsx), presses
 // and typing sent back as interactions. Around it: the process's state when there is no
 // tree to show (starting, stopped with Restart, waiting for the person's permission, with
-// Allow… to ask again); a stopped process with a tree drawn before keeps it, under a banner
+// Allow… to ask again; a widget with settings it needs and none set yet: "Set up" with
+// Configure…); a stopped process with a tree drawn before keeps it, under a banner
 // saying why (a save that didn't load: its error) with Restart;
 // an error boundary so a tree that can't be drawn shows a Callout and not a broken
 // board, and `widget.env` whenever the window's theme, size class or placement changes.
@@ -10,7 +11,9 @@
 import { Button, Callout, Stack, View, type ViewStateSpec } from "@cmd/ui";
 import { Component, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { TreeNode, WindowId } from "@cmd/protocol";
-import { PlacementContext, type WindowViewProps } from "../registry.ts";
+import { useStoreValue } from "../../lib/store.ts";
+import { PlacementContext, windowChromeChanged, type WindowViewProps } from "../registry.ts";
+import { configurable, configure, needsSetup } from "./ConfigSheet.tsx";
 import { drawAll, type DrawContext } from "./elements.tsx";
 import { closeTree, openTree, rpcLink, type WidgetLink, type WidgetPlace } from "./live.ts";
 import type { TreeSnapshot, TreeStore } from "./tree.ts";
@@ -23,14 +26,25 @@ export function PackageView({ win }: WindowViewProps) {
     setStore(openTree(win.id, link));
     return () => closeTree(win.id);
   }, [win.id, link]);
+  const entry = useStoreValue((s) => s.library.find((e) => e.kind === win.kind));
+  // The title menu's Configure… follows the Library (register.tsx reads it when it draws).
+  const canConfigure = configurable(entry);
+  useEffect(() => windowChromeChanged(), [canConfigure]);
+  const setup = needsSetup(entry, win.state.config as Record<string, unknown> | undefined) ? { title: entry!.title, configure: () => configure(win.id) } : null;
   if (!store) return <View state={STARTING} />;
-  return <PackageWidget windowId={win.id} store={store} link={link} />;
+  return <PackageWidget windowId={win.id} store={store} link={link} setup={setup} />;
+}
+
+/** A widget that needs settings before it can show anything: its title and the way to the Configure sheet. */
+export interface Setup {
+  title: string;
+  configure(): void;
 }
 
 const STARTING: ViewStateSpec = { kind: "loading", title: "Starting…" };
 
 /** A widget's tree and state, drawn; the view without the core (stories and tests give it a store and a link of their own). */
-export function PackageWidget({ windowId, store, link }: { windowId: WindowId; store: TreeStore; link: WidgetLink }) {
+export function PackageWidget({ windowId, store, link, setup = null }: { windowId: WindowId; store: TreeStore; link: WidgetLink; setup?: Setup | null }) {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const ctx = useMemo<DrawContext>(() => ({ windowId, send: (h, e, v) => link.interact(h, e, v) }), [windowId, link]);
   const [probe, size] = useSizeClass();
@@ -38,7 +52,7 @@ export function PackageWidget({ windowId, store, link }: { windowId: WindowId; s
   const placement = useContext(PlacementContext);
   useEffect(() => link.env({ theme, size, placement }), [link, theme, size, placement]);
 
-  const cover = coverOf(snap, link);
+  const cover = coverOf(snap, link, setup);
   return (
     <>
       <span ref={probe} hidden />
@@ -60,10 +74,11 @@ export function PackageWidget({ windowId, store, link }: { windowId: WindowId; s
   );
 }
 
-/** What replaces the tree: the process's state, unless it is running or restarting with a tree to keep on screen. */
-function coverOf(snap: TreeSnapshot, link: WidgetLink): ViewStateSpec | null {
+/** What replaces the tree: the process's state (or the settings it needs), unless it is running or restarting with a tree to keep on screen. */
+function coverOf(snap: TreeSnapshot, link: WidgetLink, setup: Setup | null): ViewStateSpec | null {
   if (snap.status === "waiting-grant")
     return { kind: "empty", icon: "lock", title: "Waiting for permission", text: "This widget runs once you allow what it asks for.", action: <Button onClick={() => link.ask()}>Allow…</Button> };
+  if (setup) return { kind: "empty", icon: "gearshape", title: `Set up ${setup.title}`, text: "It needs a few settings first.", action: <Button onClick={() => setup.configure()}>Configure…</Button> };
   if (snap.status === "stopped" && !snap.loaded)
     return { kind: "error", title: stoppedTitle(snap), ...(snap.detail ? { text: snap.detail } : {}), action: <Button icon="arrow.clockwise" onClick={() => link.restart()}>Restart</Button> };
   if (!snap.loaded) return STARTING;

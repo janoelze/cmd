@@ -1,7 +1,8 @@
 // What sits over the board: one sheet at a time (the command palette, a picker, onboarding,
-// the Widget Library, What's New, Feedback, the Task Manager), opened by commands from anywhere
-// and closed by ⌘W. A sheet that shouldn't interrupt (What's New after a launch) waits its turn
-// behind the one open. Onboarding's steps count as seen when it goes, done or not.
+// the Widget Library, What's New, Feedback, the Task Manager, a widget's Configure sheet),
+// opened by commands from anywhere and closed by ⌘W. A sheet that shouldn't interrupt (What's
+// New after a launch) waits its turn behind the one open. Onboarding's steps count as seen
+// when it goes, done or not.
 
 import { useSyncExternalStore } from "react";
 import type { Release } from "../../../shared/changelog.ts";
@@ -17,7 +18,9 @@ export type Sheet =
   | { kind: "library" }
   | { kind: "whatsNew"; releases: Release[] }
   | { kind: "feedback" }
-  | { kind: "taskManager" };
+  | { kind: "taskManager" }
+  /** A package widget window's Configure sheet (windows/package/ConfigSheet.tsx). */
+  | { kind: "widgetConfig"; windowId: string };
 
 let sheet: Sheet | null = null;
 /** Sheets waiting for the open one to close, first first. */

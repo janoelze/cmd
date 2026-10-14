@@ -39,6 +39,7 @@ import { BootSheet, useBootReport } from "./BootSheet.tsx";
 import { SitePermissionSheet } from "./SitePermissionSheet.tsx";
 import { Approvals } from "./Approvals.tsx";
 import { GrantSheets } from "../windows/package/GrantSheet.tsx";
+import { ConfigSheets } from "../windows/package/ConfigSheet.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { TaskManager } from "./TaskManager.tsx";
 import { TopBar } from "./TopBar.tsx";
@@ -217,6 +218,7 @@ export function App() {
       <SitePermissionSheet />
       <Approvals />
       <GrantSheets />
+      <ConfigSheets />
     </div>
   );
 }
