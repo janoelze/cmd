@@ -35,7 +35,9 @@ export interface WidgetHostMethods {
 /** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window. */
 export type WidgetHostEvent = { type: "widget.tree"; windowId: WindowId; message: WidgetTree | WidgetPatch | WidgetHostStatus };
 
-/** The widget host's settings, taken into SETTINGS_SCHEMA (placed in the Settings window's Magic Widgets page). */
-export const WIDGET_HOST_SETTINGS = {
+/** Widgets' settings, taken into SETTINGS_SCHEMA where they always stood (placed in the Settings window's Magic Widgets and Notifications pages). */
+export const WIDGET_SETTINGS = {
+  "widgets.developer": { title: "Developer widgets", type: "boolean", default: false, description: "Offer widgets that show what cmd records and does.", details: "Like the Event Stream. Safe to use; mostly useful when working on cmd or reporting a problem." },
+  "notifications.widgets": { title: "Widgets report something", type: "boolean", default: true, description: "When a Magic widget reports news." },
   "widgets.aiBudget": { title: "AI budget per widget", type: "number", unit: "tokens a day", default: 200000, min: 0, step: 10000, description: "How much of your AI one widget may use a day. 0: no limit." },
 } as const satisfies Record<string, Def>;

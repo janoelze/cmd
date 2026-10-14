@@ -33,7 +33,7 @@ const refused = async (p: Promise<unknown>) => {
 describe("ai.complete", () => {
   it("answers with text through the person's AI, no tools, as the widget's purpose", async () => {
     const { ai, calls } = fakeAi();
-    const r = await widgetComplete({ prompt: "hello", system: "be brief", maxTokens: 99999 }, { name: "demo", stateDir: null, budget: () => 0, ai }, new AiUsage(null));
+    const r = await widgetComplete({ prompt: "hello", system: "be brief", maxTokens: 99999 }, { name: "demo", budget: () => 0, ai }, new AiUsage(null));
     expect(r).toEqual({ text: "answer to hello", usage: { input: 120, output: 30 } });
     expect(calls).toEqual([expect.objectContaining({ kind: "text", purpose: "widget:demo", prompt: "hello", system: "be brief", maxOutputTokens: 4000 })]);
     expect(calls[0]).not.toHaveProperty("tools");
@@ -42,7 +42,7 @@ describe("ai.complete", () => {
   it("answers with an object for a JSON Schema", async () => {
     const { ai, calls } = fakeAi();
     const schema = { type: "object", properties: { mood: { type: "string" }, score: { type: "number" } }, required: ["mood", "score"] };
-    const r = await widgetComplete({ prompt: "rate it", schema }, { name: "demo", stateDir: null, budget: () => 0, ai }, new AiUsage(null));
+    const r = await widgetComplete({ prompt: "rate it", schema }, { name: "demo", budget: () => 0, ai }, new AiUsage(null));
     expect(r).toEqual({ object: { mood: "calm", score: 3 }, usage: { input: 120, output: 30 } });
     expect(calls[0]).toMatchObject({ kind: "object", schema });
   });
@@ -50,7 +50,7 @@ describe("ai.complete", () => {
   it("stops a call once the package's daily budget is spent, kept across restarts", async () => {
     const { ai, calls } = fakeAi();
     const stateDir = tmp("cmd-widget-ai-");
-    const scope: AiScope = { name: "demo", stateDir, budget: () => 200, ai };
+    const scope: AiScope = { name: "demo", budget: () => 200, ai };
     await widgetComplete({ prompt: "one" }, scope, new AiUsage(stateDir)); // 150 of 200
     await widgetComplete({ prompt: "two" }, scope, new AiUsage(stateDir)); // 300: over, but it was under when asked
     const e = await refused(widgetComplete({ prompt: "three" }, scope, new AiUsage(stateDir)));
@@ -62,12 +62,12 @@ describe("ai.complete", () => {
 
   it("says so when no AI provider is set up", async () => {
     const ai = { complete: () => Promise.reject(new AiNotConfigured()), object: () => Promise.reject(new AiNotConfigured()) } as unknown as AiScope["ai"];
-    const e = await refused(widgetComplete({ prompt: "hi" }, { name: "demo", stateDir: null, budget: () => 0, ai }, new AiUsage(null)));
+    const e = await refused(widgetComplete({ prompt: "hi" }, { name: "demo", budget: () => 0, ai }, new AiUsage(null)));
     expect(e).toEqual({ code: "failed", message: "No AI provider is set up yet. Add an API key in Settings → AI." });
   });
 
   it("refuses a request without a prompt", async () => {
     const { ai } = fakeAi();
-    expect((await refused(widgetComplete({ prompt: " " }, { name: "demo", stateDir: null, budget: () => 0, ai }, new AiUsage(null)))).code).toBe("invalid");
+    expect((await refused(widgetComplete({ prompt: " " }, { name: "demo", budget: () => 0, ai }, new AiUsage(null)))).code).toBe("invalid");
   });
 });

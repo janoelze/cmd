@@ -69,7 +69,8 @@ export async function brokeredFetch(url: string, init: ApiFetchInit | null | und
     const field = scope.fields.find((f) => f.key === o.auth);
     if (!field?.secret || !field.host) throw invalid(`net.fetch: auth "${String(o.auth)}" isn't a secret config field of this widget`);
     authHost = field.host;
-    if (hostOf(u) !== authHost && u.hostname !== authHost) throw invalid(`net.fetch: "${field.key}" is only sent to ${authHost}, not to ${hostOf(u)}`);
+    // Exactly its host: a field bound to "api.github.com" goes to no other port of it.
+    if (hostOf(u) !== authHost) throw invalid(`net.fetch: "${field.key}" is only sent to ${authHost}, not to ${hostOf(u)}`);
     secret = scope.secret(field.key);
     if (!secret) throw failed(`${field.title} isn't set yet. Add it in the widget's settings.`);
     const name = (field.header ?? "Authorization").toLowerCase();

@@ -4,6 +4,7 @@
 // person's interactions, a resync, where it is drawn, Restart) and the grant (`cmd widget grant`
 // today, the grants sheet later).
 
+import os from "node:os";
 import path from "node:path";
 import type { CoreContext } from "../../kernel/context.ts";
 import type { Feature } from "../../kernel/features.ts";
@@ -13,7 +14,6 @@ import { sandboxAvailable } from "../../magic/sandbox.ts";
 import type { WidgetPackages } from "../packages.ts";
 import { WidgetHost } from "./host.ts";
 import { DenoRuntime } from "./runtime.ts";
-import os from "node:os";
 
 /** The host over the packages; Deno runs its processes when there is a state dir (else a test sets a runtime). */
 export function createWidgetHost(core: CoreContext, packages: WidgetPackages, o: { stateDir: string | null; socket: string | null }): WidgetHost {

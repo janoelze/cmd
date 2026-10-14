@@ -1,6 +1,6 @@
 # Every settings key cmd has shipped, one per line, sorted (AR1-15-04). Append a key when it
-# SETTINGS_MIGRATIONS (renamed, removed or a new kind of value). test/settings-keys.test.ts checks both.
 # joins SETTINGS_SCHEMA; never remove one: a key that leaves the schema gets an entry in
+# SETTINGS_MIGRATIONS (renamed, removed or a new kind of value). test/settings-keys.test.ts checks both.
 actions.describe
 actions.openBrowser
 agents.claude.command

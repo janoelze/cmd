@@ -251,7 +251,7 @@ export function apiV1(core: AdapterCore, scope: WidgetScope): ApiAdapter {
     "ai.complete": (req) => {
       if (!perms.ai.includes("complete")) throw missing("ai", "complete", "Using cmd's AI");
       limits.ai.take("ai.complete");
-      return widgetComplete(req, { name: scope.pkg.name, stateDir: null, budget: () => Number(core.settings.settings["widgets.aiBudget"]) || 0, ai: core.ai }, scope.aiUsage);
+      return widgetComplete(req, { name: scope.pkg.name, budget: () => Number(core.settings.settings["widgets.aiBudget"]) || 0, ai: core.ai }, scope.aiUsage);
     },
   };
 

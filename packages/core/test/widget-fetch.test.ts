@@ -83,6 +83,10 @@ describe("net.fetch", () => {
     const e = await refused(brokeredFetch(`http://${B}/steal`, { auth: "token" }, scope({ net: [A, B] })));
     expect(e.message).toBe(`net.fetch: "token" is only sent to ${A}, not to ${B}`);
     expect(seen.some((s) => s.url === "B/steal")).toBe(false);
+    // Bound to a host without a port: another port of that host isn't it (api.github.com → api.github.com:8443).
+    const port = await refused(brokeredFetch(`http://${A}/port`, { auth: "token" }, scope({ net: [A, "localhost"], fields: [{ ...token, host: "localhost" }] })));
+    expect(port.message).toBe(`net.fetch: "token" is only sent to localhost, not to ${A}`);
+    expect(seen.some((s) => s.url === "A/port")).toBe(false);
     // Without auth, no secret: the widget's own header is its own.
     await brokeredFetch(`http://${A}/plain`, { headers: { Authorization: "mine" } }, scope());
     expect(seen.at(-1)?.auth).toBe("mine");

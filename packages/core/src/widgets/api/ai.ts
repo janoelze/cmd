@@ -16,7 +16,6 @@ const MAX_TOKENS = 4000;
 export interface AiScope {
   /** The package's name. */
   name: string;
-  stateDir: string | null;
   /** Tokens a package may use a day (0: no limit). */
   budget(): number;
   ai: Pick<AiService, "complete" | "object">;
