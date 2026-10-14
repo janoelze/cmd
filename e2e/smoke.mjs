@@ -242,6 +242,7 @@ const SCENARIOS = {
   "widget-grants": [],
   "widget-reload": [],
   "widget-config": [],
+  "widget-frame": [],
   "app-window": [],
 };
 const failures = [];
@@ -2619,6 +2620,103 @@ export default function Demo() {
   await gone(".ui-dialog");
   await call("window.close", { id: w.id });
   api.close();
+});
+
+// A frame widget (docs/56, "The frame surface"; AR1-11-05): its view.html is drawn in the one frame
+// host, a single sandboxed iframe (allow-scripts, no allow-same-origin: an opaque origin) on
+// cmd-widget://package/, with the theme's variables. It posts open() on load and a moment later:
+// nothing opens; a click on its link opens exactly one browser window, and only one. Its state goes
+// to the window through the widget API. Then Magic's radio example draws its player the same way.
+await scenario("widget-frame", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const dir = path.join(widgetSrc, "frame-demo");
+  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "frame-demo", version: "1.0.0", cmd: { api: 1, widgets: [{ id: "main", title: "Frame Demo", main: "src/main.tsx", surface: "frame" }], permissions: {} } }, null, 2));
+  fs.writeFileSync(path.join(dir, "src", "main.tsx"), `import { Window } from "@cmd/widget-api";\nexport default function Demo() {\n  return <Window status="Framed" />;\n}\n`);
+  fs.writeFileSync(
+    path.join(dir, "view.html"),
+    `<style>body{padding:var(--inset)}a{color:var(--link)}</style>
+<p id="hello">Hello from a frame</p>
+<a id="go" href="https://example.invalid/after-click">Go</a> <button id="count">Count</button>
+<script type="module">
+cmd.open("https://example.invalid/on-load");
+setTimeout(() => cmd.open("https://example.invalid/later"), 600);
+document.getElementById("count").onclick = () => cmd.state.set("count", (cmd.state.get("count") ?? 0) + 1);
+</script>`,
+  );
+  const linked = await cmdCli("widget", "link", dir);
+  check(linked.code === 0, `cmd widget link links it (${JSON.stringify(linked.out.trim().slice(0, 200))})`);
+  const browsers = () => call("window.list").then((l) => l.filter((w) => w.kind === "browser" && String(w.state.url ?? "").includes("example.invalid")));
+  const before = (await browsers()).length;
+  const w = await call("widget.add", { ref: "pkg:frame-demo/main" });
+  await tileIn(w.id);
+  const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+  const iframe = tile.locator("iframe");
+  await iframe.waitFor({ timeout: 15_000 }).catch(expired("the frame widget's iframe"));
+  const attrs = await iframe.evaluate((el) => ({ sandbox: el.getAttribute("sandbox"), src: el.getAttribute("src") }));
+  const frames = await tile.locator("iframe").count();
+  const frame = await until(() => win.frames().find((f) => f.url().startsWith("cmd-widget://package/")), Boolean, 10_000);
+  const inside = await until(() => frame.evaluate(() => ({ origin: self.origin, text: document.getElementById("hello")?.textContent ?? "", accent: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(), cmd: typeof window.cmd?.state?.set })).catch(() => null), (r) => r?.text);
+  await select(w.id);
+  await still();
+  await shot(win, "widget-frame.png");
+  check(frames === 1 && attrs.sandbox === "allow-scripts" && attrs.src.startsWith("cmd-widget://package/"), `a frame widget is one sandboxed iframe on cmd-widget://package/ (${frames}, ${JSON.stringify(attrs)})`);
+  check(inside?.origin === "null" && inside.text === "Hello from a frame" && inside.accent && inside.cmd === "function", `its page runs in an opaque origin with the theme's variables and cmd (${JSON.stringify(inside)})`);
+  const status = await until(() => tile.textContent().catch(() => ""), (t) => t.includes("Framed"), 15_000).catch(() => "");
+  if (!(await call("magic.runtime")).deno) console.log("  (no Deno: the widget's process, and the title bar's status, aren't checked)");
+  else check(status.includes("Framed"), `its process fills the title bar (${JSON.stringify(status.slice(0, 120))})`);
+
+  // The gesture rule: on load and later, nothing; after a click on its link, one window.
+  await new Promise((r) => setTimeout(r, 900)); // past the page's own later open()
+  const quiet = (await browsers()).length;
+  check(quiet === before, `open() on load and without a click opens nothing (${quiet - before} windows)`);
+  await frame.locator("#go").click();
+  const opened = await until(browsers, (l) => l.length > before, 10_000);
+  await new Promise((r) => setTimeout(r, 1200)); // any second window would be here by now
+  const after = await browsers();
+  check(opened.length === before + 1 && after.length === before + 1 && String(after.at(-1)?.state.url).includes("after-click"), `a click on its link opens exactly one window (${after.length - before}: ${after.map((b) => b.state.url).join(", ")})`);
+  for (const b of after.slice(before)) await call("window.close", { id: b.id });
+
+  // State through the widget API.
+  await select(w.id);
+  await frame.locator("#count").click();
+  await frame.locator("#count").click();
+  const kv = await until(() => call("window.list").then((l) => l.find((x) => x.id === w.id)?.state.kv), (v) => v?.count === 2, 10_000);
+  check(kv?.count === 2, `cmd.state.set from the frame reaches the window's state (${JSON.stringify(kv)})`);
+  await call("window.close", { id: w.id });
+
+  // Magic's radio example: its player, drawn in the frame, not a placeholder.
+  const radio = path.join(root, "packages/core/src/magic/prompt/examples/9-radio");
+  const r = await cmdCli("widget", "link", radio);
+  check(r.code === 0, `the radio example links (${JSON.stringify(r.out.trim().slice(0, 200))})`);
+  await call("widget.grant", { name: "bassdrive" });
+  await gone(".ui-approval");
+  const rw = await call("widget.add", { ref: "pkg:bassdrive/radio" });
+  await tileIn(rw.id);
+  const radioFrame = await until(() => win.frames().find((f) => f.url().startsWith("cmd-widget://package/") && f !== frame && !f.isDetached()), Boolean, 15_000);
+  const player = await until(() => radioFrame.evaluate(() => document.querySelector(".name b")?.textContent + " · " + document.getElementById("detail")?.textContent).catch(() => ""), (t) => t.includes("Bassdrive"));
+  const radioTile = await win.locator(`.tile[data-pane="${rw.id}"]`).textContent();
+  await select(rw.id);
+  await still();
+  await shot(win, "widget-frame-radio.png");
+  check(player.includes("Bassdrive · Press play to tune in") && !radioTile.includes("can't show"), `the radio example draws its player in the window (${JSON.stringify(player)})`);
+  await call("window.close", { id: rw.id });
+
+  // The Visualizer and Jam talk to their frames through the same host: a preset in the title bar; Play plays.
+  const viz = await call("window.open", { kind: "visualizer", input: {} });
+  await tileIn(viz.id);
+  const vizBar = await until(() => win.locator(`.tile[data-pane="${viz.id}"] .ui-window-bar`).textContent().catch(() => ""), (t) => !/^Visualizer(No Sound)?$/.test(t), 20_000).catch(() => "");
+  check(!/^Visualizer(No Sound)?$/.test(vizBar), `the Visualizer's frame says its preset (${JSON.stringify(vizBar)})`);
+  const jam = await call("window.open", { kind: "jam", input: { code: 's("bd*2")' } });
+  await tileIn(jam.id);
+  await select(jam.id);
+  await still();
+  const jamTile = win.locator(`.tile[data-pane="${jam.id}"]`);
+  await jamTile.getByRole("button", { name: "Play" }).click();
+  const jamBar = await until(() => jamTile.locator(".ui-window-bar").textContent().catch(() => ""), (t) => /Playing/.test(t), 20_000).catch(() => "");
+  check(/Playing/.test(jamBar), `Jam's frame plays (${JSON.stringify(jamBar)})`);
+  await call("window.close", { id: jam.id });
+  await call("window.close", { id: viz.id });
 });
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web

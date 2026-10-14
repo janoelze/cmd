@@ -113,7 +113,7 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 
 ### AR1-11-05 · Enforce frame actions in the renderer, and share one frame host
 
-- **Status:** open
+- **Status:** done for frame widgets, Jam and the Visualizer (Widgets V3 2b: `renderer/src/lib/frames.ts`); the old Magic frame in `windows/magic/MagicView.tsx` keeps its relay until the old runtime is deleted
 - **Severity:** medium
 - **Effort:** M
 - **Where:** `apps/desktop/src/renderer/src/components/MagicView.tsx:395-427`, `packages/core/src/magic/prompt/host.js:229-290`, `apps/desktop/src/renderer/src/components/JamView.tsx:289-312`, `apps/desktop/src/renderer/src/components/VisualizerView.tsx:82-102`
@@ -125,9 +125,11 @@ A Magic widget is a folder under `$CMD_HOME/widgets/<id>/` (`widgets/store.ts`, 
 **Proposal.** Move the rule to the renderer. Accept an action message only if the window is active and the iframe received a `pointerdown` within the last second. Track it by listening for `pointerdown` on the iframe element's parent and `blur` on the window, the standard trick for detecting a click into a cross-origin frame. Apply the rate limit to `open-url` too. Then extract a `FrameHost` hook in `@cmd/ui` or `renderer/src/frames.ts` (source check, typed message table, `post`, gesture gate) used by the three views. Each view keeps only its handlers. This matches MCP Apps' rule that "all host communication via postMessage JSON-RPC, host can restrict tool calls" (00-research §2, §7).
 
 **Success criteria.**
-- [ ] An e2e or renderer test: a widget whose script posts `open-url` on load opens nothing; the same after a click on the frame opens one window.
+- [x] An e2e or renderer test: a widget whose script posts `open-url` on load opens nothing; the same after a click on the frame opens one window.
 - [ ] `grep -c "opaque origins all say" apps/desktop/src/renderer/src/components/*.tsx` = 0 (one shared host).
-- [ ] `open-url` is rate-limited like `terminal` (test).
+- [x] `open-url` is rate-limited like `terminal` (test).
+
+Built: e2e `widget-frame` and `apps/desktop/test/package-frames.test.ts` (the gesture rule: one action per press, at most one a second). The grep is 0 for `renderer/src` once MagicView's old frame is gone.
 
 ### AR1-11-06 · Account for cost and cap what a build may spend
 
