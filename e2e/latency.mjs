@@ -19,6 +19,8 @@ const root = path.resolve(import.meta.dirname, "..");
 const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : null);
 const label = arg("--label") ?? "";
 const only = arg("--only")?.split(",");
+/** --only names, or prefixes ending in * ("open *"). */
+const wanted = (name) => !only || only.some((o) => o === name || (o.endsWith("*") && name.startsWith(o.slice(0, -1))));
 const RUNS = Number(arg("--runs") ?? 8);
 // --profile: sample the renderer's CPU over each scenario and list where its time went
 // (build with CMD_NO_MINIFY=1 pnpm build for readable names).
@@ -46,6 +48,12 @@ for (let i = 0; i < 40; i++) fs.writeFileSync(path.join(project, "src", `file${i
   fs.writeFileSync(path.join(project, "big.ts"), Array.from({ length: 3000 }, (_, i) => fn(i)).join(""));
   fs.mkdirSync(path.join(project, "many"));
   for (let i = 0; i < 2000; i++) fs.writeFileSync(path.join(project, "many", `item-${String(i).padStart(4, "0")}.json`), "{}\n");
+  // One file of each kind the app opens (the reference fixtures), and long Markdown and JSON.
+  fs.cpSync(path.join(root, "apps/desktop/src/renderer/src/reference/fixtures/kinds"), path.join(project, "kinds"), { recursive: true });
+  fs.copyFileSync(path.join(root, "apps/desktop/src/renderer/src/reference/fixtures/manual.pdf"), path.join(project, "kinds", "manual.pdf"));
+  const section = (i) => `## Section ${i}\n\nSome *prose* with \`code\`, a [link](https://example.com) and **bold** text that wraps across the width of the window. `.repeat(3) + `\n\n- one\n- two\n  - nested\n\n\`\`\`ts\nconst x${i} = await fetch("/api/${i}");\nconsole.log(x${i});\n\`\`\`\n\n| a | b |\n|---|---|\n| ${i} | ${i * 2} |\n\n`;
+  fs.writeFileSync(path.join(project, "kinds", "long.md"), `# Long document\n\n${Array.from({ length: 300 }, (_, i) => section(i)).join("")}`);
+  fs.writeFileSync(path.join(project, "kinds", "big.json"), JSON.stringify(Array.from({ length: 3000 }, (_, i) => ({ id: i, name: `item ${i}`, tags: ["a", "b"], nested: { ok: i % 2 === 0, n: i * 1.5 } })), null, 2));
 }
 
 const require = createRequire(path.join(root, "apps/desktop/package.json"));
@@ -98,7 +106,7 @@ await win.evaluate(() => {
       const r = t.getBoundingClientRect();
       return `${t.dataset.pane ?? ""}:${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}`;
     });
-    return [tiles.join(";"), document.querySelector(".tile.sel .xterm-screen")?.style.width, innerWidth, devicePixelRatio, document.querySelector("main.windows")?.clientWidth, document.querySelector(".tile.sel")?.getAttribute("data-pane"), document.querySelector(".palette:not([data-closing])") ? "P" : "", document.querySelector(".workspace-trigger .workspace-name")?.textContent, document.querySelectorAll("[data-motion]:not([data-closing])").length].join("|");
+    return [tiles.join(";"), document.querySelector(".tile.sel .xterm-screen")?.style.width, innerWidth, devicePixelRatio, document.querySelector("main.windows")?.clientWidth, document.querySelector(".tile.sel")?.getAttribute("data-pane"), document.querySelector(".palette:not([data-closing])") ? "P" : "", document.querySelector(".workspace-trigger .workspace-name")?.textContent, document.querySelectorAll("[data-motion]:not([data-closing])").length, document.querySelector(".tile.sel")?.getElementsByTagName("*").length].join("|");
   };
 });
 
@@ -173,7 +181,7 @@ const stats = (xs) => {
 const rows = [];
 const culprits = new Map();
 async function scenario(name, run, { runs = RUNS, setup, teardown } = {}) {
-  if (only && !only.includes(name)) return;
+  if (!wanted(name)) return;
   const results = [];
   const rendersBefore = await win.evaluate(() => ({ ...window.__cmdPerf.renders }));
   const eventsBefore = await win.evaluate(() => ({ ...window.__cmdPerf.events, sets: window.__cmdPerf.sets }));
@@ -462,6 +470,66 @@ await scenario(
     },
   },
 );
+// Every kind of file and every built-in widget: from the call to the window on screen
+// (respond), and until its content stops changing (settle), then scrolling what scrolls.
+const tilesNow = () => win.evaluate(() => (window.__tiles = document.querySelectorAll(".tile[data-pane]:not([data-closing])").length));
+const tileAdded = () => document.querySelectorAll(".tile[data-pane]:not([data-closing])").length > window.__tiles;
+for (const file of fs.readdirSync(path.join(project, "kinds")).sort())
+  await scenario(`open ${file}`, () => timed(() => openPath(path.join(project, "kinds", file)), { ready: tileAdded, settleFrames: 30, timeout: 8000 }), { runs: 2, setup: tilesNow, teardown: closeSelected });
+if (!only || only.some((o) => o.startsWith("open widget") || o === "open *")) {
+  const widgets = (await call("widget.list", {})).filter((w) => w.source === "builtin");
+  for (const w of widgets)
+    await scenario(
+      `open widget ${w.ref.replace(/^type:/, "")}`,
+      () =>
+        timed(
+          () =>
+            win.evaluate(async (ref) => {
+              const w = await window.cmd.call("widget.add", { ref });
+              await window.cmd.call("window.select", { id: w.id });
+            }, w.ref),
+          { ready: tileAdded, settleFrames: 30, timeout: 8000 },
+        ),
+      { runs: 2, setup: tilesNow, teardown: closeSelected },
+    );
+}
+/** 40 wheel ticks over `selector` in the selected window, down then up on alternate runs. */
+async function scrollOver(name, selector, open) {
+  if (!wanted(name)) return;
+  await open();
+  await sleep(1200);
+  const box = await win.locator(`.tile.sel ${selector}`).first().boundingBox();
+  await win.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await scenario(
+    name,
+    (i) =>
+      timed(
+        async () => {
+          for (let k = 0; k < 40; k++) await win.mouse.wheel(0, i % 2 ? -150 : 150), await sleep(8);
+        },
+        { ready: () => true, settleFrames: 12, timeout: 6000 },
+      ),
+    { runs: 4 },
+  );
+  await closeSelected();
+}
+await scrollOver("scroll terminal", ".xterm-screen", async () => {
+  await menu("file.newTerminal");
+  await sleep(800);
+  const id = await sel();
+  await call("pane.write", { paneId: id, data: `for i in $(seq 1 5000); do echo "\\033[3$((i % 7))mline $i\\033[0m $(printf '%.0s─' {1..50})"; done\r` });
+  await sleep(2500);
+});
+await scrollOver("scroll markdown", ".markdown, .md, [class*=markdown]", () => openPath(path.join(project, "kinds", "long.md")));
+await scrollOver("scroll json", "[class*=json], .cm-scroller", () => openPath(path.join(project, "kinds", "big.json")));
+await scrollOver("scroll pdf", "[class*=pdf]", () => openPath(path.join(project, "kinds", "manual.pdf")));
+await scrollOver("scroll files", ".ui-tree", async () => {
+  await openPath(project);
+  await win.waitForSelector(".tile.sel [data-path]");
+  await win.locator(`.tile.sel [data-path="${path.join(project, "many")}"]`).click();
+  await win.keyboard.press("ArrowRight");
+});
+
 // Dragging: a strip window's edge, then a canvas window by its title, 40 pointer moves a frame apart.
 async function drag(handle, dx, dy) {
   const b = await win.locator(handle).first().boundingBox();
