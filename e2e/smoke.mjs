@@ -226,6 +226,7 @@ const SCENARIOS = {
   untitled: [],
   embedded: ["browser", "terminals"],
   magic: ["terminals"],
+  "widget-agents": [],
   settings: ["files", "markdown"],
   keybindings: [],
   mru: ["terminals"],
@@ -1674,6 +1675,86 @@ await scenario("magic", async () => {
     await call("pane.kill", { paneId: fresh.at(-1).id }).catch(() => {});
     await call("window.close", { id: b.id });
   }
+});
+
+// The Agents widget package (packages/widgets/agents, docs/56): added from the Widget Library
+// as a built-in, it runs in its own process (Deno) and lists the agents of this workspace,
+// waiting ones first, with the counts in its title bar; a click selects the agent's terminal,
+// and its title menu widens it to every workspace. The agents are stand-ins: a process whose
+// argv says claude (what detection sees) in each terminal, told by hooks what it is doing.
+await scenario("widget-agents", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const homeId = (await call("workspace.list")).find((w) => w.home).id;
+  const elsewhere = path.join(home, "elsewhere");
+  fs.mkdirSync(elsewhere, { recursive: true });
+  const other = (await call("workspace.open", { path: elsewhere, show: false })).workspace;
+  const made = [];
+  const agentIn = async (name, workspaceId, events) => {
+    const pane = await call("pane.create", { cwd: home, command: "sh -c 'read -r _; true' claude", workspaceId });
+    made.push(pane.id);
+    // Hooks come from an agent already seen in the foreground (else its shell would read as the agent exiting).
+    await until(() => call("identify", { paneId: pane.id }).then((r) => r.agent?.kind), (k) => k === "claude");
+    for (const [event, payload] of events) await call("hook.ingest", { paneId: pane.id, agent: "claude", event, payload });
+    const { agent } = await call("identify", { paneId: pane.id });
+    await call("agent.rename", { agentId: agent.id, name });
+    return pane.id;
+  };
+  const docs = await agentIn("Docs", homeId, [["UserPromptSubmit", { prompt: "write the docs" }], ["Stop", { last_assistant_message: "Done." }]]);
+  const perf = await agentIn("Perf", homeId, [["UserPromptSubmit", { prompt: "profile it" }], ["SubagentStart", { agent_id: "e2e-sub", agent_type: "Explore" }]]);
+  const tours = await agentIn("Tours", homeId, [["Notification", { notification_type: "permission_prompt", message: "Allow pnpm e2e?" }]]);
+  await agentIn("Release", other.id, [["Notification", { notification_type: "permission_prompt", message: "Tag it?" }]]);
+  await select(docs);
+  // Every window on screen: a click on a row selects a terminal, and the widget stays in view.
+  await menu("view.grid");
+  await win.waitForSelector(".main.mode-grid", { timeout: 10_000 });
+
+  // ⇧⌘L: Agents is under Built-in, as a package of cmd's own.
+  await menu("widget.library");
+  const card = win.locator(".widget-library .wl-card").filter({ has: win.locator(".wl-name", { hasText: /^Agents$/ }) });
+  await card.waitFor({ timeout: 10_000 });
+  const source = await card.locator(".wl-source").textContent();
+  const section = await card.evaluate((el) => el.closest(".wl-grid")?.previousElementSibling?.textContent ?? "");
+  check(source === "Built-in · agents 1.0.0" && section === "Built-in", `the Widget Library lists the Agents package under Built-in (${source}; ${section})`);
+  await card.click();
+  await gone(".widget-library");
+  const id = (await until(() => call("window.list"), (l) => l.some((w) => w.kind === "pkg:agents/activity"))).find((w) => w.kind === "pkg:agents/activity").id;
+  const tile = win.locator(`.tile[data-pane="${id}"]`);
+  const rows = () => tile.locator(".ui-list-row").allTextContents();
+  // No grants sheet: a built-in package has what it declares.
+  const shown = await until(rows, (r) => r.length === 4 && r[0].includes("Tours"), 20_000);
+  check(shown.length === 4 && /Tours/.test(shown[0]) && /Perf/.test(shown[1]) && /Explore/.test(shown[2]) && /Docs/.test(shown[3]), `the Agents widget lists waiting agents first, then working (a subagent under its host), then the rest (${shown.map((r) => r.slice(0, 12)).join(" | ")})`);
+  const status = await until(() => tile.locator(".tile-title").textContent(), (t) => t.includes("1 waiting for you · 2 working · 1 done"));
+  check(status.includes("1 waiting for you · 2 working · 1 done"), `its title bar says who waits and who works (${status})`);
+  check((await tile.locator(".ui-list-section").first().textContent()).includes("Waiting for you"), "its first section is Waiting for you");
+  await shot(win, "widget-agents.png");
+
+  // A click on a row selects that agent's terminal.
+  await tile.locator(".ui-list-row", { hasText: "Tours" }).click();
+  check((await until(selected, (s) => s === tours, 5000)) === tours, "a click on an agent's row selects its terminal");
+  await tile.locator(".ui-list-row", { hasText: "Explore" }).click();
+  check((await until(selected, (s) => s === perf, 5000)) === perf, "a click on a subagent selects its host's terminal");
+
+  // The title menu: All Workspaces brings in the other workspace's agent, and is kept in the window's state.
+  await app.evaluate(({ Menu }) => {
+    globalThis.__agentsPopup = Menu.prototype.popup;
+    Menu.prototype.popup = function (o) {
+      globalThis.__lastMenu = this.items.map((i) => i.label).filter(Boolean);
+      this.items.find((i) => i.label === "All Workspaces")?.click();
+      o?.callback?.();
+    };
+  });
+  await tile.locator(".ui-window-bar-menu").click();
+  const all = await until(rows, (r) => r.some((t) => t.includes("Release")), 10_000);
+  const labels = await app.evaluate(() => globalThis.__lastMenu);
+  await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__agentsPopup));
+  check(labels.includes("This Workspace") && labels.includes("All Workspaces") && all.length === 5 && /Release|Tours/.test(all[0]), `All Workspaces in its title menu lists every workspace's agents (${labels.join(", ")}; ${all.length} rows)`);
+  check((await until(() => tile.locator(".ui-window-bar-menu").textContent(), (t) => t.includes("All Workspaces"), 5000)).includes("All Workspaces"), "the title menu says the scope it shows");
+  await shot(win, "widget-agents-all.png");
+
+  await call("window.close", { id });
+  for (const p of made) await call("pane.kill", { paneId: p }).catch(() => {});
+  await call("workspace.close", { id: other.id });
 });
 
 // Settings: its own native window (⌘,), generated from the schema; changes apply live.

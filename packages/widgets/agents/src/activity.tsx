@@ -13,7 +13,7 @@ type Scope = "workspace" | "all";
 const SECTIONS = [
   { title: "Waiting for you", tone: "needs" as const, has: (a: Agent) => a.bucket === "needs" },
   { title: "Working", has: (a: Agent) => a.bucket !== "needs" && (a.state === "working" || a.state === "starting") },
-  { title: "Idle", has: (a: Agent) => a.bucket !== "needs" && a.state !== "working" && a.state !== "starting" },
+  { title: "Others", has: (a: Agent) => a.bucket !== "needs" && a.state !== "working" && a.state !== "starting" },
 ];
 
 /** Hosts with their subagents under them, each level most recent first. */

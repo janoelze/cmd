@@ -15,7 +15,7 @@ describe("Agents", () => {
     });
     const tree = await render(<Agents />, host);
     expect(tree).toHaveSection("Waiting for you", { count: 1 });
-    expect(tree.sections().map((s) => s.props.title)).toEqual(["Waiting for you", "Working", "Idle"]);
+    expect(tree.sections().map((s) => s.props.title)).toEqual(["Waiting for you", "Working", "Others"]);
     expect(titles(tree.rows())).toEqual(["Tours", "Perf", "Docs"]);
     expect(tree.find("Window").props.status).toBe("1 waiting for you · 1 working · 1 done");
   });
