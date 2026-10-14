@@ -1,0 +1,31 @@
+{
+  "name": "@cmd/widget-api",
+  "version": "1.0.0",
+  "description": "The API cmd widgets are written against: elements, hooks, the cmd object, and a fake host for tests.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts",
+    "./runtime": "./src/runtime.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-reconciler": "0.34.0"
+  },
+  "devDependencies": {
+    "@cmd/protocol": "workspace:*",
+    "@types/react": "^19.0.0",
+    "@types/react-reconciler": "^0.34.0",
+    "vitest": "^5.0.3",
+    "esbuild": "^0.28.2"
+  }
+}

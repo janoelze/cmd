@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./node": "./src/node.ts",
-    "./replay": "./src/replay.ts"
+    "./replay": "./src/replay.ts",
+    "./widget-tree": "./src/widget-tree.ts"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1"

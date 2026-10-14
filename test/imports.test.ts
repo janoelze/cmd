@@ -19,6 +19,7 @@ const PARTS: [string, string][] = [
   ["packages/core/", "core"],
   ["packages/cli/", "cli"],
   ["packages/ui/", "ui"],
+  ["packages/widget-api/", "widget-api"],
   ["apps/desktop/src/main/", "desktop/main"],
   ["apps/desktop/src/preload/", "desktop/preload"],
   ["apps/desktop/src/renderer/", "desktop/renderer"],
@@ -34,7 +35,7 @@ const PARTS: [string, string][] = [
   ["test/", "test"],
   ["website/", "website"],
 ];
-const PACKAGES: Record<string, string> = { "@cmd/protocol": "packages/protocol", "@cmd/remote-crypto": "packages/remote-crypto", "@cmd/core": "packages/core", "@cmd/cli": "packages/cli", "@cmd/ui": "packages/ui", "@cmd/desktop": "apps/desktop", "@cmd/web": "apps/web", "@cmd/relay": "apps/relay", "@cmd/tours": "tools/tours" };
+const PACKAGES: Record<string, string> = { "@cmd/protocol": "packages/protocol", "@cmd/remote-crypto": "packages/remote-crypto", "@cmd/core": "packages/core", "@cmd/cli": "packages/cli", "@cmd/ui": "packages/ui", "@cmd/widget-api": "packages/widget-api", "@cmd/desktop": "apps/desktop", "@cmd/web": "apps/web", "@cmd/relay": "apps/relay", "@cmd/tours": "tools/tours" };
 
 /**
  * What the shipped code of each part may import: workspace parts, plus "node:" and
@@ -45,6 +46,8 @@ const ALLOWED: Record<string, { value: string[]; types?: string[] }> = {
   protocol: { value: ["node:"] },
   "remote-crypto": { value: [] },
   ui: { value: [] },
+  // Runs in the widget process (Deno, sandboxed): protocol's wire types only, nothing at run time.
+  "widget-api": { value: [], types: ["protocol"] },
   core: { value: ["protocol", "remote-crypto", "node:"] },
   cli: { value: ["protocol", "remote-crypto", "core", "node:"] },
   "desktop/main": { value: ["protocol", "ui", "desktop/shared", "desktop/frames", "electron", "node:"] },

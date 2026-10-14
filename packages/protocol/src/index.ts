@@ -31,3 +31,4 @@ export * from "./stats.ts";
 export * from "./nowplaying.ts";
 export * from "./format.ts";
 export * from "./widget-package.ts";
+export * from "./widget-tree.ts";

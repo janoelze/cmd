@@ -1,0 +1,241 @@
+// A fake core for widget tests: `createHost({ agents, … })` answers the process's hello,
+// serves the reads from the data it was given, pushes topic data to subscriptions (and
+// again on `host.set()`), and records acts in `host.calls` as `[verb, ...args]` instead
+// of doing them. It speaks the real wire messages over an in-memory transport, so a test
+// runs the same code a widget process does, with no socket, Deno or app.
+
+import type {
+  ApiAction,
+  ApiAgent,
+  ApiEvent,
+  ApiEventQuery,
+  ApiGitStatus,
+  ApiGitWorktree,
+  ApiScopeQuery,
+  ApiTerminal,
+  ApiTopic,
+  ApiVerb,
+  ApiWindow,
+  ApiWorkspace,
+  WidgetEnv,
+  WidgetIn,
+  WidgetOut,
+  WireValue,
+} from "@cmd/protocol/widget-tree";
+import type { Transport } from "../connection.ts";
+import { workspace as fixtureWorkspace } from "./fixtures.ts";
+
+/** What the fake core serves. Everything is optional. @since 1.0 */
+export interface HostData {
+  workspace?: Partial<ApiWorkspace>;
+  agents?: ApiAgent[];
+  /** Terminals; `screen` is what `terminals.read` returns. */
+  terminals?: (ApiTerminal & { screen?: string })[];
+  windows?: ApiWindow[];
+  events?: ApiEvent[];
+  config?: Record<string, WireValue>;
+  secrets?: Record<string, string>;
+  /** The window's stored state at start. */
+  state?: Record<string, WireValue>;
+  git?: ApiGitStatus | null;
+  diff?: string;
+  worktrees?: ApiGitWorktree[];
+  actions?: ApiAction[];
+  env?: Partial<WidgetEnv>;
+  /** Verbs refused as a grant without them would be, with the permission they need. */
+  deny?: Partial<Record<ApiVerb, string>>;
+}
+
+/** The verbs that act: recorded in `host.calls`, not done. */
+const ACTS = new Set<string>(["windows.open", "windows.select", "notify.send"]);
+
+/** A fake core. @since 1.0 */
+export interface FakeHost {
+  /** The acts the widget made, in order: `["windows.select", "w-tours"]`. */
+  readonly calls: [string, ...unknown[]][];
+  /** Every call, reads too. */
+  readonly requests: [string, ...unknown[]][];
+  /** Every message the process sent. */
+  readonly messages: WidgetOut[];
+  /** The live subscriptions. */
+  subscriptions(): { id: number; topic: ApiTopic; query: unknown }[];
+  /** Changes the data and pushes it to subscriptions of what changed. */
+  set(data: HostData): void;
+  /** Adds events to the log and pushes the matching ones to `events` subscriptions. */
+  emit(...events: ApiEvent[]): void;
+  /** The process's side of the in-memory wire. */
+  readonly transport: Transport;
+  /** Sends a message to the process as the core would. */
+  deliver(msg: WidgetIn): void;
+  /** Messages not yet delivered either way (render waits for none). */
+  readonly inFlight: number;
+}
+
+const inScope = (q: ApiScopeQuery | null | undefined, wsId: string, item: { workspaceId: string | null }) => q?.scope === "all" || item.workspaceId === wsId;
+
+function matches(q: ApiEventQuery | null | undefined, e: ApiEvent, wsId: string): boolean {
+  if (q?.since !== undefined && e.at < q.since) return false;
+  if (q?.types?.length && !q.types.some((t) => (t.endsWith(".") ? e.type.startsWith(t) : e.type === t))) return false;
+  return inScope({ scope: q?.scope }, wsId, e);
+}
+
+/** Makes a fake core serving `data`. @since 1.0 */
+export function createHost(data: HostData = {}): FakeHost {
+  const d: HostData = { ...data };
+  const state = new Map<string, WireValue>(Object.entries(data.state ?? {}));
+  const histories = new Map<string, number[]>();
+  const subs = new Map<number, { topic: ApiTopic; query: unknown }>();
+  const calls: [string, ...unknown[]][] = [];
+  const requests: [string, ...unknown[]][] = [];
+  const messages: WidgetOut[] = [];
+  const listeners = new Set<(m: WidgetIn) => void>();
+  let inFlight = 0;
+  let opened = 0;
+
+  const ws = (): ApiWorkspace => fixtureWorkspace(d.workspace);
+  const env = (): WidgetEnv => ({ version: "0.32.0", api: { major: 1, minor: 0 }, verbs: [], theme: "dark", size: "regular", placement: "board", ...d.env });
+
+  const deliver = (msg: WidgetIn) => {
+    inFlight++;
+    queueMicrotask(() => {
+      inFlight--;
+      for (const fn of [...listeners]) fn(msg);
+    });
+  };
+
+  const topicData = (topic: ApiTopic, query: unknown): WireValue => {
+    const id = ws().id;
+    const q = query as ApiScopeQuery | null;
+    const v: unknown =
+      topic === "workspace" ? ws()
+      : topic === "agents" ? (d.agents ?? []).filter((a) => inScope(q, id, a))
+      : topic === "terminals" ? (d.terminals ?? []).filter((t) => inScope(q, id, t)).map(({ screen: _, ...t }) => t)
+      : topic === "windows" ? (d.windows ?? []).filter((w) => inScope(q, id, w))
+      : topic === "events" ? (d.events ?? []).filter((e) => matches(query as ApiEventQuery, e, id)).slice(-((query as ApiEventQuery | null)?.limit ?? 200))
+      : topic === "git" ? (d.git ?? null)
+      : (d.actions ?? []);
+    return v as WireValue;
+  };
+
+  const serve = (method: string, p: unknown[]): unknown => {
+    const id = ws().id;
+    const terminal = () => (d.terminals ?? []).find((t) => t.id === p[0]);
+    switch (method) {
+      case "workspace.get": return ws();
+      case "workspace.windows": return (d.windows ?? []).filter((w) => w.workspaceId === id);
+      case "workspace.selected": return (d.windows ?? []).find((w) => w.workspaceId === id && w.selected) ?? null;
+      case "agents.list": return (d.agents ?? []).filter((a) => inScope(p[0] as ApiScopeQuery, id, a));
+      case "agents.get": return (d.agents ?? []).find((a) => a.id === p[0]) ?? null;
+      case "terminals.list": return topicData("terminals", p[0] ?? null);
+      case "terminals.read": {
+        const t = terminal();
+        if (!t) throw new Error(`No terminal ${String(p[0])}`);
+        const lines = (t.screen ?? "").split("\n");
+        const want = (p[1] as { lines?: number } | undefined)?.lines ?? lines.length;
+        return { text: lines.slice(-want).join("\n"), clipped: want < lines.length, untrusted: true };
+      }
+      case "terminals.waitFor": {
+        const re = new RegExp(String(p[1]));
+        const line = (terminal()?.screen ?? "").split("\n").find((l) => re.test(l)) ?? null;
+        return { matched: line !== null, line };
+      }
+      case "windows.list": return topicData("windows", p[0] ?? null);
+      case "windows.open": return { id: `w-opened-${++opened}` };
+      case "windows.select": return null;
+      case "events.query": return topicData("events", p[0] ?? null);
+      case "events.stats": {
+        const list = (d.events ?? []).filter((e) => matches(p[0] as ApiEventQuery, e, id));
+        const byType: Record<string, number> = {};
+        for (const e of list) byType[e.type] = (byType[e.type] ?? 0) + 1;
+        return { total: list.length, byType };
+      }
+      case "git.status": return d.git ?? null;
+      case "git.diff": return { text: d.diff ?? "", clipped: false };
+      case "git.worktrees": return d.worktrees ?? [];
+      case "actions.list": return d.actions ?? [];
+      case "notify.send": return null;
+      case "state.get": return state.get(String(p[0])) ?? null;
+      case "state.set": state.set(String(p[0]), p[1] as WireValue); return null;
+      case "state.history": {
+        const key = String(p[0]);
+        const max = (p[2] as number | undefined) ?? 60;
+        const h = [...(histories.get(key) ?? []), ...(typeof p[1] === "number" ? [p[1]] : [])].slice(-max);
+        histories.set(key, h);
+        return h;
+      }
+      case "secrets.get": return d.secrets?.[String(p[0])] ?? null;
+    }
+    throw Object.assign(new Error(`This cmd doesn't serve ${method}.`), { code: "unknown" });
+  };
+
+  const receive = (m: WidgetOut) => {
+    messages.push(m);
+    switch (m.kind) {
+      case "hello":
+        deliver({ kind: "ready", env: env(), config: d.config ?? {}, state: Object.fromEntries(state) });
+        return;
+      case "call": {
+        requests.push([m.method, ...m.params]);
+        const denied = d.deny?.[m.method];
+        if (denied) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "permission", permission: denied, message: `Add "${denied}" to the widget's permissions to use ${m.method}.` } });
+        if (ACTS.has(m.method)) calls.push([m.method, ...m.params]);
+        try {
+          deliver({ kind: "result", id: m.id, ok: true, value: (serve(m.method, m.params) ?? null) as WireValue });
+        } catch (e) {
+          const code = (e as { code?: string }).code === "unknown" ? "unknown" : "failed";
+          deliver({ kind: "result", id: m.id, ok: false, error: { code, message: (e as Error).message } });
+        }
+        return;
+      }
+      case "subscribe":
+        subs.set(m.id, { topic: m.topic, query: m.query });
+        deliver({ kind: "event", sub: m.id, data: topicData(m.topic, m.query) });
+        return;
+      case "unsubscribe":
+        subs.delete(m.id);
+        return;
+    }
+  };
+
+  const TOPIC_OF: Partial<Record<keyof HostData, ApiTopic>> = { workspace: "workspace", agents: "agents", terminals: "terminals", windows: "windows", git: "git", actions: "actions" };
+
+  return {
+    calls,
+    requests,
+    messages,
+    subscriptions: () => [...subs].map(([id, s]) => ({ id, ...s })),
+    set(next) {
+      Object.assign(d, next);
+      if (next.config) deliver({ kind: "config", config: next.config });
+      if (next.env) deliver({ kind: "env", env: env() });
+      const changed = new Set(Object.keys(next).map((k) => TOPIC_OF[k as keyof HostData]).filter(Boolean));
+      if (next.workspace) for (const t of ["agents", "terminals", "windows"] as const) changed.add(t);
+      for (const [id, s] of subs) if (changed.has(s.topic)) deliver({ kind: "event", sub: id, data: topicData(s.topic, s.query) });
+    },
+    emit(...events) {
+      d.events = [...(d.events ?? []), ...events];
+      for (const [id, s] of subs) {
+        if (s.topic !== "events") continue;
+        const hit = events.filter((e) => matches(s.query as ApiEventQuery, e, ws().id));
+        if (hit.length) deliver({ kind: "event", sub: id, data: hit as unknown as WireValue });
+      }
+    },
+    transport: {
+      send(m) {
+        inFlight++;
+        queueMicrotask(() => {
+          inFlight--;
+          receive(m);
+        });
+      },
+      listen(fn) {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    },
+    deliver,
+    get inFlight() {
+      return inFlight;
+    },
+  };
+}

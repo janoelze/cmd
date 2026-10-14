@@ -1,0 +1,187 @@
+// The hooks (docs/56, "Writing the UI"): the API's reads as subscriptions. Each live hook
+// subscribes on mount, gets the current value at once and every change after, and
+// unsubscribes on unmount: a widget never polls cmd for what cmd can push. useData is for
+// the outside world (fetch, a CLI) on a timer, with the health the title bar shows.
+
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { ApiAction, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import { connection } from "./connection.ts";
+
+/** A topic's current value, live; `initial` until the core's first event. */
+function useTopic<T extends ApiTopic>(topic: T, query: TopicQuery[T] | null, initial: TopicData[T], merge?: (prev: TopicData[T], next: TopicData[T]) => TopicData[T]): TopicData[T] {
+  const [value, setValue] = useState(initial);
+  const key = JSON.stringify(query ?? null);
+  const mergeRef = useRef(merge);
+  mergeRef.current = merge;
+  useEffect(() => {
+    setValue(initial);
+    return connection().subscribe(topic, query, (data) => setValue((prev) => (mergeRef.current ? mergeRef.current(prev, data as TopicData[T]) : (data as TopicData[T]))));
+    // The query by value: a new object with the same fields is the same subscription.
+  }, [topic, key]);
+  return value;
+}
+
+/**
+ * The widget's workspace (id, name, folder, branch), live; null until it arrives.
+ * Needs `workspace: ["read"]`.
+ * @since 1.0
+ */
+export function useWorkspace(): ApiWorkspace | null {
+  return useTopic("workspace", null, null as unknown as ApiWorkspace);
+}
+
+/**
+ * The agents of this workspace (or every workspace with `{ scope: "all" }`), live: a
+ * row updates when an agent's state, name or line changes. Empty until they arrive.
+ * Needs `workspace: ["read"]` (`["all"]` for every workspace).
+ * @since 1.0
+ */
+export function useAgents(query: ApiAgentQuery = {}): ApiAgent[] {
+  return useTopic("agents", query, []);
+}
+
+/**
+ * The terminals of this workspace (or all), live.
+ * @since 1.0
+ */
+export function useTerminals(query: ApiScopeQuery = {}): ApiTerminal[] {
+  return useTopic("terminals", query, []);
+}
+
+/**
+ * The windows of this workspace (or all), live, with which is selected.
+ * @since 1.0
+ */
+export function useWindows(query: ApiScopeQuery = {}): ApiWindow[] {
+  return useTopic("windows", query, []);
+}
+
+/**
+ * Events from the log matching `query`, newest last: the query's result first, then each
+ * new one as it happens; at most `query.limit` (default 200) are kept. Needs
+ * `events: [<class>]` for each class of events it reads.
+ * @since 1.0
+ */
+export function useEvents(query: ApiEventQuery = {}): ApiEvent[] {
+  const limit = query.limit ?? 200;
+  return useTopic("events", query, [], (prev, next) => [...prev, ...next].slice(-limit));
+}
+
+/**
+ * The workspace's git status (branch, ahead/behind, changed files), live; null outside a repository.
+ * @since 1.0
+ */
+export function useGit(): ApiGitStatus | null {
+  return useTopic("git", null, null);
+}
+
+/**
+ * The workspace's Actions (docs/36), live.
+ * @since 1.0
+ */
+export function useActions(): ApiAction[] {
+  return useTopic("actions", null, []);
+}
+
+function usePushed<T>(read: () => T): T {
+  const c = connection();
+  return useSyncExternalStore((fn) => c.watch(fn), read, read);
+}
+
+/**
+ * This window's config values (from package.json's `config` fields, as the person set
+ * them), live. Secret fields are not here: read them with `cmd.secrets.get`.
+ * @since 1.0
+ */
+export function useConfig<T extends Record<string, WireValue> = Record<string, WireValue>>(): T {
+  return usePushed(() => connection().config as T);
+}
+
+/**
+ * Where the widget runs: cmd's version, the API served, the theme, the size class and
+ * the placement (board or sidebar), live.
+ * @since 1.0
+ */
+export function useEnv(): WidgetEnv {
+  return usePushed(() => connection().env);
+}
+
+/**
+ * A value kept by the core for this window across reloads and restarts, like useState.
+ * The first render already has the stored value.
+ * @since 1.0
+ */
+export function useStoredState<T extends WireValue>(key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
+  const c = connection();
+  // The first initial, so a literal ({}) each render reads as the same value.
+  const init = useRef(initial).current;
+  const value = usePushed(() => (c.state.has(key) ? (c.state.get(key) as T) : init));
+  const set = useCallback(
+    (next: T | ((prev: T) => T)) => {
+      const prev = (c.state.has(key) ? c.state.get(key) : init) as T;
+      const v = typeof next === "function" ? (next as (p: T) => T)(prev) : next;
+      c.setState(key, v);
+      void c.call("state.set", [key, v]).catch(() => {});
+    },
+    [c, key, init],
+  );
+  return [value, set];
+}
+
+/**
+ * The time now, re-rendering every `every` ms (default 1000): for ages that move.
+ * @since 1.0
+ */
+export function useNow(every = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), every);
+    return () => clearInterval(t);
+  }, [every]);
+  return now;
+}
+
+/** What useData returns. @since 1.0 */
+export interface DataState<T> {
+  /** The last good result (kept on screen through errors), undefined before the first. */
+  data: T | undefined;
+  /** The last run's error, cleared by a good one. */
+  error: Error | null;
+  /** The data is from before the last failed run. */
+  stale: boolean;
+  /** A run is in flight. */
+  refreshing: boolean;
+  /** Run now. */
+  refresh: () => void;
+}
+
+/**
+ * The outside world on a timer: runs `fn` (a fetch, a CLI) now and every `every`
+ * seconds (default 60), keeps the last good data through failures and says how fresh it
+ * is. A run that throws keeps the old data with `stale` and `error` set.
+ * @since 1.0
+ */
+export function useData<T>(fn: () => Promise<T>, opts: { every?: number } = {}): DataState<T> {
+  const every = opts.every ?? 60;
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  const [state, setState] = useState<Omit<DataState<T>, "refresh">>({ data: undefined, error: null, stale: false, refreshing: true });
+  const alive = useRef(true);
+  const run = useCallback(() => {
+    setState((s) => ({ ...s, refreshing: true }));
+    fnRef.current().then(
+      (data) => alive.current && setState({ data, error: null, stale: false, refreshing: false }),
+      (e: unknown) => alive.current && setState((s) => ({ data: s.data, error: e instanceof Error ? e : new Error(String(e)), stale: s.data !== undefined, refreshing: false })),
+    );
+  }, []);
+  useEffect(() => {
+    alive.current = true;
+    run();
+    const t = every > 0 ? setInterval(run, every * 1000) : null;
+    return () => {
+      alive.current = false;
+      if (t) clearInterval(t);
+    };
+  }, [every, run]);
+  return { ...state, refresh: run };
+}
