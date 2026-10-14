@@ -49,7 +49,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Your history, kept.** cmd keeps its own copy of every agent session, with the commands you ran and what they printed, commits, pages and files: searchable, a year by default, on this Mac only. Credentials are redacted before anything is stored. Settings → Data says what's kept, for how long, and what never to record; `cmd data forget` deletes a session or a project for good.
 - **Stats.** How you and your agents used cmd: agent time and yours, turns and how they ended, the commands you run most and how often they fail, tokens, commits. The Stats widget reads like Screen Time, and every number opens its chart. `cmd stats` shows the same in a terminal.
 - **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit and paste into a message or ticket. Needs an AI provider (Settings → AI & Agents).
-- **Widgets.** Agent Activity and a Live Diff of your uncommitted changes come built in; with Magic, describe anything else and an agent builds a live widget for it. They live in the Widget Library (⇧⌘L). [More below](#magic-widgets).
+- **Widgets.** Agent Activity, Recent Commands, a Countdown and a Live Diff of your uncommitted changes come built in; with Magic, describe anything else and an agent builds a live widget for it. They live in the Widget Library (⇧⌘L). [More below](#magic-widgets).
 - **Web browser** next to your terminals, with phone, tablet and desktop sizes.
 - **Files and editor.** A file browser, a text editor, Markdown windows and JSON windows (a tree you fold, JSON Lines too). ⌘E switches a Markdown or JSON window to the editor and back, at the line you're on. The editor keeps a file's indentation and line endings, and a reload brings you back where you were. `open README.md` in a shell opens it in cmd.
 - **SQLite.** Open a `.sqlite` or `.db` file to browse its tables: rows sorted and filtered, the structure, and a read-only query. It updates as the file changes.
@@ -73,7 +73,7 @@ Press ⇧⌘M and type what you want to see: "my open merge requests", "the last
 
 **Setup.** Magic widgets use your own Anthropic or OpenAI API key, asked for on first launch and kept in Settings → AI & Agents. cmd picks the newest models your key can use. Keys are stored outside `settings.json` and readable only by you. Widgets run on [Deno](https://deno.com); cmd uses yours or downloads its own.
 
-**Safety.** The agent can only read. Its commands pass a read-only policy, and widgets run in a sandbox with only the hosts and programs they declare. Your keys, keychains, browser profiles and `.env` files are off limits, and tokens never reach the model.
+**Safety.** The agent can only read. Its commands pass a read-only policy, and widgets run in a sandbox with only the hosts and programs they declare; a widget's programs run through cmd, read-only. A widget that acts (opens a terminal with a command typed, starts an agent, runs a Workspace Action) does it only when you press something in it, and cmd asks you first, naming the widget; Always keeps your yes for that widget in that workspace. Your keys, keychains, browser profiles and `.env` files are off limits, and tokens never reach the model.
 
 ## Keyboard shortcuts
 

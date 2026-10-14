@@ -15,9 +15,9 @@ export interface PermissionLine {
 /** What acting on each part of cmd asks, in words. */
 const ACT: Record<string, string> = {
   actions: "Run Workspace Actions, asking first",
-  agents: "Start and message agents, asking first",
-  terminals: "Type in terminals, asking first",
-  windows: "Open and close windows, asking first",
+  agents: "Start, message and stop agents, asking first",
+  terminals: "Open and type in terminals, asking first",
+  windows: "Close windows, asking first",
 };
 
 /** Each permission of `declared` as a line; `granted` (the grant it has) marks the new ones. */

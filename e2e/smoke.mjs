@@ -2588,7 +2588,7 @@ export default function Act() {
   // The grant first: it may ask to act, asking each time.
   await sheet.waitFor({ timeout: 10_000 }).catch(expired("grants sheet"));
   const grantText = (await sheet.textContent()) ?? "";
-  check(grantText.includes("Type in terminals, asking first"), `the grants sheet says it may act, asking first (${JSON.stringify(grantText.slice(0, 200))})`);
+  check(grantText.includes("Open and type in terminals, asking first"), `the grants sheet says it may act, asking first (${JSON.stringify(grantText.slice(0, 200))})`);
   const grantShown = Date.now();
   await until(() => Date.now() - grantShown > 400);
   await win.keyboard.press("Enter");
