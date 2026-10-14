@@ -99,8 +99,9 @@ export function ConfigSheet({ entry, config, open = true, onClose, api }: { entr
     setBusy(true);
     setError(null);
     try {
-      if (Object.keys(changed).length) await api.config(changed);
+      // Secrets first: the new config redraws the widget, whose next fetch should find them.
       for (const [key, v] of Object.entries(secrets)) if (v === null || v.trim()) await api.secret(key, v === null ? null : v.trim());
+      if (Object.keys(changed).length) await api.config(changed);
       onClose();
     } catch (e) {
       setError(message(e));

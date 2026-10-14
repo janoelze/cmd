@@ -240,6 +240,7 @@ const SCENARIOS = {
   workspaces: [],
   "widget-grants": [],
   "widget-reload": [],
+  "widget-config": [],
   "app-window": [],
 };
 const failures = [];
@@ -2468,6 +2469,108 @@ await scenario("widget-reload", async () => {
   const fixed = await until(async () => [await banner.count(), await tile()], ([n, t]) => n === 0 && t.includes("Version four"), 15_000);
   check(fixed[0] === 0 && fixed[1].includes("First row"), `the next good save clears the error (${fixed[0]} banners, ${JSON.stringify(fixed[1].slice(0, 120))})`);
   for (const id of [w.id, ed.id, term.id]) await call("window.close", { id });
+});
+
+// Configure: a package with a repository and a token bound to a local server says "Set up";
+// Configure… in its title menu opens the sheet; Save sets both, and the widget draws with the
+// repository and a fetch the core made with the token in its header (the server checks it).
+await scenario("widget-config", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const TOKEN = "e2e-token-5b7c1f";
+  const seen = [];
+  const api = http.createServer((req, res) => {
+    seen.push(req.headers.authorization ?? null);
+    const repo = new URL(req.url, "http://x").searchParams.get("repo");
+    if (req.headers.authorization !== `Bearer ${TOKEN}`) return void res.writeHead(401).end("no token");
+    res.end(`ok for ${repo}`);
+  });
+  await new Promise((r) => api.listen(0, r));
+  const host = `localhost:${api.address().port}`;
+  const dir = path.join(widgetSrc, "config-demo");
+  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  const config = [{ key: "repo", title: "Repository", type: "string" }, { key: "token", title: "Token", type: "string", secret: true, host }];
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "config-demo", version: "1.0.0", cmd: { api: 1, widgets: [{ id: "main", title: "CI Demo", main: "src/main.tsx", config }], permissions: { net: [host] } } }, null, 2));
+  fs.writeFileSync(
+    path.join(dir, "src", "main.tsx"),
+    `import { Window, View, List, ListRow, ListRowContent, useConfig, useData, cmd } from "@cmd/widget-api";
+
+function Runs({ repo }) {
+  const runs = useData(() => cmd.net.fetch("http://${host}/runs?repo=" + encodeURIComponent(repo), { auth: "token" }), { every: 0 });
+  const said = runs.data ? "Server: " + runs.data.status + " " + runs.data.body : runs.error ? "Failed: " + runs.error.message : "Fetching";
+  return (
+    <List>
+      <ListRow><ListRowContent title={"Repo " + repo} /></ListRow>
+      <ListRow><ListRowContent title={said} /></ListRow>
+    </List>
+  );
+}
+
+export default function Demo() {
+  const { repo = "" } = useConfig();
+  return <Window><View><Runs key={repo} repo={repo} /></View></Window>;
+}
+`,
+  );
+  const linked = await cmdCli("widget", "link", dir);
+  check(linked.code === 0, `cmd widget link links it (${JSON.stringify(linked.out.trim().slice(0, 200))})`);
+  await call("widget.grant", { name: "config-demo" });
+  await gone(".ui-approval");
+  const w = await call("widget.add", { ref: "pkg:config-demo/main" });
+  await tileIn(w.id);
+  const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+  const cover = await until(() => tile.textContent().catch(() => ""), (t) => t.includes("Set up CI Demo"), 15_000);
+  check(cover.includes("Set up CI Demo") && cover.includes("Configure…"), `a widget with settings it needs says Set up (${JSON.stringify(cover.slice(0, 160))})`);
+
+  // Configure… from the title menu.
+  await app.evaluate(({ Menu }) => {
+    globalThis.__configPopup = Menu.prototype.popup;
+    Menu.prototype.popup = function (o) {
+      globalThis.__lastMenu = this.items.map((i) => i.label).filter(Boolean);
+      this.items.find((i) => i.label === "Configure…")?.click();
+      o?.callback?.();
+    };
+  });
+  await tile.locator(".ui-window-bar-menu").click();
+  const sheet = win.locator('.ui-dialog[aria-label="Configure CI Demo"]:not([data-closing])');
+  await sheet.waitFor({ timeout: 10_000 }).catch(expired("the Configure sheet"));
+  const labels = await app.evaluate(() => globalThis.__lastMenu);
+  await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__configPopup));
+  check(labels.includes("Configure…"), `the title menu has Configure… (${labels.join(", ")})`);
+  const rowOf = (title) => sheet.locator(".ui-row").filter({ has: win.locator(".ui-row-name", { hasText: new RegExp(`^${title}$`) }) });
+  const text = (await sheet.textContent()) ?? "";
+  check(text.includes("Repository") && text.includes("Token") && text.includes(`Sent only to ${host}`), `the sheet has a row per field and says where the token goes (${JSON.stringify(text.slice(0, 200))})`);
+  await rowOf("Repository").locator("input").fill("jan/cmd");
+  await rowOf("Token").locator("input").fill(TOKEN);
+  check((await rowOf("Token").locator("input").getAttribute("type")) === "password", "the token is typed into a password field");
+  await shot(win, "widget-config.png");
+  await sheet.locator("button", { hasText: /^Save$/ }).click();
+  await gone(".ui-dialog");
+  const drawn = await until(() => tile.textContent().catch(() => ""), (t) => t.includes("Repo jan/cmd") && t.includes("Server: 200 ok for jan/cmd"), 20_000);
+  await shot(win, "widget-config-running.png");
+  check(drawn.includes("Repo jan/cmd") && drawn.includes("Server: 200 ok for jan/cmd"), `the widget draws with the repository and a fetch with the token (${JSON.stringify(drawn.slice(0, 200))})`);
+  check(seen.at(-1) === `Bearer ${TOKEN}`, `the server got the token in its header (${seen.length} requests)`);
+  const secrets = JSON.parse(fs.readFileSync(path.join(home, "widget-packages", "config-demo", "secrets.json"), "utf8"));
+  const log = fs.readFileSync(path.join(home, "logs", "core.log"), "utf8");
+  check(secrets.main?.token === TOKEN && !log.includes(TOKEN) && !(await tile.textContent()).includes(TOKEN), "the token is kept in cmd's secrets, and not in the log or the window");
+
+  // Again: the token shows as Set, never its value.
+  await app.evaluate(({ Menu }) => {
+    globalThis.__configPopup = Menu.prototype.popup;
+    Menu.prototype.popup = function (o) {
+      this.items.find((i) => i.label === "Configure…")?.click();
+      o?.callback?.();
+    };
+  });
+  await tile.locator(".ui-window-bar-menu").click();
+  await sheet.waitFor({ timeout: 10_000 }).catch(expired("the Configure sheet, again"));
+  await app.evaluate(({ Menu }) => (Menu.prototype.popup = globalThis.__configPopup));
+  const again = await until(() => rowOf("Token").textContent(), (t) => t.includes("Set") && t.includes("Change"));
+  check(again.includes("Set") && !(await sheet.innerHTML()).includes(TOKEN) && (await rowOf("Repository").locator("input").inputValue()) === "jan/cmd", `the sheet shows the token as Set and the repository as saved (${JSON.stringify(again)})`);
+  await win.keyboard.press("Escape");
+  await gone(".ui-dialog");
+  await call("window.close", { id: w.id });
+  api.close();
 });
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web
