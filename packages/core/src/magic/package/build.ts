@@ -26,7 +26,7 @@ import { runTool, toolsFor, type ToolContext, type ToolOutput } from "../tools.t
 import { snapshotFiles } from "./files.ts";
 import { previewTrees } from "./preview.ts";
 import { buildPackageRequest, buildPackageSystem, promptHash } from "./prompt.ts";
-import { checkoutToolchain, type RunOptions, type Toolchain } from "./toolchain.ts";
+import { defaultToolchain, type RunOptions, type Toolchain } from "./toolchain.ts";
 import { PACKAGE_TOOL_SPECS, permissionStep, runPackageTool, type PackageEnding, type PackageToolContext, type PackageToolState } from "./tools.ts";
 
 export interface PackageBuildOptions {
@@ -49,7 +49,7 @@ export interface PackageBuildOptions {
   systemFile?: string;
   /** Skip the fast paths (changes). */
   noFast?: boolean;
-  /** Default: the checkout's (checkoutToolchain); null: none (package.json is all that's checked). */
+  /** Default: the checkout's, else package.json only (defaultToolchain); null: none. */
   toolchain?: Toolchain | null;
   previewer?: () => Promise<Previewer | null>;
   /** The permission step (see tools.ts); none: nothing is asked, the grant is the caller's. */
@@ -110,7 +110,8 @@ export async function verifyPackage(c: PackageToolContext, state: PackageToolSta
   // Declined: it can't run as it is; the agent hears why and may ask for less.
   if (state.declined) return { ...EMPTY_VERDICT, problems: ["The person declined what package.json asks for: ask for less, or say what the widget can't do without it."], pkg: check.pkg };
   const test = await c.toolchain.test(c.dir, c.run);
-  if (!test.ok) problems.push(...test.problems.map((p) => `test: ${p}`), ...test.failed.map((f) => `test failed: ${f.name}\n${f.message}`));
+  if (test.skipped) warnings.push(`tests not run: ${test.skipped}`);
+  else if (!test.ok) problems.push(...test.problems.map((p) => `test: ${p}`), ...test.failed.map((f) => `test failed: ${f.name}\n${f.message}`));
   const pkg = check.pkg!;
   const tree = pkg.widgets.filter((w) => w.surface === "tree");
   for (const w of tree) if (!snapshotFiles(c.dir)[w.main.replace(/\.tsx?$/, ".story.tsx")]) warnings.push(`no story for ${w.id}: write ${w.main.replace(/\.tsx?$/, ".story.tsx")} with a state per fixture`);
@@ -169,7 +170,7 @@ export async function buildPackage(o: PackageBuildOptions): Promise<PackageBuild
   const deny = o.deny ?? magicDenyPaths();
   const ctx: ToolContext = { cwd: o.cwd, home: os.homedir(), deny, sandbox, signal: ac.signal };
   const run: RunOptions = { sandbox, deny, signal: ac.signal, cmdVersion: o.cmdVersion ?? null };
-  const pc: PackageToolContext = { dir: o.dir, toolchain: o.toolchain === undefined ? checkoutToolchain() : o.toolchain, run, previewer: o.previewer ?? (async () => null), ask: o.ask, granted: o.granted };
+  const pc: PackageToolContext = { dir: o.dir, toolchain: o.toolchain === undefined ? defaultToolchain() : o.toolchain, run, previewer: o.previewer ?? (async () => null), ask: o.ask, granted: o.granted };
   const state: PackageToolState = { dirty: false, ending: null, declined: null, onPackage: (title, icon) => emit({ type: "title", title, icon, at: at() }) };
   const trace: TraceStep[] = [];
   const timings: PackageBuildResult["timings"] = { done: 0 };

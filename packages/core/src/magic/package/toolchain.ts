@@ -7,7 +7,7 @@
 // Vitest and types, as a child process of this Node under magic/sandbox.ts (writes only to that
 // folder, no network): the agent's code and tests never run in the core. The tools are the
 // checkout's TypeScript and Vitest; a cmd without them (the packaged app for now) checks
-// package.json alone and says the rest was skipped.
+// package.json alone and says the rest was skipped (packageJsonToolchain; docs/56, Open questions).
 
 import fs from "node:fs";
 import os from "node:os";
@@ -289,3 +289,21 @@ export function checkoutToolchain(repo = REPO): Toolchain | null {
     },
   };
 }
+
+const SKIPPED = "this cmd has no TypeScript and Vitest to run it with (a checkout's pnpm install has)";
+
+/** What a cmd without the toolchain does: package.json through readPackage, and says the types, tests and trees were skipped. */
+export function packageJsonToolchain(): Toolchain {
+  return {
+    name: "package.json only",
+    async check(dir, o) {
+      const read = readPackage(dir, { cmdVersion: o.cmdVersion ?? null });
+      return read.ok ? { ok: true, problems: [], pkg: read.pkg, types: "skipped" } : { ok: false, problems: read.errors, pkg: null, types: "skipped" };
+    },
+    test: async () => ({ ok: true, passed: 0, failed: [], problems: [], skipped: SKIPPED }),
+    trees: async () => ({ ok: true, variants: [], problems: [], skipped: SKIPPED }),
+  };
+}
+
+/** The checkout's toolchain, else package.json only. */
+export const defaultToolchain = (): Toolchain => checkoutToolchain() ?? packageJsonToolchain();

@@ -530,6 +530,8 @@ For whoever cuts the release with a phase in it; the `changelog` skill writes th
 
 ## Open questions
 
+- **Magic's checks in the packaged app.** A Magic build checks with the checkout's TypeScript and Vitest (magic/package/toolchain.ts); the staged runtime has neither, nor esbuild (a devDependency of `@cmd/widget-api`, not the core's, and a native binary per platform: staging it is more than a line), so a release build checks package.json alone and says the types, tests and previews were skipped: a syntax error first shows in the window. Options: ship esbuild for a syntax pass (`transform` of each `src/**` file); `deno check` against the staged widget-api sources with vendored React types (Deno is already there); or ship tsc and Vitest (about 30 MB) for the same checks as dev.
+
 - ~~**Config and secrets for package windows.**~~ Resolved: the Configure sheet, `widget.config`, `widget.secret` and `widget.secrets` ("Configuring a package widget"). Not yet: `cmd widget config` in the CLI.
 - **`List` virtualisation.** The kit's `List` draws every row (a thousand rows: 37–47 ms first draw, the rest over the next frames); virtualising it is a kit change, and every widget gets it through the element table.
 - **Process count.** Twenty widgets on the board are twenty Deno processes. If docs/43's audit says that's too much at rest, instances of one package in one workspace could share a process with separate roots; the API doesn't change either way.

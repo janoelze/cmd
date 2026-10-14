@@ -100,7 +100,6 @@ const PERSIST_DATA_MS = 60_000;
 const MIN_REFRESH_S = 2;
 /** Failures in a row before magic.autoFix asks the agent. */
 const AUTO_FIX_AFTER = 3;
-
 const stateOf = (w: AppWindow) => w.state as MagicState;
 
 function detailOf(tool: string, input: Record<string, unknown>): string {
@@ -136,7 +135,8 @@ export class MagicService {
   #installing: Promise<MagicRuntime> | null = null;
   #disposed = false;
 
-  /** What it was made with: MagicPackages (package/service.ts) builds with the same backend, state dir and sandbox. */ readonly made = (): MagicServiceOptions => this.#o;
+  /** What it was made with: MagicPackages (package/service.ts) builds with the same backend, state dir and sandbox. */
+  readonly made = (): MagicServiceOptions => this.#o;
   constructor(o: MagicServiceOptions) {
     this.#o = o;
     this.#stateDir = o.stateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-"));

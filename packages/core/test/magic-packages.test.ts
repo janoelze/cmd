@@ -18,7 +18,7 @@ import { listFiles, readMark, writable, writeFile } from "../src/magic/package/f
 import { buildPackageSystem, examples, exampleFiles } from "../src/magic/package/prompt.ts";
 import { scriptedBackend, type ScriptTurn } from "../src/magic/package/scripted.ts";
 import { slugOf, wantsText } from "../src/magic/package/service.ts";
-import { checkoutToolchain } from "../src/magic/package/toolchain.ts";
+import { checkoutToolchain, packageJsonToolchain } from "../src/magic/package/toolchain.ts";
 import { sandboxAvailable } from "../src/magic/sandbox.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { tmp, until } from "./fake-widget-runtime.ts";
@@ -154,6 +154,15 @@ describe("buildPackage", () => {
     expect(n.ending).toMatchObject({ kind: "needs-program", programs: ["pmset"] });
     expect(n.ok).toBe(false);
     expect(n.verdict.problems).toEqual(["The battery's charge comes from pmset."]);
+  });
+
+  it("checks package.json alone in a cmd without the toolchain, and says the rest was skipped", async () => {
+    const dir = path.join(tmp("cmd-magic-home-"), "pomodoro");
+    const r = await buildPackage(base(dir, [{ calls: [...writes(example("timer"), "pomodoro")!, tool("check"), tool("test")] }], { toolchain: packageJsonToolchain() }));
+    expect(r.ok).toBe(true);
+    expect(r.verdict.warnings.join("\n")).toMatch(/tests not run: this cmd has no TypeScript and Vitest/);
+    const outputs = (r.trace as { tool: string; output: string }[]).map((t) => `${t.tool}: ${t.output}`);
+    expect(outputs).toContainEqual(expect.stringMatching(/^check: OK: package\.json is valid \(types not checked/));
   });
 
   it("stops at the token ceiling, with a backend that never stops", async () => {

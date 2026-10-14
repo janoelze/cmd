@@ -24,7 +24,7 @@ import { buildPackage, type PackageBuildResult } from "./build.ts";
 import { readMark, writeMark } from "./files.ts";
 import { PackageRevisions } from "./revisions.ts";
 import { scriptFromEnv, scriptedBackend } from "./scripted.ts";
-import { checkoutToolchain, type Toolchain } from "./toolchain.ts";
+import { defaultToolchain, type Toolchain } from "./toolchain.ts";
 import { permissionLines } from "./words.ts";
 
 const log = logger("magic");
@@ -232,7 +232,7 @@ export class MagicPackages {
       sandbox: this.#sandbox(),
       deny: magicDenyPaths(),
       noFast: true,
-      toolchain: this.#o.toolchain === undefined ? checkoutToolchain() : this.#o.toolchain,
+      toolchain: this.#o.toolchain === undefined ? defaultToolchain() : this.#o.toolchain,
       previewer: () => this.#c.previews.previewer(),
       ask,
       granted: () => library.host.granted(name)?.permissions ?? null,

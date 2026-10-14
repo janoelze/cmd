@@ -159,6 +159,15 @@ export function Slot({
     mounted.current = true;
   }, [key, shown?.text, animate]);
 
+  // The leaving value goes when its exit animation ends, or after it at the latest: a window
+  // that isn't painting (hidden, in the background) runs no animations, and the old status
+  // stayed there over an empty slot (a Magic window's "Working…" once it became the widget).
+  useEffect(() => {
+    if (!leaving) return;
+    const t = setTimeout(() => setLeaving((l) => (l?.id === leaving.id ? null : l)), MOVE_MS * 2);
+    return () => clearTimeout(t);
+  }, [leaving]);
+
   const text = (t: string) => (clipStart ? `‎${t}‎` : t);
   const cls = `${fade ? "fade" : ""} ${clipStart ? "clip-start" : ""}`;
   return (

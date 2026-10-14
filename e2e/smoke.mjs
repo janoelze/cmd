@@ -1525,7 +1525,10 @@ await scenario("magic", async () => {
     const kit = await until(() => tile.locator(".ui-view").count(), (n) => n > 0, 20_000);
     const frames = await tile.locator("iframe").count();
     const drawn = rt.deno ? await until(() => tile.textContent().catch(() => ""), (t) => /Not a git repository|Nothing to commit|Changed|Added/.test(t), 30_000) : "(no Deno: not run)";
+    // The build's "Working…" leaves the title bar once the package's widget is there.
+    const bar = await until(() => tile.locator(".tile-status").textContent().catch(() => ""), (t) => !t.includes("Working…") && !t.includes("Checking…"), 10_000);
     await shot(win, "magic-package.png");
+    check(!bar.includes("Working…") && !bar.includes("Checking…"), `the package window's title bar drops the build's status (${JSON.stringify(bar)})`);
     check(made?.kind === "pkg:git-changes/changes" && fs.existsSync(grants) && kit > 0 && frames === 0, `Allow writes the grant and the window becomes the package's widget, drawn by the kit with no iframe (${made?.kind}, ${frames} frames; ${JSON.stringify(String(drawn).slice(0, 80))})`);
     const entry = (await call("widget.list")).find((e) => e.ref === "pkg:git-changes/changes");
     await menu("widget.library");

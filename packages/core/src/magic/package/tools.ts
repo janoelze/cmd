@@ -168,11 +168,12 @@ export async function runPackageTool(name: string, input: Record<string, unknown
       const asked = r.pkg ? await permissionStep(r.pkg, c, state) : null;
       const note = asked ? `\n${asked}` : "";
       if (!r.ok) return err(`${r.problems.join("\n")}${note}`);
-      return { output: `OK: package.json is valid${r.types === "checked" ? " and the types check" : ""}.${note}`, isError: !!state.declined };
+      return { output: `OK: package.json is valid${r.types === "checked" ? " and the types check" : " (types not checked: this cmd has no TypeScript)"}.${note}`, isError: !!state.declined };
     }
     case "test": {
       if (!c.toolchain) return err("cmd can't run tests here (its Vitest isn't installed).");
       const r = await c.toolchain.test(c.dir, c.run);
+      if (r.skipped) return { output: `Not run: ${r.skipped}. cmd checked package.json only.`, isError: false };
       if (r.ok) return { output: `OK: ${r.passed} test${r.passed === 1 ? "" : "s"} passed.`, isError: false };
       const lines = [...r.problems, ...r.failed.map((f) => `✗ ${f.name}\n${f.message}`)];
       return err(redact(`${r.passed} passed, ${r.failed.length} failed.\n${lines.join("\n\n")}`));
