@@ -10,6 +10,18 @@ describe("OscScanner", () => {
     ]);
   });
 
+  it("finds what follows long plain text: bells, C1 forms, sequences after text in the same chunk", () => {
+    const s = new OscScanner();
+    const text = "plain output ".repeat(500);
+    expect(s.feed(`${text}\x07${text}\x9d0;c1 title\x9c${text}\x1b]2;seven\x07${text}`)).toEqual([
+      { type: "bell" },
+      { type: "title", title: "c1 title" },
+      { type: "title", title: "seven" },
+    ]);
+    expect(s.feed(`${text}\x1b]0;split ${text}`)).toEqual([]); // inside an OSC, text is its body
+    expect(s.feed("end\x07")).toEqual([{ type: "title", title: `split ${text}end` }]);
+  });
+
   it("handles sequences split across chunks", () => {
     const s = new OscScanner();
     expect(s.feed("\x1b")).toEqual([]);
