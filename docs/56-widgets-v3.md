@@ -59,7 +59,7 @@ Researched 2026-10-14 from primary sources (a report with URLs is in Sources). T
 3. **The person grants; the manifest only asks.** What a widget may touch is `declared ∩ granted`, never the manifest alone. A new version asking for more runs with the old grant until the person answers. Acting (typing into a terminal, starting an agent, running a deploy) goes through the same approvals as agents' tools (docs/55), remembered per workspace.
 4. **Draw with the kit, through data.** A widget's view is a tree of kit components the app draws, not HTML it ships. One look, one set of tokens, virtualised lists, accessibility, the phone client, and tests that assert on a tree. Custom visuals keep a frame, with nothing in it but pixels.
 5. **A package, by the standard.** `package.json`, TypeScript, `npm test`, a lockfile, a license, a changelog, `files`. The same package runs linked from a folder, installed from a release, or made by Magic in your library. Magic is a very good author of packages, not a format of its own.
-6. **A clean slate, every phase visible.** Each phase is visible in the app. Today's format is not carried: no adapter runs cmd:2 folders, and nothing is built to keep them rendering as they did. A widget from before is an entry in the Library that Magic rebuilds as a package from its saved request, or that goes. The old runtime (the `data.ts` runner, the frame kit and its versions, the frame host, the refresh paths in `MagicService`) is deleted in phase 2, not kept beside the new one.
+6. **A clean slate, every phase visible.** Each phase is visible in the app. Today's format is not carried: no adapter runs cmd:2 folders, no migration rebuilds them, and the old runtime (the `data.ts` runner, the frame kit and its versions, the frame host, the refresh paths in `MagicService`) is deleted in phase 2. Widgets made before are gone with it, and a release note says so; with a handful of users, a clean implementation is worth more than keeping them. Anyone who wants one back describes it to Magic again.
 
 ## The design
 
@@ -280,7 +280,7 @@ This section is the answer to the constraint, so it is specific.
 - **A major is an adapter, kept.** `widgets/api/v1.ts` stays when `v2.ts` arrives; the process's hello picks one. The core supports a major for at least two minors of cmd after its successor ships, and a `SUPPORTED_API` range in `packages/protocol` is what `core.hello` reports (the Library reads it). A widget on a major the core no longer serves doesn't break silently: its window says "Made for an older cmd" with **Update with Magic** (next bullet) or a link to the package's page, and the Library badges it. Chrome's silent non-update is the failure to avoid.
 - **Magic migrates.** Kits already move widgets up (`kitMove` rewrites kit-1 variables). A major bump ships with a migration prompt: when the person next changes a widget, or presses Update, the agent rewrites it against the new API with the old files, the d.ts diff and the migration notes in its context, then checks and previews as for any change. This is cmd's unfair advantage over every system in the research: deprecation can be paired with an author who is always available.
 - **Deprecation is visible, dated, and tested.** A verb to be removed is marked `@deprecated since 1.4, removed in 2` in the d.ts; calling it logs once per process into the widget's health ("uses agents.watch, which cmd 0.40 will drop"), and the Library shows a count. `widget-api.test.ts` keeps one example package per supported major in the repo (`packages/widget-api/examples/v1/`) and runs it against the current core on every commit: the promise is tested, not remembered.
-- **cmd:2 widgets are not carried over.** There is no runtime for today's folders after phase 2. The first launch after it lists each (from `widget.json`: title, request history, the last screenshot) in the Library under "From before", with **Rebuild with Magic** (the old request, history and files go into the agent's context, as a Change does today) and Delete; its windows on the board show the same two choices in place of a view. The folders stay under `$CMD_HOME/widgets/` until deleted, so nothing is lost, but nothing of the old code runs them. The compatibility promise starts at API 1; the one before it was an experiment and is treated as one.
+- **cmd:2 widgets are dropped.** There is no runtime for today's folders after phase 2 and no migration. The first start after it renames `$CMD_HOME/widgets/` to `widgets-old/` (a person's files are never deleted by an update) and closes the `magic` windows that showed them; the Library lists nothing from before; the release note says widgets made before this version are gone and Magic makes them again. The compatibility promise starts at API 1; what came before was an experiment and is treated as one.
 - **The experimental namespace is where speed lives.** Anything in `cmd.experimental.*` can change in any release. Internal widgets (the built-ins that move to packages, phase 6) may use it; the community index refuses it; a Magic widget may use it only when the request needs it, and the Library shows the badge. Promoting an experiment is a minor of the API and the d.ts rename.
 
 ### Magic on V3
@@ -374,7 +374,7 @@ Before handing back, in the phase's worktree:
 
 ### Phase 2: Magic makes packages (M)
 
-**Scope.** The prompt and the nine examples rewritten for V3 (`magic/prompt/`); the agent's tools write packages (`magic/widget-tools.ts`: `write_file` on `src/`, `fixtures/`, `package.json` only; `check`, `test`, `preview`); the permission step in the build view; git-backed revisions (confirm first; else keep `revisions/NNNN/`); the old runtime deleted; "From before" entries with Rebuild with Magic; `MagicService` replaced (builds in `magic/`, running in `widgets/host/`, the library in `widgets/library.ts`).
+**Scope.** The prompt and the nine examples rewritten for V3 (`magic/prompt/`); the agent's tools write packages (`magic/widget-tools.ts`: `write_file` on `src/`, `fixtures/`, `package.json` only; `check`, `test`, `preview`); the permission step in the build view; git-backed revisions (confirm first; else keep `revisions/NNNN/`); the old runtime deleted; the one-time rename of the old widgets folder; `MagicService` replaced (builds in `magic/`, running in `widgets/host/`, the library in `widgets/library.ts`).
 
 **Acceptance criteria.**
 
@@ -384,11 +384,11 @@ Before handing back, in the phase's worktree:
 - [ ] **Frame widgets.** A request that is visual ("a shader", "play this radio") yields `"surface": "frame"` with `view.html`, drawn in the one frame host; Jam and the Visualizer use the same host (`grep -c "opaque origins all say" apps/desktop/src/renderer/src` is 0; AR1-11-05's gesture rule holds: an `open-url` posted on load opens nothing, after a click one window).
 - [ ] **Revisions.** Each build is a commit (or a numbered revision if git was rejected: say which in this doc); Restore checks out a version and the window redraws; hand edits appear as a version named "Edited by hand"; the edit view's Changes lists them with screenshots. Test in `widgets.test.ts`.
 - [ ] **The old runtime is gone.** Deleted: `widget-runtime/runner.ts`, `widget-runtime/view.d.ts`, `magic/prompt/host.js`, `magic/prompt/kit.css`, `magic/prompt/kits/`, `magic/prompt/tokens.css` and `preview-themes.json` (generated for the frame), `magic/sources.ts` and the v1 window path, the refresh, health and hand-edit code of `MagicService`, `widgets/store.ts`'s revisions if git replaced them, `kits.test.ts`, `KIT_FILES`/`CURRENT_KIT`/`KIT1_RENAMES` in protocol `magic.ts`; `grep -rn "cmd-widget://frame" apps packages` finds only the frame surface's host; `grep -rn "k-pane\|k-stat\|kitVersion" packages apps` returns nothing; `pnpm tokens` no longer writes the frame's files.
-- [ ] **From before.** A cmd:2 folder under `$CMD_HOME/widgets/` is listed in the Library under "From before" with its title, request and last screenshot, and Rebuild with Magic and Delete; a window of kind `magic` whose widget has no package shows the same two choices instead of a view; Rebuild runs a build with the old request, history, `data.ts` and `view.ts` in the agent's context and replaces the window with the package's; Delete removes the folder. Tests in `widgets.test.ts` with a fixture folder; e2e: a fixture cmd:2 folder rebuilt with a fake backend.
+- [ ] **Old widgets are dropped, not lost.** The first start after this phase renames `$CMD_HOME/widgets/` to `widgets-old/` once and closes every `magic` window without a package (a startup job, docs/34, logged with the count); nothing lists or runs them; `widget.list` shows only packages. Test in `widgets.test.ts` with a fixture folder and an old window: the folder is renamed, the window closed, a second start does nothing. The release note (below) says what happened and what to do.
 - [ ] **The split.** `wc -l packages/core/src/magic/service.ts` < 350; `widgets/host/`, `widgets/library.ts` and the adapter have their own tests and no import of `magic/`; `kernel/features.ts` lists `widgetsFeature` and `magicFeature`.
 - [ ] **Cost.** A build stops at a token ceiling with a clear message (AR1-11-06's first step; test with a backend that never stops).
 
-**How to confirm.** With a key in `.env`: `pnpm cmd magic "how many agents are waiting in this workspace"` from a terminal in the worktree's app, watch the steps, see a kit-drawn widget; ⌘E shows versions; Restore the first; `pnpm cmd magic eval --tag security` passes; open the dev library, see the old widgets under From before, rebuild one; `pnpm test` with Deno installed runs the example packages; `pnpm e2e` passes the `magic` and `widget-rebuild` scenarios.
+**How to confirm.** With a key in `.env`: `pnpm cmd magic "how many agents are waiting in this workspace"` from a terminal in the worktree's app, watch the steps, see a kit-drawn widget; ⌘E shows versions; Restore the first; `pnpm cmd magic eval --tag security` passes; start the app on a dev instance with old widgets and see them gone and `widgets-old/` in place; `pnpm test` with Deno installed runs the example packages; `pnpm e2e` passes the `magic` scenario.
 
 ### Phase 3: the developer loop (M)
 
@@ -438,17 +438,17 @@ Before handing back, in the phase's worktree:
 
 ### Phase 6: the rest of the built-ins, background, signing (M)
 
-**Scope.** Notifications and Resources as packages where they fit; `background` as a permission; signing; the "From before" entries removed from the Library once Jan's and the fixtures' are rebuilt or deleted; docs/14 and docs/16's "Under the hood" marked superseded.
+**Scope.** Notifications and Resources as packages where they fit; `background` as a permission; signing; docs/14 and docs/16's "Under the hood" marked superseded.
 
 **Acceptance criteria.**
 
 - [ ] Notifications and Resources are packages that do the native ones' job, or this doc says which stays native and why (Resources' process tree may need an `experimental` verb first).
 - [ ] `background: true` is a permission in the sheet; a widget with it keeps its process while off every board and notifies; without it, the process stops as in phase 1 (tests).
 - [ ] Releases in the index are signed (Sigstore or minisign: decide and record here) and `install` verifies before the hash check; an unsigned indexed release is refused.
-- [ ] The "From before" listing and its code are deleted (`grep -rn "From before\|fromBefore" packages apps` returns nothing); docs/14's Status is "superseded by 56".
+- [ ] docs/14's Status is "superseded by 56" and docs/16's "Under the hood" points here.
 - [ ] The example package per supported API major in `packages/widget-api/examples/` renders in CI (`widget-api.test.ts`), and `SUPPORTED_API` in `packages/protocol` is what `core.hello` reports.
 
-**How to confirm.** `pnpm test` with the examples per major running; the Library has no From before section; `pnpm cmd widget install` of a signed release passes and of a stripped signature fails.
+**How to confirm.** `pnpm test` with the examples per major running; `pnpm cmd widget install` of a signed release passes and of a stripped signature fails.
 
 Phase 1 is the one that proves the three sentences and is where the time goes; phases 2 and 3 are what people and agents touch; 4 to 6 can follow at the pace the registry needs. The order is chosen so that nothing in phases 2–6 changes the contract of phase 1: the d.ts grows, the table gets rows, the adapter gets verbs.
 
@@ -463,6 +463,9 @@ For whoever cuts the release with a phase in it; the `changelog` skill writes th
 
 ### Improved
 - Magic builds widgets with cmd's own components, so they look and behave like the built-in ones, and work on your phone.
+
+### Changed
+- Widgets made with Magic before this version are gone: the new widgets are a different thing underneath. Their files are kept in `widgets-old` next to cmd's data. Describe them to Magic again and they come back better.
 ```
 
 ## Decisions, so they don't get re-decided
@@ -481,7 +484,7 @@ For whoever cuts the release with a phase in it; the `changelog` skill writes th
 | Dependencies | bundled by `pack`; the runtime never resolves `node_modules` | Chrome's no-remote-code; a dependency can't run outside the grant |
 | Revisions | git per Magic package (confirm in phase 2) | Standard, publishable, diffable; Restore is checkout |
 | Registry | a JSON index in a repository over GitHub releases, hash-pinned, reviewed | Obsidian's shape; the thinnest thing that is trustworthy |
-| Today's widgets | not carried: no adapter, the old runtime deleted in phase 2; each is rebuilt by Magic from its request, or deleted | A clean implementation is worth more than 22 folders kept rendering as they were; the compatibility promise starts at API 1 |
+| Today's widgets | dropped: no adapter, no migration, the old runtime deleted in phase 2, the folder renamed to `widgets-old/` once | Four users; a clean implementation is worth more than 22 folders kept running; the compatibility promise starts at API 1 |
 
 ## Open questions
 
