@@ -2,7 +2,7 @@
 
 **Status:** partly built: the audit and a log of wins; PTY host throughput, code cache and flow control open.
 
-> Status (2026-10-04): audit done; first round of fixes on the `perf` branch (see Wins). The rule: the UI looks and behaves the same; it only costs less. Wins are logged at the bottom with before/after numbers.
+> Status (2026-10-14): audit done; two rounds of fixes (see Wins), the second measured with `e2e/latency.mjs`. The rule: the UI looks and behaves the same; it only costs less. Wins are logged at the bottom with before/after numbers.
 
 The aim is a workbench that costs close to nothing while idle, stays cheap per open terminal and agent, and never stutters while scrolling, typing or streaming output.
 
@@ -26,9 +26,11 @@ The scenarios:
 | `memory` | N panes printing 12,000 lines each (past the 10,000-line scrollback) | host memory per terminal |
 | `search` | a first index of the real transcripts, then a start with the index built | time, CPU and peak memory |
 
+**Renderer, steady state**, `e2e/perf.mjs`: the built app with 4 terminals, idle, with agents' spinners in their titles, during a flood and while scrolling: main-thread time, frames, renders per component (`window.__cmdPerf`, `lib/perf.ts`). `--profile` adds where the script time went.
+
+**Interaction latency**, `e2e/latency.mjs`: the built app with 8 terminals of scrollback and a second workspace. For each action (keystrokes, also while three other terminals stream output; the palette; mode switches; sidebars; zoom; opening and closing windows; workspace switches; resizing the app window) it reports the time from the input to the first frame that shows it, the time until the board stops moving, dropped frames, the worst frame, long animation frames with the scripts in them, and renders per run. `--only a,b` runs some, `--profile` samples the renderer per action with the callers of the top functions (`e2e/profile.mjs`; `CMD_NO_MINIFY=1 pnpm build` first for readable names).
+
 **Still to add.** The bench doesn't cover these yet:
-- **Renderer frame timing.** A Playwright run of the built app that floods a pane, scrolls the scrollback and pans the canvas, recording `long-animation-frame` entries and frame times. It also records `app.getAppMetrics()` at idle with N terminals.
-- **Dev-only render counters.** Store events per type per second, and React `<Profiler>` commits per second for `App`, `Sidebar` and `WindowsView`, exposed as `window.__cmdPerf`.
 - **Core counters in `core.info`.** Broadcasts and bytes per event type, SQLite writes per method, process spawns per binary, and screen saves (saved or skipped, ms, bytes).
 - **Startup marks on one clock.** `boot:*` marks turned into absolute times so main and renderer can be compared, plus the first paint of the selected terminal.
 
@@ -86,11 +88,12 @@ Ordered by expected win. Risk means the risk of a visible change in behaviour. �
 
 1. ✅ (invisible updates) **One store event re-renders the whole window.** `App` subscribes to everything. `inWorkspace` builds three new Maps per change, and `buildRows` builds new rows, so the Sidebar, every tile, `TileTitle` and `Slot` re-render. Triggers include every OSC title change (agent spinners), every 2 s usage sample per busy pane and every hook event. Fix: memoised `inWorkspace` and rows, `memo` on the heavy components, and notifications coalesced per frame.
 2. ✅ **IPC on every store change.** `closeNotification` runs on every update, and `setMenuState` on every agent event. Fix: narrower effect dependencies.
-3. **Canvas pan and drag re-render every title on every frame**, and `TerminalView`'s `memo` never holds because `onMenu` is a new closure each render.
+3. ✅ **Canvas pan and drag re-render every title on every frame**, and `TerminalView`'s `memo` never holds because `onMenu` is a new closure each render.
 4. **Layout thrash.** `StripScrollbar` reads layout after every commit. `Slot` interleaves reads and writes. The tooltip runs a rAF loop with `getBoundingClientRect`.
 5. **Hidden work.** Focus mode hides tiles with `visibility:hidden`, so their terminals likely keep rendering. `DotMatrix` runs a 30 fps rAF loop off screen. The Files git poll runs while the app is in the background.
 6. **Every window mirrors every pane of every workspace.** Each holds an xterm (about 12 B per cell) and snapshots every pane at startup. *Needs a decision: switching to a workspace would then wait for a snapshot.*
-7. **Settings changes re-apply everything**: they refit every terminal and restyle `:root` on any key.
+7. ✅ (the fits) **Settings changes re-apply everything**: they refit every terminal and restyle `:root` on any key.
+8. ✅ **Every layout change refit every terminal, twice or more, in one frame.** A mode switch fitted each terminal for the old board size, then the new one; terminals shown again (a workspace switch) were fitted before their window had a size (6×1) and back; hidden ones (focus mode) were fitted to 2×1, reflowing the scrollback there and back; the WebGL canvas was allocated twice per resize. See wins 14–17.
 
 ### Electron main and startup
 
@@ -124,5 +127,14 @@ Measured with the bench and `e2e/perf.mjs` on the same machine. "UI" rows are th
 | 12 | WebGL renderer by default | UI scroll: main thread 122 ms/s; 4 spinners 50 ms/s; renderer 384 MB after scrolling | 66 ms/s; 38 ms/s; 276 MB |
 | 13 | The selected terminal's snapshot is asked for first; the dev Dock icon is set 1 s after launch | first window created ~265 ms after launch (dev); terminals filled in any order | ~185 ms; the terminal in view fills first (warm start: terminals filled at 815 instead of 833 ms) |
 | 10 | The updater bundle loads 5 s after launch | 570 KB parsed on the main thread during the first window's load | after it |
+| 14 | Terminals resize once per layout change: the board takes its new size in the commit that changes it; attached terminals are fitted by their ResizeObserver, not before their window has a size; rows and columns together; the WebGL canvas sized to what its device-pixel observer reports (a Vite patch) | workspace switch (8 + 3 terminals): worst frame 92 ms, 7 dropped, ~22 resizes, each terminal told 6×1 for a moment | 17 ms, 0.6 dropped, 0.3 resizes |
+| 15 | Fits wait their turn (`windows/terminal/fits.ts`): the focused terminal at once, others on screen within 4 ms a frame, the rest over the next frames, those out of sight when idle; zoom and settings too | strip switch: worst frame 75 ms, 63 ms of long frames; canvas 50 / 55; zoom 43 ms of long frames | strip 25 ms / 0; canvas 25 ms / 0; zoom 0 |
+| 16 | `terminal.webglPool` 8 → 12 | showing a workspace again rebuilt a GL context per terminal past the pool (~25 ms each) | none up to 12 terminals |
+| 17 | Hidden terminals (no size) aren't fitted | every launch reflowed hidden terminals' scrollback to 2 columns and back | warm start, 6 terminals written: 618 → 565 ms |
+| 18 | The first frame's theme comes from the main process (`?theme=`) instead of localStorage | localStorage's first use blocked the renderer 16 ms before the first paint | tiles painted (warm) 419 → 388 ms |
+| 19 | Rows are reused across rebuilds while their parts are the same; `TileTitle` and `SessionRow` memoised with stable props | a new terminal: 91 title and 75 sidebar row renders; a selection change: 18 titles | 12 and 36; 3.5 |
+| 20 | A flood's scrolls reach the kit once a frame, and xterm's scrollbar keeps one hide timer (a Vite patch) | ~70 ms a second of setTimeout/clearTimeout in a flood | none |
+
+Interaction latency after these (`e2e/latency.mjs`, 120 Hz, median): a keystroke's echo on screen 4 ms (5 ms with three other terminals streaming, p95 8 ms); palette open 4 ms; selecting another window 6 ms; mode switches 2–13 ms to the first frame, no long animation frames; the worst frame of any board transition 25 ms.
 
 Already fine: no frame over 33 ms while flooding (25 MB through `cat`) or scrolling 10,000 lines of scrollback (p95 frame 9 ms at 120 Hz); the core serializes each broadcast once for all connections.
