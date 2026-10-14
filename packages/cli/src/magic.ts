@@ -11,7 +11,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { DEFAULT_SETTINGS, isAiProvider, parseJsonc, resolveSettings, type Settings } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, isAiProvider, parseJsonc, resolveSettings, type Settings, type WidgetPermissions } from "@cmd/protocol";
 import { cmdHome, configDir } from "@cmd/protocol/node";
 import { connect } from "@cmd/protocol/node";
 import {
@@ -220,6 +220,7 @@ export async function magicCommand(argv: string[]): Promise<number> {
   process.once("SIGINT", () => ac.abort());
   if (!o.json) process.stderr.write(`${bold("✦")} ${prompt} ${dim(`· ${backend.name} ${backend.model}`)}\n`);
   let r: PackageBuildResult;
+  let granted: WidgetPermissions | null = null;
   try {
     r = await buildPackage({
       prompt,
@@ -240,9 +241,10 @@ export async function magicCommand(argv: string[]): Promise<number> {
       ask: async (pkg) => {
         const allow = !o.decline;
         if (!o.json) process.stderr.write(`  ${allow ? green("✓") : red("✗")} ${wantsText(pkg.permissions)} ${dim(allow ? "(allowed: the app asks the person)" : "(--decline)")}\n`);
+        if (allow) granted = pkg.permissions;
         return { allow };
       },
-      granted: () => null,
+      granted: () => granted,
       signal: ac.signal,
       onEvent: (e) => {
         events.push(e);

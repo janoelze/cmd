@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import type { WidgetPermissions } from "@cmd/protocol";
 import { cmdHome } from "@cmd/protocol/node";
 import { buildPackage, buildPackageSystem, checkoutToolchain, playwrightPreviewer, promptHash, slugOf, type BuildEvent, type PackageBuildResult } from "@cmd/core/magic";
 import { pickBackend, stamp, writeRun } from "./magic.ts";
@@ -168,6 +169,7 @@ export async function evalCommand(argv: string[]): Promise<number> {
     const events: BuildEvent[] = [];
     const prompt = hashes.get(v.name)!;
     let r: PackageBuildResult;
+    let granted: WidgetPermissions | null = null;
     try {
       const name = slugOf(c.prompt);
       r = await buildPackage({
@@ -181,8 +183,8 @@ export async function evalCommand(argv: string[]): Promise<number> {
         toolchain,
         previewer: async () => previewer,
         // Evals allow what a package asks for: the person's answer isn't what is judged.
-        ask: async () => ({ allow: true }),
-        granted: () => null,
+        ask: async (pkg) => ((granted = pkg.permissions), { allow: true }),
+        granted: () => granted,
         onEvent: (e) => events.push(e),
       });
     } catch (e) {

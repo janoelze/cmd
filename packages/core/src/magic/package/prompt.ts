@@ -14,6 +14,10 @@ import { PROMPT_DIR, type RequestContext } from "../prompt.ts";
 import { REPO } from "./toolchain.ts";
 
 export const API_README = path.join(REPO, "packages/widget-api/README.md");
+/** Where the API's data types are declared (protocol's widget-tree.ts; @cmd/widget-api re-exports them). */
+export const API_TYPES = path.join(REPO, "packages/protocol/src/widget-tree.ts");
+/** The data types a widget handles, as declared: what the reference names but doesn't spell out. */
+const DATA_TYPES = new Set(["WidgetEnv", "ApiScopeQuery", "ApiWorkspace", "ApiWindow", "ApiAgentState", "ApiTone", "ApiLight", "ApiAgent", "ApiTerminal", "ApiTerminalScreen", "ApiEventQuery", "ApiEvent", "ApiEventStats", "ApiGitStatus", "ApiGitWorktree", "ApiAction", "ApiFetchInit", "ApiFetchResponse", "ApiCompletionRequest", "ApiCompletion", "ApiNotification"]);
 export const EXAMPLES_DIR = path.join(PROMPT_DIR, "examples");
 
 /** The README's generated reference (between its reference markers), or a note when this cmd lacks it. */
@@ -26,6 +30,29 @@ export function apiReference(file = API_README): string {
   }
   const m = /<!-- reference:start[^>]*-->([\s\S]*?)<!-- reference:end -->/.exec(text);
   return (m?.[1] ?? text).trim();
+}
+
+/** The declarations of the API's data types, with their comments (`Agent` in @cmd/widget-api is ApiAgent here). */
+export function apiTypes(file = API_TYPES): string {
+  let lines: string[];
+  try {
+    lines = fs.readFileSync(file, "utf8").split("\n");
+  } catch {
+    return "";
+  }
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^export (interface|type) (\w+)/.exec(lines[i]!);
+    if (!m || !DATA_TYPES.has(m[2]!)) continue;
+    let start = i;
+    while (start > 0 && /^(\/\*\*|\s\*|\/\/)/.test(lines[start - 1]!)) start--;
+    let end = i;
+    if (m[1] === "interface") while (end < lines.length && lines[end] !== "}") end++;
+    else while (end < lines.length && !lines[end]!.trimEnd().endsWith(";")) end++;
+    out.push(lines.slice(start, end + 1).join("\n"));
+    i = end;
+  }
+  return out.join("\n\n");
 }
 
 /** Where an example's file is shown: package.json, the widget, its test and story, other sources, fixtures, the rest. */
@@ -78,7 +105,9 @@ function example(dir: string): string {
 /** The system prompt; `file` replaces prompt.md (prompt variants for evals). */
 export function buildPackageSystem(file?: string): string {
   const main = fs.readFileSync(file ?? path.join(PROMPT_DIR, "prompt.md"), "utf8").trim();
-  return `${main}\n\n# The API: @cmd/widget-api\n\nThe whole contract a widget is written against, generated from its types (everything here is in API 1 for good).\n\n${apiReference()}\n\n# Examples\n\nFinished widgets (check, test and preview passed for each), and two builds that ended without a package.\n\n${examples().map(example).join("\n\n")}\n`;
+  const types = apiTypes();
+  const data = types ? `\n\n## The data\n\nWhat the reads return, as declared. @cmd/widget-api exports them without the \`Api\` prefix (\`Agent\`, \`Terminal\`, \`WindowInfo\` for ApiWindow, \`Workspace\`, \`Event\`, \`GitStatus\`, \`FetchResponse\`, \`Env\` for WidgetEnv); \`Light\` and \`Tone\` are exported as they are.\n\n\`\`\`ts\n${types}\n\`\`\`` : "";
+  return `${main}\n\n# The API: @cmd/widget-api\n\nThe whole contract a widget is written against, generated from its types (everything here is in API 1 for good).\n\n${apiReference()}${data}\n\n# Examples\n\nFinished widgets (check, test and preview passed for each), and two builds that ended without a package.\n\n${examples().map(example).join("\n\n")}\n`;
 }
 
 /** A short hash of a system prompt, for eval reports and the log. */
