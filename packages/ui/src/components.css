@@ -1048,6 +1048,10 @@ td.ui-grid-num { font-family: var(--font-mono); font-size: var(--text-xs); }
 .ui-grid-tree { display: flex; align-items: center; gap: var(--space-1-5); min-width: 0; padding-left: calc(var(--depth) * var(--space-4)); }
 .ui-grid th[data-tree] .ui-grid-sort { padding-left: calc(var(--space-3) + var(--space-1-5)); } /* past the disclosure (.ui-twisty) and its gap */
 .ui-grid-tree .ui-twisty[data-none] { visibility: hidden; }
+/* Text a cell lays out in a row (an Inline, a tree row) ends in an ellipsis rather than running into the text
+   beside it; the first piece (a name) gives way last, what follows it (a folder, a note) first. */
+.ui-grid td :is(.ui-inline, .ui-grid-tree) > .ui-text { overflow: hidden; text-overflow: ellipsis; }
+.ui-grid td .ui-inline > .ui-text:not(.ui-text ~ .ui-text) { flex-shrink: 0; max-width: 100%; }
 .ui-grid tr[data-heading] td { font-weight: 600; font-size: var(--text-sm); color: var(--text-dim); }
 .ui-grid tbody tr[data-heading]:hover td { background: none; }
 .ui-grid-footer { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--grid-edge); font-size: var(--text-sm); color: var(--text-dim); }

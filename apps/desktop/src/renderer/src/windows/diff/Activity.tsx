@@ -212,11 +212,10 @@ interface Row {
 
 const lines = (t: { added: number; removed: number }) => ({ node: [t.added && `+${t.added}`, t.removed && `−${t.removed}`].filter(Boolean).join(" "), kind: "number" as const });
 const when = (ms: number) => ({ node: age(ms), kind: "number" as const });
-const dim = (on: boolean | undefined, node: ReactNode) => (on ? <Text tone="dim">{node}</Text> : node);
 /** A file's name, its folder after it, dim. */
 const fileName = (rel: string, faded?: boolean) => (
   <Inline gap={1.5}>
-    {dim(faded, base(rel))}
+    <Text tone={faded ? "dim" : undefined}>{base(rel)}</Text>
     {dir(rel) && <Text tone="dim">{dir(rel)}</Text>}
   </Inline>
 );
