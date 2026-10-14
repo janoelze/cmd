@@ -34,7 +34,7 @@ async function setup(pkgs: FakePackage[]) {
 describe("frame widgets", () => {
   it("run their process, and their window gets the package folder and the grant's hosts once granted", async () => {
     const { core, rt, home, open } = await setup([{ name: "radio", surface: "frame", permissions: { net: ["stream.example.com"] } }]);
-    expect(core.handlers["widget.list"]({}).find((e) => e.kind === "pkg:radio/main")?.surface).toBe("frame");
+    expect((await core.handlers["widget.list"]({})).find((e) => e.kind === "pkg:radio/main")?.surface).toBe("frame");
     const w = await open();
     expect(core.library.host.status(w.id)?.state).toBe("waiting-grant");
     expect(await core.handlers["widget.frameSource"]({ windowId: w.id })).toBeNull(); // nothing before the grant

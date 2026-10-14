@@ -29,6 +29,7 @@ const PARTS: [string, string][] = [
   ["apps/desktop/src/shared/", "desktop/shared"],
   ["apps/desktop/src/jam/", "desktop/frames"],
   ["apps/desktop/src/visualizer/", "desktop/frames"],
+  ["apps/desktop/src/package-frame/", "desktop/frames"],
   ["apps/desktop/", "desktop"],
   ["apps/web/", "web"],
   ["apps/relay/", "relay"],
