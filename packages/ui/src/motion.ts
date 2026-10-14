@@ -218,11 +218,34 @@ export function useFlip(root: RefObject<HTMLElement | null>, { selector, keyOf =
   const flights = useRef(new Map<HTMLElement, Flight>());
   /** Rows growing or shrinking: from and to which height. */
   const sizes = useRef(new WeakMap<HTMLElement, { from: number; to: number }>());
-  // Render: the page is still the last commit's.
-  const before = root.current ? shownRows(root.current, selector, keyOf) : null;
+  const watch = useRef<Watch | null>(null);
+  // Render: the page is still the last commit's. Measuring it forces a layout, so where rows
+  // were last time serves while nothing under the root changed and nothing glides.
+  const box0 = root.current;
+  const w0 = watch.current;
+  if (w0?.mo.takeRecords().length) w0.rows = null; // changed since: a render run twice must not trust it either
+  const cached = box0 && w0?.box === box0 && !flights.current.size ? w0.rows : null;
+  const before = box0 ? (cached ?? shownRows(box0, selector, keyOf)) : null;
   useLayoutEffect(() => {
     const box = root.current;
     if (!box || !before) return;
+    let w = watch.current;
+    let changed = true; // the first commit watched: it may have changed anything
+    if (w?.box === box) changed = w.mo.takeRecords().length > 0;
+    else {
+      w?.mo.disconnect();
+      w?.ro.disconnect();
+      const fresh: Watch = { box, rows: null, mo: new MutationObserver(() => {}), ro: new ResizeObserver(() => (fresh.rows = null)) };
+      fresh.mo.observe(box, { subtree: true, childList: true, attributes: true, characterData: true });
+      fresh.ro.observe(box);
+      watch.current = w = fresh;
+    }
+    // Nothing under the root changed in this commit: no row moved (glides under way go on).
+    if (!changed) {
+      if (!flights.current.size) w.rows = before;
+      return;
+    }
+    w.rows = null;
     const animate = !reducedMotion();
     const now = performance.now();
     // Glides under way stop where they are (that's in `before`); their speed carries on.
@@ -281,7 +304,13 @@ export function useFlip(root: RefObject<HTMLElement | null>, { selector, keyOf =
       flights.current.set(el, f);
       anim.finished.then(() => flights.current.get(el) === f && flights.current.delete(el), () => {});
     }
-    if (!leave || !animate) return;
+    // Where rows are now serves the next render, unless something moves or grows (it's measured again then).
+    const still = !flights.current.size && !els.some((el) => el.getAnimations().length);
+    if (!leave || !animate || ![...before.keys()].some((key) => !after.has(key))) {
+      if (still) w.rows = after;
+      w.mo.takeRecords(); // this effect's own style writes
+      return;
+    }
     // What React removed is detached but whole: put it back over the root where it was shown, and fade it out.
     for (const [key, was] of before) {
       const el = was.el;
@@ -297,4 +326,20 @@ export function useFlip(root: RefObject<HTMLElement | null>, { selector, keyOf =
       el.animate([{ opacity: 1 }, { opacity: 0 }], timing("exit", { id: "flip-out", fill: "forwards" })).finished.then(() => el.remove(), () => el.remove());
     }
   });
+  useEffect(
+    () => () => {
+      watch.current?.mo.disconnect();
+      watch.current?.ro.disconnect();
+      watch.current = null;
+    },
+    [],
+  );
+}
+
+/** What useFlip watches under its root, and where its rows were when last measured (null: measure again). */
+interface Watch {
+  box: HTMLElement;
+  rows: Map<string, Shown> | null;
+  mo: MutationObserver;
+  ro: ResizeObserver;
 }
