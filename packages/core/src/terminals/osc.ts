@@ -26,6 +26,8 @@ const BEL = "\x07";
 const CAN = "\x18";
 const SUB = "\x1a";
 const MAX_OSC = 8192;
+/** What can start or stop something outside any sequence: BEL, CAN, SUB, ESC and the C1 controls. */
+const SPECIAL = /[\x07\x18\x1a\x1b\x90-\x9f]/g;
 /** The 8-bit C1 controls (U+0090…U+009F) that open or end strings, as the char after ESC. */
 const C1: Record<number, string> = { 0x90: "P", 0x98: "X", 0x9b: "[", 0x9c: "\\", 0x9d: "]", 0x9e: "^", 0x9f: "_" };
 
@@ -45,6 +47,13 @@ export class OscScanner {
   feed(chunk: string): OscEvent[] {
     const out: OscEvent[] = [];
     for (let i = 0; i < chunk.length; i++) {
+      // Between sequences only these chars do anything: jump to the next one (most output is plain text).
+      if (!this.#inOsc && this.#csi === null && !this.#inString && !this.#pendingEsc) {
+        SPECIAL.lastIndex = i;
+        const next = SPECIAL.exec(chunk);
+        if (!next) break;
+        i = next.index;
+      }
       const ch = chunk[i]!;
       const c = ch.charCodeAt(0);
       const seven = c >= 0x90 && c <= 0x9f ? C1[c] : undefined;
