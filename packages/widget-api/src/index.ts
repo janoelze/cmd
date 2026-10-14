@@ -11,14 +11,13 @@
 // Within API 1 nothing here changes or goes; additions carry `@since 1.x`.
 
 import { createElement, type ReactNode } from "react";
-import type { WireValue } from "@cmd/protocol/widget-tree";
-import { useConfig } from "./hooks.ts";
+import { useConfig, type ConfigShape, type ConfigValues } from "./hooks.ts";
 
 export * from "./elements.ts";
 export { cmd } from "./cmd.ts";
 export { fmt } from "./fmt.ts";
 export { ApiCallError } from "./connection.ts";
-export { useWorkspace, useAgents, useTerminals, useWindows, useEvents, useGit, useActions, useConfig, useEnv, useData, useStoredState, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
+export { useWorkspace, useAgents, useTerminals, useWindows, useEvents, useGit, useActions, useConfig, useEnv, type WidgetConfig, type ConfigValues, type ConfigShape, useData, useStoredState, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
 export { WIDGET_API, WIDGET_API_MINOR } from "./version.ts";
 export type {
   ApiAgent as Agent,
@@ -54,7 +53,7 @@ export type Widget = () => ReactNode;
  *
  * @since 1.0
  */
-export function defineWidget<Config extends Record<string, WireValue> = Record<string, WireValue>>(render: (props: { config: Config }) => ReactNode): Widget {
+export function defineWidget<Config extends ConfigShape<Config> = ConfigValues>(render: (props: { config: Config }) => ReactNode): Widget {
   function Widget(): ReactNode {
     return createElement(render as (p: { config: Config }) => ReactNode, { config: useConfig<Config>() });
   }

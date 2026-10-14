@@ -213,7 +213,7 @@ export class RenderedTree {
     return this.fire(n, ["onSubmit"], value);
   }
 
-  /** Chooses an entry of a node's `menu` (a row's context menu, the Window's title menu) or an empty state's action. */
+  /** Chooses an entry of a node's `menu` (a row's context menu, the Window's title menu), or the action of an EmptyState or a View's state. */
   async choose(n: TreeElement, label: string, prop = "menu"): Promise<void> {
     const find = (entries: WireValue | undefined): HandlerRef | undefined => {
       if (!Array.isArray(entries)) return undefined;
@@ -224,7 +224,8 @@ export class RenderedTree {
       }
       return undefined;
     };
-    const action = n.props.action as { label?: string; run?: HandlerRef } | undefined;
+    // An EmptyState's action, or a View's state's.
+    const action = (n.props.action ?? (n.props.state as { action?: unknown } | null | undefined)?.action) as { label?: string; run?: HandlerRef } | undefined;
     const run = find(n.props[prop]) ?? (action?.label === label && isHandler(action.run) ? action.run : undefined);
     if (!run) throw new Error(`${n.type} "${titleOf(n)}" has no menu entry "${label}"`);
     this.host.deliver({ kind: "interaction", handler: run.$handler, event: "run" });

@@ -66,8 +66,18 @@ export interface WidgetHostMethods {
 export const FRAME_VERBS = ["state.set", "windows.open"] as const;
 export type FrameVerb = (typeof FRAME_VERBS)[number];
 
-/** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window. */
-export type WidgetHostEvent = { type: "widget.tree"; windowId: WindowId; message: WidgetTree | WidgetPatch | WidgetHostStatus };
+/** A package widget's console line or error, for `cmd widget dev`'s terminal (and nothing else: the app doesn't show them). */
+export interface WidgetHostLog {
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  /** An error's stack (a render error's, or one nothing caught). */
+  stack?: string | null;
+}
+
+/** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window; its console, for whoever listens. */
+export type WidgetHostEvent =
+  | { type: "widget.tree"; windowId: WindowId; message: WidgetTree | WidgetPatch | WidgetHostStatus }
+  | ({ type: "widget.log"; windowId: WindowId } & WidgetHostLog);
 
 /** Widgets' settings, taken into SETTINGS_SCHEMA where they always stood (placed in the Settings window's Magic Widgets and Notifications pages). */
 export const WIDGET_SETTINGS = {

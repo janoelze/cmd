@@ -23,7 +23,7 @@ export const WIDGET_LINK_HELP = `       cmd widget link [dir]        add a widge
 /** How long to wait for the Library to list (or drop) a package. */
 const LIBRARY_MS = 5000;
 
-const tilde = (p: string) => {
+export const tilde = (p: string) => {
   const home = process.env.HOME;
   return home && (p === home || p.startsWith(home + "/")) ? "~" + p.slice(home.length) : p;
 };
@@ -59,20 +59,10 @@ async function link(home: string, given: string, json: boolean): Promise<number>
   }
   const name = r.pkg.name;
   const at = path.join(home, name);
-  let there: fs.Stats | null = null;
-  try {
-    there = fs.lstatSync(at);
-  } catch {}
-  if (there) {
-    const same = there.isSymbolicLink() && realOrNull(at) === dir;
-    if (!same) {
-      const what = there.isSymbolicLink() ? `a link to ${tilde(fs.readlinkSync(at))}` : "a package of its own";
-      console.error(red(`${tilde(at)} is ${what}. Unlink it first: cmd widget unlink ${name}`));
-      return 1;
-    }
-  } else {
-    fs.mkdirSync(home, { recursive: true });
-    fs.symlinkSync(dir, at);
+  const refused = ensureLink(home, dir, name);
+  if (refused) {
+    console.error(red(refused));
+    return 1;
   }
 
   const conn = await connect().catch(() => null);
@@ -107,6 +97,23 @@ async function link(home: string, given: string, json: boolean): Promise<number>
   }
 }
 
+/** Links `dir` into the packages folder under `name` (already linked there: nothing to do); null, or why not. */
+export function ensureLink(home: string, dir: string, name: string): string | null {
+  const at = path.join(home, name);
+  let there: fs.Stats | null = null;
+  try {
+    there = fs.lstatSync(at);
+  } catch {}
+  if (there) {
+    if (there.isSymbolicLink() && realOrNull(at) === dir) return null;
+    const what = there.isSymbolicLink() ? `a link to ${tilde(fs.readlinkSync(at))}` : "a package of its own";
+    return `${tilde(at)} is ${what}. Unlink it first: cmd widget unlink ${name}`;
+  }
+  fs.mkdirSync(home, { recursive: true });
+  fs.symlinkSync(dir, at);
+  return null;
+}
+
 async function unlink(home: string, name: string, force: boolean): Promise<number> {
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(name) || name.includes("..")) {
     console.error(red(`${name} isn't a widget package's name`));
@@ -139,7 +146,7 @@ async function unlink(home: string, name: string, force: boolean): Promise<numbe
 }
 
 /** The Library once `ok` holds for it (now, or at a widget.library event), or null after LIBRARY_MS. */
-async function library(conn: Connection, ok: (list: WidgetEntry[]) => boolean): Promise<WidgetEntry[] | null> {
+export async function library(conn: Connection, ok: (list: WidgetEntry[]) => boolean): Promise<WidgetEntry[] | null> {
   let done: (v: WidgetEntry[] | null) => void = () => {};
   const result = new Promise<WidgetEntry[] | null>((r) => (done = r));
   const timer = setTimeout(() => done(null), LIBRARY_MS);

@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import type { WidgetPatch, WidgetTree } from "@cmd/protocol";
 import { execArgv, type SandboxMode } from "../../lib/sandbox.ts";
+import { writeEnvTypes } from "../../widgets/env-types.ts";
 import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
 import { listFiles } from "./files.ts";
 
@@ -92,6 +93,44 @@ function modules(repo: string): Record<string, string> | null {
   }
 }
 
+/**
+ * A person's package (`cmd widget new`, `dev`, `check`, `test`): node_modules links to the
+ * checkout's @cmd/widget-api, React, Vitest, TypeScript and types, and their commands in
+ * node_modules/.bin, so `npm test`, an editor and `tsc` work in the folder as they would after
+ * an install (@cmd/widget-api isn't on npm yet). A module already there (a real install, the
+ * person's own) is left alone. Returns what it linked, or null when this cmd has no checkout.
+ */
+export function linkDevModules(dir: string, repo = REPO): string[] | null {
+  const mods = modules(repo);
+  const ts = path.join(repo, "node_modules/typescript");
+  if (!mods || !exists(ts)) return null;
+  const all: Record<string, string> = { ...mods, typescript: real(ts) };
+  const linked: string[] = [];
+  const there = (p: string) => {
+    try {
+      fs.lstatSync(p);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  for (const [name, target] of Object.entries(all)) {
+    const at = path.join(dir, "node_modules", name);
+    if (there(at)) continue;
+    fs.mkdirSync(path.dirname(at), { recursive: true });
+    fs.symlinkSync(target, at);
+    linked.push(name);
+  }
+  const bins: Record<string, string> = { vitest: "vitest/vitest.mjs", tsc: "typescript/bin/tsc" };
+  for (const [bin, rel] of Object.entries(bins)) {
+    const at = path.join(dir, "node_modules/.bin", bin);
+    if (there(at)) continue;
+    fs.mkdirSync(path.dirname(at), { recursive: true });
+    fs.symlinkSync(path.join("..", rel), at);
+  }
+  return linked;
+}
+
 const TSCONFIG = {
   compilerOptions: {
     target: "ES2023",
@@ -110,7 +149,7 @@ const TSCONFIG = {
     lib: ["ES2023"],
     types: ["node"],
   },
-  include: ["src/**/*.ts", "src/**/*.tsx"],
+  include: ["src/**/*.ts", "src/**/*.tsx", "cmd-env.d.ts"],
 };
 
 /** Renders each widget against its story's states (else its fixtures, else an empty host) and writes the trees to CMD_TREES_OUT. */
@@ -184,6 +223,9 @@ function workCopy(src: string, mods: Record<string, string>): Work {
     fs.symlinkSync(target, at);
   }
   fs.writeFileSync(path.join(pkg, "tsconfig.json"), JSON.stringify(TSCONFIG));
+  // The config's types as package.json says now, whatever the folder's own copy says.
+  const read = readPackage(src);
+  if (read.ok) writeEnvTypes(pkg, read.pkg);
   return { dir, pkg, done: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 

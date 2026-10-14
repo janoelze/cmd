@@ -1,0 +1,128 @@
+// `cmd widget new|test` (docs/56, "Developer ergonomics"): a widget package from the template
+// (packages/cli/templates/widget: a widget with a list and a toolbar, its test, its story,
+// README, LICENSE, CLAUDE.md and AGENTS.md), and its tests. Both prepare the folder the way
+// an install would: node_modules links to this cmd's @cmd/widget-api, React, Vitest and
+// TypeScript (toolchain.ts's linkDevModules) and cmd-env.d.ts from package.json, so
+// `npm test`, `tsc` and an editor work in it. `test` runs the package's own `test` script
+// (vitest run) with those on the PATH: the same thing `npm test` does, not a runner of its own.
+
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { linkDevModules, writeEnvTypes } from "@cmd/core/magic";
+import { cmdVersion, readPackage } from "@cmd/core/widgets/package";
+import { dim, green, red } from "./magic.ts";
+
+export const TEMPLATE = path.resolve(import.meta.dirname, "../templates/widget");
+
+const NAME = /^[a-z0-9][a-z0-9._-]*$/;
+
+const tilde = (p: string) => {
+  const home = process.env.HOME;
+  return home && (p === home || p.startsWith(home + "/")) ? "~" + p.slice(home.length) : p;
+};
+
+/** "my-widget" → "My Widget". */
+export const titleOf = (name: string) =>
+  name
+    .split(/[-._]+/)
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1))
+    .join(" ");
+
+/** A widget id from a package name: lower case letters, digits and dashes. */
+export const idOf = (name: string) => name.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "widget";
+
+/**
+ * Links what the package's tests and types need and writes cmd-env.d.ts. Returns null when the
+ * package.json isn't one cmd can read (its problems are the caller's to say), else what it did.
+ */
+export function prepare(dir: string): { linked: string[] | null; env: boolean } | null {
+  const r = readPackage(dir);
+  if (!r.ok) return null;
+  return { linked: linkDevModules(dir), env: writeEnvTypes(dir, r.pkg) };
+}
+
+/** The template's files, named and filled in for `name`. */
+export function templateFiles(name: string, year = new Date().getFullYear(), version = cmdVersion() ?? "0.30.0"): Record<string, string> {
+  const id = idOf(name);
+  const fill = (s: string) =>
+    s
+      .replaceAll("__NAME__", name)
+      .replaceAll("__TITLE__", titleOf(name))
+      .replaceAll("__ID__", id)
+      .replaceAll("__YEAR__", String(year))
+      .replaceAll("__CMD__", version.split(".").slice(0, 2).join("."))
+      .replaceAll("./widget.tsx", `./${id}.tsx`);
+  const out: Record<string, string> = {};
+  const walk = (rel: string) => {
+    for (const e of fs.readdirSync(path.join(TEMPLATE, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(r);
+      else {
+        // Named for the package (src/widget.tsx → src/<id>.tsx); `gitignore` is .gitignore (npm would drop a dot-file from a package).
+        const to = r === "gitignore" ? ".gitignore" : r.replace(/^src\/widget\./, `src/${id}.`);
+        out[to] = fill(fs.readFileSync(path.join(TEMPLATE, r), "utf8"));
+      }
+    }
+  };
+  walk("");
+  out["AGENTS.md"] = out["CLAUDE.md"]!;
+  return out;
+}
+
+/** `cmd widget new <name>`: the package in ./<name> (or `parent`/<name>). */
+export function newPackage(name: string | undefined, parent: string): number {
+  if (!name) {
+    console.error(red("usage: cmd widget new <name>   (lower case: my-widget)"));
+    return 1;
+  }
+  if (!NAME.test(name) || name.includes("..")) {
+    console.error(red(`${name} can't be a package's name: use lower case letters, digits and dashes (my-widget)`));
+    return 1;
+  }
+  const dir = path.resolve(parent, name);
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length) {
+    console.error(red(`${tilde(dir)} isn't empty. Pick another name, or remove it first.`));
+    return 1;
+  }
+  for (const [rel, text] of Object.entries(templateFiles(name))) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  }
+  const ready = prepare(dir);
+  const id = idOf(name);
+  console.log(`${green("✓")} ${name} ${dim(`· ${tilde(dir)}`)}`);
+  console.log(dim(`  src/${id}.tsx is the widget, src/${id}.test.tsx its tests, src/${id}.story.tsx its states`));
+  if (!ready?.linked) process.stderr.write(dim("  this cmd has no TypeScript and Vitest to lend it: run npm install there for its tests\n"));
+  console.log(`\n  cd ${path.relative(process.cwd(), dir) || "."}\n  cmd widget dev      ${dim("put it on the board; saves reload it")}\n  npm test            ${dim("or cmd widget test")}`);
+  return 0;
+}
+
+/** `cmd widget test [dir]`: the package's `test` script (vitest run), with this cmd's tools linked; its exit code. */
+export async function testPackage(dir: string, extra: string[] = []): Promise<number> {
+  const r = readPackage(dir);
+  if (!r.ok) {
+    console.error(`${red("✗")} ${path.basename(dir)} ${dim("· fix package.json first (cmd widget check)")}`);
+    return 2;
+  }
+  prepare(dir);
+  const bin = path.join(dir, "node_modules/.bin");
+  if (!fs.existsSync(path.join(bin, "vitest"))) {
+    console.error(red("no Vitest here: this cmd has none to lend, so run npm install in the package first"));
+    return 2;
+  }
+  let script = "vitest run";
+  try {
+    script = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).scripts?.test ?? script;
+  } catch {}
+  const command = [script, ...extra.map((a) => `'${a.replace(/'/g, `'\\''`)}'`)].join(" ");
+  return new Promise<number>((resolve) => {
+    const child = spawn("/bin/sh", ["-c", command], { cwd: dir, stdio: "inherit", env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` } });
+    child.on("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
+    child.on("error", (e) => {
+      console.error(red(`the tests didn't start: ${e.message}`));
+      resolve(2);
+    });
+  });
+}

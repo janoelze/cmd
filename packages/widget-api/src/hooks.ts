@@ -97,11 +97,26 @@ function usePushed<T>(read: () => T): T {
 }
 
 /**
- * This window's config values (from package.json's `config` fields, as the person set
- * them), live. Secret fields are never here: a widget never holds a secret (`cmd.net.fetch`'s `auth` names one).
+ * A package's config, by field: empty here, filled in by the `cmd-env.d.ts` that `cmd widget
+ * check` and `dev` write from package.json's `config` fields, so `useConfig()` is typed by
+ * them and a renamed field is a type error.
  * @since 1.0
  */
-export function useConfig<T extends Record<string, WireValue> = Record<string, WireValue>>(): T {
+export interface WidgetConfig {}
+
+/** What `useConfig()` returns without a type: the package's `WidgetConfig`, else any values. @since 1.0 */
+export type ConfigValues = keyof WidgetConfig extends never ? Record<string, WireValue> : WidgetConfig;
+
+/** A config shape: each value one the wire carries. @since 1.0 */
+export type ConfigShape<T> = { [K in keyof T]: WireValue };
+
+/**
+ * This window's config values (from package.json's `config` fields, as the person set
+ * them, else their defaults), live, typed by `cmd-env.d.ts`. Secret fields are never here:
+ * a widget never holds a secret (`cmd.net.fetch`'s `auth` names one).
+ * @since 1.0
+ */
+export function useConfig<T extends ConfigShape<T> = ConfigValues>(): T {
   return usePushed(() => connection().config as T);
 }
 

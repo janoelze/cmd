@@ -556,6 +556,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.pairEnded":
     case "remote.input":
     case "widget.library":
+    case "widget.log": // a widget's console, for cmd widget dev on this Mac
     case "window.closedChanged": // window.closed and window.reopen aren't remote
     case "actions.changed":
     case "stats.changed":

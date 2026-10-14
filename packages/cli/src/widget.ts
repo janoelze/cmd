@@ -1,22 +1,33 @@
-// `cmd widget`: widget packages (docs/56) from a terminal. `list` and `add` ask the running
-// core about the Widget Library (docs/16-widgets.md); `check` checks a package's package.json
-// (Magic's own builds check types, tests and trees too); `link` and `unlink` put one in the
-// Library from its folder and take it out (widget-link.ts); grant, restart, tree, press and env
-// drive a package window's process (widget-host.ts).
+// `cmd widget`: widget packages (docs/56) from a terminal. `new`, `dev`, `test`, `check` and
+// `preview` are the developer loop (widget-new.ts, widget-dev.ts, widget-preview.ts; check runs
+// the toolchain Magic checks with); `list` and `add` ask the running core about the Widget
+// Library (docs/16-widgets.md); `link` and `unlink` put one in the Library from its folder and
+// take it out (widget-link.ts); grant, restart, tree, press and env drive a package window's
+// process (widget-host.ts).
 
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { ENV, type WidgetEntry } from "@cmd/protocol";
 import { connect, defaultSocketPath } from "@cmd/protocol/node";
+import { checkoutToolchain, sandboxAvailable, writeEnvTypes } from "@cmd/core/magic";
 import { cmdVersion, readPackage } from "@cmd/core/widgets/package";
 import { HOST_SUBS, WIDGET_HOST_HELP, widgetHostCommand } from "./widget-host.ts";
 import { LINK_SUBS, WIDGET_LINK_HELP, widgetLinkCommand } from "./widget-link.ts";
+import { newPackage, testPackage } from "./widget-new.ts";
 import { dim, green, red } from "./magic.ts";
 
-export const WIDGET_HELP = `cmd widget — check, link and add widget packages
+export const WIDGET_HELP = `cmd widget — make, check and run widget packages
 
-usage: cmd widget check [dir]      a widget package's package.json (a "cmd" block): what cmd checks
-                                   before it runs one
+usage: cmd widget new <name>        a package from the template, in ./<name>: a widget with a list
+                                   and a toolbar, its test, its story, CLAUDE.md for agents
+       cmd widget dev [dir]         link it, put it on the board and print its console; saves
+                                   reload it (Ctrl-C stops printing, the widget stays)
+       cmd widget test [dir]        its tests: the package's test script (vitest run)
+       cmd widget check [dir]       package.json, permissions and types; writes cmd-env.d.ts,
+                                   which types useConfig() from the config fields
+       cmd widget preview [dir] [--themes all|dark|light] [--sizes all|narrow|regular|wide]
+                                   draw each state of its story; exits 2 on overflow, an empty
+                                   state where the story has data, or console errors
        cmd widget list             the Widget Library: built-in widgets, then packages
        cmd widget add <widget>     put one in this terminal's workspace: a ref from list,
                                    or a title
@@ -24,13 +35,25 @@ ${WIDGET_LINK_HELP}
 ${WIDGET_HOST_HELP}
 
   --force              unlink: remove a package that isn't a link
+  --out <dir>          preview: where the shots go (default <dir>/.cmd-preview)
   --json               machine-readable output
 
-dir defaults to the current folder. Magic makes packages: cmd magic --help.`;
+dir defaults to the current folder. Magic makes packages too: cmd magic --help.`;
+
+/** Every subcommand, as the help lists them. */
+export const WIDGET_SUBS = ["new", "dev", "test", "check", "preview", "list", "add", ...LINK_SUBS, ...HOST_SUBS];
 
 export async function widgetCommand(argv: string[]): Promise<number> {
   if (HOST_SUBS.includes(argv[0] ?? "") && !argv.includes("--help") && !argv.includes("-h")) return widgetHostCommand(argv);
   if (LINK_SUBS.includes(argv[0] ?? "") && !argv.includes("--help") && !argv.includes("-h")) return widgetLinkCommand(argv);
+  if (argv[0] === "dev" && !argv.includes("--help") && !argv.includes("-h")) return (await import("./widget-dev.ts")).devCommand(argv.slice(1));
+  if (argv[0] === "preview" && !argv.includes("--help") && !argv.includes("-h")) return (await import("./widget-preview.ts")).previewCommand(argv.slice(1));
+  // Everything after the folder goes to Vitest (cmd widget test . -t "name").
+  if (argv[0] === "test" && !argv.includes("--help") && !argv.includes("-h")) {
+    const [dir, ...rest] = argv.slice(1);
+    const hasDir = dir !== undefined && !dir.startsWith("-");
+    return testPackage(path.resolve(hasDir ? dir : "."), hasDir ? rest : argv.slice(1));
+  }
   const { values: o, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -79,6 +102,7 @@ export async function widgetCommand(argv: string[]): Promise<number> {
   }
 
   if (sub === "check") return await checkPackage(path.resolve(dirArg ?? "."), !!o.json);
+  if (sub === "new") return newPackage(dirArg, process.cwd());
 
   console.error(red(`unknown: cmd widget ${sub}`));
   console.log(WIDGET_HELP);
@@ -95,20 +119,38 @@ async function coreVersion(): Promise<string | null> {
 }
 
 /**
- * `cmd widget check` on a widget package: 0 when it's valid, 2 with each problem (its field first) when not.
- * engines.cmd is checked against this cmd's version, else the running core's, else not at all (and it says so).
+ * `cmd widget check` on a widget package: 0 when it's valid, 2 with each problem (its field, or
+ * its file and line, first) when not. package.json through readPackage, then cmd-env.d.ts written
+ * from its config, then TypeScript over src/ (the toolchain Magic checks with; skipped, and said,
+ * where this cmd has none, or with `types: false`). engines.cmd is checked against this cmd's
+ * version, else the running core's, else not at all (and it says so).
  */
-export async function checkPackage(dir: string, json: boolean, local: string | null = cmdVersion(), ask: () => Promise<string | null> = coreVersion): Promise<number> {
+export async function checkPackage(dir: string, json: boolean, local: string | null = cmdVersion(), ask: () => Promise<string | null> = coreVersion, o: { types?: boolean } = {}): Promise<number> {
   const version = local ?? (await ask());
   if (!version) process.stderr.write(dim("engines.cmd not checked: no cmd running\n"));
   const r = readPackage(dir, { cmdVersion: version });
-  if (json) console.log(JSON.stringify(r.ok ? { ok: true, name: r.pkg.name, version: r.pkg.version, api: r.pkg.api, kinds: r.pkg.widgets.map((w) => w.kind) } : { ok: false, problems: r.errors }));
-  else if (r.ok) console.log(`${green("✓")} ${r.pkg.name} ${r.pkg.version} ${dim(`· API ${r.pkg.api} · ${r.pkg.widgets.map((w) => w.kind).join(", ")}`)}`);
-  else {
-    console.error(`${red("✗")} ${path.basename(dir)} ${dim(`· ${r.errors.length} ${r.errors.length === 1 ? "problem" : "problems"} in package.json`)}`);
-    for (const e of r.errors) console.error(red(`  ${e}`));
+  let problems = r.ok ? [] : r.errors;
+  let types: "checked" | "skipped" = "skipped";
+  if (r.ok) {
+    writeEnvTypes(dir, r.pkg);
+    const tools = o.types === false ? null : checkoutToolchain();
+    if (tools) {
+      const c = await tools.check(dir, { sandbox: sandboxAvailable() ? "required" : "off", deny: [], cmdVersion: version });
+      problems = c.problems;
+      types = c.types;
+    } else if (o.types !== false) process.stderr.write(dim("types not checked: this cmd has no TypeScript to check with\n"));
   }
-  return r.ok ? 0 : 2;
+  const ok = !problems.length;
+  if (json) console.log(JSON.stringify(r.ok && ok ? { ok: true, name: r.pkg.name, version: r.pkg.version, api: r.pkg.api, kinds: r.pkg.widgets.map((w) => w.kind), types } : { ok: false, problems }));
+  else if (r.ok && ok) console.log(`${green("✓")} ${r.pkg.name} ${r.pkg.version} ${dim(`· API ${r.pkg.api} · ${r.pkg.widgets.map((w) => w.kind).join(", ")}${types === "checked" ? " · types" : ""}`)}`);
+  else {
+    const where = r.ok ? "" : " in package.json";
+    // TypeScript's continuation lines are indented: count the problems, not the lines.
+    const n = problems.filter((p) => !/^\s/.test(p)).length;
+    console.error(`${red("✗")} ${path.basename(dir)} ${dim(`· ${n} ${n === 1 ? "problem" : "problems"}${where}`)}`);
+    for (const e of problems) console.error(red(`  ${e}`));
+  }
+  return ok ? 0 : 2;
 }
 
 /** A widget by its ref, its kind (the ref without "type:"), or its title (any case). */

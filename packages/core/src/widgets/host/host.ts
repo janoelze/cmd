@@ -386,8 +386,10 @@ export class WidgetHost {
         inst.subs.delete(m.id);
         return;
       case "log":
+        this.#core.broadcast({ type: "widget.log", windowId: inst.windowId, level: m.level, message: String(m.message).slice(0, 2000) });
         return log[m.level === "error" ? "warn" : m.level === "warn" ? "info" : "debug"](`widget ${inst.pkg?.name}/${inst.widget?.id}: ${String(m.message).slice(0, 2000)}`);
       case "error":
+        this.#core.broadcast({ type: "widget.log", windowId: inst.windowId, level: "error", message: String(m.message).slice(0, 2000), stack: [m.stack, m.componentStack].filter(Boolean).join("\n").slice(0, 4000) || null });
         return log.warn(`widget ${inst.pkg?.name}/${inst.widget?.id} error: ${String(m.message).slice(0, 500)}`, { stack: m.stack?.slice(0, 2000) });
     }
   }
