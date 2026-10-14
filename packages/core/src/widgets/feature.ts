@@ -5,11 +5,11 @@
 import { widgetsHome } from "@cmd/protocol/node";
 import type { CoreContext } from "../kernel/context.ts";
 import type { Feature } from "../kernel/features.ts";
-import { WidgetPackages } from "./packages.ts";
+import { WidgetPackages, builtinWidgets } from "./packages.ts";
 
-/** The service over $CMD_WIDGETS_HOME or ~/.cmd/widgets; it reads them from its startup job (a core with a state dir) on. */
+/** The service over $CMD_WIDGETS_HOME or ~/.cmd/widgets, and the built-in packages; it reads them from its startup job (a core with a state dir) on. */
 export function createPackages(core: Pick<CoreContext, "windowTypes">, onChange: () => void): WidgetPackages {
-  return new WidgetPackages({ home: widgetsHome(), types: () => core.windowTypes, onChange });
+  return new WidgetPackages({ home: widgetsHome(), builtin: builtinWidgets(), types: () => core.windowTypes, onChange });
 }
 
 export const packagesFeature = {

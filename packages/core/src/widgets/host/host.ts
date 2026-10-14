@@ -282,7 +282,7 @@ export class WidgetHost {
   }
 
   #granted(name: string): Grants | null {
-    return this.#o.stateDir ? readGrants(this.#o.stateDir, name) : (this.#grants.get(name) ?? null);
+    return this.#o.packages.builtinGrant(name) ?? (this.#o.stateDir ? readGrants(this.#o.stateDir, name) : (this.#grants.get(name) ?? null));
   }
 
   #launch(inst: Instance): void {

@@ -17,7 +17,7 @@ import "./library.css";
 
 /** "Weather · Lisbon" → "W": the first letter or digit. */
 const initial = (title: string) => (/[\p{L}\p{N}]/u.exec(title)?.[0] ?? "✦").toUpperCase();
-const sourceOf = (e: WidgetEntry) => (e.source === "builtin" ? "Built-in" : e.source === "package" ? (e.problem ? "Can't run" : `${e.name} ${e.version}`) : "Made with Magic");
+const sourceOf = (e: WidgetEntry) => (e.source === "builtin" ? "Built-in" : e.source === "package" ? (e.problem ? "Can't run" : `${e.builtin ? "Built-in · " : ""}${e.name} ${e.version}`) : "Made with Magic");
 
 function matches(e: WidgetEntry, query: string): boolean {
   const hay = [e.title, e.description, e.request].filter(Boolean).join(" ").toLowerCase();
@@ -40,9 +40,10 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
 
   const shown = useMemo(() => library.filter((e) => matches(e, query)), [library, query]);
   const yours = shown.filter((e) => e.source === "yours");
-  const packages = shown.filter((e) => e.source === "package");
+  // Built-in packages (packages/widgets, docs/56) sit with the built-ins, not under Packages.
+  const packages = shown.filter((e) => e.source === "package" && !e.builtin);
   const dev = (e: WidgetEntry) => !!e.tags?.includes("developer");
-  const builtin = shown.filter((e) => e.source === "builtin" && !dev(e));
+  const builtin = shown.filter((e) => (e.source === "builtin" || (e.source === "package" && e.builtin)) && !dev(e));
   // Shown only with Settings → Magic Widgets → Developer widgets on (the core leaves them out otherwise).
   const developer = shown.filter((e) => e.source === "builtin" && dev(e));
 

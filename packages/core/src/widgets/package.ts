@@ -63,6 +63,8 @@ export interface WidgetPackage {
   experimental: string[];
   /** Its folder (a link in the packages folder stays a link here). */
   dir: string;
+  /** Ships with cmd (packages.ts's built-in root): granted what it declares. */
+  builtin?: boolean;
 }
 
 export type PackageResult = { ok: true; pkg: WidgetPackage } | { ok: false; errors: string[] };

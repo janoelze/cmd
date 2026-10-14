@@ -22,7 +22,7 @@
     "remote:device": "node --no-warnings packages/cli/src/remote-device.ts",
     "dev": "node scripts/build-web.mjs --if-missing && pnpm --filter @cmd/desktop dev",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @cmd/ui typecheck && pnpm --filter @cmd/widget-api typecheck && pnpm --filter @cmd/desktop typecheck && pnpm --filter @cmd/web typecheck",
+    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @cmd/ui typecheck && pnpm --filter @cmd/widget-api typecheck && pnpm --filter './packages/widgets/*' typecheck && pnpm --filter @cmd/desktop typecheck && pnpm --filter @cmd/web typecheck",
     "postinstall": "node scripts/postinstall.mjs",
     "build": "pnpm --filter @cmd/desktop build",
     "icons": "node scripts/make-icons.mjs",

@@ -1,0 +1,32 @@
+{
+  "name": "agents",
+  "version": "1.0.0",
+  "description": "Every agent at a glance: who waits for you, who is working, what just finished.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/activity.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "activity",
+        "title": "Agents",
+        "icon": "person.2",
+        "description": "Every agent at a glance: who waits for you, who is working, what just finished.",
+        "main": "src/activity.tsx",
+        "size": "m"
+      }
+    ],
+    "permissions": { "workspace": ["read", "all"] }
+  }
+}

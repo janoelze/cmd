@@ -362,6 +362,8 @@ export interface WidgetEntry {
   permissions?: WidgetPermissions;
   /** Packages: the person is being asked to grant `permissions` (the grants sheet); `granted` is the grant it has, if any. */
   ask?: { granted: WidgetPermissions | null };
+  /** Packages: ships with cmd (packages/widgets), listed under Built-in and granted what it declares. */
+  builtin?: boolean;
 }
 
 export interface FileEntry {

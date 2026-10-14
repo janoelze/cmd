@@ -69,7 +69,7 @@ export class WidgetLibrary {
         ? e.pkg.widgets.map((w) => {
             const ask = this.host.asking(e.pkg.name);
             const link = linkOf(e.dir);
-            return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
+            return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), ...(e.builtin ? { builtin: true } : {}), windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
           })
         : [{ ref: `pkg:${e.folder}`, source: "package", kind: `pkg:${e.folder}`, title: e.folder, icon: DEFAULT_ICON, name: e.folder, problem: e.errors.join("; "), dir: e.dir, windows: [] }],
     );

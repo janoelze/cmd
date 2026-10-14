@@ -20,6 +20,7 @@ const PARTS: [string, string][] = [
   ["packages/cli/", "cli"],
   ["packages/ui/", "ui"],
   ["packages/widget-api/", "widget-api"],
+  ["packages/widgets/", "widgets"],
   ["apps/desktop/src/main/", "desktop/main"],
   ["apps/desktop/src/preload/", "desktop/preload"],
   ["apps/desktop/src/renderer/", "desktop/renderer"],
@@ -48,6 +49,8 @@ const ALLOWED: Record<string, { value: string[]; types?: string[] }> = {
   ui: { value: [] },
   // Runs in the widget process (Deno, sandboxed): protocol's wire types only, nothing at run time.
   "widget-api": { value: [], types: ["protocol"] },
+  // Widget packages that ship with cmd (packages/widgets/<name>): the widget API, as any package's (and react, from npm: WIDGET_NPM).
+  widgets: { value: ["widget-api"] },
   core: { value: ["protocol", "remote-crypto", "node:"] },
   cli: { value: ["protocol", "remote-crypto", "core", "node:"] },
   "desktop/main": { value: ["protocol", "ui", "desktop/shared", "desktop/frames", "electron", "node:"] },
@@ -62,7 +65,9 @@ const partOf = (rel: string) => PARTS.find(([p]) => rel.startsWith(p))?.[1] ?? n
 /** The package folder a file is in ("packages/core"), or null. */
 const packageOf = (rel: string) => Object.values(PACKAGES).find((p) => rel.startsWith(`${p}/`)) ?? null;
 /** Shipped code: under a package's src/ (tests, configs and scripts are not). */
-const shipped = (rel: string) => /^(packages|apps)\/[^/]+\/src\//.test(rel) && !/\.(test|story)\.tsx?$/.test(rel);
+const shipped = (rel: string) => /^((packages|apps)\/[^/]+|packages\/widgets\/[^/]+)\/src\//.test(rel) && !/\.(test|story)\.tsx?$/.test(rel);
+/** What a widget package's shipped code may take from npm: React, whose runtime the widget process has (the vendored bundle). */
+const WIDGET_NPM = ["react", "react/jsx-runtime"];
 
 const SKIP = new Set(["node_modules", "out", "out-dev", "dist", "build", "native"]);
 function files(dir: string, out: string[] = []): string[] {
@@ -100,6 +105,7 @@ function breaks(): string[] {
       else if (spec === "electron" || spec.startsWith("electron/")) to = "electron";
       else {
         const name = Object.keys(PACKAGES).find((p) => spec === p || spec.startsWith(`${p}/`));
+        if (!name && from === "widgets" && shipped(f) && !WIDGET_NPM.includes(spec)) out.push(`${f}: ${spec}, a widget package may import only @cmd/widget-api and react`);
         if (!name) continue; // a dependency from npm: package.json's business
         target = PACKAGES[name]!;
         to = partOf(`${target}/src/`) ?? partOf(`${target}/`);

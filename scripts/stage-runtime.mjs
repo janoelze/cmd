@@ -23,6 +23,13 @@ fs.writeFileSync(path.join(out, ".checkout"), root + "\n");
 for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packages/core/${p}`, `packages/core/${p}`);
 // @cmd/widget-api vendored for Deno (scripts/widget-api-bundle.mjs): package widgets' processes import it (widgets/host/runtime.ts).
 copy("packages/widget-api/dist/deno", "packages/widget-api/dist/deno");
+// The built-in widget packages (packages/widgets/<name>, widgets/packages.ts's built-in root): what a
+// package ships, without node_modules (the runtime imports @cmd/widget-api from the bundle above).
+for (const name of fs.readdirSync(path.join(root, "packages/widgets"))) {
+  const dir = `packages/widgets/${name}`;
+  if (!fs.existsSync(path.join(root, dir, "package.json"))) continue;
+  for (const p of ["package.json", "src", "README.md", "LICENSE"]) if (fs.existsSync(path.join(root, dir, p))) copy(`${dir}/${p}`, `${dir}/${p}`);
+}
 // Workspace packages the core imports (@cmd/protocol, @cmd/remote-crypto): their
 // TypeScript is copied next to the core, and node_modules gets a small JavaScript
 // package per entry point that re-exports it from there (Node won't strip types

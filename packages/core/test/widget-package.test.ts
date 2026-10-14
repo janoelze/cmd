@@ -14,6 +14,9 @@ import { effective, grantsPath, needsGrant, readGrants, writeGrants } from "../s
 import { runWidgetTool } from "../src/magic/widget-tools.ts";
 import { WidgetStore } from "../src/widgets/store.ts";
 import type { VerifyContext } from "../src/widgets/verify.ts";
+import { BUILTIN_WIDGETS, WidgetPackages } from "../src/widgets/packages.ts";
+import type { WindowTypes } from "../src/windows/types.ts";
+import { FakeWidgetRuntime, until, writePackage } from "./fake-widget-runtime.ts";
 import { rmTemp } from "./tmp.ts";
 import { SYSTEM_TIMEOUT } from "../../../test/system.ts";
 
@@ -321,6 +324,66 @@ describe("packages in the Widget Library", () => {
     core.handlers["window.update"]({ id: w.id, state: { refreshedAt: Date.now() } });
     core.handlers["window.close"]({ id: w.id });
     expect(snapshot(home)).toEqual(before);
+    await core.close();
+  });
+});
+
+// The built-in root (widgets/packages.ts): packages that ship with cmd, beside the person's.
+describe("built-in packages", () => {
+  it("are read from the repo's packages/widgets by default", () => {
+    expect(BUILTIN_WIDGETS).toBe(path.resolve(import.meta.dirname, "../../widgets"));
+    expect(readPackage(path.join(BUILTIN_WIDGETS, "agents"), { cmdVersion: null })).toMatchObject({ ok: true, pkg: { name: "agents", widgets: [{ kind: "pkg:agents/activity", title: "Agents" }], permissions: { workspace: ["read", "all"] } } });
+  });
+
+  it("are listed beside the person's, marked built-in; the person's package of the same name wins", () => {
+    const home = tmp("cmd-widgets-home-");
+    const builtin = tmp("cmd-widgets-builtin-");
+    pkgDir(PKG({ name: "agents", version: "1.0.0" }), builtin, "agents");
+    pkgDir(PKG({ name: "clock", version: "2.0.0" }), builtin, "clock");
+    pkgDir(PKG({ name: "clock", version: "9.0.0" }), home, "clock");
+    fs.mkdirSync(path.join(builtin, "not-a-package")); // no package.json: skipped, not listed as broken
+    const registered: string[] = [];
+    const types = { get: () => undefined, register: (t: { kind: string }) => void registered.push(t.kind), unregister: () => {} } as unknown as WindowTypes;
+    const packages = new WidgetPackages({ home, builtin, types: () => types, onChange: () => {} });
+    packages.scan();
+    const list = packages.list();
+    packages.dispose();
+    expect(list.map((e) => [e.folder, !!e.builtin, e.ok && e.pkg.version, e.ok && !!e.pkg.builtin])).toEqual([
+      ["agents", true, "1.0.0", true],
+      ["clock", false, "9.0.0", false],
+    ]);
+    expect(registered.sort()).toEqual(["pkg:agents/ci", "pkg:clock/ci"]);
+  });
+
+  it("are in the Library as built-in and run with what they declare, no grants file", async () => {
+    const home = tmp("cmd-widgets-home-");
+    const builtin = tmp("cmd-widgets-builtin-");
+    writePackage(builtin, { name: "shipped", permissions: { workspace: ["read", "all"] } });
+    writePackage(home, { name: "mine", permissions: { workspace: ["read"] } });
+    process.env.CMD_WIDGETS_HOME = home;
+    process.env.CMD_BUILTIN_WIDGETS = builtin;
+    const { Core } = await import("../src/kernel/core.ts");
+    const { fakeFactory } = await import("./fake-pty.ts");
+    const stateDir = tmp("cmd-state-");
+    const core = new Core({ socketPath: "", dbPath: null, settingsPath: null, terminals: fakeFactory().factory, pollMs: 0, stateDir });
+    delete process.env.CMD_WIDGETS_HOME;
+    process.env.CMD_BUILTIN_WIDGETS = ""; // as vitest.setup.ts leaves it
+    const rt = new FakeWidgetRuntime(core.widgetTokens);
+    core.library.host.configure({ runtime: rt, times: { pingMs: 20, stallMs: 150, stopAfterMs: 100, restartMs: 5, helloMs: 2000 } });
+    core.start();
+    await core.scheduler.idle();
+    const entries = (core.handlers["widget.list"]({}) as unknown as WidgetEntry[]).filter((e) => e.source === "package");
+    expect(entries.map((e) => [e.name, !!e.builtin])).toEqual([
+      ["mine", false],
+      ["shipped", true],
+    ]);
+    const ws = core.workspaces.home().id;
+    const shipped = (await core.handlers["widget.add"]({ ref: "pkg:shipped/main", workspaceId: ws })) as unknown as { id: string };
+    const mine = (await core.handlers["widget.add"]({ ref: "pkg:mine/main", workspaceId: ws })) as unknown as { id: string };
+    await until(() => core.library.host.status(shipped.id)?.state === "running", "the built-in running");
+    expect(rt.procs.map((p) => [p.spec.name, p.spec.permissions.workspace])).toEqual([["shipped", ["read", "all"]]]);
+    expect(core.library.host.status(mine.id)?.state).toBe("waiting-grant"); // the person's still asks
+    expect(fs.existsSync(grantsPath(stateDir, "shipped"))).toBe(false);
     await core.close();
   });
 });

@@ -5,3 +5,5 @@ import os from "node:os";
 import path from "node:path";
 
 process.env.CMD_LOG_DIR = path.join(os.tmpdir(), "cmd-test", "logs");
+// The built-in widget packages (packages/widgets) stay out of tests' cores unless a test names a root.
+process.env.CMD_BUILTIN_WIDGETS ??= "";
