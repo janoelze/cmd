@@ -1353,7 +1353,7 @@ await scenario("embedded", async () => {
   }
   check(order.every(Boolean), `clicking from one embedded page into the next selects each window (${order.map((x) => (x ? "✓" : "✗")).join(" ")})`);
 
-  // Right-click in a Magic window opens its window's menu (the native menu is stubbed to record and pick).
+  // Right-click on a Magic window's title bar opens its menu (the native menu is stubbed to record and pick).
   await app.evaluate(({ Menu }) => {
     globalThis.__menuPopup ??= Menu.prototype.popup;
     Menu.prototype.popup = function (o) {
@@ -1363,13 +1363,12 @@ await scenario("embedded", async () => {
     };
   });
   await app.evaluate(() => (globalThis.__pick = "Change…"));
-  const b0 = await tileOf(magic[0]).boundingBox();
-  await win.mouse.click(b0.x + b0.width / 2, b0.y + 8, { button: "right" });
+  await win.locator(`.tile[data-pane="${magic[0]}"] .tile-title`).click({ button: "right" });
   const titleInput = win.locator(`.tile[data-pane="${magic[0]}"] .tile-title-input`);
   await titleInput.waitFor({ timeout: 10_000 });
   const menuItems = await app.evaluate(() => globalThis.__lastMenu);
   await until(selected, (s) => s === magic[0], 5000);
-  check(menuItems[0] === "Change…" && menuItems.includes("Copy Request") && (await selected()) === magic[0], `right-click in a Magic window opens its window's menu, Change first (${menuItems.slice(0, 3).join(", ")}…)`);
+  check(menuItems[0] === "Change…" && menuItems.includes("Copy Request") && (await selected()) === magic[0], `right-click on a Magic window opens its menu, Change first (${menuItems.slice(0, 3).join(", ")}…)`);
   const isFocused = (loc) => until(() => loc.evaluate((el) => el === document.activeElement).catch(() => false), Boolean, 5000);
   check(await isFocused(titleInput), "Change from that menu edits the title bar, focused");
   await win.keyboard.press("Escape");

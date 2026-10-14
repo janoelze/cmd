@@ -77,12 +77,13 @@ describe("the Widget Library", () => {
 function magicPackage(home: string, stateDir: string, o: { link?: boolean } = {}) {
   const src = o.link ? tmp("cmd-widget-src-") : home;
   const dir = writePackage(src);
+  // Version 1 without cmd's mark, as 2a's builds kept it (the mark was written after).
+  const revs = new PackageRevisions(stateDir, "demo");
+  revs.snapshot(dir, { prompt: "a demo", ok: true }, Buffer.from("png"));
   const json = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
   json.cmd.magic = { request: "a demo", madeAt: new Date().toISOString(), revisions: 1 };
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(json, null, 2) + "\n");
   if (o.link) fs.symlinkSync(dir, path.join(home, "demo"));
-  const revs = new PackageRevisions(stateDir, "demo");
-  revs.snapshot(dir, { prompt: "a demo", ok: true }, Buffer.from("png"));
   return { dir, revs };
 }
 
@@ -125,7 +126,9 @@ describe("versions of a package made with Magic", () => {
     expect(i.revisions.at(-1)!.shot).toBeTruthy(); // version 1's screenshot comes with it
     expect(i).toMatchObject({ name: "demo", edited: false, building: false });
     expect(i.link).toBeUndefined();
-    expect(JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).cmd.magic.revisions).toBe(3);
+    // Still made with Magic, though version 1's package.json had no mark.
+    expect(JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).cmd.magic).toMatchObject({ request: "a demo", revisions: 3 });
+    expect((c.handlers["widget.list"]({}) as WidgetEntry[]).find((e) => e.name === "demo")?.magic).toBeTruthy();
     expect(() => c.handlers["magic.restorePackage"]({ windowId: w.id, revision: 9 })).toThrow(/no version 9/);
   });
 
@@ -196,5 +199,15 @@ describe("a folder that isn't a package", () => {
     expect(lines()).toHaveLength(2);
     expect(lines()[1]).toContain("widget package building can't be used");
     pkgs.dispose();
+  });
+});
+
+describe("the split (docs/56, \"The split\")", () => {
+  it("widgets/ imports nothing from magic/", () => {
+    const root = path.resolve(import.meta.dirname, "../src/widgets");
+    const files = (fs.readdirSync(root, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts"));
+    const offenders = files.filter((f) => /from "(\.\.\/)+magic\//.test(fs.readFileSync(path.join(root, f), "utf8")) || /import\("(\.\.\/)+magic\//.test(fs.readFileSync(path.join(root, f), "utf8")));
+    expect(files.length).toBeGreaterThan(10);
+    expect(offenders).toEqual([]);
   });
 });

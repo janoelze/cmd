@@ -295,8 +295,9 @@ export class MagicPackages {
     if (why || !v.pkg) return this.#end(id, name, ac, { error: why ?? "The widget couldn't be built.", fresh: o.fresh });
 
     const revs = new PackageRevisions(this.#stateDir, name);
+    // The mark first, so the version keeps it (Restore brings back a package Magic made).
+    writeMark(dir, { request: o.original, madeAt: readMark(dir)?.madeAt ?? new Date().toISOString(), revisions: (revs.latest()?.n ?? 0) + 1 });
     const rev = revs.snapshot(dir, { prompt: o.text, ok: v.ok, ...(v.ok ? {} : { problems: v.problems.slice(0, 10) }), model: r.model }, v.shot ? Buffer.from(v.shot, "base64") : undefined);
-    writeMark(dir, { request: o.original, madeAt: readMark(dir)?.madeAt ?? new Date().toISOString(), revisions: rev.n });
     this.#end(id, name, ac, { fresh: o.fresh, keep: true });
     const { library } = this.#c;
     library.packages.scan();
@@ -396,9 +397,10 @@ export class MagicPackages {
     // One reload, now: the saves below don't reload it again a moment later.
     const { reloader, host } = this.#c.library;
     reloader.paused.add(e.name);
+    const mark = readMark(e.dir);
     revs.checkout(e.dir, n);
     const rev = revs.snapshot(e.dir, { prompt: `Back to version ${n}: ${meta.prompt}`.slice(0, 300), ok: meta.ok, ...(meta.problems ? { problems: meta.problems } : {}), ...(meta.model ? { model: meta.model } : {}), ...(meta.hand ? { hand: true } : {}) }, revs.shotOf(n));
-    const mark = readMark(e.dir);
+    // cmd's mark as it is now (an older version may have none), counting this version.
     if (mark) writeMark(e.dir, { ...mark, revisions: rev.n });
     log.info(`package ${e.name} back to version ${n} (version ${rev.n})`);
     host.reload(e.name);
