@@ -527,6 +527,27 @@ For whoever cuts the release with a phase in it; the `changelog` skill writes th
 | Revisions | git per Magic package (confirm in phase 2) | Standard, publishable, diffable; Restore is checkout |
 | Registry | a JSON index in a repository over GitHub releases, hash-pinned, reviewed | Obsidian's shape; the thinnest thing that is trustworthy |
 | Today's widgets | dropped: no adapter, no migration, the old runtime deleted in phase 2, the folder renamed to `widgets-old/` once | Four users; a clean implementation is worth more than 22 folders kept running; the compatibility promise starts at API 1 |
+| API 1's surface | frozen at what `widget-tree.ts` holds (22 verbs, 7 topics, 30 elements); `cmd.ai` and the brokered `cmd.net.fetch` were the one addition, asked for; anything else is `cmd.experimental` or a minor later | Decided in the 2026-10-14 review: a small promise is one that can be kept while the codebase moves weekly |
+| Elements | the 30 built, not the ~70 the first draft listed; one spec in protocol, one entry in the element table each | Every element is three places (spec, API component, kit translation): the set stays small until a real widget needs more |
+| Process per window | kept for now; the open question below stays | Per package needs a window id on the wire, a multi-root reconciler and per-window scoping: a day or two of rework for 25 MB a window, and the wire is cmd's own, so it can change later |
+| Built-in packages | ship in `packages/widgets/`, listed under Built-in, granted what they declare without a grants file; a person's package of the same name wins | They ship with cmd, which the person already trusts; a sheet for them would be noise |
+| Native Agent Activity | stays beside the `agents` package until the package has lived on the board; deleted in a later phase | A regression in something used daily isn't worth saving one view early |
+| `notify.send`, `windows.open` | no permission for notifications (deduplicated by key, 10/min, muted per window); `windows.open` only within 5 s of a click in the widget | Notifying is what a widget on your board is for; a widget can't open windows on its own |
+| Config and secrets | values per window (`state.config`, pushed to the process), secrets per package and widget in the instance's `secrets.json` (0600), set in the Configure sheet; the sheet shows Set / Not set, never a value | Two windows of one widget share a login but not a repository; a secret typed once is never seen again |
+| Magic's output | every new request is a package in `~/.cmd/widgets/<slug>/`, marked `cmd.magic` by cmd; revisions numbered per instance for now; the fast paths and old widgets stay `MagicService`'s until 2b | One format for what Magic and people write; the mark travels with the package |
+| Remote, phase 1 | `widget.tree` reaches a device that follows the window, handlers stripped below control scope; `widget.interact` is control-scope; the phone draws nothing yet | The policy is in place before the client; apps/web needs a window-view registry first |
+
+## Built on 2026-10-14: how it went
+
+Phase 1, the config sheet and phase 2a were built in one day by six Opus workers in their own worktrees, each briefed from this doc and reviewed against its criteria (the `manager` skill), 59 commits. What the day settled is in the table above and in the "Built:" clauses of each phase 1 criterion; what it changed in the design, so the next phases start from the right place:
+
+- **Secrets left the API.** The first draft had `cmd.secrets` in the widget; the review replaced it with the brokered `net.fetch` and `cmd.ai.complete`, and item B bound every secret field to a host. Nothing on the wire carries a value.
+- **The wire got its shape from building it**: `ready` after `hello`, `rev` on trees and patches with `resync` on a gap, five patch ops, handler ids kept per prop path, the core keeping the last whole tree per window, ping/pong for the 20 s stall, `status` messages (`starting`, `running`, `stopped` with a reason and `detail`, `waiting-grant`). Protocol lives in `widget-tree.ts` (the process's wire), `widget-host.ts` (the app's methods and the `widget.tree` event, and the widget settings: `rpc.ts` and `settings.ts` are at their line limits) and `widget-package.ts` (the manifest's shapes); `magic-package.ts` for Magic's part.
+- **The sheet is the kit's `ApprovalSheet` with a `list`**, not `tools/approvals.ts`'s per-call flow: a grant is per package, all or nothing, with no "for how long"; the core decides who is asked (`WidgetHost.asking`) so one package is one sheet.
+- **A save that doesn't load is not a crash**: "Stopped · didn't load" with the error over the last good tree, no strike, no restart until the next save.
+- **The kit's `List` isn't virtualised**, which the first draft assumed; rows draw progressively (60, then 100 a frame) until it is.
+- **The packaged app can't type-check or test what Magic writes** (no TypeScript, Vitest or esbuild in the staged runtime): the first open question below.
+- **Not done, deliberately**: deleting the native Agent Activity, the old runtime and `MagicService`'s split (2b), the phone client drawing trees, `cmd widget new|dev|test` (phase 3), acting verbs and `cmd.run` (phase 4; two of Magic's nine examples end as terminals until then).
 
 ## Open questions
 
