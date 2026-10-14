@@ -21,8 +21,8 @@ function files(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Methods by name: each `"x.y": { params` in protocol's sources (Methods and the features' own method maps). */
-const methods = files("packages/protocol/src").flatMap((f) => [...read(f).matchAll(/^\s+"([a-z][A-Za-z]*\.[A-Za-z.]+)":\s*\{\s*params/gm)].map((m) => m[1]!));
+/** Methods by name: each `"x.y": { params` in protocol's sources (Methods and the features' own method maps). The widget API's verbs (widget-tree.ts) are no RPC methods: the widget host's adapter serves them. */
+const methods = files("packages/protocol/src").filter((f) => !f.endsWith("widget-tree.ts")).flatMap((f) => [...read(f).matchAll(/^\s+"([a-z][A-Za-z]*\.[A-Za-z.]+)":\s*\{\s*params/gm)].map((m) => m[1]!));
 
 /** Where calls come from: the clients, and the core calling itself (not where methods are declared, handled or listed for remote or Operator access). */
 const callers = [...files("packages/cli/src"), ...files("apps/desktop/src"), ...files("apps/web/src"), ...files("packages/core/src").filter((f) => !/\/handlers\.ts$|\/feature\.ts$|remote\/policy\.ts$|tools\/access\.ts$|kernel\/core\.ts$/.test(f))];

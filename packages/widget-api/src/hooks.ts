@@ -13,8 +13,11 @@ function useTopic<T extends ApiTopic>(topic: T, query: TopicQuery[T] | null, ini
   const key = JSON.stringify(query ?? null);
   const mergeRef = useRef(merge);
   mergeRef.current = merge;
+  const lastKey = useRef(key);
   useEffect(() => {
-    setValue(initial);
+    // A new query starts from nothing, not from the last query's data.
+    if (lastKey.current !== key) setValue(initial);
+    lastKey.current = key;
     return connection().subscribe(topic, query, (data) => setValue((prev) => (mergeRef.current ? mergeRef.current(prev, data as TopicData[T]) : (data as TopicData[T]))));
     // The query by value: a new object with the same fields is the same subscription.
   }, [topic, key]);
