@@ -514,6 +514,13 @@ await selectNth(0);
 await scenario("move a window to the right sidebar", () => menu("window.dockRight"));
 await scenario("hide right sidebar", () => menu("view.rightSidebar"));
 await scenario("show right sidebar", () => menu("view.rightSidebar"));
+await scenario("hide both sidebars", () => menu("view.sidebars"));
+await scenario("show both sidebars", () => menu("view.sidebars"));
+// Toggled again halfway, and again: each turn starts from where things are (one change of direction each).
+await scenario("sidebars twice quickly", async () => (await menu("view.sidebars"), await sleep(120), await menu("view.sidebars")), { reversals: 1 });
+await scenario("sidebars four times quickly", async () => {
+  for (let i = 0; i < 4; i++) await menu("view.sidebars"), await sleep(120);
+}, { reversals: 3 });
 await scenario("move it back to the board", () => menu("window.undock"));
 await scenario("open a window (grid)", () => menu("file.newText"));
 const newest = await call("window.list").then((l) => l.filter((w) => w.kind === "text").sort((a, b) => b.createdAt - a.createdAt)[0]);

@@ -27,6 +27,9 @@ export function useSliding(): Partial<Record<Side, Slide>> {
   );
 }
 
+/** A side is sliding in or out: the board's size changes from it glide, however quickly they follow each other. */
+export const sidebarsSliding = (): boolean => Object.keys(sliding).length > 0;
+
 /** Hide or show a side; an empty left side gets a Navigator. */
 export function toggleSide(side: Side): void {
   const board = boardOf(getState());
