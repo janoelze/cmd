@@ -60,10 +60,29 @@ export function window(over: Partial<ApiWindow> = {}): ApiWindow {
 
 let nextEvent = 1;
 
-/** An event from the log (a finished command by default). @since 1.0 */
+/** An event from the log (a finished command by default; `key` defaults to its id, `until` to `at`). @since 1.0 */
 export function event(over: Partial<ApiEvent> = {}): ApiEvent {
-  return { id: nextEvent++, at: Date.now(), type: "command", workspaceId: WORKSPACE_ID, data: {}, ...over };
+  const id = nextEvent++;
+  const at = over.at ?? Date.now();
+  return { id, at, type: "command", workspaceId: WORKSPACE_ID, data: {}, key: `event-${id}`, until: at, terminalId: null, ...over };
 }
 
-/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `workspace()`. @since 1.0 */
-export const fixtures = { agent, pane, window, event, workspace };
+/**
+ * A command as the log keeps it: running while `exitCode` is undefined, else ended with it;
+ * `ago` is how long ago it started (ms), `took` how long it ran. @since 1.1
+ */
+export function command(over: { command?: string; cwd?: string; exitCode?: number | null; ago?: number; took?: number; terminalId?: string | null; branch?: string; key?: string; workspaceId?: string } = {}): ApiEvent {
+  const at = Date.now() - (over.ago ?? 60_000);
+  const running = over.exitCode === undefined;
+  return event({
+    at,
+    until: running ? null : at + (over.took ?? 1500),
+    terminalId: over.terminalId === undefined ? "t-zsh" : over.terminalId,
+    workspaceId: over.workspaceId ?? WORKSPACE_ID,
+    ...(over.key ? { key: over.key } : {}),
+    data: { command: over.command ?? "pnpm test", exitCode: running ? null : over.exitCode!, cwd: over.cwd ?? "/Users/me/src/app", git: over.branch ? { branch: over.branch } : null, output: null },
+  });
+}
+
+/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `command()` (1.1), `workspace()`. @since 1.0 */
+export const fixtures = { agent, pane, window, event, command, workspace };

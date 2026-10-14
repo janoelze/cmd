@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { API_SINCE, API_VERBS, type ApiError, type AppWindow, type CoreEvent, type ToolActivity, type WireValue, type Workspace } from "@cmd/protocol";
+import { API_SINCE, API_VERBS, type ApiError, type AppWindow, type CoreEvent, type ToolActivity, type WireValue } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
 import { API_ACCESS } from "../src/widgets/api/access.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
@@ -112,7 +112,7 @@ describe("acting widgets (API 1.1)", () => {
     expect(first.ask.approval!.title).toBe("Open a terminal in web with a command typed, not run");
     expect(first.result).toMatchObject({ ok: true, value: { id: expect.any(String) } });
     // A new terminal in web/, the command offered at its prompt by the shell integration, not run.
-    const opened = (first.result as { value: { id: string } }).value.id;
+    const opened = (first.result as unknown as { value: { id: string } }).value.id;
     expect(t.core.panes.get(opened)).toMatchObject({ workspaceId: t.ws.id, cwd: path.join(t.repo, "web") });
     expect((t.ptyOf(opened).opts as { env: Record<string, string> }).env.CMD_RESTORE_COMMAND).toBe("pnpm test");
     expect(t.ptyOf(opened).written.join("")).not.toContain("pnpm test");
@@ -156,7 +156,7 @@ describe("acting widgets (API 1.1)", () => {
     // agents.start: a Claude in a terminal of its own, in the folder asked.
     const start = await t.act("agents.start", [{ prompt: "write the tests", cwd: "web" }]);
     expect(start.ask.approval).toMatchObject({ permission: "agents", title: "Start Claude on a task in web", exact: "write the tests" });
-    const started = (start.result as { value: { id: string; terminalId: string } }).value;
+    const started = (start.result as unknown as { value: { id: string; terminalId: string } }).value;
     expect(t.core.agents.get(started.id)).toMatchObject({ kind: "claude", workspaceId: t.ws.id });
     expect(t.core.panes.get(started.terminalId)?.cwd).toBe(path.join(t.repo, "web"));
 
@@ -187,7 +187,7 @@ describe("acting widgets (API 1.1)", () => {
     const close = await t.act("windows.close", [files.id]);
     expect(close.ask.approval).toMatchObject({ permission: "stop", title: "Close the window “" + files.title + "”" });
     expect(t.core.windows.others().some((w) => w.id === files.id)).toBe(false);
-    const mine = (await t.act("terminals.open", [{}])).result as { value: { id: string } };
+    const mine = (await t.act("terminals.open", [{}])).result as unknown as { value: { id: string } };
     const tidy = await t.act("windows.close", [mine.value.id]);
     expect(tidy.ask.approval?.permission).toBe("show");
 

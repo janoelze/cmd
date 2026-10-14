@@ -1,0 +1,32 @@
+{
+  "name": "commands",
+  "version": "1.0.0",
+  "description": "Every command your terminals ran: how long it took and whether it worked.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/commands.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "commands",
+        "title": "Recent Commands",
+        "icon": "terminal",
+        "description": "Every command your terminals ran: how long it took and whether it worked. Run Again types it in a new terminal.",
+        "main": "src/commands.tsx",
+        "size": "m"
+      }
+    ],
+    "permissions": { "workspace": ["read", "all"], "events": ["output"], "act": ["terminals.open"] }
+  }
+}

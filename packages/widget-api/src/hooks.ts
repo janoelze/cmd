@@ -66,13 +66,17 @@ export function useWindows(query: ApiScopeQuery = {}): ApiWindow[] {
 
 /**
  * Events from the log matching `query`, newest last: the query's result first, then each
- * new one as it happens; at most `query.limit` (default 200) are kept. Needs
+ * new one as it happens; at most `query.limit` (default 200) are kept. An event recorded again
+ * (a command as it ends: the same `key`, since 1.1) replaces the one before. Needs
  * `events: [<class>]` for each class of events it reads.
  * @since 1.0
  */
 export function useEvents(query: ApiEventQuery = {}): ApiEvent[] {
   const limit = query.limit ?? 200;
-  return useTopic("events", query, [], (prev, next) => [...prev, ...next].slice(-limit));
+  return useTopic("events", query, [], (prev, next) => {
+    const again = new Set(next.map((e) => e.key).filter((k): k is string => !!k));
+    return [...(again.size ? prev.filter((e) => !e.key || !again.has(e.key)) : prev), ...next].slice(-limit);
+  });
 }
 
 /**

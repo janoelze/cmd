@@ -26,7 +26,7 @@ export const API_README = path.join(REPO, "packages/widget-api/README.md");
 /** Where the API's data types are declared (protocol's widget-tree.ts; @cmd/widget-api re-exports them). */
 export const API_TYPES = path.join(REPO, "packages/protocol/src/widget-tree.ts");
 /** The data types a widget handles, as declared: what the reference names but doesn't spell out. */
-const DATA_TYPES = new Set(["WidgetEnv", "ApiScopeQuery", "ApiWorkspace", "ApiWindow", "ApiAgentState", "ApiTone", "ApiLight", "ApiAgent", "ApiTerminal", "ApiTerminalScreen", "ApiEventQuery", "ApiEvent", "ApiEventStats", "ApiGitStatus", "ApiGitWorktree", "ApiAction", "ApiFetchInit", "ApiFetchResponse", "ApiCompletionRequest", "ApiCompletion", "ApiNotification"]);
+const DATA_TYPES = new Set(["WidgetEnv", "ApiScopeQuery", "ApiWorkspace", "ApiWindow", "ApiAgentState", "ApiTone", "ApiLight", "ApiAgent", "ApiTerminal", "ApiTerminalScreen", "ApiEventQuery", "ApiEvent", "ApiEventStats", "ApiGitStatus", "ApiGitWorktree", "ApiAction", "ApiFetchInit", "ApiFetchResponse", "ApiCompletionRequest", "ApiCompletion", "ApiNotification", "ApiAgentStart", "ApiStarted", "ApiTerminalOpen", "ApiActionStarted", "ApiRunOptions", "ApiRunResult"]);
 export const EXAMPLES_DIR = path.join(PROMPT_DIR, "examples");
 
 /** The README's generated reference (between its reference markers), or a note when this cmd lacks it. */

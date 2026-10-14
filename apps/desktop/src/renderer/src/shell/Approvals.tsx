@@ -1,7 +1,8 @@
 // The approval sheet in the app (docs/55): the oldest tool call waiting for the person, from any
 // workspace, opens at once over the window; "1 of 3" when more wait. How long a yes holds is a
 // switch in its footer (Once, This Session, Always, where the call offers them); Return allows,
-// Esc denies (lib/asks.ts, the kit's ApprovalSheet).
+// Esc denies (lib/asks.ts, the kit's ApprovalSheet). A widget's act (docs/56, phase 4) names the
+// widget, its package and version; a yes is kept for that package alone.
 
 import { ApprovalSheet, Presence } from "@cmd/ui";
 import { permissionOf, type ApprovalScope, type ToolActivity } from "@cmd/protocol";
@@ -20,15 +21,17 @@ function Ask({ ask, open, count }: { ask: ToolActivity; open: boolean; count: nu
   // How long a yes holds: short choices, what each covers in its tooltip.
   const where = workspace ? ` in “${workspace}”` : "";
   const settings = "Change it in Settings → AI & Agents → Permissions.";
+  const w = a.widget;
   const scope: Record<ApprovalScope, { label: string; detail: string }> = {
     once: { label: "Once", detail: "Asks again next time." },
-    session: { label: "This Session", detail: a.risky ? `Until ${ask.caller} exits. Risky actions are never allowed for always.` : `Until ${ask.caller} exits.` },
-    always: { label: "Always", detail: bySite ? `Kept for ${a.site}${where}. ${settings}` : `Kept for “${permissionOf(a.permission)?.title ?? a.permission}”${where}. ${settings}` },
+    session: { label: "This Session", detail: w ? "While this widget runs." : a.risky ? `Until ${ask.caller} exits. Risky actions are never allowed for always.` : `Until ${ask.caller} exits.` },
+    always: { label: "Always", detail: w ? `Kept for the widget ${w.name}${where}. ${settings}` : bySite ? `Kept for ${a.site}${where}. ${settings}` : `Kept for “${permissionOf(a.permission)?.title ?? a.permission}”${where}. ${settings}` },
   };
+  const who = w ? { icon: w.icon, name: ask.caller, context: [`${w.name} ${w.version}`, workspace].filter(Boolean).join(" · ") } : { icon: ask.callerKind === "operator" ? "brain" : "terminal", name: ask.caller, context: workspace ?? undefined };
   return (
     <ApprovalSheet<ApprovalScope, string>
       open={open}
-      who={{ icon: ask.callerKind === "operator" ? "brain" : "terminal", name: ask.caller, context: workspace ?? undefined }}
+      who={who}
       title={a.title}
       why={ask.why !== ask.tool ? ask.why : undefined}
       exact={a.exact || undefined}

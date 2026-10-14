@@ -62,7 +62,7 @@ describe("widget package stories", () => {
   const files = fs.readdirSync(root).flatMap((p) => (fs.existsSync(path.join(root, p, "src")) ? fs.readdirSync(path.join(root, p, "src")).filter((f) => f.endsWith(".story.tsx")).map((f) => path.join(root, p, "src", f)) : []));
 
   it("has the built-in packages' stories", () => {
-    expect(files.map((f) => path.relative(root, f))).toContain(path.join("agents", "src", "activity.story.tsx"));
+    expect(files.map((f) => path.relative(root, f))).toEqual(expect.arrayContaining([path.join("agents", "src", "activity.story.tsx"), path.join("commands", "src", "commands.story.tsx"), path.join("timer", "src", "timer.story.tsx")]));
   });
 
   it("renders every variant in every theme without an error", async () => {
@@ -84,8 +84,8 @@ describe("widget package stories", () => {
             const root = createRoot(el, { onCaughtError: (e) => void errors.push(`caught: ${String(e)}`), onUncaughtError: (e) => void errors.push(`uncaught: ${String(e)}`) });
             errors.length = 0;
             await act(async () => root.render(createElement(Story)));
-            // The widget runs, then its tree is drawn (inside act: the still arrives after the first render): a row or the empty state.
-            await act(async () => void (await vi.waitFor(() => expect(el.querySelector(".ui-list-row, .ui-viewstate-title"), `${name} (${theme.id}) drew no rows`).not.toBeNull())));
+            // The widget runs, then its tree is drawn (inside act: the still arrives after the first render): a row, the empty state, or text (a countdown).
+            await act(async () => void (await vi.waitFor(() => expect(el.querySelector(".ui-list-row, .ui-viewstate-title, .ui-view .ui-text"), `${name} (${theme.id}) drew nothing`).not.toBeNull())));
             if (errors.length) broken.push(`${path.basename(file)} ${name} (${theme.id}): ${errors[0]}`);
             await act(async () => root.unmount());
             el.remove();

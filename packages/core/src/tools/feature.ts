@@ -48,8 +48,9 @@ const levels = (core: Pick<CoreContext, "settings">) => Object.fromEntries(PERMI
 /** Calls the person said no to lately, from the log (tool.call, denied). */
 function denied(core: Pick<CoreContext, "data">, limit: number): DeniedCall[] {
   return core.data.query({ types: ["tool.call"], by: "time", order: "desc", limit: 500 }).flatMap((e) => {
-    const d = e.data as { state?: string; caller?: string; ask?: string | null; reason?: string | null; permission?: Permission | null; site?: string | null };
-    return d.state === "denied" && e.workspaceId ? [{ id: e.id, at: e.at, workspaceId: e.workspaceId, caller: d.caller ?? "An agent", title: d.ask ?? e.text ?? "", reason: d.reason ?? null, permission: d.permission ?? null, site: d.site ?? null }] : [];
+    const d = e.data as { state?: string; caller?: string; ask?: string | null; reason?: string | null; permission?: Permission | null; site?: string | null; widget?: string };
+    // A widget's denial has no "Allow from now on": that would allow the kind of act for agents, not for the widget (its own yes is kept from its sheet).
+    return d.state === "denied" && e.workspaceId ? [{ id: e.id, at: e.at, workspaceId: e.workspaceId, caller: d.caller ?? "An agent", title: d.ask ?? e.text ?? "", reason: d.reason ?? null, permission: d.widget ? null : (d.permission ?? null), site: d.site ?? null }] : [];
   }).slice(0, limit);
 }
 

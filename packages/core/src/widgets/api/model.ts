@@ -69,5 +69,5 @@ export function apiWorkspace(ws: Workspace, branch: string | null): ApiWorkspace
 }
 
 export function apiEvent(e: DataEvent): ApiEvent {
-  return { id: e.seq, at: e.at, type: e.type, workspaceId: e.workspaceId, data: (e.data ?? {}) as { [key: string]: WireValue } };
+  return { id: e.seq, at: e.at, type: e.type, workspaceId: e.workspaceId, data: (e.data ?? {}) as { [key: string]: WireValue }, key: e.id, until: e.until ?? null, terminalId: e.paneId ?? null };
 }

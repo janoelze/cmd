@@ -228,4 +228,20 @@ describe("subscriptions", () => {
     expect(n + logs.filter((e) => e.message.startsWith("tick ")).length).toBe(10_000);
     expect(dropped.level).toBe("warn");
   });
+
+  // A countdown rings from its own process (packages/widgets/timer): the process runs while its
+  // window is open in any workspace, shown or not, and its notify.send reaches the notification center.
+  it("keeps a window's process running in a workspace that isn't shown, and its notification reaches the center", async () => {
+    const { core, rt, isStatus } = await setup();
+    core.library.host.grant("demo");
+    const elsewhere = core.workspaces.open(tmp("cmd-widget-elsewhere-")).workspace;
+    const w = (await core.handlers["widget.add"]({ ref: "pkg:demo/main", workspaceId: elsewhere.id })) as AppWindow;
+    await until(isStatus(w.id, "running"), "its process");
+    expect(w.workspaceId).not.toBe(core.workspaces.home().id);
+    const notes: { title: string; windowId?: string | null }[] = [];
+    core.notifications.on("notification", (n) => notes.push(n));
+    rt.last.send({ kind: "call", id: 1, method: "notify.send", params: [{ key: "timer-1", title: "25 min timer · done", body: "Time's up" }] });
+    await rt.last.next("result", (m) => m.id === 1);
+    expect(notes).toEqual([expect.objectContaining({ title: "25 min timer · done", windowId: w.id })]);
+  });
 });
