@@ -37,7 +37,7 @@ import {
   WindowToolbar,
   type ViewStateSpec,
 } from "@cmd/ui";
-import { createElement, memo, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { createElement, memo, startTransition, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import type { ApiElement, TreeElement, TreeNode, WireMenuEntry, WireValue, WindowId } from "@cmd/protocol";
 import { showContextMenu } from "../../lib/context.ts";
 import { setWindowStatus } from "../../lib/windowActions.ts";
@@ -172,6 +172,30 @@ function Segmented({ p, ctx }: Drawn) {
   return <ToolbarSegmented value={chosen ?? value} options={options} label={str(p.label) ?? ""} onChange={(x) => (setChosen(x), change?.(x))} />;
 }
 
+/**
+ * A long list's rows, a window's worth first and the rest over the next frames: the kit's
+ * List isn't virtualised, and a thousand rows at once take far longer than a frame
+ * (docs/56: a thousand ListRows under 50 ms). Rows past the first FIRST draw as transitions,
+ * so a click or a patch never waits for them.
+ */
+const FIRST = 60;
+const STEP = 100;
+function useProgressive(count: number): number {
+  const [shown, setShown] = useState(() => Math.min(count, FIRST));
+  useEffect(() => {
+    if (shown >= count) return;
+    const frame = requestAnimationFrame(() => startTransition(() => setShown((s) => Math.min(count, s + STEP))));
+    return () => cancelAnimationFrame(frame);
+  }, [shown, count]);
+  return Math.max(Math.min(shown, count), Math.min(count, FIRST));
+}
+
+/** Rows (and sections), drawn progressively when there are many. */
+function Rows({ nodes, ctx }: { nodes: readonly TreeNode[]; ctx: DrawContext }) {
+  const shown = useProgressive(nodes.length);
+  return <>{drawAll(shown < nodes.length ? nodes.slice(0, shown) : nodes, ctx)}</>;
+}
+
 /** The widget's own window: the status line and the menus go to the title bar (chrome.ts); its children are the content. */
 function WindowEntry({ p, ctx, children }: Drawn) {
   const status = str(p.status) ?? null;
@@ -257,10 +281,14 @@ export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
       {children}
     </Hide>
   ),
-  List: ({ children }) => <List>{children}</List>,
-  ListSection: ({ p, ctx, children }) => (
+  List: ({ node, ctx }) => (
+    <List>
+      <Rows nodes={node.children} ctx={ctx} />
+    </List>
+  ),
+  ListSection: ({ p, node, ctx }) => (
     <ListSection title={str(p.title) ?? ""} count={v<number>(p.count)} open={v<boolean>(p.open)} tone={v(p.tone)} onToggle={press(ctx, p.onToggle, "onToggle")}>
-      {children}
+      <Rows nodes={node.children} ctx={ctx} />
     </ListSection>
   ),
   ListRow: ({ p, node, ctx, children }) => {

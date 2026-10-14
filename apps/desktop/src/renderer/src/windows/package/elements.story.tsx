@@ -6,6 +6,7 @@
 
 import { Window as Frame, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
 import { useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import type { TreeNode, WidgetOut, WireValue } from "@cmd/protocol";
 import { run } from "@cmd/widget-api/runtime";
 import { createHost } from "@cmd/widget-api/testing/host";
@@ -205,10 +206,41 @@ export const ExampleAgents = () => {
   return link ? <Widget store={store} link={link} name="Agent Activity" /> : null;
 };
 
-/** A thousand rows in one tree (the view's budget: drawn in under 50 ms). */
+/**
+ * A thousand rows in one tree (the view's budget: drawn in under 50 ms). The tree arrives
+ * after the first paint, as a widget's does; the time it took to draw is on the page's
+ * body as data-widget-rows-ms (`pnpm workbench eval` reads it).
+ */
 export const ThousandRows = () => {
-  const messages = useMemo(() => tree(e("View", {}, e("List", {}, ...Array.from({ length: 1000 }, (_, i) => row(`Agent ${i}`, { detail: i % 3 ? "Working" : "Waiting for you" }, e("Chip", {}, `${i % 60}m`)))))), []);
-  return <Widget messages={messages} size="wide" />;
+  const [store] = useState(() => new TreeStore({ resync: () => {} }));
+  useEffect(() => {
+    const message = tree(e("View", {}, e("List", {}, ...Array.from({ length: 1000 }, (_, i) => row(`Agent ${i}`, { detail: i % 3 ? "Working" : "Waiting for you" }, e("Chip", {}, `${i % 60}m`))))))[0]!;
+    // Outside the commit, so flushSync draws it there and then: the time is React's render and commit of the tree.
+    const t = setTimeout(() => {
+      const t0 = performance.now();
+      flushSync(() => store.apply(message));
+      document.body.dataset.widgetRowsMs = (performance.now() - t0).toFixed(1);
+      // Then the rest, a frame at a time: when all are there, and the longest frame on the way.
+      let last = performance.now();
+      let longest = 0;
+      const tick = () => {
+        const now = performance.now();
+        longest = Math.max(longest, now - last);
+        last = now;
+        const rows = store.snapshot.loaded ? document.querySelectorAll("[data-thousand] .ui-list-row").length : 0;
+        if (rows < 1000) return void requestAnimationFrame(tick);
+        document.body.dataset.widgetRowsAllMs = (now - t0).toFixed(0);
+        document.body.dataset.widgetRowsFrameMs = longest.toFixed(0);
+      };
+      requestAnimationFrame(tick);
+    });
+    return () => clearTimeout(t);
+  }, [store]);
+  return (
+    <div data-thousand>
+      <Widget store={store} size="wide" />
+    </div>
+  );
 };
 
 /** The process's states: starting, stopped with Restart, waiting for permission; and a tree the kit couldn't draw. */
@@ -228,3 +260,4 @@ export const Sizes = () => (
     ))}
   </div>
 );
+

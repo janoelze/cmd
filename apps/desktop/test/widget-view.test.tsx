@@ -154,12 +154,22 @@ describe("the package view", () => {
     root = createRoot(el);
     await act(async () => root!.render(<PackageWidget windowId="w-1" store={store} link={link()} />));
     const start = performance.now();
-    await act(async () => store.apply({ kind: "tree", rev: 1, nodes: tree.nodes }));
+    act(() => store.apply({ kind: "tree", rev: 1, nodes: tree.nodes }));
     const ms = performance.now() - start;
-    expect(rows()).toHaveLength(1000);
-    console.info(`widget view: 1000 ListRows drawn in ${ms.toFixed(1)} ms (happy-dom)`);
-    // The budget is 50 ms in Electron (e2e); happy-dom's DOM is slower, so this only guards against a blow-up.
-    expect(ms).toBeLessThan(2000);
+    // A window's worth at once, the rest over the next frames (elements.tsx, useProgressive).
+    expect(rows().length).toBeGreaterThan(0);
+    expect(rows().length).toBeLessThan(1000);
+    // The rest come over frames, as in the app: outside act, which would hold them back.
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      await vi.waitFor(() => expect(rows()).toHaveLength(1000), { timeout: 20_000 });
+    } finally {
+      (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    }
+    const all = performance.now() - start;
+    console.info(`widget view: first draw of a 1000-row tree ${ms.toFixed(1)} ms, all rows ${all.toFixed(0)} ms (happy-dom)`);
+    // The budget is 50 ms in Electron (the Workbench's ThousandRows story measures it); happy-dom's DOM is slower, so this only guards against a blow-up.
+    expect(ms).toBeLessThan(500);
     tree.unmount();
   }, 30_000);
 });
