@@ -77,9 +77,9 @@ export class CoreServer {
     this.#o = o;
   }
 
-  /** Open socket connections. */
+  /** Open client connections (app windows, the CLI): the widgets socket's (widget processes) aren't clients. */
   get connections(): number {
-    return this.#sockets.size;
+    return this.#sockets.size - this.#widgetConns.size;
   }
 
   /** Whether any connection is subscribed to events. */
