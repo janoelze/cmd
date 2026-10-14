@@ -65,7 +65,9 @@ const partOf = (rel: string) => PARTS.find(([p]) => rel.startsWith(p))?.[1] ?? n
 /** The package folder a file is in ("packages/core"), or null. */
 const packageOf = (rel: string) => Object.values(PACKAGES).find((p) => rel.startsWith(`${p}/`)) ?? null;
 /** Shipped code: under a package's src/ (tests, configs and scripts are not). */
-const shipped = (rel: string) => /^((packages|apps)\/[^/]+|packages\/widgets\/[^/]+)\/src\//.test(rel) && !/\.(test|story)\.tsx?$/.test(rel);
+/** The UI Workbench (docs/48) runs only in the dev server (no build input), as stories do: it may draw widget packages' stories with @cmd/widget-api. */
+const DEV_ONLY = /^apps\/desktop\/src\/renderer\/src\/workbench\//;
+const shipped = (rel: string) => /^((packages|apps)\/[^/]+|packages\/widgets\/[^/]+)\/src\//.test(rel) && !/\.(test|story)\.tsx?$/.test(rel) && !DEV_ONLY.test(rel);
 /** What a widget package's shipped code may take from npm: React, whose runtime the widget process has (the vendored bundle). */
 const WIDGET_NPM = ["react", "react/jsx-runtime"];
 

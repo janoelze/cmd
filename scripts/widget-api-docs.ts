@@ -36,7 +36,7 @@ const code = (s: string) => "`" + s.replace(/\s+/g, " ").replace(/\|/g, "\\|") +
 /** What a row needs, as package.json's cmd.permissions writes it. */
 function permission(row: AccessRow | undefined): string {
   if (!row) return "none";
-  const need = { workspace: '`workspace: ["read"]`', events: "`events: [<class>]`", net: "`net: [<host>]`", ai: '`ai: ["complete"]`' }[row.needs ?? ""] ?? "none";
+  const need = ({ workspace: '`workspace: ["read"]`', events: "`events: [<class>]`", net: "`net: [<host>]`", ai: '`ai: ["complete"]`' } as Record<string, string>)[row.needs ?? ""] ?? "none";
   return row.mode === "read" ? need : `${need}, ${row.mode === "act" ? "acts" : "asks each time"}`;
 }
 

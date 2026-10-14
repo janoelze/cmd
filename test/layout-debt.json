@@ -7,6 +7,7 @@
   "files over 600 lines in packages/protocol": 0,
   "files over 600 lines in packages/remote-crypto": 0,
   "files over 600 lines in packages/ui": 1,
+  "files over 600 lines in packages/widget-api": 0,
   "files over 600 lines in apps/desktop": 5,
   "files over 600 lines in apps/relay": 0,
   "files over 600 lines in apps/web": 0,

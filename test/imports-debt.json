@@ -1,8 +1,5 @@
 [
   "apps/desktop/src/renderer/src/reference/ShellColors.story.tsx: ../../../../../../packages/ui/src/tokens.css?raw, into another package by its path",
-  "apps/desktop/src/renderer/src/workbench/catalog/extract.ts: node:fs, desktop/renderer may not import node:",
-  "apps/desktop/src/renderer/src/workbench/catalog/extract.ts: node:path, desktop/renderer may not import node:",
-  "apps/desktop/src/renderer/src/workbench/catalog/plugin.ts: node:path, desktop/renderer may not import node:",
   "apps/desktop/src/shared/app-url.ts: node:path, desktop/shared may not import node:",
   "apps/desktop/src/shared/app-url.ts: node:url, desktop/shared may not import node:",
   "apps/desktop/test/file-icons.test.ts: ../../../packages/core/src/windows/builtin.ts, into another package by its path",
