@@ -17,7 +17,6 @@ import { packagesFeature } from "../widgets/feature.ts";
 
 /** Services the core makes from a feature (its field), without an import of its own each. */
 export { createStats } from "../stats/feature.ts";
-export { createPackages } from "../widgets/feature.ts";
 
 export interface Feature {
   id: string;

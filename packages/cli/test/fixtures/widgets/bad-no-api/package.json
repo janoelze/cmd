@@ -1,0 +1,51 @@
+{
+  "name": "bad-no-api",
+  "version": "1.0.0",
+  "description": "A fixture package that passes cmd widget check.",
+  "license": "MIT",
+  "engines": {
+    "cmd": ">=0.30"
+  },
+  "cmd": {
+    "widgets": [
+      {
+        "id": "main",
+        "title": "Good",
+        "icon": "checkmark.seal",
+        "main": "src/main.tsx",
+        "size": "m",
+        "config": [
+          {
+            "key": "repo",
+            "title": "Repository",
+            "type": "string",
+            "default": ""
+          },
+          {
+            "key": "token",
+            "title": "Token",
+            "type": "string",
+            "secret": true
+          }
+        ]
+      }
+    ],
+    "permissions": {
+      "net": [
+        "api.github.com"
+      ],
+      "run": [
+        "gh"
+      ],
+      "workspace": [
+        "read"
+      ],
+      "events": [
+        "agents"
+      ],
+      "act": [
+        "actions.run"
+      ]
+    }
+  }
+}

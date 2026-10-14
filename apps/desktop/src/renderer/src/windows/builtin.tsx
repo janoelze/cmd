@@ -13,6 +13,7 @@ import "./files/register.tsx";
 import "./pdf/register.tsx";
 import "./text/register.tsx";
 import "./magic/register.tsx";
+import "./package/register.tsx";
 import "./agents/register.tsx";
 import "./diff/register.tsx";
 import "./youtube/register.tsx";

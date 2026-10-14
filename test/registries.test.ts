@@ -32,6 +32,8 @@ const coreKinds = new Set(files("packages/core/src").flatMap((f) => [...read(f).
 const views = new Set(files("apps/desktop/src/renderer/src/windows").filter((f) => f.endsWith("register.tsx")).flatMap((f) => [...read(f).matchAll(/registerWindowView\(\{\s*kind: "([a-z-]+)"/g)].map((m) => m[1]!)));
 /** Drawn by the board itself, not through a registered view. */
 const BOARD = ["terminal"];
+/** Views that serve kinds the core registers at run time: "package" every "pkg:<package>/<widget>" (widgets/packages.ts, docs/56). */
+if (/types\.register\(/.test(read("packages/core/src/widgets/packages.ts"))) coreKinds.add("package");
 
 describe("registries", () => {
   it("found what to compare", () => {

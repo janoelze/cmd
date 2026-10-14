@@ -104,7 +104,7 @@ const launch = async () => {
     executablePath: require("electron"),
     // Fake camera and microphone (not a fake permission prompt): a page's getUserMedia reaches cmd's sheet without real devices.
     args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
-    env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
+    env: { ...process.env, CMD_HOME: home, CMD_WIDGETS_HOME: path.join(home, "widget-packages-home"), CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
   });
   // Reduce Motion in every page: the app window, Settings, browser pages (webviews are pages
   // here too). Chromium's --force-prefers-reduced-motion doesn't reach Electron's pages.

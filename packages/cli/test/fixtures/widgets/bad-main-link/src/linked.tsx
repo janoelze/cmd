@@ -1,0 +1,1 @@
+../../good/src/main.tsx

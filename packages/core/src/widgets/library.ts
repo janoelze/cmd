@@ -4,6 +4,8 @@
 
 import { parsePackageKind, type WidgetEntry } from "@cmd/protocol";
 import { DEFAULT_ICON } from "./package.ts";
+import { createPackages } from "./feature.ts";
+import type { WidgetPackages } from "./packages.ts";
 import type { CoreContext } from "../kernel/context.ts";
 
 /** A Widget Library ref: "magic:<widget id>" (made with Magic), "type:<kind>" (a built-in widget) or "pkg:<package>/<widget>" (a package's). */
@@ -21,20 +23,24 @@ export function magicRef(ref: string): string {
   return r.widgetId;
 }
 
-type LibraryCore = Pick<CoreContext, "windows" | "windowTypes" | "magic" | "packages" | "settings" | "broadcast" | "watched">;
+type LibraryCore = Pick<CoreContext, "windows" | "windowTypes" | "magic" | "settings" | "broadcast" | "watched">;
 
 export class WidgetLibrary {
   #core: LibraryCore;
   #timer: ReturnType<typeof setTimeout> | null = null;
+  /** Widget packages (docs/56): read and watched from their startup job (widgets/feature.ts). */
+  readonly packages: WidgetPackages;
 
   constructor(core: LibraryCore) {
     this.#core = core;
+    this.packages = createPackages(core, () => this.changed());
     // Developer widgets come and go from the library with their setting.
     core.settings.bind(["widgets.developer"], () => this.changed());
   }
 
   entries(): WidgetEntry[] {
-    const { windows, windowTypes, magic, packages, settings } = this.#core;
+    const { windows, windowTypes, magic, settings } = this.#core;
+    const packages = this.packages;
     const others = windows.others();
     const builtin = windowTypes
       .all()

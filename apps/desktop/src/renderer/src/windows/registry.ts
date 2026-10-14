@@ -69,8 +69,9 @@ export function registerWindowView(view: WindowView): void {
   views.set(view.kind, view);
 }
 
+/** A kind's view; a package's widgets ("pkg:<package>/<widget>", docs/56) share the "package" view. */
 export function viewFor(kind: string): WindowView | undefined {
-  return views.get(kind);
+  return views.get(kind) ?? (kind.startsWith("pkg:") ? views.get("package") : undefined);
 }
 
 /** Type info from the core (title, icon) for kinds without a registered view too. */

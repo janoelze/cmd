@@ -39,7 +39,7 @@ const until = async (fn, ms, what) => {
   }
 };
 
-const app = await electron.launch({ executablePath: exe, env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1" } });
+const app = await electron.launch({ executablePath: exe, env: { ...process.env, CMD_HOME: home, CMD_WIDGETS_HOME: path.join(home, "widget-packages-home"), CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1" } });
 try {
   const win = await app.firstWindow();
   await win.waitForSelector(".statusbar .core-status", { timeout: 30_000 });

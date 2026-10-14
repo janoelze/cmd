@@ -17,7 +17,7 @@ import "./library.css";
 
 /** "Weather · Lisbon" → "W": the first letter or digit. */
 const initial = (title: string) => (/[\p{L}\p{N}]/u.exec(title)?.[0] ?? "✦").toUpperCase();
-const sourceOf = (e: WidgetEntry) => (e.source === "builtin" ? "Built-in" : "Made with Magic");
+const sourceOf = (e: WidgetEntry) => (e.source === "builtin" ? "Built-in" : e.source === "package" ? (e.problem ? "Can't run" : `${e.name} ${e.version}`) : "Made with Magic");
 
 function matches(e: WidgetEntry, query: string): boolean {
   const hay = [e.title, e.description, e.request].filter(Boolean).join(" ").toLowerCase();
@@ -40,6 +40,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
 
   const shown = useMemo(() => library.filter((e) => matches(e, query)), [library, query]);
   const yours = shown.filter((e) => e.source === "yours");
+  const packages = shown.filter((e) => e.source === "package");
   const dev = (e: WidgetEntry) => !!e.tags?.includes("developer");
   const builtin = shown.filter((e) => e.source === "builtin" && !dev(e));
   // Shown only with Settings → Magic Widgets → Developer widgets on (the core leaves them out otherwise).
@@ -78,7 +79,9 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
     void showContextMenu(
       e.source === "builtin"
         ? [{ label: "Add to Workspace", run: () => void add(e) }]
-        : [
+        : e.source === "package"
+          ? [{ label: "Add to Workspace", run: () => void add(e), enabled: !e.problem }, { label: "Show in Finder", run: () => e.dir && cmd.revealPath(e.dir), enabled: !!e.dir }]
+          : [
             { label: "Add to Workspace", run: () => void add(e) },
             "-",
             { label: "Rename…", run: () => setRenaming(e) },
@@ -92,7 +95,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
   const card = (e: WidgetEntry) => (
     <div key={e.ref} className="wl-card" role="button" tabIndex={0} onClick={() => void add(e)} onKeyDown={(k) => k.key === "Enter" && void add(e)} onContextMenu={(ev) => (ev.preventDefault(), menu(e))}>
       <span className="wl-avatar" data-source={e.source} style={{ ["--hue" as string]: projectHue(e.title) }}>
-        {e.source === "builtin" ? iconNode(e.icon, 20) : <span className="wl-initial">{initial(e.title)}</span>}
+        {e.source !== "yours" ? iconNode(e.icon, 20) : <span className="wl-initial">{initial(e.title)}</span>}
       </span>
       <span className="wl-head">
         <span className="wl-title">
@@ -100,7 +103,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
         </span>
         <span className="wl-source">{sourceOf(e)}</span>
       </span>
-      {(e.description || e.request) && <span className="wl-desc">{e.description || e.request}</span>}
+      {(e.problem || e.description || e.request) && <span className="wl-desc">{e.problem || e.description || e.request}</span>}
       <IconButton className="wl-more" icon="ellipsis" size="sm" label="More" onClick={(ev) => (ev.stopPropagation(), menu(e))} />
     </div>
   );
@@ -145,6 +148,12 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
         <section className="wl-section">
           <SectionHeading>Your Widgets</SectionHeading>
           {yours.length > 0 ? <div className="wl-grid">{yours.map(card)}</div> : <EmptyState compact>Widgets you make with Magic are kept here.</EmptyState>}
+        </section>
+      )}
+      {packages.length > 0 && (
+        <section className="wl-section">
+          <SectionHeading>Packages</SectionHeading>
+          <div className="wl-grid">{packages.map(card)}</div>
         </section>
       )}
       {builtin.length > 0 && (

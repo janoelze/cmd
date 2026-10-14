@@ -3,6 +3,7 @@
 // it (types, a data run, renders), run its data, render it. So a widget can be
 // built by hand or by any coding agent (Claude Code, Codex) with cmd's rules.
 // `list` and `add` ask the running core about the Widget Library (docs/16-widgets.md).
+// `check` on a widget package (a package.json with a "cmd" block, docs/56) checks its package.json.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -10,14 +11,16 @@ import { parseArgs } from "node:util";
 import { ENV, type WidgetEntry } from "@cmd/protocol";
 import { connect, defaultSocketPath } from "@cmd/protocol/node";
 import { PREVIEW_THEMES, PROMPT_DIR, RUNTIME_DIR, checkWidget, previewCases, previewPage, previewRender, runWidgetData, verifyWidget, writeDenoConfig } from "@cmd/core/magic";
-import { bold, dim, openFile, printVerdict, red, sandboxNote, widgetContext } from "./magic.ts";
+import { isPackageDir, readPackage } from "@cmd/core/widgets/package";
+import { bold, dim, green, openFile, printVerdict, red, sandboxNote, widgetContext } from "./magic.ts";
 
 export const WIDGET_HELP = `cmd widget — make, check, run and preview Magic widgets
 
 usage: cmd widget new <dir>        a new widget folder (manifest.json, data.ts, view.html, view.ts),
                                    with notes for coding agents (CLAUDE.md, AGENTS.md)
        cmd widget check [dir]      everything cmd checks before it shows a widget: manifest, types,
-                                   a data run (kept as fixtures/live.json), renders with every fixture
+                                   a data run (kept as fixtures/live.json), renders with every fixture;
+                                   for a widget package (package.json with a "cmd" block): its package.json
        cmd widget run [dir]        run data.ts once and print its data (validated against its schema)
        cmd widget preview [dir]    render it (dark, light, small) and save preview-*.png in the folder
        cmd widget list             the Widget Library: built-in widgets, then yours by last use
@@ -135,7 +138,7 @@ export async function widgetCommand(argv: string[]): Promise<number> {
       const entries = await conn.client.call("widget.list", {});
       if (sub === "list") {
         if (o.json) return console.log(JSON.stringify(entries, null, 2)), 0;
-        for (const e of entries) console.log(`${e.ref.padEnd(44)} ${e.title}${e.windows.length ? dim(`  in a workspace${e.windows.length > 1 ? ` ×${e.windows.length}` : ""}`) : ""}`);
+        for (const e of entries) console.log(`${e.ref.padEnd(44)} ${e.title}${e.source === "package" ? dim(e.problem ? `  can't run: ${e.problem}` : `  ${e.name} ${e.version} · API ${e.api}`) : ""}${e.windows.length ? dim(`  in a workspace${e.windows.length > 1 ? ` ×${e.windows.length}` : ""}`) : ""}`);
         return 0;
       }
       if (!dirArg) {
@@ -170,6 +173,8 @@ export async function widgetCommand(argv: string[]): Promise<number> {
     process.stderr.write(dim(`  next: edit the files, then cmd widget check ${path.relative(process.cwd(), dir) || "."}\n`));
     return 0;
   }
+
+  if (sub === "check" && (isPackageDir(dir) || (!fs.existsSync(path.join(dir, "manifest.json")) && fs.existsSync(path.join(dir, "package.json"))))) return checkPackage(dir, !!o.json);
 
   if (!fs.existsSync(path.join(dir, "manifest.json"))) {
     console.error(red(`${dir} has no manifest.json (make one with: cmd widget new <dir>)`));
@@ -254,6 +259,18 @@ export async function widgetCommand(argv: string[]): Promise<number> {
   console.error(red(`unknown: cmd widget ${sub}`));
   console.log(WIDGET_HELP);
   return 1;
+}
+
+/** `cmd widget check` on a widget package: 0 when it's valid, 2 with each problem (its field first) when not. */
+function checkPackage(dir: string, json: boolean): number {
+  const r = readPackage(dir);
+  if (json) console.log(JSON.stringify(r.ok ? { ok: true, name: r.pkg.name, version: r.pkg.version, api: r.pkg.api, kinds: r.pkg.widgets.map((w) => w.kind) } : { ok: false, problems: r.errors }));
+  else if (r.ok) console.log(`${green("✓")} ${r.pkg.name} ${r.pkg.version} ${dim(`· API ${r.pkg.api} · ${r.pkg.widgets.map((w) => w.kind).join(", ")}`)}`);
+  else {
+    console.error(`${red("✗")} ${path.basename(dir)} ${dim(`· ${r.errors.length} ${r.errors.length === 1 ? "problem" : "problems"} in package.json`)}`);
+    for (const e of r.errors) console.error(red(`  ${e}`));
+  }
+  return r.ok ? 0 : 2;
 }
 
 /** A widget by its ref, its id or kind (the ref without "magic:"/"type:"), or its title (any case). */

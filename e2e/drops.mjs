@@ -35,7 +35,7 @@ const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const app = await electron.launch({
   executablePath: require("electron"),
   args: [path.join(root, "apps/desktop")],
-  env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", ...screenEnv() },
+  env: { ...process.env, CMD_HOME: home, CMD_WIDGETS_HOME: path.join(home, "widget-packages-home"), CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", ...screenEnv() },
 });
 const win = await app.firstWindow();
 await fitScreen(app, win);

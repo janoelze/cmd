@@ -1,0 +1,52 @@
+{
+  "name": "bad-engines",
+  "version": "1.0.0",
+  "description": "A fixture package that passes cmd widget check.",
+  "license": "MIT",
+  "engines": {
+    "cmd": ">=99.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "main",
+        "title": "Good",
+        "icon": "checkmark.seal",
+        "main": "src/main.tsx",
+        "size": "m",
+        "config": [
+          {
+            "key": "repo",
+            "title": "Repository",
+            "type": "string",
+            "default": ""
+          },
+          {
+            "key": "token",
+            "title": "Token",
+            "type": "string",
+            "secret": true
+          }
+        ]
+      }
+    ],
+    "permissions": {
+      "net": [
+        "api.github.com"
+      ],
+      "run": [
+        "gh"
+      ],
+      "workspace": [
+        "read"
+      ],
+      "events": [
+        "agents"
+      ],
+      "act": [
+        "actions.run"
+      ]
+    }
+  }
+}
