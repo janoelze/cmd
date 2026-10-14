@@ -71,10 +71,12 @@ export function packageArgs(deno: string, spec: ProcessSpec, configFile: string)
       return p;
     }
   };
-  const read = [real(spec.dir), WIDGET_API_BUNDLE, RUNTIME_DIR, configFile, ...spec.permissions.read.map((r) => path.resolve(expandPath(r, home))), ...(spec.socket ? [spec.socket] : [])];
+  // The socket as named and as it really is (/var is /private/var): Deno checks the path it's given.
+  const socket = spec.socket ? [...new Set([spec.socket, real(spec.socket)])] : [];
+  const read = [real(spec.dir), WIDGET_API_BUNDLE, RUNTIME_DIR, configFile, ...spec.permissions.read.map((r) => path.resolve(expandPath(r, home))), ...socket];
   const args = [deno, "run", "--quiet", "--no-prompt", "--no-remote", "--no-npm", "--node-modules-dir=none", `--config=${configFile}`, `--import-map=${path.join(WIDGET_API_BUNDLE, "import-map.json")}`, `--v8-flags=--max-old-space-size=${spec.memoryMb}`, `--allow-read=${read.join(",")}`, "--allow-env=CMD_WIDGET_SOCKET,CMD_WIDGET_TOKEN"];
   // The widgets socket, and nothing else: Deno counts a Unix socket as net ("unix:<path>"), older ones as a write.
-  if (spec.socket) args.push(`--allow-write=${spec.socket}`, `--allow-net=unix:${spec.socket}`);
+  if (socket.length) args.push(`--allow-write=${socket.join(",")}`, `--allow-net=${socket.map((p) => `unix:${p}`).join(",")}`);
   args.push(PACKAGE_MAIN, path.resolve(real(spec.dir), spec.main), spec.name, spec.version, spec.widget);
   return args;
 }
