@@ -1,6 +1,6 @@
 # Widgets and the Widget Library
 
-**Status:** built: the Widget Library, `widget.*` RPC and CLI, Agent Activity, Live Diff; a widget store is next.
+**Status:** built: the Widget Library, `widget.*` RPC and CLI, Agent Activity, Live Diff; a widget store is next. The Library and its entry points stay; what a widget is underneath is redesigned in [56-widgets-v3.md](56-widgets-v3.md).
 
 > Status (2026-10-05), branch `widget-library`: built: widgets apart from windows in the core; the library's protocol and CLI; the library sheet, the Widgets menu and the sidebar's Widgets section; Agent Activity and Live Diff. Examples in the library were built and dropped (phase 5). Next: a store (see 14-magic-v2.md). It builds on [14-magic-v2.md](14-magic-v2.md) (widget folders, revisions, the edit view) and replaces its "Toward a store → A library" step. Naming here supersedes the Magic line in [15-positioning.md](15-positioning.md).
 
