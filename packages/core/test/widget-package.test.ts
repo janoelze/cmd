@@ -384,6 +384,12 @@ describe("built-in packages", () => {
     expect(rt.procs.map((p) => [p.spec.name, p.spec.permissions.workspace])).toEqual([["shipped", ["read", "all"]]]);
     expect(core.library.host.status(mine.id)?.state).toBe("waiting-grant"); // the person's still asks
     expect(fs.existsSync(grantsPath(stateDir, "shipped"))).toBe(false);
+    // Never the grants sheet: no ask for it, also after widget.ask (cmd widget link, the window's Allow…).
+    core.handlers["widget.ask"]({ name: "shipped" });
+    expect(core.library.host.asking("shipped")).toBeNull();
+    const listed = (core.handlers["widget.list"]({}) as unknown as WidgetEntry[]).filter((e) => e.source === "package");
+    expect(listed.find((e) => e.name === "shipped")?.ask).toBeUndefined();
+    expect(listed.find((e) => e.name === "mine")?.ask).toBeDefined();
     await core.close();
   });
 });

@@ -55,7 +55,7 @@ function still(widget: WidgetModule, data: HostData, info: { package: string; ve
 }
 
 let windows = 0;
-const quiet: WidgetLink = { interact: () => {}, resync: () => {}, restart: () => {}, env: () => {} };
+const quiet: WidgetLink = { interact: () => {}, resync: () => {}, restart: () => {}, env: () => {}, ask: () => {} };
 
 function Bar({ id, name, icon }: { id: string; name: string; icon: string }) {
   useWindowChrome();
