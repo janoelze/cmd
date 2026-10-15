@@ -27,12 +27,14 @@ await (await import("./widget-api-bundle.mjs")).bundleWidgetApi({ ifStale: true 
 copy("packages/widget-api/dist/deno", "packages/widget-api/dist/deno");
 // Its README's generated reference is what Magic's agent reads of the API (magic/package/prompt.ts).
 copy("packages/widget-api/README.md", "packages/widget-api/README.md");
-// The built-in widget packages (packages/widgets/<name>, widgets/packages.ts's built-in root): what a
-// package ships, without node_modules (the runtime imports @cmd/widget-api from the bundle above).
+// The built-in widget packages (packages/widgets/<name>, widgets/packages.ts's built-in root): what
+// each package says ships (its `files`, package.json, README, LICENSE; stage-widgets.mjs), without
+// node_modules or dot-folders (the runtime imports @cmd/widget-api from the bundle above).
+const { stageWidgetPackage } = await import("./stage-widgets.mjs");
 for (const name of fs.readdirSync(path.join(root, "packages/widgets"))) {
   const dir = `packages/widgets/${name}`;
   if (!fs.existsSync(path.join(root, dir, "package.json"))) continue;
-  for (const p of ["package.json", "src", "README.md", "LICENSE"]) if (fs.existsSync(path.join(root, dir, p))) copy(`${dir}/${p}`, `${dir}/${p}`);
+  stageWidgetPackage(path.join(root, dir), path.join(out, dir));
 }
 // Workspace packages the core imports (@cmd/protocol, @cmd/remote-crypto): their
 // TypeScript is copied next to the core, and node_modules gets a small JavaScript

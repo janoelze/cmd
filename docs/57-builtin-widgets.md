@@ -13,7 +13,7 @@ cmd's own widgets are written the way anyone else's are: a package in `packages/
 All of this is already built (phases 1 and 4). A port adds a folder; it touches none of these mechanics.
 
 - **Tracked in this repository, as packages.** Each built-in is `packages/widgets/<name>/`: `package.json` with its `cmd` block, `src/`, tests, a story, README and LICENSE (AGPL, as the repo). `"private": true`: nothing is published to npm.
-- **Shipped inside the app.** `scripts/stage-runtime.mjs` copies every `packages/widgets/<name>` (package.json, src, README, LICENSE; no node_modules) into the staged runtime; the core reads it as a second root beside `~/.cmd/widgets` (`widgets/packages.ts`, `builtinWidgets()`, `CMD_BUILTIN_WIDGETS` overrides it in tests). A release ships the set that's in the tree at its tag.
+- **Shipped inside the app.** `scripts/stage-runtime.mjs` copies every `packages/widgets/<name>` (what its package.json's `files` lists, plus package.json, README and LICENSE; never node_modules or a dot-folder; `scripts/stage-widgets.mjs` fails the staging on a listed file that is missing, or a `main` or a frame widget's view.html left out) into the staged runtime; the core reads it as a second root beside `~/.cmd/widgets` (`widgets/packages.ts`, `builtinWidgets()`, `CMD_BUILTIN_WIDGETS` overrides it in tests). A release ships the set that's in the tree at its tag.
 - **Listed as Built-in, granted what they declare.** The Library shows them under Built-in. They run under their declared permissions without a grants sheet (cmd ships them, which the person already trusts), and their acts follow the approval levels like cmd's own callers do.
 - **Versioned with cmd.** A built-in's `version` moves when its behaviour changes, but it is released only as part of a cmd release; `engines.cmd` is the cmd it was written for. There is no separate update path.
 - **The person's copy wins.** A package in `~/.cmd/widgets` with the same name replaces the built-in (the core logs it). That's how someone forks one: copy the folder, link it, change it.
@@ -179,7 +179,7 @@ The Visualizer and YouTube as `"surface": "frame"` packages on the one frame hos
 |---|---|---|
 | `new AudioContext()` | `running`, 44100 Hz | Visualizer: the page can analyse sound it has |
 | `canvas.getContext("webgl2")` | a context | Visualizer: butterchurn draws |
-| `<script src="lib.js">` from the package | loaded | Visualizer: butterchurn and its presets could ship in the package (staging copies `package.json`, `src`, README, LICENSE: they'd go under `src/`) |
+| `<script src="lib.js">` from the package | loaded | Visualizer: butterchurn and its presets could ship in the package (listed in its `files`, which staging copies) |
 | `getUserMedia({ audio: true })`, on load and after a click | `SecurityError: Invalid security origin` | Visualizer's Microphone: the opaque origin, `featurePolicy.allowsFeature("microphone")` is false (the iframe has no `allow`), and main's permission handler refuses `cmd-widget:` pages anyway |
 | `getDisplayMedia({ video: true, audio: true })` after a click | `NotAllowedError: … "display-capture" is disallowed by permissions policy` | Visualizer's System Audio (main's display-media handler also refuses `cmd-widget:` frames: loopback is the app page's only) |
 | a Jam window's sound | not reachable | Visualizer: Jam publishes its samples into the renderer's page (`publishLevels`), which no frame can read |
