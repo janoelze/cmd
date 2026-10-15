@@ -1,6 +1,6 @@
 {
   "name": "events",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Everything cmd records, live: commands, agents, git, notifications.",
   "private": true,
   "license": "AGPL-3.0-only",

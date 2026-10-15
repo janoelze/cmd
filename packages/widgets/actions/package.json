@@ -1,6 +1,6 @@
 {
   "name": "actions",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "How to run this project: its scripts, a click to run one.",
   "private": true,
   "license": "AGPL-3.0-only",
@@ -27,6 +27,6 @@
         "size": "m"
       }
     ],
-    "permissions": { "workspace": ["read"], "act": ["actions.run"] }
+    "permissions": { "workspace": ["read"], "act": ["actions.run", "actions.stop"] }
   }
 }

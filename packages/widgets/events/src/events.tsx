@@ -1,10 +1,12 @@
-// Event Log, a built-in widget package (docs/57, wave 1; the native Event Stream's job): every
-// event cmd records in this workspace (or every workspace's), newest first, as it is recorded,
-// from one live query (useEvents). It knows no event types or fields: a row is the event's type
-// and whatever plain values its data carries, the kinds in the toolbar's Show menu are the
-// families of the types it has seen ("command", "agent", "git"), and the filter searches the
-// whole event. An event recorded again (a command that ended) replaces its row and moves up.
-// A click opens the event as stored; the title menu switches the scope, pauses and clears.
+// Event Log, a built-in widget package (docs/57; the native Event Stream's job): every event cmd
+// records in this workspace (or every workspace's), newest first, as it is recorded, from one
+// live query (useEvents). It knows no event types or fields: a row is the log's one line for the
+// event (API 1.2's `text`, else its type) and whatever plain values its data carries; the
+// toolbar's Show menu hides the log's classes as Settings names them (cmd.events.classes, 1.2;
+// on an older cmd, the families of the types it has seen), and the filter searches the whole
+// event. An event recorded again (a command that ended) replaces its row and moves up. A click
+// opens the event as stored; a row's menu copies it or its ID; the title menu switches the
+// scope, pauses and clears.
 
 import {
   Window,
@@ -24,8 +26,9 @@ import {
   useNow,
   cmd,
   type Event,
+  type EventClass,
 } from "@cmd/widget-api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Scope = "workspace" | "all";
 
@@ -35,6 +38,22 @@ export const SHOW = 300;
 
 /** An event's kind: the first part of its type ("agent" for "agent.stop"). */
 export const familyOf = (type: string) => type.split(".")[0] || type;
+
+/** The class of an event type, as cmd decides it: a class naming the type wins over one naming its prefix; "system" when none does. */
+export function classOf(type: string, classes: readonly EventClass[]): string {
+  for (const c of classes) if (c.types.includes(type)) return c.class;
+  for (const c of classes) for (const t of c.types) if (t.endsWith(".") && type.startsWith(t)) return c.class;
+  return "system";
+}
+
+/** The log's classes as Settings names them, read once; none on a cmd before 1.2 (the families of types instead). */
+function useClasses(): EventClass[] {
+  const [classes, setClasses] = useState<EventClass[]>([]);
+  useEffect(() => {
+    if (cmd.env.has("events.classes")) void cmd.events.classes().then(setClasses, () => {});
+  }, []);
+  return classes;
+}
 
 /** A stable hue per kind, so a kind's chip keeps its colour. */
 export function hueOf(s: string): number {
@@ -76,7 +95,9 @@ export function newestFirst(events: readonly Event[]): Event[] {
 
 export default function EventLog() {
   const [scope, setScope] = useStoredState<Scope>("scope", "workspace");
-  const [hidden, setHidden] = useStoredState<string[]>("hidden", []);
+  // Classes since 1.2 (kept apart from 1.0's families, which named other things).
+  const classes = useClasses();
+  const [hidden, setHidden] = useStoredState<string[]>(classes.length ? "hiddenClasses" : "hidden", []);
   const [pausedAt, setPausedAt] = useStoredState<number | null>("pausedAt", null);
   const [clearedAt, setClearedAt] = useStoredState<number>("clearedAt", 0);
   const [query, setQuery] = useState("");
@@ -89,9 +110,12 @@ export default function EventLog() {
   const all = paused ? live.filter((e) => e.at <= pausedAt) : live;
   const waiting = live.length - all.length;
 
-  const families = [...new Set([...all.map((e) => familyOf(e.type)), ...hidden])].sort();
+  /** What an event is grouped by: its class, else (an older cmd) its family. */
+  const groupOf = (e: Event) => (classes.length ? classOf(e.type, classes) : familyOf(e.type));
+  const titleOf = (g: string) => classes.find((c) => c.class === g)?.title ?? g;
+  const families = [...new Set([...all.map(groupOf), ...hidden])].sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
   const q = query.trim().toLowerCase();
-  const shown = all.filter((e) => !hidden.includes(familyOf(e.type)) && (!q || JSON.stringify(e).toLowerCase().includes(q))).slice(0, SHOW);
+  const shown = all.filter((e) => !hidden.includes(groupOf(e)) && (!q || JSON.stringify(e).toLowerCase().includes(q))).slice(0, SHOW);
   const perMinute = live.filter((e) => now - e.at < 60_000).length;
   const status = paused ? (waiting ? `Paused · ${waiting} waiting` : "Paused") : perMinute ? `${perMinute}/min` : null;
 
@@ -122,7 +146,7 @@ export default function EventLog() {
             label={hidden.length ? `${hidden.length} hidden` : "Show"}
             icon="line.3.horizontal.decrease"
             menu={[
-              ...families.map((f) => ({ label: f, checked: !hidden.includes(f), run: () => toggle(f) })),
+              ...families.map((f) => ({ label: titleOf(f), checked: !hidden.includes(f), run: () => toggle(f) })),
               { separator: true as const },
               { label: "Show All", disabled: hidden.length === 0, run: () => setHidden([]) },
             ]}
@@ -130,7 +154,8 @@ export default function EventLog() {
         </WindowToolbar>
         <List>
           {shown.flatMap((e) => {
-            const fam = familyOf(e.type);
+            const fam = groupOf(e);
+            const text = e.text?.trim() || null;
             const row = (
               <ListRow
                 key={key(e)}
@@ -139,11 +164,14 @@ export default function EventLog() {
                 onClick={() => setOpen(open === key(e) ? null : key(e))}
                 menu={[
                   { label: `Only ${e.type}`, run: () => setQuery(e.type) },
-                  { label: `Hide ${fam}`, run: () => toggle(fam) },
+                  { label: `Hide ${titleOf(fam)}`, run: () => toggle(fam) },
                   { label: "Show Terminal", disabled: !e.terminalId, run: () => e.terminalId && void cmd.windows.select(e.terminalId).catch(() => {}) },
+                  { separator: true },
+                  { label: "Copy Event", run: () => void cmd.clipboard.write(JSON.stringify(e, null, 2)).catch(() => {}) },
+                  { label: "Copy ID", disabled: !e.key, run: () => e.key && void cmd.clipboard.write(e.key).catch(() => {}) },
                 ]}
               >
-                <ListRowContent title={e.type} detail={details(e).join(" · ") || null} />
+                <ListRowContent title={text ?? e.type} detail={[text ? e.type : null, ...details(e)].filter(Boolean).join(" · ") || null} />
                 <ListRowEnd>
                   <Chip hue={hueOf(fam)}>{fam}</Chip>
                   <ListValue>{clock(e.at)}</ListValue>

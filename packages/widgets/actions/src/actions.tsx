@@ -1,10 +1,14 @@
-// Run Scripts, a built-in widget package (docs/57, wave 1; the native Workspace Actions' job for
-// listing and running): how to run the project in this workspace's folder, from its own files
-// (useActions, live), the first one on its own as the main action. A click runs one in its own
-// terminal (cmd.actions.run, API 1.1, which asks or follows the permission levels); while it
-// runs, a click goes to its terminal. Whether it runs, failed or finished comes from the log's
-// command events in the terminal it ran in, kept per window so it holds across a reload. A risky
-// action (a deploy, a publish) is shown, but a widget can't run it.
+// Run Scripts, a built-in widget package (docs/57; the native Workspace Actions' job for listing,
+// running and stopping): how to run the project in this workspace's folder, from its own files
+// (useActions, live), the main one on its own, the rest in sections by kind (Dev, Test, Build…)
+// and a monorepo's packages each in their own.
+// A click runs one in its own terminal (cmd.actions.run, which asks or follows the permission
+// levels); while it runs, a click goes to its terminal, and Stop (cmd.actions.stop) and Restart
+// (cmd.actions.run with restart, API 1.2) are on its row. Whether it runs, failed or finished,
+// its terminal and a dev server's address are the action's own (API 1.2's run fields), from
+// wherever it was started; how long comes from the command events of its terminal. Copy Command
+// puts its command on the clipboard. A risky action (a deploy, a publish) is shown, but a
+// widget can't run it.
 
 import {
   ApiCallError,
@@ -22,14 +26,13 @@ import {
   ListRowActions,
   ListValue,
   IconButton,
+  LinkButton,
   Button,
   Badge,
   StatusLine,
   useActions,
   useEvents,
-  useTerminals,
   useWorkspace,
-  useStoredState,
   useNow,
   fmt,
   cmd,
@@ -38,79 +41,97 @@ import {
 } from "@cmd/widget-api";
 import { useState } from "react";
 
-/** Where an action last ran from this window: its terminal, and when. */
-type Ran = { terminalId: string; at: number };
 /** How a run is now. */
-export type RunState = { kind: "running"; since: number } | { kind: "failed"; exitCode: number; took: number } | { kind: "done"; took: number } | { kind: "stopped"; took: number };
+export type RunState = { kind: "running"; since: number | null } | { kind: "failed"; exitCode: number; took: number | null } | { kind: "done"; took: number | null } | { kind: "stopped"; took: number | null };
 
 /** Exit statuses that mean someone stopped it (⌃C, kill): not a failure. */
 const STOPPED = new Set([130, 137, 143]);
 /** Past this many actions the toolbar has a filter. */
 export const FILTER_FROM = 12;
 
-/** A run's state from the command events of its terminal since it ran: the latest one. Null when none came yet. */
-export function runState(ran: Ran | undefined, events: readonly Event[]): RunState | null {
-  if (!ran) return null;
-  const mine = events.filter((e) => e.terminalId === ran.terminalId && e.at >= ran.at - 1000);
-  const e = mine.reduce<Event | null>((a, b) => (!a || b.at >= a.at ? b : a), null);
-  if (!e) return null;
-  if (e.until === null || e.until === undefined) return { kind: "running", since: e.at };
-  const took = e.until - e.at;
-  const code = typeof e.data.exitCode === "number" ? e.data.exitCode : null;
+/** Sections by kind, in the native view's order and words: working on it first, shipping and cleaning up last. */
+export const KINDS: { kind: string; title: string; icon: string }[] = [
+  { kind: "dev", title: "Dev", icon: "play" },
+  { kind: "test", title: "Test", icon: "checkmark.circle" },
+  { kind: "build", title: "Build", icon: "hammer" },
+  { kind: "check", title: "Check", icon: "checklist" },
+  { kind: "run", title: "Other", icon: "terminal" },
+  { kind: "setup", title: "Setup", icon: "wrench.and.screwdriver" },
+  { kind: "deploy", title: "Deploy", icon: "paperplane" },
+  { kind: "clean", title: "Clean", icon: "trash" },
+  { kind: "agent", title: "Agent Skills", icon: "sparkles" },
+];
+const kindOf = (a: WorkspaceAction) => KINDS.find((k) => k.kind === a.kind) ?? KINDS.find((k) => k.kind === "run")!;
+
+/**
+ * A run's state: running or how it ended, from the action (API 1.2: `running`, `exitCode`);
+ * how long, from the newest command in its terminal. Null when it hasn't run here.
+ */
+export function runState(a: WorkspaceAction, events: readonly Event[]): RunState | null {
+  if (!a.terminalId) return null;
+  const mine = events.filter((e) => e.terminalId === a.terminalId);
+  const e = mine.reduce<Event | null>((x, y) => (!x || y.at >= x.at ? y : x), null);
+  if (a.running) return { kind: "running", since: e && (e.until === null || e.until === undefined) ? e.at : null };
+  const took = e && typeof e.until === "number" ? e.until - e.at : null;
+  const code = a.exitCode ?? null;
   if (code !== null && STOPPED.has(code)) return { kind: "stopped", took };
   return code ? { kind: "failed", exitCode: code, took } : { kind: "done", took };
 }
 
+/** "localhost:5173" for an address. */
+export const shortUrl = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "");
+
 export default function RunScripts() {
   const ws = useWorkspace();
   const actions = useActions();
-  const terminals = useTerminals();
   const commands = useEvents({ types: ["command"], limit: 200 });
-  const [ran, setRan] = useStoredState<Record<string, Ran>>("ran", {});
   const [query, setQuery] = useState("");
-  const open = new Set(terminals.map((t) => t.id));
-  const states = new Map(actions.map((a) => [a.name, runState(ran[a.name], commands)]));
-  // A run whose terminal closed isn't running any more.
-  for (const [name, s] of states) if (s?.kind === "running" && !open.has(ran[name]!.terminalId)) states.set(name, null);
+  const states = new Map(actions.map((a) => [a.name, runState(a, commands)]));
   const running = [...states.values()].filter((s) => s?.kind === "running").length;
   const failed = [...states.values()].filter((s) => s?.kind === "failed").length;
   const now = useNow(running ? 1000 : 15_000);
 
-  const show = (a: WorkspaceAction) => void cmd.windows.select(ran[a.name]!.terminalId).catch(() => {});
-  const run = (a: WorkspaceAction) => {
-    const at = Date.now();
-    void cmd.actions.run(a.name).then(
-      (r) => setRan({ ...ran, [a.name]: { terminalId: r.terminalId, at: r.started ? at : (ran[a.name]?.at ?? at) } }),
-      (e: unknown) => {
-        // The person's own no says nothing; anything else says why.
-        if (!(e instanceof ApiCallError && e.code === "denied")) void cmd.notify.send({ key: "run", title: `${a.name} · couldn't run`, body: e instanceof Error ? e.message : String(e) }).catch(() => {});
-      },
-    );
+  /** The person's own no says nothing; anything else says why. */
+  const said = (what: string) => (e: unknown) => {
+    if (!(e instanceof ApiCallError && e.code === "denied")) void cmd.notify.send({ key: "run", title: `${what} · couldn't`, body: e instanceof Error ? e.message : String(e) }).catch(() => {});
   };
+  const show = (a: WorkspaceAction) => a.terminalId && void cmd.windows.select(a.terminalId).catch(() => {});
+  const run = (a: WorkspaceAction) => void cmd.actions.run(a.name).catch(said(a.name));
+  const restart = (a: WorkspaceAction) => void cmd.actions.run(a.name, { restart: true }).catch(said(a.name));
+  const stop = (a: WorkspaceAction) => void cmd.actions.stop(a.name).catch(said(a.name));
+  const copy = (a: WorkspaceAction) => a.command && void cmd.clipboard.write(a.command).catch(() => {});
+  const open = (url: string) => void cmd.windows.open(url).catch(() => {});
 
   const row = (a: WorkspaceAction, main = false) => {
     const s = states.get(a.name) ?? null;
     const on = s?.kind === "running";
     const state =
-      s?.kind === "running" ? fmt.dur((now - s.since) / 1000)
+      s?.kind === "running" ? (s.since !== null ? fmt.dur((now - s.since) / 1000) : null)
       : s?.kind === "failed" ? `exit ${s.exitCode}`
-      : s?.kind === "done" || s?.kind === "stopped" ? fmt.dur(s.took / 1000)
+      : (s?.kind === "done" || s?.kind === "stopped") && s.took !== null ? fmt.dur(s.took / 1000)
       : null;
     return (
       <ListRow
         key={a.name}
         dim={a.risky}
-        tip={a.risky ? "Deploys or publishes: run it from a terminal" : a.title}
+        tip={a.risky ? "Deploys or publishes: run it from a terminal" : (a.command ?? a.title)}
         onClick={a.risky ? undefined : () => (on ? show(a) : run(a))}
         menu={[
-          ...(a.risky ? [] : [{ label: on ? "Show Terminal" : "Run", run: () => (on ? show(a) : run(a)) }]),
-          ...(!on && ran[a.name] && open.has(ran[a.name]!.terminalId) ? [{ label: "Show Terminal", run: () => show(a) }] : []),
+          ...(a.risky ? [] : on ? [{ label: "Show Terminal", run: () => show(a) }, { label: "Restart", run: () => restart(a) }, { label: "Stop", run: () => stop(a) }] : [{ label: "Run", run: () => run(a) }]),
+          ...(!on && a.terminalId ? [{ label: "Show Terminal", run: () => show(a) }] : []),
+          ...(a.url ? [{ label: `Open ${shortUrl(a.url)}`, run: () => open(a.url!) }] : []),
+          ...(a.command ? [{ separator: true as const }, { label: "Copy Command", run: () => copy(a) }] : []),
         ]}
       >
-        <ListRowIcon icon={main ? "play.fill" : a.risky ? "exclamationmark.triangle" : "terminal"} light={on ? "working" : s?.kind === "failed" ? "danger" : undefined} />
+        <ListRowIcon icon={main ? "play.fill" : a.risky ? "exclamationmark.triangle" : kindOf(a).icon} light={on ? "working" : s?.kind === "failed" ? "danger" : undefined} />
         <ListRowContent title={a.name} mono detail={a.title !== a.name ? a.title : null} tone={s?.kind === "failed" ? "danger" : undefined} />
         <ListRowEnd>
           {a.risky && <Badge size="sm" tone="warning">risky</Badge>}
+          {a.url && (
+            <LinkButton tone="accent" onClick={() => open(a.url!)}>
+              {shortUrl(a.url)}
+            </LinkButton>
+          )}
           {state && <ListValue>{state}</ListValue>}
           {main && !on && (
             <Button size="sm" variant="primary" icon="play.fill" onClick={() => run(a)}>
@@ -118,9 +139,16 @@ export default function RunScripts() {
             </Button>
           )}
         </ListRowEnd>
-        {!a.risky && !main && (
+        {!a.risky && (on || !main) && (
           <ListRowActions>
-            {on ? <IconButton size="sm" icon="macwindow" label="Show Terminal" onClick={() => show(a)} /> : <IconButton size="sm" icon="play.fill" label="Run" onClick={() => run(a)} />}
+            {on ? (
+              <>
+                <IconButton size="sm" icon="arrow.clockwise" label="Restart" onClick={() => restart(a)} />
+                <IconButton size="sm" icon="stop.fill" label="Stop" onClick={() => stop(a)} />
+              </>
+            ) : (
+              <IconButton size="sm" icon="play.fill" label="Run" onClick={() => run(a)} />
+            )}
           </ListRowActions>
         )}
       </ListRow>
@@ -128,11 +156,16 @@ export default function RunScripts() {
   };
 
   const q = query.trim().toLowerCase();
-  const matches = q ? actions.filter((a) => a.name.toLowerCase().includes(q) || a.title.toLowerCase().includes(q)) : actions;
+  const matches = q ? actions.filter((a) => a.name.toLowerCase().includes(q) || a.title.toLowerCase().includes(q) || !!a.command?.toLowerCase().includes(q)) : actions;
   const safe = actions.filter((a) => !a.risky);
-  const main = q ? undefined : safe[0];
+  // The main action is cmd's (`primary`, usually dev); an older cmd says none, so the first that isn't risky.
+  const main = q ? undefined : (safe.find((a) => a.primary) ?? (actions.some((a) => a.primary !== undefined) ? undefined : safe[0]));
   const rest = safe.filter((a) => a !== main);
   const risky = actions.filter((a) => a.risky);
+  const pinned = rest.filter((a) => a.pinned);
+  // The root's by kind; a monorepo's packages each in a section of their own, as Workspace Actions has them.
+  const byKind = KINDS.map((k) => ({ ...k, rows: rest.filter((a) => !a.pinned && !a.package && kindOf(a) === k) })).filter((k) => k.rows.length);
+  const packages = [...new Set(rest.filter((a) => !a.pinned && a.package).map((a) => a.package!))].sort();
 
   const state =
     ws && !ws.root ? { icon: "play.rectangle", title: "No folder", text: "This workspace has no folder." }
@@ -156,11 +189,24 @@ export default function RunScripts() {
           ) : (
             <>
               {main && <ListGroup>{row(main, true)}</ListGroup>}
-              {rest.length > 0 && (
-                <ListSection title="Scripts" count={rest.length}>
-                  {rest.map((a) => row(a))}
+              {pinned.length > 0 && (
+                <ListSection title="Pinned" count={pinned.length}>
+                  {pinned.map((a) => row(a))}
                 </ListSection>
               )}
+              {byKind.map((k) => (
+                <ListSection key={k.kind} title={k.title} count={k.rows.length}>
+                  {k.rows.map((a) => row(a))}
+                </ListSection>
+              ))}
+              {packages.map((pk) => {
+                const rows = rest.filter((a) => !a.pinned && a.package === pk);
+                return (
+                  <ListSection key={`pkg:${pk}`} title={pk} count={rows.length}>
+                    {rows.map((a) => row(a))}
+                  </ListSection>
+                );
+              })}
               {risky.length > 0 && (
                 <ListSection title="Run From a Terminal" count={risky.length}>
                   {risky.map((a) => row(a))}
