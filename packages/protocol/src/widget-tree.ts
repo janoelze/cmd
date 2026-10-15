@@ -14,7 +14,7 @@
 import type { ApiBox, ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
-import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, MediaTopicData, MediaTopicQuery, WidgetMigrated, WidgetEnvLocale, ApiActionMore, ApiActionRunMore, ApiActionsInfo, ApiActionsInfoQuery, ApiActionsQuery, ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWorkspaceName } from "./widget-tree-1.3.ts";
+import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, MediaTopicData, MediaTopicQuery, WidgetMigrated, WidgetEnvLocale, ApiActionMore, ApiActionRunOptions, ApiActionsInfo, ApiActionsInfoQuery, ApiActionsQuery, ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWorkspaceName } from "./widget-tree-1.3.ts";
 
 // ── versions ────────────────────────────────────────────
 
@@ -494,12 +494,6 @@ export interface ApiAction extends ApiActionMore {
   url?: string | null;
   /** 1.2: how its latest run ended: the exit status, null while it runs or when it hasn't. */
   exitCode?: number | null;
-}
-
-/** How `cmd.actions.run` runs an action. */
-export interface ApiActionRunOptions extends ApiActionRunMore {
-  /** 1.2: one that is running is stopped (⌃C) and run again in its terminal: Restart. An older cmd runs it only when it isn't running. */
-  restart?: boolean;
 }
 
 /** A request the core makes for the widget (the process has no network of its own). */

@@ -176,10 +176,12 @@ export interface ApiActionMore {
   elsewhere?: ApiActionElsewhere[];
 }
 
-/** How `cmd.actions.run` runs an action, since 1.3 (ApiActionRunOptions extends it). */
-export interface ApiActionRunMore {
-  /** In a new terminal, even when its last one is back at its prompt (Run in New Terminal). */
+/** How `cmd.actions.run` runs an action (here since 1.3, beside its new options). */
+export interface ApiActionRunOptions {
+  /** 1.2: one that is running is stopped (⌃C) and run again in its terminal: Restart. An older cmd runs it only when it isn't running. */
+  restart?: boolean;
+  /** 1.3: in a new terminal, even when its last one is back at its prompt (Run in New Terminal). */
   fresh?: boolean;
-  /** The worktree it is an action of, as `useActions({ root })` was given; the workspace's folder by default. */
+  /** 1.3: the worktree it is an action of, as `useActions({ root })` was given; the workspace's folder by default. */
   root?: string;
 }
