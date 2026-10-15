@@ -11,7 +11,7 @@ const since = "1.3";
 
 export const ELEMENTS_1_3_PICTURE = {
   Picture: {
-    doc: "An image: a cover, a thumbnail, a logo. From a data: URL, or an https URL of a host in the package's net grant, which cmd fetches; never loaded by the page.",
+    doc: "An image: a cover, a thumbnail, a logo. From a data: URL, or an https URL of a host in the package's `net` permission, which cmd fetches (a host outside it shows the placeholder, and the widget's log names what to add); the page never loads one.",
     since,
     props: {
       src: { type: "string", nullable: true, doc: "data:image/png|jpeg|webp|gif;base64,… (at most 512 KB), or https://<a granted host>/… (cmd fetches it: at most 2 MB and 4096 px a side, kept an hour); null shows the placeholder. Never SVG." },

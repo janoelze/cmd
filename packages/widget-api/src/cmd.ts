@@ -319,7 +319,7 @@ export const cmd = {
     /** Live: the hook `useAppUsage()`. @since 1.3 */
     use: useAppUsage,
   },
-  /** What the Mac is playing (any app that tells macOS: Music, Spotify, a browser tab). @since 1.2 */
+  /** What the Mac is playing (any app that tells macOS: Music, Spotify, a browser tab). Live since 1.3: the hook `useMedia()`. @since 1.2 */
   media: {
     /** The track, its app, position and cover, or null when nothing plays. Needs `media: ["read"]`. @since 1.2 */
     get: VERBS["media.get"],

@@ -1197,7 +1197,7 @@ export interface PictureProps {
   onClick?: () => void;
 }
 /**
- * An image: a cover, a thumbnail, a logo. From a data: URL, or an https URL of a host in the package's net grant, which cmd fetches; never loaded by the page.
+ * An image: a cover, a thumbnail, a logo. From a data: URL, or an https URL of a host in the package's `net` permission, which cmd fetches (a host outside it shows the placeholder, and the widget's log names what to add); the page never loads one.
  * @since 1.3
  */
 export const Picture = el<PictureProps>("Picture");
