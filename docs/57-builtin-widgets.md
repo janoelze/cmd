@@ -41,10 +41,10 @@ Sixteen native window types have `role: "widget"`. Lines are the renderer's view
 | Timer | `timer` | 123 | a countdown, rings | **done** (`timer`, "Countdown"); native stays |
 | Event Stream | `events` | 240 | `events.query`, live events; `data.explain` | **done** (`events`, "Event Log"); native stays. No AI explain existed to rebuild (`data.explain` is the class list, now `events.classes`); on 1.2: the log's text, its classes, Copy |
 | Workspace Actions | `actions` | 522 | `actions.list`, `actions.run`; pin, stop, settings | **done** (`actions`, "Run Scripts"); native stays. On 1.2: Stop, Restart, run state, kinds and the address from cmd, Copy Command; no Pin (not a verb), no settings link |
-| Stats | `stats` | 324 | `stats.query`, `stats.queryMany` | **wave 2**: on `stats.query` (built) |
+| Stats | `stats` | 324 | `stats.query`, `stats.queryMany` | **done** (`stats`, "Usage Stats"); native stays. One `stats.query` per pane; This Workspace by default, All Workspaces adds active time, projects and cmd's model calls; no "cmd" pane (core memory, stalls: the `system` class), no quantiles, counts again after a recorded command or turn (no stats topic) |
 | Journal | `journal` | 307 | `journal.day/days/week` | **wave 2**: on `journal.days` (built), reading written days only |
 | Notifications | `notifications` | 138 | the notification list, clear | **wave 2**: needs no verb (decided: no `notify.list` or `notify.clear`; the list is `useEvents`, Clear its own) |
-| Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **wave 2**: on `terminals.usage` (built); its "cmd" pane stays native |
+| Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **done** (`resources`, "Terminal Usage"); native stays. On `useTerminalUsage` and `DataGrid`; its "cmd" pane (`core.processes`) and the Task Manager link stay native; other workspaces' terminals show their folder, not the workspace's name |
 | Now Playing | `nowplaying` | 93 | `nowPlaying.get/control` | **wave 2**: on `media.get` and `media.control` (built) |
 | Navigator | `navigator` | 335 | `search.query` (transcripts) | **stays native**: decided, no `search.query`; it is the board's sidebar for sessions, a window |
 | Visualizer | `visualizer` | 162 | a frame with presets | **wave 3**: a frame package, if the frame `cmd` (state, theme, open) is enough |
@@ -144,6 +144,19 @@ Why one journal verb: the widget reads what the Journal wrote, and a list of the
 One addition beyond the list, to keep Restart one press: `actions.run(name, { restart: true })` (1.2, optional, an older cmd ignores it and leaves a running one running) stops a running action and runs it again in its terminal, one act and one sheet ("Restart “dev”"), as Workspace Actions' Restart does. Stop, then run would be two acts, and a press is one act (docs/56's decision). Data within API 1: `ApiEvent.text` and `ApiAction`'s `command`, `kind`, `package`, `pinned`, `primary`, `running`, `terminalId`, `url` (while it runs), `exitCode`, all optional in the d.ts so a 1.1 cmd's answers still type. A 1.1 package runs unchanged and is told the new verbs (`widget-act.test.ts`); `cmd.env.has("actions.stop")` is false on a cmd whose `env.verbs` lacks it (widget-api `testing.test.tsx`). `PROTOCOL` is unchanged: no RPC method or event changed (the verbs ride `widget.frame` and the widget wire as data).
 
 Wave 1 on 1.2: Run Scripts (`actions` 1.1.0, `act: ["actions.run", "actions.stop"]`) and Event Log (`events` 1.1.0); what still differs is in their READMEs. Then port the wave 2 widgets on it.
+
+## 1.3 candidates
+
+What the wave 2 ports wanted and the API doesn't have. None is built; each port works around it or leaves the feature out, as said.
+
+| Candidate | Wanted by | Today |
+|---|---|---|
+| `Stat` with children (a `Sparkline` in the tile) and a `delta` that is a trend with `good` (the kit's `Delta`) | Usage Stats, Terminal Usage | the `Sparkline` sits under the `Stat` in a `Stack`; the change is `delta` text with `deltaTone` (green when it went the good way) |
+| A live stats topic (`useStat(query)`, the core's `stats.changed`) | Usage Stats | the widget asks again 2.5 s after a `command` or `agent.stop` event (its own `useEvents`; cmd counts a second or two after the event) and once a minute |
+| Quantiles in `ApiStatResult` (`p50`, `p90` beside `total`) | Usage Stats | the waiting line's "at a time" is a second query with `measure: "p50"`; a stat's detail has no "median …, 90% under …" |
+| `fmt.value(v, unit)` and `fmt.delta(cur, prev, unit)`: a number in a chart `unit`, as the charts write it | Usage Stats | the package keeps its own copy of the Stats window's formatters |
+| Other workspaces' names (`workspaces.list`, or `workspaceName` on a terminal) | Terminal Usage (All Workspaces) | a terminal of another workspace shows its folder's name |
+| The fake host refusing a topic (`deny` covers calls only) | Terminal Usage's refused test | the test delivers the core's refusal of the subscription by hand (`host.deliver`) |
 
 ## Wave 3: frames
 
