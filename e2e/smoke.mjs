@@ -248,6 +248,8 @@ const SCENARIOS = {
   "widget-act": [],
   "widget-commands": [],
   "widget-timer": [],
+  "widget-events": [],
+  "widget-actions": [],
   "app-window": [],
 };
 const failures = [];
@@ -2800,6 +2802,105 @@ await scenario("widget-timer", async () => {
   await call("workspace.close", { id: ws.id });
 });
 
+
+/** Adds a built-in package's widget from the Widget Library (⇧⌘L) by its card's name; the new window's id. */
+async function addFromLibrary(name, kind) {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const before = new Set((await call("window.list")).map((w) => w.id));
+  await menu("widget.library");
+  const card = win.locator(".widget-library .wl-card").filter({ has: win.locator(".wl-name", { hasText: new RegExp(`^${name}$`) }) });
+  await card.waitFor({ timeout: 10_000 });
+  const source = await card.locator(".wl-source").textContent();
+  await card.click();
+  await gone(".widget-library");
+  const id = (await until(() => call("window.list"), (l) => l.some((w) => w.kind === kind && !before.has(w.id)))).find((w) => w.kind === kind && !before.has(w.id)).id;
+  return { id, source };
+}
+
+// Event Log (packages/widgets/events): the native Event Stream's job as a package. Added from the
+// Widget Library under Built-in, it shows a command run in a terminal of its workspace as it is
+// recorded, filters by a word, and opens an event whole.
+await scenario("widget-events", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const where = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-e2e-events-")));
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === ws.name);
+  const terminals = () => call("pane.list").then((l) => l.filter((p) => p.workspaceId === ws.id).map((p) => p.id));
+  try {
+    await menu("file.newTerminal");
+    const [termId] = await until(terminals, (l) => l.length === 1);
+    await until(() => paneText(termId, 5), (t) => /\S/.test(t)); // its prompt
+    await menu("view.grid");
+    const { id, source } = await addFromLibrary("Event Log", "pkg:events/events");
+    check(source === "Built-in · events 1.0.0", `the Widget Library lists Event Log under Built-in (${source})`);
+    await tileIn(id);
+    const tile = win.locator(`.tile[data-pane="${id}"]`);
+    await select(termId);
+    await focusIn(termId);
+    await win.keyboard.type("echo e2e-events-ok");
+    await win.keyboard.press("Enter");
+    const rows = () => tile.locator(".ui-list-row").allTextContents();
+    const shown = await until(rows, (r) => r.some((t) => t.includes("echo e2e-events-ok")), 20_000);
+    const status = await until(() => tile.locator(".tile-title").textContent(), (t) => /\d+\/min/.test(t));
+    await shot(win, "widget-events.png");
+    check(shown.some((t) => /^command/.test(t) && t.includes("echo e2e-events-ok")) && /\d+\/min/.test(status), `it shows the command as the log records it, live, and the rate in its title bar (${shown.slice(0, 3).map((t) => t.slice(0, 50)).join(" | ")}; ${status})`);
+    await select(id);
+    await tile.getByPlaceholder("Filter: any word in an event").fill("e2e-events-ok");
+    const filtered = await until(rows, (r) => r.length > 0 && r.every((t) => t.includes("e2e-events-ok")), 10_000);
+    await tile.locator(".ui-list-row").first().click();
+    const opened = await until(() => tile.locator(".ui-code").first().textContent().catch(() => ""), (t) => t.includes('"command": "echo e2e-events-ok"'), 10_000);
+    await shot(win, "widget-events-open.png");
+    check(filtered.length > 0 && opened.includes('"type": "command"'), `the filter keeps the rows that mention a word, and a click opens the event whole (${filtered.length} rows; ${JSON.stringify(opened.slice(0, 80))})`);
+    await call("window.close", { id });
+  } finally {
+    for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
+    await call("workspace.close", { id: ws.id });
+    fs.rmSync(where, { recursive: true, force: true });
+  }
+});
+
+// Run Scripts (packages/widgets/actions): Workspace Actions' list and Run as a package. Added
+// from the Widget Library, it lists a folder's package.json scripts, the risky one apart; a click
+// on a script runs it in a terminal of its own (Run project commands is Allow: no sheet), and
+// the row follows the run from that terminal's command events until it ends.
+await scenario("widget-actions", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const where = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-e2e-actions-")));
+  fs.writeFileSync(path.join(where, "package.json"), JSON.stringify({ name: "e2e-actions", scripts: { hello: "echo e2e-actions-ok && sleep 1", deploy: "wrangler deploy" } }));
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === ws.name);
+  const terminals = () => call("pane.list").then((l) => l.filter((p) => p.workspaceId === ws.id).map((p) => p.id));
+  try {
+    await menu("view.grid");
+    const { id, source } = await addFromLibrary("Run Scripts", "pkg:actions/actions");
+    check(source === "Built-in · actions 1.0.0", `the Widget Library lists Run Scripts under Built-in (${source})`);
+    await tileIn(id);
+    const tile = win.locator(`.tile[data-pane="${id}"]`);
+    const rows = () => tile.locator(".ui-list-row").allTextContents();
+    const listed = await until(rows, (r) => r.some((t) => t.startsWith("hello")) && r.some((t) => t.startsWith("deploy")), 20_000);
+    const sections = await tile.locator(".ui-list-section").allTextContents();
+    check(listed.length === 2 && sections.some((t) => t.startsWith("Run From a Terminal") && t.includes("deploy")), `it lists the folder's scripts, the risky one apart (${listed.map((t) => t.slice(0, 30)).join(" | ")})`);
+    const before = await terminals();
+    await tile.getByRole("button", { name: "Run" }).click();
+    const opened = (await until(terminals, (l) => l.length === before.length + 1, 15_000)).find((t) => !before.includes(t));
+    const out = opened ? await until(() => paneText(opened, 10), (t) => t.includes("e2e-actions-ok"), 15_000) : "";
+    const running = await until(() => tile.locator(".tile-title").textContent(), (t) => t.includes("1 running"), 10_000).catch(() => "");
+    await shot(win, "widget-actions-running.png");
+    const title = await until(() => tile.locator(".tile-title").textContent(), (t) => !t.includes("running"), 20_000);
+    const done = await tile.locator(".ui-list-row").first().textContent();
+    await shot(win, "widget-actions.png");
+    check(!!opened && out.includes("e2e-actions-ok") && running.includes("1 running") && !title.includes("running") && /hello.*\d+sRun$/.test(done) && !done.includes("exit"), `a click runs it in a terminal of its own and the row follows it from running to done (${JSON.stringify(running)}; ${JSON.stringify(done.slice(0, 60))})`);
+    await call("window.close", { id });
+  } finally {
+    for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
+    await call("workspace.close", { id: ws.id });
+    fs.rmSync(where, { recursive: true, force: true });
+  }
+});
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web
 // link that gets that far opens in a browser window instead (main/web-session.ts). Last:
