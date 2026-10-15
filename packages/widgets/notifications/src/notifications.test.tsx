@@ -4,9 +4,13 @@
 // row's menu copies its text; Clear is the widget's own "cleared at", kept across a reload; every
 // workspace's from the title menu; refused without the grant, with a way back; empty; many.
 
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
 import NotificationLog, { KEEP, iconOf, newestFirst } from "./notifications.tsx";
+
+// A fixed clock (only Date: timers run as usual): today at noon, so "yesterday" is 13 h ago at any hour the tests run.
+vi.useFakeTimers({ now: new Date(2026, 9, 15, 12, 0, 0), toFake: ["Date"] });
+afterAll(() => void vi.useRealTimers());
 
 const { event, pane } = fixtures;
 const note = (over: { title: string; body?: string; source?: string; urgent?: boolean; at?: number; terminalId?: string | null; workspaceId?: string }) =>
