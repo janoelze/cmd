@@ -69,6 +69,10 @@ export type FrameCmd = FrameNamespaces & {
   readonly config: Record<string, WireValue> & { get(): Record<string, WireValue> };
   /** "dark" or "light". The theme's variables are on :root: `var(--text)`, `var(--accent)`, `var(--space-2)`… */
   readonly theme: "dark" | "light";
+  /** A Frame element's `data`, as the widget's process passes it (null in a frame widget's page). @since 1.2 */
+  readonly data: WireValue | null;
+  /** Sends a value to the widget's process: the Frame element's `onMessage`. Plain data, 256 KB at most; not a press, so it can't start an act. @since 1.2 */
+  post(value: WireValue): void;
   /** Where the page runs. */
   env: {
     /** cmd's version, the API served and its verbs, the theme, the size class and placement. */
@@ -77,11 +81,12 @@ export type FrameCmd = FrameNamespaces & {
     has(name: string): boolean;
   };
   /**
-   * `fn` when the window's `"state"`, `"config"` or `"theme"` changes, or on each change of a
+   * `fn` when the window's `"state"`, `"config"` or `"theme"` changes, a Frame's `"data"`, or on each change of a
    * live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it.
    */
   on(type: "state" | "config", fn: (value: Record<string, WireValue>) => void): () => void;
   on(type: "theme", fn: (value: "dark" | "light") => void): () => void;
+  on(type: "data", fn: (value: WireValue | null) => void): () => void;
   on<T extends ApiTopic>(type: T, fn: (value: TopicValue<T>) => void, query?: TopicQuery<T>): () => void;
   /** Opens a URL, a path or a widget in a window beside this one: `cmd.windows.open`. Only right after a click in the frame. */
   open(target: string): Promise<{ id: string }>;

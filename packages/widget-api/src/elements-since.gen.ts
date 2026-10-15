@@ -60,4 +60,5 @@ export const ELEMENT_SINCE: Record<string, string> = {
   TimelineEntry: "1.2",
   Ribbon: "1.2",
   DataGrid: "1.2",
+  Frame: "1.2",
 };

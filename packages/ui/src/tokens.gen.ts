@@ -959,6 +959,12 @@ export const TOKENS: readonly TokenInfo[] = [
     "description": "The title bar's band in a window of its own (Settings): where the traffic lights sit, drawn by the page under them (TitleBand). 28px off macOS (the app's styles.css)."
   },
   {
+    "name": "--frame-min-h",
+    "type": "dimension",
+    "value": "160px",
+    "description": "A Frame element's height when its widget gives none (a page of the package in a tree, docs/56): room for a small chart."
+  },
+  {
     "name": "--ease",
     "type": "cubicBezier",
     "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",

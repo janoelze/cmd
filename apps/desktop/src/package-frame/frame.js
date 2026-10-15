@@ -7,11 +7,12 @@
 // protocol's registry (API_VERBS, API_TOPICS), so the page's `cmd` has every verb the core
 // serves under its own name (cmd.agents.list(), cmd.net.fetch(), cmd.run("gh", …)), nothing
 // written here per verb. Its window's state, config and theme come with the first bytes and
-// again as they change.
+// again as they change. A Frame element's page (API 1.2) also has the element's `data` and
+// sends values to the widget's process with `cmd.post(value)` (its onMessage).
 //
-// In:  { type: "state", state }, { type: "config", config }, { type: "theme", appearance, vars },
+// In:  { type: "state", state }, { type: "config", config }, { type: "theme", appearance, vars }, { type: "data", data },
 //      { type: "result", id, ok, value | error }, { type: "event", sub, data }, { type: "end", sub, error }
-// Out: { type: "ready" }, { type: "state", key, value }, { type: "call", id, verb, params },
+// Out: { type: "ready" }, { type: "state", key, value }, { type: "call", id, verb, params }, { type: "post", value },
 //      { type: "subscribe", sub, topic, query }, { type: "unsubscribe", sub },
 //      { type: "press" }, { type: "contextmenu" }, { type: "error", message }
 
@@ -24,7 +25,7 @@
     } catch {}
   };
   const copy = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
-  const listeners = { state: [], config: [], theme: [] };
+  const listeners = { state: [], config: [], theme: [], data: [] };
   const emit = (type, value) => {
     for (const fn of listeners[type]) {
       try {
@@ -41,6 +42,7 @@
   let kv = init.state && typeof init.state === "object" ? init.state : {};
   let config = init.config && typeof init.config === "object" ? init.config : {};
   let appearance = init.appearance === "light" ? "light" : "dark";
+  let data = init.data === undefined ? null : init.data;
   const api = init.api && typeof init.api === "object" ? init.api : {};
   const verbs = Array.isArray(api.verbs) ? api.verbs.filter((v) => typeof v === "string" && /^\w+\.\w+$/.test(v)) : [];
   const topics = Array.isArray(api.topics) ? api.topics.filter((t) => typeof t === "string" && /^\w+$/.test(t)) : [];
@@ -126,6 +128,8 @@
     },
     /** "dark" or "light". The theme's variables are on :root (var(--text), var(--accent), …). */
     theme: { get: () => appearance, enumerable: true },
+    /** A Frame element's `data` (null for a frame widget's page). */
+    data: { get: () => copy(data), enumerable: true },
   });
   const size = () => (innerWidth < 360 ? "narrow" : innerWidth < 600 ? "regular" : "wide");
   cmd.env = {
@@ -134,7 +138,7 @@
     /** Whether this cmd serves a verb ("agents.start"). */
     has: (name) => verbs.includes(name),
   };
-  /** fn(value) when the window's "state", "config" or "theme" changes, or on each change of a live topic ("agents", "events" with `query`…); returns what stops it. */
+  /** fn(value) when the window's "state", "config", "theme" or a Frame's "data" changes, or on each change of a live topic ("agents", "events" with `query`…); returns what stops it. */
   cmd.on = (type, fn, query) => {
     const list = listeners[type];
     if (list && typeof fn === "function") {
@@ -144,6 +148,8 @@
     if (topics.includes(type)) return subscribe(type, query, fn);
     return () => {};
   };
+  /** Sends a value to the widget's process: the Frame element's onMessage (plain data; not a press). */
+  cmd.post = (value) => post({ type: "post", value: copy(value) ?? null });
   /** Opens a URL, a path or a widget in a window beside this one (cmd.windows.open): works right after a click in the frame. A refusal no one catches is a console line, as it always was. */
   cmd.open = (target) => {
     const p = cmd.windows?.open ? cmd.windows.open(String(target)) : Promise.reject(new ApiCallError({ code: "unknown", message: "This version of cmd can't open windows from a frame." }));
@@ -188,6 +194,10 @@
       if (JSON.stringify(next) === JSON.stringify(kv)) return;
       kv = next;
       emit("state", copy(kv));
+    } else if (m.type === "data") {
+      if (JSON.stringify(m.data ?? null) === JSON.stringify(data)) return;
+      data = m.data ?? null;
+      emit("data", copy(data));
     } else if (m.type === "config" && m.config && typeof m.config === "object") {
       config = m.config;
       emit("config", copy(config));

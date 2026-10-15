@@ -7,7 +7,7 @@
 // prop types, gestures) is widget-spec.ts; each minor that adds elements has a file
 // (widget-elements-1.2.ts), merged into API_ELEMENTS here.
 
-import type { HandlerRef } from "./widget-tree.ts";
+import type { HandlerRef, WireValue } from "./widget-tree.ts";
 import { ALIGN, BREAKS, DISABLED, LIGHTS, SPACE, SYMBOL, TEXT_SIZES, TIP, TONES, TOOLBAR_ITEM, chosen, none, press, typed, type ActionOf, type ApiElementSpec, type MenuEntryOf, type OptionOf, type ViewStateOf } from "./widget-spec.ts";
 import { ELEMENTS_1_2 } from "./widget-elements-1.2.ts";
 
@@ -361,6 +361,8 @@ export type WireTypeOf<T, H = HandlerRef> = T extends "string" | "option"
                       ? number[][]
                       : T extends "cells"
                         ? (string | number | null)[]
+                        : T extends "value"
+                          ? WireValue
                         : T extends { list: infer F }
                           ? FieldsOf<F>[]
                           : T extends { record: infer F }

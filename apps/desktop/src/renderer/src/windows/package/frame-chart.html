@@ -1,0 +1,43 @@
+<!-- The Frame element's story page (elements.story.tsx): a bar chart on a canvas from the
+     element's data, in the theme's colours, redrawn on new data, a resize or a theme change;
+     a click posts the bar's index to the widget (cmd.post). -->
+<style>canvas{display:block;width:100%;height:100%}</style>
+<canvas id="c"></canvas>
+<script type="module">
+const c = document.getElementById("c");
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let picked = -1;
+function draw() {
+  const d = cmd.data ?? { values: [] };
+  const values = Array.isArray(d.values) ? d.values : [];
+  const dpr = devicePixelRatio || 1;
+  c.width = c.clientWidth * dpr;
+  c.height = c.clientHeight * dpr;
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  const w = c.clientWidth, h = c.clientHeight, pad = 0, max = Math.max(1, ...values);
+  const step = (w - pad * 2) / Math.max(1, values.length);
+  g.strokeStyle = css("--separator");
+  g.beginPath(); g.moveTo(pad, h - pad); g.lineTo(w - pad, h - pad); g.stroke();
+  values.forEach((v, i) => {
+    const bh = ((h - pad * 2) * v) / max;
+    g.fillStyle = i === picked ? css("--accent") : css("--text-faint");
+    g.beginPath();
+    g.roundRect(pad + i * step + step * 0.15, h - pad - bh, step * 0.7, bh, 3);
+    g.fill();
+  });
+  document.body.dataset.bars = String(values.length);
+}
+c.onclick = (e) => {
+  const values = (cmd.data ?? {}).values ?? [];
+  const i = Math.floor((e.offsetX / c.clientWidth) * values.length);
+  if (i < 0 || i >= values.length) return;
+  picked = i;
+  draw();
+  cmd.post({ picked: i });
+};
+cmd.on("data", draw);
+cmd.on("theme", draw);
+new ResizeObserver(draw).observe(c);
+draw();
+</script>

@@ -49,10 +49,10 @@ function ink(el: Element): Box[] {
     if (!(n instanceof Element)) return;
     const cs = getComputedStyle(n);
     if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return;
-    // Drawn things: SVG, images, fields, icons (masks, as SF Symbols are drawn), and small filled or outlined shapes (a status dot's parts, a spinner).
+    // Drawn things: SVG, images, fields, a frame's page (its box: its pixels are out of reach), icons (masks, as SF Symbols are drawn), and small filled or outlined shapes (a status dot's parts, a spinner).
     const empty = !n.children.length && !n.textContent?.trim();
     const filled = empty && (cs.maskImage !== "none" || cs.webkitMaskImage !== "none" || cs.backgroundImage !== "none" || ((cs.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(cs.borderTopWidth) > 0) && n.getBoundingClientRect().width < 40));
-    if (filled || n instanceof SVGSVGElement || n.tagName === "IMG" || n.tagName === "CANVAS" || n.tagName === "INPUT") {
+    if (filled || n instanceof SVGSVGElement || n.tagName === "IMG" || n.tagName === "CANVAS" || n.tagName === "INPUT" || n.tagName === "IFRAME") {
       const b = clip ? cut(box(n.getBoundingClientRect()), clip) : box(n.getBoundingClientRect());
       if (visible(size(b))) boxes.push(b);
       return;
@@ -97,7 +97,7 @@ export function audit(root: ParentNode = document): { inset: number; barInset: n
         const extent: Box = { top: Math.min(...found.map((b) => b.top)), left: Math.min(...found.map((b) => b.left)), right: Math.max(...found.map((b) => b.right)), bottom: Math.max(...found.map((b) => b.bottom)) };
         const m = { top: Math.round(extent.top - frame.top), left: Math.round(extent.left - frame.left), right: Math.round(frame.right - extent.right) };
         const problems: string[] = [];
-        if (part === "body" && Math.abs(m.left - m.right) > 1 && el.querySelector(".ui-grid, .ui-list, .ui-measure, .ui-doc, .ui-page, .ui-media, .ui-split") === null) problems.push(`left ${m.left} ≠ right ${m.right}`);
+        if (part === "body" && Math.abs(m.left - m.right) > 1 && el.querySelector(".ui-grid, .ui-list, .ui-measure, .ui-doc, .ui-page, .ui-media, .ui-split, .ui-empty") === null) problems.push(`left ${m.left} ≠ right ${m.right}`);
         // On the inset: a padded body or a list, unless it holds something with its own (a table, tree, document, media, split, state).
         const own = el.querySelector(".ui-grid, .ui-tree, .ui-measure, .ui-doc, .ui-media, .ui-split, .ui-viewstate, .ui-diff, .ui-tiles") !== null;
         const viewInset = parseFloat(getComputedStyle(el).getPropertyValue("--inset")) || inset; // the body's own (a Page's)

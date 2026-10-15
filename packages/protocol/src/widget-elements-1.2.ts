@@ -3,7 +3,8 @@
 // Layout (Panes, Pane, Panel, PanelBody, ListGroup), lists (ListRowActions, ListValue),
 // content (CodeBlock, Icon, Mark, Delta, Spinner, StatusLine), controls (IconButton,
 // LinkButton, TextField), charts (TimeSeries, TimeBars, TimeBar, Ranking, Proportion,
-// PunchCard, Calendar, Timeline, TimelineEntry, Ribbon) and DataGrid. Props are data:
+// PunchCard, Calendar, Timeline, TimelineEntry, Ribbon), DataGrid, and Frame (pixels of the
+// package's own inside a native window: a page of the package with the widget's `cmd`). Props are data:
 // a chart's values are numbers and strings, its formatting a `unit`, never a function.
 // widget-elements.ts merges these into API_ELEMENTS.
 
@@ -376,6 +377,20 @@ export const ELEMENTS_1_2 = {
       onRowDoubleClick: pick("A row was double-clicked: its key.", "string"),
       onToggle: pick("A row's disclosure was clicked: its key.", "string"),
     },
+    children: "none",
+  },
+
+  // ── pixels ──
+  Frame: {
+    doc: "Pixels of the widget's own inside its window: a page of the package (an .html file) drawn in a sandboxed frame, for a canvas, a chart or a player the elements don't draw. The page's `cmd` is the widget's (`@cmd/widget-api/frame`), its data comes from `data` and its messages go to `onMessage`. Several may share a window. Where pixels aren't drawn (a preview, the phone) its label stands in.",
+    since,
+    props: {
+      src: { type: "string", required: true, doc: 'The page: an .html file of the package, relative to its folder ("chart.html", "pages/meter.html").' },
+      label: { ...LABEL, doc: "What it shows, in words: its accessible name, and what stands in for it where pixels aren't drawn." },
+      height: { type: "number", doc: "Its height in pixels; without one it fills the space it is given." },
+      data: { type: "value", nullable: true, doc: "Data for the page, as plain values (256 KB at most): `cmd.data` there, and `cmd.on(\"data\", fn)` on each change." },
+    },
+    events: { onMessage: { gesture: "message", value: "value", typing: true, doc: "The page sent a value (`cmd.post(value)`). Not a press: it can't start an act." } },
     children: "none",
   },
 } as const satisfies Record<string, ApiElementSpec>;

@@ -123,7 +123,7 @@ export class WidgetHost {
     this.#t = { ...HOST_TIMES, ...o.times };
     this.#aiUsage = new AiUsage(o.stateDir);
     this.config = new PackageConfig({ windows: core.windows, packages: o.packages, stateDir: o.stateDir, onChange: () => o.onAsk?.() });
-    this.frames = new WidgetFrames({ windows: () => core.windows.others(), packages: o.packages, granted: (name) => this.#granted(name), api: (id) => this.api(id), send: (conn, e) => core.server.send(conn, e) });
+    this.frames = new WidgetFrames({ windows: () => core.windows.others(), packages: o.packages, granted: (name) => this.#granted(name), api: (id) => this.api(id), hasFrame: (id) => !!this.#all.get(id)?.tree.has("Frame"), send: (conn, e) => core.server.send(conn, e) });
   }
 
   /** The window's API while its widget may use it (a frame's page, frame.ts), or null: not started, waiting for a grant, stopped, closed. */

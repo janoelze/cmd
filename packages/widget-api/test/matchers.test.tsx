@@ -1,10 +1,10 @@
 // @cmd/widget-api/testing's own surface (docs/56 phase 3): each matcher passes and fails with a
 // message that says what the tree has, the finders (rows, sections, find), the hands (press,
-// change, submit, choose a menu entry or a state's action), and host.calls recording acts.
+// change, submit, message, choose a menu entry or a state's action), and host.calls recording acts.
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures, matchers, titleOf, type RenderedTree } from "@cmd/widget-api/testing";
-import { Window, View, WindowToolbar, ToolbarSearchField, ToolbarField, List, ListSection, ListRow, ListRowContent, Stat, EmptyState, Callout, useTerminals, useStoredState, cmd } from "@cmd/widget-api";
+import { Window, View, WindowToolbar, ToolbarSearchField, ToolbarField, List, ListSection, ListRow, ListRowContent, Stat, EmptyState, Callout, Frame, useTerminals, useStoredState, cmd } from "@cmd/widget-api";
 
 /** A widget with a bit of everything: a filter, sections of rows, a stat, a state when nothing matches. */
 function Sample() {
@@ -131,6 +131,24 @@ describe("the tree and its hands", () => {
     expect(h.requests).toContainEqual(["state.set", "q", "ap"]);
     await tree.submit(tree.find("ToolbarField"), "Saved");
     expect(tree).toShowState("error", "Saved");
+  });
+
+  it("message: a Frame's page posting a value, as its onMessage (1.2)", async () => {
+    function Chart() {
+      const [picked, setPicked] = useStoredState<number>("picked", -1);
+      return (
+        <View>
+          <Stat label="Picked" value={picked} />
+          <Frame src="chart.html" label="Runs per hour" data={{ values: [1, 2, 3] }} onMessage={(m) => setPicked((m as { picked: number }).picked)} />
+        </View>
+      );
+    }
+    const tree = await render(<Chart />, createHost({}));
+    const frame = tree.find("Frame", "Runs per hour");
+    expect(frame.props.data).toEqual({ values: [1, 2, 3] });
+    await tree.message(frame, { picked: 2 });
+    expect(tree).toHaveStat("Picked", 2);
+    await expect(tree.message(tree.find("Stat"), 1)).rejects.toThrow("nothing to message");
   });
 
   it("choose: a menu entry (in a submenu too) and a View state's action", async () => {

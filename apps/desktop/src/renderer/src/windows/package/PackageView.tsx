@@ -7,7 +7,8 @@
 // saying why (a save that didn't load: its error) with Restart;
 // an error boundary so a tree that can't be drawn shows a Callout and not a broken
 // board, and `widget.env` whenever the window's theme, size class or placement changes.
-// A frame widget (`"surface": "frame"`) draws its page instead of a tree (PackageFrame.tsx).
+// A frame widget (`"surface": "frame"`) draws its page instead of a tree (PackageFrame.tsx); a
+// tree's Frame elements draw pages of the package in it (FrameElement.tsx, FramesContext).
 
 import { Button, Callout, Stack, View, type ViewStateSpec } from "@cmd/ui";
 import { Component, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -17,7 +18,8 @@ import { PlacementContext, windowChromeChanged, type WindowViewProps } from "../
 import { configurable, configure, needsSetup } from "./ConfigSheet.tsx";
 import { drawAll, type DrawContext } from "./elements.tsx";
 import { closeTree, openTree, rpcLink, type WidgetLink, type WidgetPlace } from "./live.ts";
-import { PackageFrame } from "./PackageFrame.tsx";
+import { PackageFrame, configOf, servePage } from "./PackageFrame.tsx";
+import { FramesContext, type Frames } from "./FrameElement.tsx";
 import type { TreeSnapshot, TreeStore } from "./tree.ts";
 
 export function PackageView({ win, focused }: WindowViewProps) {
@@ -33,9 +35,15 @@ export function PackageView({ win, focused }: WindowViewProps) {
   const canConfigure = configurable(entry);
   useEffect(() => windowChromeChanged(), [canConfigure]);
   const setup = needsSetup(entry, win.state.config as Record<string, unknown> | undefined) ? { title: entry!.title, configure: () => configure(win.id) } : null;
+  const placement = useContext(PlacementContext);
+  const grant = JSON.stringify(entry?.ask ?? null) + JSON.stringify(entry?.permissions ?? null);
+  const kv = (win.state.kv as Record<string, unknown> | undefined) ?? {};
+  const config = configOf(entry, win);
+  // The tree's Frames (API 1.2): pages of the package with the window's widget API, loaded again with the grant or a restart.
+  const frames = (reload: number): Frames => ({ windowId: win.id, serve: (src, init) => servePage(win.id, src, init), reloadKey: `${win.id}\n${grant}\n${reload}`, active: focused, kv, config, placement });
   if (!store) return <View state={STARTING} />;
   const frame = entry?.surface === "frame" ? (reload: number) => <PackageFrame win={win} entry={entry} active={focused} reload={reload} /> : null;
-  return <PackageWidget windowId={win.id} store={store} link={link} setup={setup} frame={frame} />;
+  return <PackageWidget windowId={win.id} store={store} link={link} setup={setup} frame={frame} frames={frames} />;
 }
 
 /** A widget that needs settings before it can show anything: its title and the way to the Configure sheet. */
@@ -51,9 +59,10 @@ const STARTING: ViewStateSpec = { kind: "loading", title: "Starting…" };
  * A frame widget (`frame`) draws its page instead, from its first draw, the tree giving only the title bar; each restart of
  * its process (a save) loads the page again (`reload`).
  */
-export function PackageWidget({ windowId, store, link, setup = null, frame = null }: { windowId: WindowId; store: TreeStore; link: WidgetLink; setup?: Setup | null; frame?: ((reload: number) => ReactNode) | null }) {
+export function PackageWidget({ windowId, store, link, setup = null, frame = null, frames = null }: { windowId: WindowId; store: TreeStore; link: WidgetLink; setup?: Setup | null; frame?: ((reload: number) => ReactNode) | null; frames?: ((reload: number) => Frames) | null }) {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const reload = useRestarts(snap.status);
+  const live = frames?.(reload) ?? null;
   const ctx = useMemo<DrawContext>(() => ({ windowId, send: (h, e, v) => link.interact(h, e, v) }), [windowId, link]);
   const [probe, size] = useSizeClass();
   const theme = useAppearance();
@@ -78,7 +87,9 @@ export function PackageWidget({ windowId, store, link, setup = null, frame = nul
         <>
           {snap.status === "stopped" && <Stopped snap={snap} link={link} />}
           <TreeBoundary rev={snap.rev}>
-            <Tree nodes={snap.nodes} ctx={ctx} />
+            <FramesContext.Provider value={live}>
+              <Tree nodes={snap.nodes} ctx={ctx} />
+            </FramesContext.Provider>
           </TreeBoundary>
         </>
       )}

@@ -99,9 +99,11 @@ export type ApiShape = { list: Readonly<Record<string, ApiFieldSpec>>; name: str
  * number; "numbers" a (number | null)[] (null is a gap); "menu" a MenuEntryOf[]; "action"
  * an ActionOf; "viewState" a ViewStateOf; "options" OptionOf[]; "option" one option's value
  * (a string; the element is generic over it in @cmd/widget-api). 1.2: "strings" a string[];
- * "matrix" a number[][]; an ApiShape records of named fields.
+ * "matrix" a number[][]; an ApiShape records of named fields; "value" any plain data (strings,
+ * numbers, booleans, null, lists and records of them, no handlers; at most VALUE_MAX_BYTES as
+ * JSON), what a Frame passes to its page and back.
  */
-export type ApiPropType = "string" | "text" | "number" | "boolean" | "numbers" | "menu" | "action" | "viewState" | "options" | "option" | "strings" | "matrix" | "cells" | ApiShape | readonly (string | number)[];
+export type ApiPropType = "string" | "text" | "number" | "boolean" | "numbers" | "menu" | "action" | "viewState" | "options" | "option" | "strings" | "matrix" | "cells" | "value" | ApiShape | readonly (string | number)[];
 
 export interface ApiPropSpec {
   type: ApiPropType;
@@ -117,10 +119,11 @@ export interface ApiPropSpec {
 
 /**
  * What a person does to fire an event (the testing tree's press, doubleClick, change, submit,
- * pick). "change", "submit" and "pick" carry a value; "pick" is a press on one of several
- * things (a table's row, a chart's bucket, a ribbon's bar) and says which (1.2).
+ * pick, message). "change", "submit" and "pick" carry a value; "pick" is a press on one of several
+ * things (a table's row, a chart's bucket, a ribbon's bar) and says which (1.2); "message" is a
+ * Frame's page sending a value (`cmd.post`), which is no press (1.2).
  */
-export type ApiGesture = "press" | "doubleClick" | "change" | "submit" | "dismiss" | "pick";
+export type ApiGesture = "press" | "doubleClick" | "change" | "submit" | "dismiss" | "pick" | "message";
 
 export interface ApiEventSpec {
   gesture: ApiGesture;
@@ -147,6 +150,9 @@ export interface ApiElementSpec {
   /** The children prop's JSDoc. */
   childrenDoc?: string;
 }
+
+/** The most a "value" prop or event may hold, as JSON (bytes). */
+export const VALUE_MAX_BYTES = 256 * 1024;
 
 /** Whether a prop type is records (an ApiShape). */
 export const isShape = (t: ApiPropType): t is ApiShape => typeof t === "object" && !Array.isArray(t) && ("list" in t || "record" in t);

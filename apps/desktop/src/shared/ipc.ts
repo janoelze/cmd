@@ -75,7 +75,11 @@ export type MacDevice = "camera" | "microphone";
  * has before its first message: the theme's variables and appearance, the window's state and config.
  */
 export interface PackageFrameRequest {
-  dir: string;
+  /** The package folder (absolute); without one, `html` is the page (a Workbench story's). */
+  dir?: string;
+  /** The page: an .html file of the package, relative to it (view.html when left out). */
+  page?: string;
+  html?: string;
   media: string[];
-  init: { appearance: "dark" | "light"; vars: Record<string, string>; state: Record<string, unknown>; config: Record<string, unknown>; placement?: "board" | "sidebar" };
+  init: { appearance: "dark" | "light"; vars: Record<string, string>; state: Record<string, unknown>; config: Record<string, unknown>; placement?: "board" | "sidebar"; data?: unknown };
 }

@@ -2,7 +2,7 @@
 // every verb that needs a press goes through (the acts, windows.open). An interaction counts
 // only when its handler is on an element of the window's tree with that event (tree.ts
 // `fires`); one that isn't is dropped, logged once per window. Typing into a field isn't a
-// press. A verb takes the press it came after: one act, or one window, per press.
+// press, nor is a Frame's page sending a message (events marked `typing`). A verb takes the press it came after: one act, or one window, per press.
 // A frame's page (FramePress) can't be watched like a tree: the app's gesture rule (renderer
 // lib/frames.ts) says a call came right after a press in the frame, and the press is that
 // call's alone, at most one a second per frame; it never arms the process, nor the other way.
@@ -25,13 +25,13 @@ export class WindowPress implements Press {
   }
 
   /** An interaction from the window: whether it is real (and so goes on to the widget's process). */
-  interaction(tree: TreeState, handler: number, event: string, value: unknown, remote: boolean): boolean {
+  interaction(tree: TreeState, handler: number, event: string, _value: unknown, remote: boolean): boolean {
     if (!tree.fires(handler, event)) {
       if (!this.#warned) log.warn(`widget ${this.#label}: an interaction with no such handler (${handler} ${event.slice(0, 40)}) ignored`);
       this.#warned = true;
       return false;
     }
-    if (event === "onChange" && typeof value === "string" && tree.typesInto(handler)) return true;
+    if (tree.typing(handler, event)) return true; // typing, or a Frame's page posting: not a press
     this.#at = Date.now();
     this.#remote = remote;
     return true;

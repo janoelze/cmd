@@ -1,6 +1,7 @@
 // Frame widgets (docs/56, "The frame surface, for pixels"): a package widget with
 // `"surface": "frame"` draws its view.html in the app's one frame host (renderer lib/frames.ts,
-// served by main's cmd-widget://package/). The core says what a frame may load (its package
+// served by main's cmd-widget://package/), and a tree widget draws a page of its package in each
+// Frame element of its tree (API 1.2) with the same host; either is "a frame" here. The core says what a frame may load (its package
 // folder, the hosts its grant reaches: source) and serves the page's `cmd`: every verb of the
 // API (call) and every live topic (subscribe), through its window's own API (the adapter the
 // host keeps for the window, api/adapter.ts), so a frame has the grants, scope, rate limits and
@@ -35,6 +36,8 @@ export interface FramesDeps {
   granted(name: string): Grants | null;
   /** The window's API while its widget may use it (host.ts), or null. */
   api(windowId: WindowId): WidgetApi | null;
+  /** Whether the window's tree has a Frame element (a tree widget's frames). */
+  hasFrame(windowId: WindowId): boolean;
   /** One event to one connection (the app's that asked). */
   send(conn: Connection, e: CoreEvent): void;
 }
@@ -61,12 +64,12 @@ export class WidgetFrames {
     this.#d = d;
   }
 
-  /** The frame widget a window shows, with its grant; null for any other window, or one waiting for its grant. */
+  /** The package widget a window shows when it draws frames (a frame widget, or a tree with a Frame), with its grant; null for any other window, or one waiting for its grant. */
   #frameOf(windowId: WindowId): { pkg: WidgetPackage; widget: PackageWidget; net: string[] } | null {
     const w = this.#d.windows().find((x) => x.id === windowId);
     const pkg = w ? this.#d.packages.forKind(w.kind) : null;
     const widget = pkg?.widgets.find((x) => x.kind === w!.kind);
-    if (!pkg || !widget || widget.surface !== "frame") return null;
+    if (!pkg || !widget || (widget.surface !== "frame" && !this.#d.hasFrame(windowId))) return null;
     const g = this.#d.granted(pkg.name);
     if (needsGrant(pkg.permissions, g?.permissions)) return null;
     return { pkg, widget, net: effective(pkg.permissions, g?.permissions).net };

@@ -66,6 +66,26 @@ describe("a frame widget's files", () => {
     expect(isPackageFramePage(url.replace("view.html", "other.html"))).toBe(false);
   });
 
+  it("serve a Frame element's page with the prelude, and only an .html file of the package; a story's page inline", async () => {
+    const { root } = pkg();
+    fs.mkdirSync(path.join(root, "pages"));
+    fs.writeFileSync(path.join(root, "pages", "meter.html"), "<canvas></canvas>");
+    const init = { appearance: "dark" as const, vars: {}, state: {}, config: {}, data: { values: [1, 2] } };
+    const url = registerPackageFrame({ dir: root, page: "pages/meter.html", media: [], init });
+    expect(url).toMatch(/\/pages\/meter\.html$/);
+    expect(isPackageFramePage(url)).toBe(true);
+    expect(isPackageFramePage(url.replace("pages/meter.html", "view.html"))).toBe(false);
+    const html = await (await packageFrameResponse(new Request(url))).text();
+    expect(html).toContain('"data":{"values":[1,2]}');
+    expect(html.trimEnd().endsWith("<canvas></canvas>")).toBe(true);
+    // view.html under this token is a file of the package, not its page: no prelude.
+    expect(await (await packageFrameResponse(new Request(url.replace("pages/meter.html", "view.html")))).text()).toBe("<p id=x>hi</p>");
+    for (const page of ["../secret.txt", "nope.html", "img/a b.png", ".env"]) expect(() => registerPackageFrame({ dir: root, page, media: [], init }), page).toThrow();
+    const inline = registerPackageFrame({ html: "<b>story</b>", media: [], init });
+    expect((await (await packageFrameResponse(new Request(inline))).text()).trimEnd().endsWith("<b>story</b>")).toBe(true);
+    expect((await packageFrameResponse(new Request(inline.replace("page.html", "view.html")))).status).toBe(404);
+  });
+
   it("refuse a folder that isn't a package", () => {
     expect(() => registerPackageFrame({ dir: "relative", media: [], init: { appearance: "dark", vars: {}, state: {}, config: {} } })).toThrow();
     expect(() => registerPackageFrame({ dir: os.tmpdir(), media: [], init: { appearance: "dark", vars: {}, state: {}, config: {} } })).toThrow(/not a widget package/);
@@ -190,6 +210,18 @@ describe("a frame widget's page cmd", () => {
     expect(posted.at(-1)).toMatchObject({ type: "subscribe", topic: "events", query: { types: ["note"] } });
     send({ type: "event", sub: posted.at(-1)!.sub, data: [{ id: 1 }] });
     expect(viaOn).toEqual([[{ id: 1 }]]);
+  });
+
+  it("has a Frame's data at hand and on change, and posts a value to the app", () => {
+    const { cmd, posted, send } = page({ ...init, data: { values: [1] } });
+    expect((cmd as unknown as { data: unknown }).data).toEqual({ values: [1] });
+    const got: unknown[] = [];
+    cmd.on("data", (v) => got.push(v));
+    send({ type: "data", data: { values: [1] } }); // the same: nothing
+    send({ type: "data", data: { values: [2] } });
+    expect(got).toEqual([{ values: [2] }]);
+    (cmd as unknown as { post(v: unknown): void }).post({ picked: 0 });
+    expect(posted.at(-1)).toEqual({ type: "post", value: { picked: 0 } });
   });
 
   it("keeps state, config and open as before: state at hand, config as values, open as windows.open", () => {

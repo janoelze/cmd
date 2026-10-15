@@ -11,7 +11,7 @@
 // API 1.2 added the window-content kit's elements (docs/57); each says its @since.
 
 import type { ReactElement, ReactNode } from "react";
-import type { ActionOf, ApiElement, MenuEntryOf, ViewStateOf } from "@cmd/protocol/widget-tree";
+import type { ActionOf, ApiElement, MenuEntryOf, ViewStateOf, WireValue } from "@cmd/protocol/widget-tree";
 
 /** An element of the API: JSX makes a host element of its tag. */
 type El<P> = (props: P & { key?: string | number }) => ReactElement;
@@ -1037,6 +1037,25 @@ export interface DataGridProps {
  */
 export const DataGrid = el<DataGridProps>("DataGrid");
 
+/** Frame's props. @since 1.2 */
+export interface FrameProps {
+  /** The page: an .html file of the package, relative to its folder ("chart.html", "pages/meter.html"). */
+  src: string;
+  /** What it shows, in words: its accessible name, and what stands in for it where pixels aren't drawn. */
+  label: string;
+  /** Its height in pixels; without one it fills the space it is given. */
+  height?: number;
+  /** Data for the page, as plain values (256 KB at most): `cmd.data` there, and `cmd.on("data", fn)` on each change. */
+  data?: WireValue | null;
+  /** The page sent a value (`cmd.post(value)`). Not a press: it can't start an act. */
+  onMessage?: (value: WireValue) => void;
+}
+/**
+ * Pixels of the widget's own inside its window: a page of the package (an .html file) drawn in a sandboxed frame, for a canvas, a chart or a player the elements don't draw. The page's `cmd` is the widget's (`@cmd/widget-api/frame`), its data comes from `data` and its messages go to `onMessage`. Several may share a window. Where pixels aren't drawn (a preview, the phone) its label stands in.
+ * @since 1.2
+ */
+export const Frame = el<FrameProps>("Frame");
+
 /** Each element's props type, by name (tests hold them to the protocol's allow-list). */
 export interface ElementProps {
   Window: WindowProps;
@@ -1096,4 +1115,5 @@ export interface ElementProps {
   TimelineEntry: TimelineEntryProps;
   Ribbon: RibbonProps;
   DataGrid: DataGridProps;
+  Frame: FrameProps;
 }

@@ -1,7 +1,9 @@
 // Frame widgets' pages (docs/56, "The frame surface, for pixels"): cmd-widget://package/<token>/,
 // one token per frame the app shows (registerPackageFrame, from the renderer's frame host,
-// lib/frames.ts), each naming a package folder. view.html is served after a prelude: the
-// theme's variables, the window's state and config, the API's verbs and topics (from the
+// lib/frames.ts), each naming a package folder and its page: a frame widget's view.html, or a
+// Frame element's .html file (API 1.2; a Workbench story's page may come inline instead). The
+// page is served after a prelude: the
+// theme's variables, the window's state and config, a Frame's data, the API's verbs and topics (from the
 // protocol's registry, so the page's `cmd` has each under its name), and the page's `cmd`
 // (package-frame/frame.js);
 // every other path is a file inside the package folder, never outside it (`..`, encoded or not,
@@ -20,7 +22,13 @@ import type { PackageFrameRequest } from "../shared/ipc.ts";
 export const PACKAGE_FRAME_BASE = "cmd-widget://package/";
 
 interface Served {
-  root: string;
+  /** The package folder (a real path); null for an inline page (a story's), which loads nothing else. */
+  root: string | null;
+  /** The page's path under the token, as its URL says it ("view.html", "pages/meter.html"). */
+  page: string;
+  /** The page's file, or its markup when inline. */
+  file: string | null;
+  html: string | null;
   origins: string[];
   init: PackageFrameRequest["init"];
 }
@@ -111,41 +119,61 @@ const BASE = "html,body{margin:0;height:100%}body{font-family:var(--font-ui);fon
 
 function prelude(s: Served): string {
   const api = { verbs: API_VERBS, topics: API_TOPICS, major: WIDGET_API, minor: WIDGET_API_MINOR, version };
-  const first = { appearance: s.init.appearance, state: s.init.state ?? {}, config: s.init.config ?? {}, placement: s.init.placement === "sidebar" ? "sidebar" : "board", api };
+  const first = { appearance: s.init.appearance, state: s.init.state ?? {}, config: s.init.config ?? {}, data: s.init.data ?? null, placement: s.init.placement === "sidebar" ? "sidebar" : "board", api };
   return `<!doctype html><html data-appearance="${s.init.appearance}"><head><meta charset="utf-8"><style>${rootRule(s)}${BASE}</style><script>window.__CMD_FRAME__=${json(first)};\n${runtime}</script></head><body>\n`;
 }
 
-/** Serve a frame for this package folder: its URL (view.html under a new token). */
+/** Serve a frame for this package folder and page (view.html unless `page` names another .html file in it), or an inline page: its URL under a new token. */
 export function registerPackageFrame(req: PackageFrameRequest): string {
-  if (!req || typeof req.dir !== "string" || !path.isAbsolute(req.dir)) throw new Error("a frame widget's folder should be an absolute path");
-  const root = fs.realpathSync(req.dir);
-  if (!fs.existsSync(path.join(root, "package.json"))) throw new Error("not a widget package");
+  if (!req || typeof req !== "object") throw new Error("a frame needs a package folder and a page");
+  let root: string | null = null;
+  let page = "view.html";
+  let file: string | null = null;
+  let html: string | null = null;
+  if (typeof req.html === "string" && req.dir === undefined) {
+    html = req.html;
+    page = "page.html";
+  } else {
+    if (typeof req.dir !== "string" || !path.isAbsolute(req.dir)) throw new Error("a frame widget's folder should be an absolute path");
+    root = fs.realpathSync(req.dir);
+    if (!fs.existsSync(path.join(root, "package.json"))) throw new Error("not a widget package");
+    if (req.page !== undefined) {
+      if (typeof req.page !== "string" || !/\.html$/i.test(req.page)) throw new Error("a frame's page is an .html file of its package");
+      page = req.page.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+    }
+    file = resolveInPackage(root, page);
+    if (!file) throw new Error(`no page ${String(req.page ?? "view.html").slice(0, 120)} in the package`);
+  }
   const appearance = req.init?.appearance === "light" ? "light" : "dark";
-  const init = { appearance, vars: req.init?.vars ?? {}, state: req.init?.state ?? {}, config: req.init?.config ?? {}, placement: req.init?.placement === "sidebar" ? ("sidebar" as const) : ("board" as const) } as const;
+  const init = { appearance, vars: req.init?.vars ?? {}, state: req.init?.state ?? {}, config: req.init?.config ?? {}, data: req.init?.data ?? null, placement: req.init?.placement === "sidebar" ? ("sidebar" as const) : ("board" as const) } as const;
   while (served.size >= MAX_SERVED) served.delete(served.keys().next().value!);
   const token = randomUUID();
-  served.set(token, { root, origins: mediaOrigins(Array.isArray(req.media) ? req.media.filter((h) => typeof h === "string") : []), init });
-  return `${PACKAGE_FRAME_BASE}${token}/view.html`;
+  served.set(token, { root, page, file, html, origins: mediaOrigins(Array.isArray(req.media) ? req.media.filter((h) => typeof h === "string") : []), init });
+  return `${PACKAGE_FRAME_BASE}${token}/${page}`;
 }
 
 const tokenOf = (url: string): string | null => (url.startsWith(PACKAGE_FRAME_BASE) ? (url.slice(PACKAGE_FRAME_BASE.length).split(/[/?#]/)[0] ?? null) : null);
 
-/** The frame's page itself (its own view.html: a reload), the only place it may navigate. */
+/** The frame's page itself (a reload), the only place it may navigate. */
 export const isPackageFramePage = (url: string): boolean => {
   const t = tokenOf(url);
-  return !!t && served.has(t) && url === `${PACKAGE_FRAME_BASE}${t}/view.html`;
+  const s = t ? served.get(t) : undefined;
+  return !!s && url === `${PACKAGE_FRAME_BASE}${t}/${s.page}`;
 };
 
 export async function packageFrameResponse(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const [, token = "", ...rest] = url.pathname.split("/");
   const s = served.get(token);
-  const file = s ? resolveInPackage(s.root, rest.join("/")) : null;
-  if (!s || !file) return new Response("not found", { status: 404 });
+  if (!s) return new Response("not found", { status: 404 });
   const headers = { "content-security-policy": packageCsp(s.origins), "cache-control": "no-store", "x-content-type-options": "nosniff" };
+  const rel = rest.join("/");
+  if (s.html !== null) return rel === s.page ? new Response(prelude(s) + s.html, { headers: { ...headers, "content-type": TYPES.html! } }) : new Response("not found", { status: 404 });
+  const file = s.root ? resolveInPackage(s.root, rel) : null;
+  if (!file) return new Response("not found", { status: 404 });
   const ext = path.extname(file).slice(1).toLowerCase();
   const body = await fs.promises.readFile(file);
-  if (file === path.join(s.root, "view.html")) return new Response(prelude(s) + body.toString("utf8"), { headers: { ...headers, "content-type": TYPES.html! } });
+  if (file === s.file) return new Response(prelude(s) + body.toString("utf8"), { headers: { ...headers, "content-type": TYPES.html! } });
   return new Response(new Uint8Array(body), { headers: { ...headers, "content-type": TYPES[ext] ?? "application/octet-stream" } });
 }
 

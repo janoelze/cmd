@@ -5,7 +5,8 @@
 // patch touched; a patch that doesn't fit (a skipped rev, an unknown node) asks the core
 // for the whole tree again (`resync`), the last good tree staying on screen till it comes. Everything outside API 1's allow-list (API_ELEMENTS) is dropped
 // here with a warning naming it: an unknown element, a prop the element doesn't take, a
-// handler on a prop that isn't one of its events, a URL that isn't https, markup in
+// handler on a prop that isn't one of its events, a URL that isn't https (a Frame's src: a
+// page of the package), markup in
 // words, values of the wrong type (the checks are the protocol's, widget-values.ts, run
 // against the spec). Pure: no React, no core; tests feed it messages.
 
@@ -16,6 +17,7 @@ import {
   WireTree,
   checkValue,
   isHandler,
+  isPackagePage,
   type ApiElementSpec,
   type TreeElement,
   type TreeNode,
@@ -81,6 +83,8 @@ export class Sanitizer {
     const t = Object.hasOwn(spec.props, key) ? spec.props[key]!.type : undefined;
     if (t === undefined) return this.drop(type, key, isHandler(v) ? "a handler on a prop that isn't one of its events" : "not a prop it takes in API 1");
     if (isHandler(v)) return this.drop(type, key, "a handler on a prop that isn't one of its events");
+    // A Frame's page is a file of the package (main serves it from there), not a URL.
+    if (type === "Frame" && key === "src") return isPackagePage(v) ? v : this.drop(type, key, "not an .html file of the package");
     if (URL_PROPS.has(key)) {
       if (typeof v !== "string" || !safeUrl(v)) return this.drop(type, key, "a URL that isn't https");
       return v;

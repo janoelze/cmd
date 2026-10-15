@@ -230,11 +230,14 @@ A frame widget's page (`"surface": "frame"`, its `view.html`) has a `cmd` of its
 | `cmd.state.history(key: string, value: number \| null, max?: number): Promise<number[]>` | Appends a number to a series kept under `key` and returns its last `max` (default 60) values. |
 | `cmd.config: Record<string, WireValue> & { get(): Record<string, WireValue>; }` | This window's config values (package.json's `config` fields, as the person set them; never a secret); `cmd.config.get()` too. |
 | `cmd.theme: "dark" \| "light"` | "dark" or "light". The theme's variables are on :root: `var(--text)`, `var(--accent)`, `var(--space-2)`… |
+| `cmd.data: WireValue` | A Frame element's `data`, as the widget's process passes it (null in a frame widget's page). |
+| `cmd.post(value: WireValue): void` | Sends a value to the widget's process: the Frame element's `onMessage`. Plain data, 256 KB at most; not a press, so it can't start an act. |
 | `cmd.env.get(): WidgetEnv` | cmd's version, the API served and its verbs, the theme, the size class and placement. |
 | `cmd.env.has(name: string): boolean` | Whether this cmd serves a verb ("agents.start"). |
-| `cmd.on(type: "config" \| "state", fn: (value: Record<string, WireValue>) => void): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
-| `cmd.on(type: "theme", fn: (value: "dark" \| "light") => void): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
-| `cmd.on<T>(type: T, fn: (value: TopicValue<T>) => void, query?: TopicQuery<T>): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
+| `cmd.on(type: "config" \| "state", fn: (value: Record<string, WireValue>) => void): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, a Frame's `"data"`, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
+| `cmd.on(type: "theme", fn: (value: "dark" \| "light") => void): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, a Frame's `"data"`, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
+| `cmd.on(type: "data", fn: (value: WireValue) => void): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, a Frame's `"data"`, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
+| `cmd.on<T>(type: T, fn: (value: TopicValue<T>) => void, query?: TopicQuery<T>): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, a Frame's `"data"`, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
 | `cmd.open(target: string): Promise<{ id: string; }>` | Opens a URL, a path or a widget in a window beside this one: `cmd.windows.open`. Only right after a click in the frame. |
 | `cmd.ApiCallError: new (e: ApiError) => FrameCallError` | The class of a refused call's error. |
 
@@ -908,6 +911,18 @@ A table: rows and columns of values, a header that sorts, columns that drop as t
 | `onRowClick` | `(value: string) => void` | A row was clicked: its key. |
 | `onRowDoubleClick` | `(value: string) => void` | A row was double-clicked: its key. |
 | `onToggle` | `(value: string) => void` | A row's disclosure was clicked: its key. |
+
+#### `Frame`
+
+Pixels of the widget's own inside its window: a page of the package (an .html file) drawn in a sandboxed frame, for a canvas, a chart or a player the elements don't draw. The page's `cmd` is the widget's (`@cmd/widget-api/frame`), its data comes from `data` and its messages go to `onMessage`. Several may share a window. Where pixels aren't drawn (a preview, the phone) its label stands in. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `src` (required) | `string` | The page: an .html file of the package, relative to its folder ("chart.html", "pages/meter.html"). |
+| `label` (required) | `string` | What it shows, in words: its accessible name, and what stands in for it where pixels aren't drawn. |
+| `height` | `number` | Its height in pixels; without one it fills the space it is given. |
+| `data` | `WireValue \| null` | Data for the page, as plain values (256 KB at most): `cmd.data` there, and `cmd.on("data", fn)` on each change. |
+| `onMessage` | `(value: WireValue) => void` | The page sent a value (`cmd.post(value)`). Not a press: it can't start an act. |
 
 ### Records
 

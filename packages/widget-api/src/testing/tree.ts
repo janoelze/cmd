@@ -182,6 +182,11 @@ export class RenderedTree {
     await this.settle();
   }
 
+  /** A Frame's page sends `value` (`cmd.post` there): the Frame's onMessage. @since 1.2 */
+  message(n: TreeElement, value: WireValue): Promise<void> {
+    return this.fire(n, "message", value);
+  }
+
   /** Submits a field. */
   submit(n: TreeElement, value: WireValue): Promise<void> {
     return this.fire(n, "submit", value);

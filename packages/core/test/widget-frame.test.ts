@@ -233,4 +233,27 @@ describe("frame widgets", () => {
     await core.handlers["window.open"]({ kind: "browser", input: { url: "https://example.com/" }, workspaceId: core.workspaces.home().id });
     await until(() => (frameEvents(w.id, 1).at(-1)?.data as unknown[] | undefined)?.length === 2, "the new window, through the new API");
   });
+
+  it("serves a tree widget's Frame elements: its pages reach the window's API, and what a page posts is the process's onMessage, never a press", async () => {
+    const { core, rt, home, open, call } = await setup([{ name: "chart", permissions: { workspace: ["read"], act: ["terminals"] } }]);
+    core.library.host.grant("chart");
+    // The process draws a Frame (its onMessage handler 1) and a button (handler 2).
+    rt.boot = (p) =>
+      void p.connect().hello().send({ kind: "tree", rev: 1, nodes: [{ id: 1, type: "View", props: {}, children: [{ id: 2, type: "Frame", props: { src: "chart.html", label: "Chart", data: { values: [1, 2] }, onMessage: { $handler: 1 } }, children: [] }, { id: 3, type: "Button", props: { label: "Go", onClick: { $handler: 2 } }, children: [] }] }] });
+    const w = await open("pkg:chart/main");
+    await until(() => core.library.host.status(w.id)?.state === "running", "the process");
+    await until(() => core.library.host.frames.source(w.id), "the tree with its Frame");
+    expect(core.library.host.frames.source(w.id)).toEqual({ dir: fs.realpathSync(`${home}/chart`), media: [] });
+    expect((await call(w.id, "agents.list")).ok).toBe(true);
+    // The page posts: the process gets onMessage with the value; it is no press, so an act after it is refused.
+    core.library.host.interact(w.id, 1, "onMessage", { picked: 1 });
+    const got = await rt.last.next("interaction", (m) => m.event === "onMessage");
+    expect(got).toMatchObject({ handler: 1, value: { picked: 1 } });
+    rt.last.send({ kind: "call", id: 9, method: "terminals.open", params: [{}] });
+    expect(await rt.last.next("result", (m) => m.id === 9)).toMatchObject({ ok: false, error: { code: "invalid", message: expect.stringMatching(/right after the person presses/) } });
+    // A tree without a Frame: no frames for that window.
+    rt.last.send({ kind: "tree", rev: 2, nodes: [{ id: 5, type: "View", props: {}, children: [] }] });
+    await until(() => !core.library.host.frames.source(w.id), "no Frame any more");
+    await expect(call(w.id, "agents.list")).rejects.toThrow(/not a frame widget/);
+  });
 });

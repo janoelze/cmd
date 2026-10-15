@@ -8,6 +8,8 @@
 // - The time charts, Ranking, Proportion, PunchCard, Calendar: the kit takes functions
 //   (`format`, `xLabel`, `dayLabel`); the API takes a `unit` (protocol format.ts formats it, as
 //   the Stats window does) and labels as strings.
+// - Frame: a page of the package in the shared frame host (FrameElement.tsx), its label
+//   standing in where pixels aren't drawn.
 // - DataGrid: columns and rows are data; a row's cells become the kit's cells (an icon
 //   column's a Mark, a dim column's dim text), its key the row's, `selected` a key.
 
@@ -15,6 +17,7 @@ import { Calendar, DataGrid, LinkButton, Mark, Proportion, PunchCard, Ranking, S
 import { formatValue, type ApiElement, type StatUnit, type WireValue } from "@cmd/protocol";
 import type { ComponentType } from "react";
 import { on, press, str, useDraft, v, type Drawn } from "./draw.ts";
+import { FrameElement } from "./FrameElement.tsx";
 
 /** A unit prop's formatter: short, as charts' ticks and readouts are. */
 const fmt = (p: Record<string, WireValue>) => {
@@ -175,8 +178,9 @@ function DataGridEntry({ p, ctx }: Drawn) {
 }
 
 /** The 1.2 elements that translate, and what draws each. */
-export type Translated12 = "StatusLine" | "TextField" | "TimeSeries" | "TimeBars" | "Ranking" | "Proportion" | "PunchCard" | "Calendar" | "DataGrid";
+export type Translated12 = "Frame" | "StatusLine" | "TextField" | "TimeSeries" | "TimeBars" | "Ranking" | "Proportion" | "PunchCard" | "Calendar" | "DataGrid";
 export const ENTRIES_1_2: { readonly [K in Translated12 & ApiElement]: ComponentType<Drawn> } = {
+  Frame: FrameElement,
   StatusLine: StatusLineEntry,
   TextField: TextFieldEntry,
   TimeSeries: TimeSeriesEntry,

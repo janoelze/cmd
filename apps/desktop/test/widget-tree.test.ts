@@ -266,3 +266,18 @@ describe("the allow-list", () => {
     expect(warnings).toEqual(["widget: <Text> holds only text: its <Button> was dropped", "widget: <List> holds only elements: its text was dropped"]);
   });
 });
+
+describe("a Frame's props (1.2)", () => {
+  it("take a page of the package as src and plain data, and drop anything else", () => {
+    const { s, warnings } = store();
+    const frame = (props: Record<string, WireValue>) => {
+      s.apply(tree([el(1, "Frame", { label: "Chart", ...props })]));
+      return (s.snapshot.nodes[0] as TreeElement).props;
+    };
+    expect(frame({ src: "pages/chart.html", data: { values: [1, 2], name: "x", deep: [{ a: null }] }, onMessage: { $handler: 1 } })).toEqual({ label: "Chart", src: "pages/chart.html", data: { values: [1, 2], name: "x", deep: [{ a: null }] }, onMessage: { $handler: 1 } });
+    for (const src of ["../secret.html", "/etc/x.html", "https://example.com/x.html", ".hidden.html", "pages/../x.html", "chart.js", "a\\b.html"]) expect(frame({ src }).src, src).toBeUndefined();
+    expect(frame({ src: "c.html", data: { run: { $handler: 3 } } }).data).toBeUndefined();
+    expect(frame({ src: "c.html", data: "x".repeat(300 * 1024) }).data).toBeUndefined();
+    expect(warnings.some((w) => /not an \.html file of the package/.test(w)) && warnings.some((w) => /a handler inside data/.test(w)) && warnings.some((w) => /more than 256 KB/.test(w))).toBe(true);
+  });
+});

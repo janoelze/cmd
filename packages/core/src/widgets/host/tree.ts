@@ -23,13 +23,19 @@ export class TreeState {
     return this.#tree.tree();
   }
 
-  /** Whether `handler` is a text field's onChange (typing, not a press). */
-  typesInto(handler: number): boolean {
+  /** Whether `handler` fires as `event` on an element whose spec marks it typing (a field's onChange, a Frame's onMessage): not a press. */
+  typing(handler: number, event: string): boolean {
     for (const node of this.#tree.nodes()) {
       const spec = node.type === "#text" ? undefined : (API_ELEMENTS as Record<string, ApiElementSpec>)[node.type];
-      const h = spec?.events.onChange?.typing ? (node as TreeElement).props.onChange : undefined;
+      const h = spec?.events[event]?.typing ? (node as TreeElement).props[event] : undefined;
       if (h && typeof h === "object" && !Array.isArray(h) && (h as { $handler?: unknown }).$handler === handler) return true;
     }
+    return false;
+  }
+
+  /** Whether the tree has an element of `type` (a Frame: its window serves frames, frame.ts). */
+  has(type: string): boolean {
+    for (const node of this.#tree.nodes()) if (node.type === type) return true;
     return false;
   }
 

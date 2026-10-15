@@ -245,6 +245,7 @@ const SCENARIOS = {
   "widget-config": [],
   "widget-frame": [],
   "widget-frame-api": [],
+  "widget-frame-element": [],
   "widget-act": [],
   "widget-commands": [],
   "widget-timer": [],
@@ -2614,6 +2615,91 @@ $("open").onclick = () => cmd.windows.open("https://example.invalid/frame-api-cl
   for (const b of after) await call("window.close", { id: b.id });
   await call("window.close", { id: w.id });
   await call("pane.kill", { paneId: pane.id }).catch(() => {});
+});
+
+// A Frame element (API 1.2) inside a tree widget: the widget's tree draws a Stat, a Button and a
+// Frame whose page (chart.html of the package) draws bars from the element's data. Data in: the
+// Button adds a bar and the page redraws without loading again. A message out: a click in the
+// page posts the bar it hit, and the process shows it in the tree. The theme follows: switching
+// to light reaches the page's variables. Needs Deno for the widget's process.
+await scenario("widget-frame-element", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const dir = path.join(widgetSrc, "frame-element");
+  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "frame-element", version: "1.0.0", cmd: { api: 1, widgets: [{ id: "main", title: "Runs", main: "src/main.tsx" }], permissions: {} } }, null, 2));
+  fs.writeFileSync(
+    path.join(dir, "src", "main.tsx"),
+    `import { Window, View, Stack, Inline, Stat, Button, Frame, useStoredState } from "@cmd/widget-api";
+export default function Main() {
+  const [values, setValues] = useStoredState<number[]>("values", [3, 5, 2]);
+  const [picked, setPicked] = useStoredState<number>("picked", -1);
+  return (
+    <Window status={\`\${values.length} bars\`}>
+      <View>
+        <Stack gap={2} pad="inset">
+          <Inline gap={4}>
+            <Stat label="Picked" value={picked} />
+            <Button onClick={() => setValues([...values, 7])}>Add Bar</Button>
+          </Inline>
+          <Frame src="chart.html" label="Runs per hour" height={160} data={{ values }} onMessage={(m) => setPicked((m as { picked: number }).picked)} />
+        </Stack>
+      </View>
+    </Window>
+  );
+}
+`,
+  );
+  fs.writeFileSync(
+    path.join(dir, "chart.html"),
+    `<div id="bars" style="display:flex;gap:4px;align-items:flex-end;height:120px"></div>
+<script type="module">
+const draw = (d) => {
+  const el = document.getElementById("bars");
+  el.replaceChildren(...(d?.values ?? []).map((v, i) => Object.assign(document.createElement("i"), { style: \`display:block;width:16px;height:\${v * 8}px;background:var(--accent)\`, onclick: () => cmd.post({ picked: i }) })));
+  document.body.dataset.bars = String(d?.values?.length ?? 0);
+};
+draw(cmd.data);
+cmd.on("data", draw);
+cmd.on("theme", (t) => (document.body.dataset.theme = t));
+document.body.dataset.theme = cmd.theme;
+</script>`,
+  );
+  const linked = await cmdCli("widget", "link", dir);
+  check(linked.code === 0, `cmd widget link links it (${JSON.stringify(linked.out.trim().slice(0, 200))})`);
+  const w = await call("widget.add", { ref: "pkg:frame-element/main" });
+  await tileIn(w.id);
+  const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+  await tile.locator("iframe").waitFor({ timeout: 20_000 }).catch(expired("the Frame element's iframe"));
+  const page = async () => {
+    for (const f of win.frames()) if (f.url().includes("/chart.html") && !f.isDetached() && (await f.evaluate(() => !!document.getElementById("bars")).catch(() => false))) return f;
+    return null;
+  };
+  const frame = await until(page, Boolean, 15_000);
+  const seen = () => frame.evaluate(() => ({ bars: Number(document.body.dataset.bars), theme: document.body.dataset.theme, accent: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(), marker: window.__loaded ?? (window.__loaded = Math.random()) }));
+  const first = await until(seen, (r) => r.bars === 3, 15_000);
+  const attrs = await tile.locator("iframe").evaluate((el) => ({ sandbox: el.getAttribute("sandbox"), src: el.getAttribute("src") }));
+  check(first.bars === 3 && attrs.sandbox === "allow-scripts" && attrs.src.startsWith("cmd-widget://package/") && (await tile.locator(".ui-stat").count()) === 1, `the tree draws its Stat and Button, and the Frame its page from the element's data (${JSON.stringify({ ...first, ...attrs })})`);
+
+  // Data in: the Button adds a bar; the same page redraws.
+  await select(w.id);
+  await tile.getByRole("button", { name: "Add Bar" }).click();
+  const more = await until(seen, (r) => r.bars === 4, 10_000).catch(() => null);
+  check(more?.bars === 4 && more.marker === first.marker, `new data reaches the page without loading it again (${JSON.stringify(more)})`);
+
+  // A message out: a click on the third bar posts it; the process shows it in the tree.
+  await frame.locator("#bars i").nth(2).click();
+  const picked = await until(() => tile.locator(".ui-stat").textContent(), (t) => /2/.test(t), 10_000).catch(() => "");
+  check(/Picked\s*2/.test(picked), `cmd.post from the page is the Frame's onMessage in the process (${JSON.stringify(picked)})`);
+  await shot(win, "widget-frame-element.png");
+
+  // The theme follows.
+  const was = (await call("settings.get", {}))?.["theme.appearance"] ?? "dark";
+  await call("settings.set", { key: "theme.appearance", value: "light" });
+  const light = await until(seen, (r) => r.theme === "light", 10_000).catch(() => null);
+  check(light?.theme === "light" && light.accent && light.accent !== first.accent, `the page follows the app's theme (${first.theme} ${first.accent} → ${light?.theme} ${light?.accent})`);
+  await call("settings.set", { key: "theme.appearance", value: was });
+  await call("window.close", { id: w.id });
 });
 
 // A menu the app pops up (a row's or a title bar's): the entry labelled `label` is chosen, the labels kept.

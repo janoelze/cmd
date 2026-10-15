@@ -5,7 +5,7 @@
 // in the widget and a HandlerRef on the wire are judged the same way. And what a remote
 // device gets of a tree: the same tree without handlers.
 
-import { isShape, type ApiFieldSpec, type ApiPropType } from "./widget-spec.ts";
+import { VALUE_MAX_BYTES, isShape, type ApiFieldSpec, type ApiPropType } from "./widget-spec.ts";
 import type { HandlerRef, PatchOp, TreeNode, WidgetPatch, WidgetTree, WireValue } from "./widget-tree.ts";
 
 /** What a View's state can be. */
@@ -88,6 +88,38 @@ function options(v: unknown): ValueCheck {
   return ok(v as WireValue);
 }
 
+/** A Frame's `src`: an .html file of the package, by a relative path with no dot-file or `..` in it ("chart.html", "pages/meter.html"). */
+export const isPackagePage = (s: unknown): s is string => typeof s === "string" && s.length <= 200 && /^[\w-][\w .-]*(\/[\w-][\w .-]*)*\.html$/i.test(s) && !s.split("/").some((seg) => seg.startsWith("."));
+
+/** Plain data (a Frame's `data`, its page's message): no handler refs, no functions, not too deep, at most VALUE_MAX_BYTES. */
+function plain(v: unknown): ValueCheck {
+  const walk = (x: unknown, depth: number): string | null => {
+    if (depth > 32) return "nested too deep";
+    if (x === null || typeof x === "string" || typeof x === "boolean") return null;
+    if (typeof x === "number") return Number.isFinite(x) ? null : "a number that isn't finite";
+    if (Array.isArray(x)) {
+      for (const y of x) {
+        const bad = walk(y, depth + 1);
+        if (bad) return bad;
+      }
+      return null;
+    }
+    if (isObj(x)) {
+      if ("$handler" in x) return "a handler inside data";
+      for (const y of Object.values(x)) {
+        const bad = walk(y, depth + 1);
+        if (bad) return bad;
+      }
+      return null;
+    }
+    return "not plain data";
+  };
+  const bad = walk(v, 0);
+  if (bad) return no(bad);
+  if (JSON.stringify(v).length > VALUE_MAX_BYTES) return no(`more than ${VALUE_MAX_BYTES / 1024} KB of data`);
+  return ok(v as WireValue);
+}
+
 /** One record of named fields (1.2): each field present checked by its type, the required ones there; fields the spec doesn't name are left out. */
 function record(v: unknown, fields: Readonly<Record<string, ApiFieldSpec>>, what: string): { ok: true; value: { [key: string]: WireValue } } | { ok: false; why: string } {
   if (!isObj(v)) return { ok: false, why: `${what} isn't an object` };
@@ -156,6 +188,8 @@ export function checkValue(type: ApiPropType, v: unknown, isRun: IsRun = isHandl
       return Array.isArray(v) && v.every((r) => Array.isArray(r) && r.every((x) => typeof x === "number" && Number.isFinite(x))) ? ok(v as WireValue) : no("not rows of numbers");
     case "cells":
       return cells(v);
+    case "value":
+      return plain(v);
     default:
       return no("an unknown type");
   }

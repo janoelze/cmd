@@ -157,5 +157,17 @@
         "unit": "px"
       }
     }
+  },
+  "frame": {
+    "min": {
+      "h": {
+        "$description": "A Frame element's height when its widget gives none (a page of the package in a tree, docs/56): room for a small chart.",
+        "$type": "dimension",
+        "$value": {
+          "value": 160,
+          "unit": "px"
+        }
+      }
+    }
   }
 }

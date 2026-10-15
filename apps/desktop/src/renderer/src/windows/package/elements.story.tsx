@@ -1,10 +1,11 @@
 // Every element of the widget API (docs/56, API 1; 1.2's from docs/57) drawn by the package view, from a fixed
-// tree as a widget's process would send it: one variant per element of API_ELEMENTS, then
+// tree as a widget's process would send it: one variant per element of API_ELEMENTS (Frame's
+// page inline, frame-chart.html, as a live window would serve its package's), then
 // the example widget (packages/widget-api/examples/v1/agents.tsx) running against the fake
 // host, a thousand rows, and the window's states. The title bar shows what the tree's
 // Window gives it (status line, title menu).
 
-import { Window as Frame, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
+import { Window as KitWindow, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
 import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import type { TreeNode, WidgetOut, WireValue } from "@cmd/protocol";
@@ -18,6 +19,9 @@ import { showContextMenu } from "../../lib/context.ts";
 import { useWindowChrome } from "../registry.ts";
 import { chromeOf, menuEntries, menuLabel } from "./chrome.ts";
 import { PackageWidget } from "./PackageView.tsx";
+import type { Frames } from "./FrameElement.tsx";
+import { cmd } from "../../lib/bridge.ts";
+import chartPage from "./frame-chart.html?raw";
 import type { WidgetLink } from "./live.ts";
 import { TreeStore, type TreeMessage } from "./tree.ts";
 
@@ -43,7 +47,7 @@ let windows = 0;
 const quiet: WidgetLink = { interact: () => {}, resync: () => {}, restart: () => {}, ask: () => {}, env: () => {} };
 
 /** A widget's window at a reference size, with the title bar its Window fills. */
-function Widget({ messages, size = "regular", name = "Example", link = quiet, store: given }: { messages?: TreeMessage[]; size?: SizeName; name?: string; link?: WidgetLink; store?: TreeStore }) {
+function Widget({ messages, size = "regular", name = "Example", link = quiet, store: given, frames }: { messages?: TreeMessage[]; size?: SizeName; name?: string; link?: WidgetLink; store?: TreeStore; frames?: Frames }) {
   const id = useMemo(() => `story-widget-${++windows}`, []);
   const store = useMemo(() => {
     if (given) return given;
@@ -53,15 +57,15 @@ function Widget({ messages, size = "regular", name = "Example", link = quiet, st
   }, [given, messages]);
   const [width, height] = SIZES[size];
   return (
-    <Frame selected style={{ width, height, position: "relative", flex: "none" }}>
+    <KitWindow selected style={{ width, height, position: "relative", flex: "none" }}>
       <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <Bar id={id} name={name} />
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          <PackageWidget windowId={id} store={store} link={link} />
+          <PackageWidget windowId={id} store={store} link={link} frames={frames ? () => frames : null} />
         </div>
       </WindowBody>
       <WindowFrame />
-    </Frame>
+    </KitWindow>
   );
 }
 
@@ -346,3 +350,26 @@ export const Sizes = () => (
   </div>
 );
 
+/** A Frame's page in a story: inline (frame-chart.html), no widget API; null where the app can't serve one (tests). */
+const storyFrames: Frames = {
+  windowId: null,
+  serve: async (_src, init) => (typeof cmd.packageFrame === "function" ? cmd.packageFrame({ html: chartPage, media: [], init }) : null),
+  reloadKey: "story",
+  active: true,
+  kv: {},
+  config: {},
+};
+const frameTree = (values: number[]) =>
+  inView(
+    e("Inline", { gap: 4 }, e("Stat", { label: "Runs today", value: values.reduce((a, b) => a + b, 0) }), e("Stat", { label: "Busiest hour", value: `${8 + values.indexOf(Math.max(...values))}:00` })),
+    e("Frame", { src: "chart.html", label: "Runs per hour", height: 180, data: { values }, onMessage: h() }),
+    e("Text", { tone: "dim", size: "sm" }, "Click a bar: the page posts its index to the widget."),
+  );
+
+/** A canvas chart in a kit window: a Frame between Stats, drawn from its data in the theme's colours; beside it, the same tree where pixels aren't drawn (a preview, the phone), its label standing in. */
+export const Frame = () => (
+  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+    <Widget messages={frameTree([3, 5, 2, 8, 13, 9, 4, 6, 11, 7])} frames={storyFrames} name="Runs" />
+    <Widget messages={frameTree([3, 5, 2, 8, 13, 9, 4, 6, 11, 7])} name="Runs" size="narrow" />
+  </div>
+);

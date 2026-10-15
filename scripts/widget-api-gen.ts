@@ -62,6 +62,8 @@ function tsType(t: ApiPropType): string {
       return "number[][]";
     case "cells":
       return "(string | number | null)[]";
+    case "value":
+      return "WireValue";
     default:
       return t as string;
   }
@@ -143,7 +145,7 @@ export function generate(): string {
     "// API 1.2 added the window-content kit's elements (docs/57); each says its @since.",
     "",
     'import type { ReactElement, ReactNode } from "react";',
-    'import type { ActionOf, ApiElement, MenuEntryOf, ViewStateOf } from "@cmd/protocol/widget-tree";',
+    'import type { ActionOf, ApiElement, MenuEntryOf, ViewStateOf, WireValue } from "@cmd/protocol/widget-tree";',
     "",
     "/** An element of the API: JSX makes a host element of its tag. */",
     "type El<P> = (props: P & { key?: string | number }) => ReactElement;",
