@@ -55,7 +55,7 @@ README.md                one paragraph: what it shows, where the data comes from
   - **`permissions`**: exactly what the widget needs, nothing more; a widget that needs none says `{}`.
     <!-- gen:permissions -->
     - `net`: hosts `cmd.net.fetch` may reach (`"api.open-meteo.com"`); no `*`.
-    - `workspace`: `["read"]` to see this workspace's agents, terminals, windows, git status and Actions (`cmd.workspace`, `cmd.agents`, `cmd.terminals`, `cmd.windows`, `cmd.git` and `cmd.actions`, and their hooks); `["read", "all"]` for every workspace's.
+    - `workspace`: `["read"]` to see this workspace's agents, terminals, windows, git status and Actions (`cmd.workspace`, `cmd.agents`, `cmd.terminals`, `cmd.windows`, `cmd.git` and `cmd.actions`, and their hooks); `["read", "all"]` for every workspace's, read with `{ scope: "all" }` (`useAgents`, `useTerminals`, `useWindows` and `useEvents`, and their verbs).
     - `events`: classes of cmd's event log beyond git, notes and actions, which need none: `"operator"` (the Operator), `"tools"` (tool calls), `"output"` (command output), `"agents"` (agent events), `"transcripts"`, `"ai"` (model calls), `"browsing"` (pages and files), `"system"` (the data layer).
     - `ai`: `["complete"]` to use the person's AI (it counts against their usage: only when the request is about it).
     - `run`: the programs `cmd.run` runs, by name (`["ps"]`, `["gh"]`); never a shell or an interpreter (sh, node, python).

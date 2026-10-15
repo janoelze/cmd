@@ -29,7 +29,7 @@ const verbsNeeding = (need: ApiNeed) => (Object.keys(API) as ApiVerb[]).filter((
 const namespaces = (verbs: string[]) => [...new Set(verbs.map((v) => v.split(".")[0]!))];
 
 /** The live hooks, one per topic, with the keys of their query: `useAgents({ scope })`. */
-function hooks(): string {
+function liveHooks(): { name: string; keys: string[] }[] {
   const { checker, exported } = apiExports();
   return API_TOPICS.map((t) => {
     const name = `use${t[0]!.toUpperCase()}${t.slice(1)}`;
@@ -37,9 +37,11 @@ function hooks(): string {
     if (!hook) throw new Error(`@cmd/widget-api has no ${name} for the topic "${t}"`);
     const param = checker.getTypeOfSymbol(hook).getCallSignatures()[0]?.parameters[0];
     const keys = param ? checker.getNonNullableType(checker.getTypeOfSymbol(param)).getProperties().map((p) => p.name) : [];
-    return q(`${name}(${keys.length ? `{ ${keys.join(", ")} }` : ""})`);
-  }).join(", ");
+    return { name, keys };
+  });
 }
+const LIVE = liveHooks();
+const hooks = () => LIVE.map((h) => q(`${h.name}(${h.keys.length ? `{ ${h.keys.join(", ")} }` : ""})`)).join(", ");
 
 /** The toolbar's items: the elements named Toolbar…, in the spec's order. */
 const toolbar = () =>
@@ -76,7 +78,7 @@ function permissionLines(): string[] {
   const ws = namespaces(verbsNeeding("workspace")).map((n) => q(`cmd.${n}`));
   const lines: Record<(typeof PERMISSION_KEYS)[number], string> = {
     net: `hosts ${list(verbsNeeding("net").map((v) => q(`cmd.${v}`)))} may reach (${q('"api.open-meteo.com"')}); no ${q("*")}.`,
-    workspace: `${q('["read"]')} to see this workspace's agents, terminals, windows, git status and Actions (${list(ws)}, and their hooks); ${q('["read", "all"]')} for every workspace's.`,
+    workspace: `${q('["read"]')} to see this workspace's agents, terminals, windows, git status and Actions (${list(ws)}, and their hooks); ${q('["read", "all"]')} for every workspace's, read with \`{ scope: "all" }\` (${list(LIVE.filter((h) => h.keys.includes("scope")).map((h) => q(h.name)))}, and their verbs).`,
     events: `classes of cmd's event log beyond ${list(ev.free)}, which need none: ${ev.named.map(gloss).join(", ")}.`,
     ai: `${q(JSON.stringify(API_AI_USES))} to use the person's AI (it counts against their usage: only when the request is about it).`,
     run: `the programs ${q("cmd.run")} runs, by name (${q('["ps"]')}, ${q('["gh"]')}); never a shell or an interpreter (sh, node, python).`,
