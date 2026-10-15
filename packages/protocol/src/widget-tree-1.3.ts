@@ -5,6 +5,8 @@
 // these only grow. Their verbs are rows of widget-verbs.ts and entries of widget-tree.ts's
 // ApiMethods; the core keeps them in widgets/storage.ts.
 
+import type { ApiNowPlaying } from "./widget-tree-1.2.ts";
+
 /**
  * Where a stored value lives:
  * - "window": this window (`cmd.state` is the same data), gone when the window is.
@@ -96,4 +98,14 @@ export interface ApiRerun {
 export interface WidgetEnvLocale {
   /** 1.3: the app's locale ("de-DE"), which `fmt.value` and `fmt.delta` write numbers in; a cmd before 1.3 sends none. */
   locale?: string;
+}
+
+/** The live `media` topic's query (1.3, `useMedia`): none. Part of TopicQuery. */
+export interface MediaTopicQuery {
+  media: null;
+}
+
+/** The live `media` topic's data (1.3): what plays, or null. On the wire a value without `artwork` keeps the last one sent: the cover crosses only when it changes. Part of TopicData. */
+export interface MediaTopicData {
+  media: ApiNowPlaying | null;
 }

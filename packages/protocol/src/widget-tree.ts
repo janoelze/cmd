@@ -14,7 +14,7 @@
 import type { ApiBox, ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
-import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, WidgetMigrated, WidgetEnvLocale } from "./widget-tree-1.3.ts";
+import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, MediaTopicData, MediaTopicQuery, WidgetMigrated, WidgetEnvLocale } from "./widget-tree-1.3.ts";
 import type { ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWorkspaceName } from "./widget-tree-1.3.ts";
 
 // ── versions ────────────────────────────────────────────
@@ -299,7 +299,7 @@ export interface ApiMethods {
 export const API_METHODS_MATCH_VERBS: [Exclude<ApiVerb, keyof ApiMethods>, Exclude<keyof ApiMethods, ApiVerb>] extends [never, never] ? true : false = true;
 
 /** A topic's query, and the data of its events. */
-export interface TopicQuery {
+export interface TopicQuery extends MediaTopicQuery {
   workspace: null;
   agents: ApiAgentQuery;
   terminals: ApiScopeQuery;
@@ -313,9 +313,8 @@ export interface TopicQuery {
   journal: ApiJournalQuery;
   workspaces: null;
   appUsage: null;
-  media: null;
 }
-export interface TopicData {
+export interface TopicData extends MediaTopicData {
   workspace: ApiWorkspace;
   agents: ApiAgent[];
   terminals: ApiTerminal[];
@@ -331,8 +330,6 @@ export interface TopicData {
   journal: ApiJournalDay[];
   workspaces: ApiWorkspaceName[];
   appUsage: ApiAppUsage;
-  /** What plays, or null (1.3). On the wire a value without `artwork` keeps the last one sent: the cover crosses only when it changes. */
-  media: ApiNowPlaying | null;
 }
 
 // ── the data, in the product's words ────────────────────
