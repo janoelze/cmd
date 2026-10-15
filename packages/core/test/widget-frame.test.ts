@@ -215,5 +215,22 @@ describe("frame widgets", () => {
     core.library.host.restart(w.id);
     await until(() => frameEvents(w.id, 1).some((e) => e.end), "the end on a restart");
     expect(core.library.host.frames.count()).toBe(0);
+    // The window's new API takes the same subscription again (the app asks at once, frame-api.ts).
+    expect(await core.handlers["widget.frameSubscribe"]({ windowId: w.id, frame: "f1", sub: 1, topic: "agents" }, ctx)).toEqual({ ok: true, value: null });
+    expect(frameEvents(w.id, 1).at(-1)?.data).toEqual([]);
+  });
+
+  it("gives a frame with no process to run a new API on Restart, which its subscriptions are asked for again on", async () => {
+    const { core, open, ctx, frameEvents } = await setup([{ name: "radio", surface: "frame", permissions: { workspace: ["read"] } }], { runtime: false });
+    core.library.host.grant("radio");
+    const w = await open();
+    const before = core.library.host.api(w.id);
+    await core.handlers["widget.frameSubscribe"]({ windowId: w.id, frame: "f1", sub: 1, topic: "windows" }, ctx);
+    core.library.host.restart(w.id);
+    expect(frameEvents(w.id, 1).at(-1)?.end?.message).toMatch(/stopped/);
+    expect(core.library.host.api(w.id)).not.toBe(before);
+    expect(await core.handlers["widget.frameSubscribe"]({ windowId: w.id, frame: "f1", sub: 1, topic: "windows" }, ctx)).toEqual({ ok: true, value: null });
+    await core.handlers["window.open"]({ kind: "browser", input: { url: "https://example.com/" }, workspaceId: core.workspaces.home().id });
+    await until(() => (frameEvents(w.id, 1).at(-1)?.data as unknown[] | undefined)?.length === 2, "the new window, through the new API");
   });
 });

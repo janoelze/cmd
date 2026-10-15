@@ -531,7 +531,7 @@ export class WidgetHost {
   #removed(id: WindowId): void {
     const inst = this.#all.get(id);
     if (!inst || inst.timers.stop) return;
-    this.frames.ended(id, { code: "failed", message: "This widget's window closed." });
+    this.frames.ended(id, { code: "failed", message: "This widget's window is closed." });
     inst.timers.stop = setTimeout(() => {
       this.#stop(inst, null);
       this.#endApi(inst);

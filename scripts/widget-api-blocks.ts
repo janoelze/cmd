@@ -113,7 +113,7 @@ function frame(): string {
     if (!(verb in API)) throw new Error(`no verb ${verb} for the frame's block`);
     return q(`cmd.${verb}(${args})`);
   };
-  return `every verb of the widget's by the same name and permission (${say("agents.list", "")}, ${say("git.status", "")}, ${say("net.fetch", "url")}, …), and live data as ${q("cmd.<topic>.subscribe(query, fn)")} or ${q("cmd.on(topic, fn, query)")} for ${list(API_TOPICS.map((t) => q(`"${t}"`)))}`;
+  return `every verb the widget has, by the same name and with the same permissions (${say("agents.list", "")}, ${say("git.status", "")}, ${say("net.fetch", "url")}, …), and live data as ${q("cmd.<topic>.subscribe(query, fn)")} or ${q("cmd.on(topic, fn, query)")} for ${list(API_TOPICS.map((t) => q(`"${t}"`)))}`;
 }
 
 /** Every block by name. */

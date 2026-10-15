@@ -6,7 +6,10 @@
 // call that needs a press (protocol needsPress: the acts, windows.open) is marked pressed only
 // when the frame host's Gesture gave one (lib/frames.ts `wantsPress`). Subscriptions' values come
 // back as widget.frameEvent to this connection and go to the page that asked, until it stops
-// them, the page goes (close) or the core ends them (the widget stopped).
+// them or the page goes (close). When the core ends one (the window's API was replaced: a
+// restart, a restart with no process to run, a reload), it is asked for again at once under the
+// same id, so the page's live data goes on, starting again with the value now; only when that is
+// refused too (the widget stopped, its window closed) does the page get the `end`.
 
 import { needsPress, type CoreEvent, type WidgetFrameResult, type WindowId } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
@@ -24,8 +27,10 @@ export interface FrameApi {
 
 interface Session {
   windowId: WindowId;
-  subs: Set<number>;
+  /** Each subscription's topic and query, to ask for it again when the core ends it. */
+  subs: Map<number, { topic: string; query?: unknown }>;
   post(m: unknown): void;
+  subscribe(sub: number): Promise<WidgetFrameResult>;
 }
 
 const sessions = new Map<string, Session>();
@@ -39,10 +44,15 @@ const failed = (e: Error): WidgetFrameResult => ({ ok: false, error: { code: "fa
 /** The API for one page load of a frame in `windowId`'s window; `post` sends the page a message. */
 export function openFrameApi(windowId: WindowId, post: (m: unknown) => void): FrameApi {
   const frame = crypto.randomUUID();
-  const subs = new Set<number>();
+  const subs = new Map<number, { topic: string; query?: unknown }>();
   let closed = false;
   const send = (m: unknown) => void (!closed && post(m));
-  sessions.set(frame, { windowId, subs, post: send });
+  const subscribe = (sub: number): Promise<WidgetFrameResult> => {
+    const s = subs.get(sub);
+    if (!s || closed) return Promise.resolve({ ok: true, value: null });
+    return cmd.call("widget.frameSubscribe", { windowId, frame, sub, topic: s.topic, ...(s.query == null ? {} : { query: s.query }) }).catch(failed);
+  };
+  sessions.set(frame, { windowId, subs, post: send, subscribe });
   return {
     wantsPress: (m) => m.type === "call" && typeof m.verb === "string" && needsPress(m.verb),
     message(m, pressed) {
@@ -57,11 +67,8 @@ export function openFrameApi(windowId: WindowId, post: (m: unknown) => void): Fr
       }
       if (m.type === "subscribe" && Number.isInteger(m.sub) && typeof m.topic === "string") {
         const sub = m.sub as number;
-        subs.add(sub);
-        void cmd
-          .call("widget.frameSubscribe", { windowId, frame, sub, topic: m.topic.slice(0, 40), ...(m.query == null ? {} : { query: m.query }) })
-          .catch(failed)
-          .then((r) => {
+        subs.set(sub, { topic: m.topic.slice(0, 40), ...(m.query == null ? {} : { query: m.query }) });
+        void subscribe(sub).then((r) => {
             if (r.ok || !subs.delete(sub)) return;
             send({ type: "end", sub, error: r.error });
           });
@@ -83,11 +90,13 @@ export function openFrameApi(windowId: WindowId, post: (m: unknown) => void): Fr
   };
 }
 
-/** A subscription's value (or its end) to the page that asked for it. */
-function route(e: Extract<CoreEvent, { type: "widget.frameEvent" }>): void {
+/** A subscription's value to the page that asked for it; its end, asked for again first (the window's API may have been replaced). */
+export function route(e: Extract<CoreEvent, { type: "widget.frameEvent" }>): void {
   const s = sessions.get(e.frame);
   if (!s || s.windowId !== e.windowId || !s.subs.has(e.sub)) return;
   if (!e.end) return s.post({ type: "event", sub: e.sub, data: e.data ?? null });
-  s.subs.delete(e.sub);
-  s.post({ type: "end", sub: e.sub, error: e.end });
+  void s.subscribe(e.sub).then((r) => {
+    if (r.ok || !s.subs.delete(e.sub)) return;
+    s.post({ type: "end", sub: e.sub, error: e.end });
+  });
 }

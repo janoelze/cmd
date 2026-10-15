@@ -146,7 +146,7 @@
   };
   /** Opens a URL, a path or a widget in a window beside this one (cmd.windows.open): works right after a click in the frame. A refusal no one catches is a console line, as it always was. */
   cmd.open = (target) => {
-    const p = cmd.windows?.open ? cmd.windows.open(String(target)) : Promise.reject(new ApiCallError({ code: "unknown", message: "This cmd can't open windows from a frame." }));
+    const p = cmd.windows?.open ? cmd.windows.open(String(target)) : Promise.reject(new ApiCallError({ code: "unknown", message: "This version of cmd can't open windows from a frame." }));
     p.catch((err) => console.warn(`cmd.open: ${err.message}`));
     return p;
   };

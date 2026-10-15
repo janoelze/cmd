@@ -87,7 +87,7 @@ export class WidgetFrames {
   #api(windowId: WindowId): WidgetApi {
     if (!this.#frameOf(windowId)) throw new Error(`not a frame widget's window: ${windowId}`);
     const api = this.#d.api(windowId);
-    if (!api) throw failed("This widget isn't running.");
+    if (!api) throw failed("This widget isn't running. Restart it from its window.");
     return api;
   }
 
@@ -115,7 +115,7 @@ export class WidgetFrames {
     const k = key(windowId, frame, sub);
     mine.get(k)?.off();
     mine.delete(k);
-    if ([...mine.values()].filter((s) => s.windowId === windowId).length >= FRAME_SUBS_MAX) return { ok: false, error: { code: "failed", message: `A frame keeps at most ${FRAME_SUBS_MAX} subscriptions; stop one first.` } };
+    if ([...mine.values()].filter((s) => s.windowId === windowId).length >= FRAME_SUBS_MAX) return { ok: false, error: { code: "failed", message: `A frame can hold ${FRAME_SUBS_MAX} subscriptions at most. Stop one first.` } };
     let live = true;
     try {
       const off = api.subscribe(String(topic), query, (data) => live && this.#d.send(conn, { type: "widget.frameEvent", windowId, frame, sub, data }));
@@ -144,7 +144,7 @@ export class WidgetFrames {
   }
 
   /** The window's API ended (its widget stopped or restarts, its grant changed, its window closed): its frames' subscriptions end, and each frame is told why. */
-  ended(windowId: WindowId, why: ApiError = { code: "failed", message: "This widget stopped." }): void {
+  ended(windowId: WindowId, why: ApiError = { code: "failed", message: "This widget stopped, so its live data did too." }): void {
     for (const mine of this.#subs.values())
       for (const [k, s] of mine) {
         if (s.windowId !== windowId) continue;

@@ -144,7 +144,7 @@ function frames(): string[] {
   const out = [
     "### Frames",
     "",
-    "A frame widget's page (`\"surface\": \"frame\"`, its `view.html`) has a `cmd` of its own, typed by `@cmd/widget-api/frame` (`/// <reference types=\"@cmd/widget-api/frame\" />`): every verb above under the same name, with the same permissions, limits and asks, through the core; the hooks aside. A verb that needs a press (an act, `windows.open`) works right after a click in the frame, once per click. A page has no network: its data comes through `cmd`.",
+    "A frame widget's page (`\"surface\": \"frame\"`, its `view.html`) has a `cmd` of its own, typed by `@cmd/widget-api/frame` (`/// <reference types=\"@cmd/widget-api/frame\" />`): every verb above, by the same name and with the same permissions, limits and asks; no hooks. A verb that needs a press (an act, `windows.open`) works right after a click in the frame, once per click. The page has no network of its own: its data comes through `cmd`.",
     "",
     "| Member | What |",
     "|---|---|",

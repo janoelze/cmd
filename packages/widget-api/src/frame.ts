@@ -33,8 +33,9 @@ export type TopicQuery<T extends ApiTopic> = NonNullable<ApiMethods[(typeof API_
 export interface Live<T extends ApiTopic> {
   /**
    * Calls `fn` with the topic's value now and again on each change (for `events`: the query's
-   * result, then each batch of new events); returns a function that stops it. A refusal (the
-   * grant doesn't reach it) goes to `onError`, else the console.
+   * result, then each batch of new events); returns a function that stops it. When the widget
+   * restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach
+   * it) or its end (the widget stopped) goes to `onError`, else the console.
    * @since 1.1
    */
   subscribe(fn: (value: TopicValue<T>) => void): () => void;
