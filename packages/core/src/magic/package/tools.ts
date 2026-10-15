@@ -5,14 +5,18 @@
 // (it needs a program a widget can't run: cmd.run runs read-only commands only). They work on
 // one package folder; nothing else is reachable, grants.json least of all.
 
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { WidgetPermissions } from "@cmd/protocol";
 import { redact } from "../../lib/policy.ts";
+import { needsGrant } from "../../widgets/grants.ts";
 import type { ToolOutput, ToolSpec } from "../tools.ts";
 import type { Previewer } from "../previewer.ts";
 import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
 import { WRITABLE, listFiles, readFile, writeFile } from "./files.ts";
-import { previewTrees } from "./preview.ts";
-import type { RunOptions, Toolchain } from "./toolchain.ts";
+import { previewTrees, type TreePreview } from "./preview.ts";
+import type { CheckResult, RunOptions, TestResult, Toolchain, TreesResult } from "./toolchain.ts";
 
 const why = { type: "string", description: 'A few words for the person saying what this step does, e.g. "Writing the widget".' };
 const obj = (props: Record<string, unknown>, required: string[]) => ({ type: "object", properties: { why, ...props }, required: ["why", ...required], additionalProperties: false });
@@ -73,7 +77,8 @@ export type PackageEnding = { kind: "terminal"; command: string; title: string; 
 
 export interface PackageToolContext {
   dir: string;
-  toolchain: Toolchain | null;
+  /** Checks, tests and trees (packageJsonToolchain where this cmd has no TypeScript and Vitest). */
+  toolchain: Toolchain;
   run: RunOptions;
   previewer: () => Promise<Previewer | null>;
   /**
@@ -83,11 +88,11 @@ export interface PackageToolContext {
   ask?: (pkg: WidgetPackage) => Promise<{ allow: boolean; reason?: string }>;
   /** The grant the package has (null: none), to tell whether to ask. */
   granted?: () => WidgetPermissions | null;
+  /** Results by the state of the package's files (once()): the agent's tools and cmd's verify share a run of the same files. */
+  runs: Map<string, Promise<unknown>>;
 }
 
 export interface PackageToolState {
-  /** A file changed since the last passing check. */
-  dirty: boolean;
   ending: PackageEnding | null;
   /** The person declined what the package asked for, with the permissions asked then. */
   declined: string | null;
@@ -98,15 +103,39 @@ export interface PackageToolState {
 const err = (output: string): ToolOutput => ({ output, isError: true });
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
 
-/** Whether `declared` asks for anything `granted` doesn't have. */
-function wantsMore(declared: WidgetPermissions, granted: WidgetPermissions | null): boolean {
-  return (Object.keys(declared) as (keyof WidgetPermissions)[]).some((k) => declared[k].some((x) => !granted?.[k]?.includes(x)));
+/** The package's files, hashed: what a check, a test run or a preview depends on. */
+function filesHash(dir: string): string {
+  const h = crypto.createHash("sha256");
+  for (const f of listFiles(dir).sort()) h.update(f).update("\0").update(fs.readFileSync(path.join(dir, f))).update("\0");
+  return h.digest("hex");
 }
+
+/** `fn` once per state of the package's files: the same files aren't checked, tested or drawn twice in a build. */
+function once<T>(c: PackageToolContext, what: string, fn: () => Promise<T>): Promise<T> {
+  const key = `${what}:${filesHash(c.dir)}`;
+  let p = c.runs.get(key) as Promise<T> | undefined;
+  if (!p) {
+    p = fn();
+    c.runs.set(key, p);
+    p.catch(() => c.runs.delete(key));
+  }
+  return p;
+}
+
+export const checkOnce = (c: PackageToolContext): Promise<CheckResult> => once(c, "check", () => c.toolchain.check(c.dir, c.run));
+export const testOnce = (c: PackageToolContext): Promise<TestResult> => once(c, "test", () => c.toolchain.test(c.dir, c.run));
+/** The trees, and drawn when there are any (what the preview tool shows and verify judges). */
+export const previewOnce = (c: PackageToolContext): Promise<{ trees: TreesResult; drawn: TreePreview | null }> =>
+  once(c, "preview", async () => {
+    const trees = await c.toolchain.trees(c.dir, c.run);
+    const drawn = trees.variants.length ? await previewTrees(await c.previewer().catch(() => null), trees.variants, widgetsOf(c.dir)) : null;
+    return { trees, drawn };
+  });
 
 /** The permission step, if the package asks for more than its grant: the person's answer as the tool's words. */
 export async function permissionStep(pkg: WidgetPackage, c: PackageToolContext, state: PackageToolState): Promise<string | null> {
   if (!c.ask) return null;
-  if (!wantsMore(pkg.permissions, c.granted?.() ?? null)) {
+  if (!needsGrant(pkg.permissions, c.granted?.() ?? null)) {
     state.declined = null; // it asks for no more than it has now
     return null;
   }
@@ -129,7 +158,6 @@ export async function runPackageTool(name: string, input: Record<string, unknown
       if (!p || content === undefined) return err("path and content are required");
       try {
         const rel = writeFile(c.dir, p, content);
-        state.dirty = true;
         return { output: `Wrote ${rel} (${content.length} characters).${afterWrite(c, rel, state)}`, isError: false };
       } catch (e) {
         return err((e as Error).message);
@@ -146,7 +174,6 @@ export async function runPackageTool(name: string, input: Record<string, unknown
         const n = text.split(old).length - 1;
         if (n !== 1) return err(n === 0 ? `the text to replace isn't in ${p} (read_file it first)` : `the text to replace occurs ${n} times in ${p}; include more around it`);
         const rel = writeFile(c.dir, p, text.replace(old, () => nu));
-        state.dirty = true;
         return { output: `Edited ${rel}.${afterWrite(c, rel, state)}`, isError: false };
       } catch (e) {
         return err((e as Error).message);
@@ -163,29 +190,24 @@ export async function runPackageTool(name: string, input: Record<string, unknown
       }
     }
     case "check": {
-      if (!c.toolchain) return err("cmd can't check packages here (its TypeScript isn't installed).");
-      const r = await c.toolchain.check(c.dir, c.run);
+      const r = await checkOnce(c);
       const asked = r.pkg ? await permissionStep(r.pkg, c, state) : null;
       const note = asked ? `\n${asked}` : "";
       if (!r.ok) return err(`${r.problems.join("\n")}${note}`);
       return { output: `OK: package.json is valid${r.types === "checked" ? " and the types check" : " (types not checked: this cmd has no TypeScript)"}.${note}`, isError: !!state.declined };
     }
     case "test": {
-      if (!c.toolchain) return err("cmd can't run tests here (its Vitest isn't installed).");
-      const r = await c.toolchain.test(c.dir, c.run);
+      const r = await testOnce(c);
       if (r.skipped) return { output: `Not run: ${r.skipped}. cmd checked package.json only.`, isError: false };
       if (r.ok) return { output: `OK: ${r.passed} test${r.passed === 1 ? "" : "s"} passed.`, isError: false };
       const lines = [...r.problems, ...r.failed.map((f) => `✗ ${f.name}\n${f.message}`)];
       return err(redact(`${r.passed} passed, ${r.failed.length} failed.\n${lines.join("\n\n")}`));
     }
     case "preview": {
-      if (!c.toolchain) return err("cmd can't render packages here (its Vitest isn't installed).");
-      const t = await c.toolchain.trees(c.dir, c.run);
+      const { trees: t, drawn } = await previewOnce(c);
       if (t.skipped) return { output: `Not rendered: ${t.skipped}.`, isError: false };
-      if (!t.variants.length) return err(t.problems.join("\n") || "nothing rendered");
-      const drawn = await previewTrees(await c.previewer().catch(() => null), t.variants, widgetsOf(c.dir));
+      if (!drawn) return err(t.problems.join("\n") || "nothing rendered");
       const problems = [...t.problems, ...drawn.problems];
-      if (!problems.length) state.dirty = false;
       const outlines = t.variants.map((v) => `--- ${v.widget} · ${v.name} ---\n${v.outline.split("\n").slice(0, 60).join("\n") || "(nothing)"}`).join("\n\n");
       const head = problems.length ? `Problems:\n- ${problems.join("\n- ")}` : "Renders cleanly in every state.";
       const warn = drawn.warnings.length ? `\nWarnings:\n- ${drawn.warnings.join("\n- ")}` : "";

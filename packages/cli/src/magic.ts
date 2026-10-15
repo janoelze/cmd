@@ -11,7 +11,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { DEFAULT_SETTINGS, isAiProvider, parseJsonc, resolveSettings, type Settings, type WidgetPermissions } from "@cmd/protocol";
+import { DEFAULT_SETTINGS, isAiProvider, parseJsonc, resolveSettings, type MagicStep, type Settings, type WidgetPermissions } from "@cmd/protocol";
 import { cmdHome, configDir } from "@cmd/protocol/node";
 import { connect } from "@cmd/protocol/node";
 import {
@@ -22,6 +22,7 @@ import {
   SecretsService,
   sandboxAvailable,
   slugOf,
+  stepLog,
   wantsText,
   type Backend,
   type BuildEvent,
@@ -95,29 +96,18 @@ export const bold = c("1");
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
-function describeInput(tool: string, input: Record<string, unknown>): string {
-  const v = input.command ?? input.path ?? input.url ?? "";
-  const s = typeof v === "string" ? v : "";
-  return `${tool === "run" ? "" : tool + " "}${s}`.replace(/\s+/g, " ").slice(0, 70);
-}
+/** A finished step as `cmd magic` prints it (the lab's build and the app's alike). */
+export const stepLine = (s: MagicStep): string =>
+  `  ${s.isError ? red("✗") : green("✓")} ${s.why.padEnd(34).slice(0, 34)} ${dim(s.detail.slice(0, 60))}${s.ms !== undefined ? ` ${dim(secs(s.ms))}` : ""}${s.isError && s.output ? "\n     " + red(s.output.split("\n")[0]!.slice(0, 110)) : ""}\n`;
 
 function printer(): (e: BuildEvent) => void {
-  const starts = new Map<number, { why: string; detail: string }>();
+  const steps = stepLog((s) => s.ms !== undefined && process.stderr.write(stepLine(s)));
   return (e) => {
+    steps.take(e);
     switch (e.type) {
       case "route":
         if (e.route !== "agent") process.stderr.write(dim(`  fast path: ${e.route}\n`));
         break;
-      case "step-start":
-        starts.set(e.id, { why: e.why, detail: describeInput(e.tool, e.input) });
-        break;
-      case "step-end": {
-        const s = starts.get(e.id)!;
-        const mark = e.isError ? red("✗") : green("✓");
-        const first = e.isError ? "  " + red(e.output.split("\n")[0]!.slice(0, 110)) : "";
-        process.stderr.write(`  ${mark} ${s.why.padEnd(34).slice(0, 34)} ${dim(s.detail)} ${dim(secs(e.ms))}${first ? "\n   " + first : ""}\n`);
-        break;
-      }
       case "title":
         process.stderr.write(`  ${bold("▸")} ${e.title}\n`);
         break;
@@ -181,8 +171,7 @@ export async function magicCommand(argv: string[]): Promise<number> {
   }
   const name = slugOf(prompt);
   const dir = path.resolve(o.out ?? path.join(cmdHome(), "magic", "runs", `${stamp()}-${slug(prompt)}`, name));
-  const toolchain = checkoutToolchain();
-  if (!toolchain) process.stderr.write(red("  ✗ this cmd has no TypeScript and Vitest to check packages with (a checkout's pnpm install has)\n"));
+  if (!checkoutToolchain()) process.stderr.write(dim("  note: this cmd has no TypeScript and Vitest, so only package.json is checked (a checkout's pnpm install has them)\n"));
   const previewer = await playwrightPreviewer();
   if (!previewer) process.stderr.write(dim("  note: Playwright isn't available, so widgets aren't drawn\n"));
 
@@ -207,7 +196,6 @@ export async function magicCommand(argv: string[]): Promise<number> {
       maxTokens: userSettings()["magic.maxTokens"] || undefined,
       sandbox: unsandboxed ? "off" : "required",
       systemFile: o.system ? path.resolve(o.system) : undefined,
-      toolchain,
       previewer: async () => previewer,
       // The lab is the person at the terminal: what the package asks for is allowed (in the app, the grants sheet asks).
       ask: async (pkg) => {

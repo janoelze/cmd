@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { WidgetPermissions } from "@cmd/protocol";
 import { cmdHome } from "@cmd/protocol/node";
-import { buildPackage, buildPackageSystem, checkoutToolchain, playwrightPreviewer, promptHash, slugOf, type BuildEvent, type PackageBuildResult } from "@cmd/core/magic";
+import { buildPackage, buildPackageSystem, playwrightPreviewer, promptHash, slugOf, type BuildEvent, type PackageBuildResult } from "@cmd/core/magic";
 import { pickBackend, stamp, writeRun } from "./magic.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -156,7 +156,6 @@ export async function evalCommand(argv: string[]): Promise<number> {
   const out = path.resolve(o.out ?? path.join(cmdHome(), "magic", "evals", stamp()));
   const backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort });
   const unsandboxed = !!o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
-  const toolchain = checkoutToolchain();
   const previewer = await playwrightPreviewer();
   const hashes = new Map(variants.map((v) => [v.name, promptHash(buildPackageSystem(v.file))]));
 
@@ -179,7 +178,6 @@ export async function evalCommand(argv: string[]): Promise<number> {
         cwd: process.cwd(),
         sandbox: unsandboxed ? "off" : "required",
         systemFile: v.file,
-        toolchain,
         previewer: async () => previewer,
         // Evals allow what a package asks for: the person's answer isn't what is judged.
         ask: async (pkg) => ((granted = pkg.permissions), { allow: true }),

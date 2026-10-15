@@ -5,7 +5,7 @@
 // command, for a build that ends with one); exits 1 when the build fails, saying why.
 
 import type { AppWindow, CoreEvent, MagicState, MagicStep, RpcClient } from "@cmd/protocol";
-import { bold, dim, green, red, yellow } from "./magic.ts";
+import { bold, dim, green, red, stepLine, yellow } from "./magic.ts";
 
 export async function magicInApp(client: RpcClient, prompt: string, o: { json: boolean }): Promise<number> {
   const w = await client.call("window.open", { kind: "magic", input: {}, callerPaneId: process.env.CMD_PANE_ID });
@@ -21,7 +21,7 @@ export async function magicInApp(client: RpcClient, prompt: string, o: { json: b
     }
     if (shown.has(s.id)) return;
     shown.add(s.id);
-    process.stderr.write(`  ${s.isError ? red("✗") : green("✓")} ${s.why.padEnd(34).slice(0, 34)} ${dim(s.detail.slice(0, 60))}${s.isError && s.output ? "\n     " + red(s.output.split("\n")[0]!.slice(0, 110)) : ""}\n`);
+    process.stderr.write(stepLine(s));
   };
   const done = new Promise<number>((resolve) => {
     const finish = async (win: AppWindow) => {

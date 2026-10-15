@@ -23,10 +23,10 @@ import { linkOf, listFiles, PackageRevisions } from "../../widgets/revisions.ts"
 import { DENO_VERSION } from "../../widgets/deno.ts";
 import { RELOAD_DEBOUNCE_MS } from "../../widgets/reload.ts";
 import { sandboxAvailable, type SandboxMode } from "../../lib/sandbox.ts";
-import { buildPackage, type BuildEvent, type PackageBuildResult } from "./build.ts";
+import { buildPackage, stepLog, type BuildEvent, type PackageBuildResult } from "./build.ts";
 import { readMark, writeMark } from "./files.ts";
 import { scriptFromEnv, scriptedBackend } from "./scripted.ts";
-import { defaultToolchain, type Toolchain } from "./toolchain.ts";
+import type { Toolchain } from "./toolchain.ts";
 import { permissionLines } from "./words.ts";
 
 const log = logger("magic");
@@ -39,8 +39,8 @@ export interface MagicPackagesOptions {
   /** Tests: the model (default: the AI service's smart tier). */
   backend?: (s: Settings) => Backend;
   sandbox?: SandboxMode;
-  /** Tests: the toolchain (default: the checkout's). */
-  toolchain?: Toolchain | null;
+  /** Tests: the toolchain (default: the checkout's, else package.json only). */
+  toolchain?: Toolchain;
   /** Where packages are made (default: widgetsHome()). */
   home?: () => string;
 }
@@ -65,11 +65,6 @@ export function wantsText(p: WidgetPermissions): string {
 }
 
 const stateOf = (w: AppWindow) => w.state as MagicState;
-
-function detailOf(tool: string, input: Record<string, unknown>): string {
-  const v = input.command ?? input.path ?? input.url ?? "";
-  return String(v).replace(/\s+/g, " ").slice(0, 160) || tool;
-}
 
 export class MagicPackages {
   #c: Ctx;
@@ -168,20 +163,12 @@ export class MagicPackages {
     const pkg: MagicPackageBuild = { name, ...(editing ? { editing } : {}) };
     this.#c.windows.update(id, { title: fresh ? "Magic Widget" : w.title, state: { prompt: original, phase: "working", error: undefined, steps: [], history, pkg } });
 
-    const steps: MagicStep[] = [];
     const send = (progress: Extract<CoreEvent, { type: "magic.stream" }>["progress"]) => this.#c.broadcast({ type: "magic.stream", id, progress });
     const stepEvent = (step: MagicStep) => send({ type: "step", step: { ...step } });
+    const trail = stepLog(stepEvent);
     const onEvent = (e: BuildEvent) => {
-      if (e.type === "step-start") {
-        const step: MagicStep = { id: e.id, tool: e.tool, why: e.why, detail: detailOf(e.tool, e.input) };
-        steps.push(step);
-        stepEvent(step);
-      } else if (e.type === "step-end") {
-        const step = steps.find((s) => s.id === e.id);
-        if (!step) return;
-        Object.assign(step, { ms: e.ms, isError: e.isError, output: e.output.slice(0, 4000) });
-        stepEvent(step);
-      } else if (e.type === "title") {
+      trail.take(e);
+      if (e.type === "title") {
         if (fresh && this.#window(id)) this.#c.windows.update(id, { title: e.title, state: e.icon ? { icon: e.icon } : {} });
         send({ type: "title", title: e.title });
       } else if (e.type === "verify") send({ type: "verify" });
@@ -193,8 +180,7 @@ export class MagicPackages {
     const ask = (p: WidgetPackage): Promise<{ allow: boolean; reason?: string }> =>
       new Promise((resolve) => {
         const step: MagicStep = { id: ++askSeq, tool: "permissions", why: wantsText(p.permissions), detail: name };
-        steps.push(step);
-        stepEvent(step);
+        trail.add(step);
         const t0 = Date.now();
         library.packages.scan();
         const done = (allow: boolean, reason?: string) => {
@@ -239,7 +225,7 @@ export class MagicPackages {
       sandbox: this.#sandbox(),
       deny: magicDenyPaths(),
       noFast: !fresh,
-      toolchain: this.#o.toolchain === undefined ? defaultToolchain() : this.#o.toolchain,
+      toolchain: this.#o.toolchain,
       previewer: () => this.#c.previews.previewer(),
       ask,
       granted: () => library.host.granted(name)?.permissions ?? null,
@@ -247,7 +233,7 @@ export class MagicPackages {
       signal: ac.signal,
       onEvent,
     })).then(
-      (r) => this.#finish(id, name, ac, r, { fresh, text, original, history, steps, editing }),
+      (r) => this.#finish(id, name, ac, r, { fresh, text, original, history, steps: trail.steps, editing }),
       (e: Error) => this.#end(id, name, ac, { error: ac.signal.aborted ? "Stopped." : e.message, fresh }),
     );
   }

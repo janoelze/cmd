@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { AppWindow, WidgetEntry } from "@cmd/protocol";
+import { PREVIEW_SIZES, type AppWindow, type MagicPreviewRequest, type WidgetEntry } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
 import { readPackage } from "../src/widgets/package.ts";
 import { readGrants } from "../src/widgets/grants.ts";
@@ -18,7 +18,8 @@ import { listFiles, readMark, writable, writeFile } from "../src/magic/package/f
 import { buildPackageSystem, examples, exampleFiles } from "../src/magic/package/prompt.ts";
 import { scriptedBackend, type ScriptTurn } from "../src/magic/package/scripted.ts";
 import { slugOf, wantsText } from "../src/magic/package/service.ts";
-import { checkoutToolchain, packageJsonToolchain } from "../src/magic/package/toolchain.ts";
+import { checkoutToolchain, packageJsonToolchain, type Toolchain } from "../src/magic/package/toolchain.ts";
+import type { Previewer } from "../src/magic/previewer.ts";
 import { sandboxAvailable } from "../src/lib/sandbox.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { tmp, until } from "./fake-widget-runtime.ts";
@@ -125,6 +126,28 @@ describe("buildPackage", () => {
     expect(seen.messages[0]!.content).toMatch(/Package folder: .*weather; its name: "weather"/);
     expect(seen.tools.map((t) => t.name)).toEqual(expect.arrayContaining(["write_file", "check", "test", "preview", "terminal", "needs_program"]));
     expect(seen.tools.map((t) => t.name)).not.toContain("run_data");
+  });
+
+  it("checks, tests and draws once per state of the files: cmd's verify reuses what the agent ran, and draws through drawTrees", async () => {
+    const dir = path.join(tmp("cmd-magic-home-"), "weather");
+    const runs = { check: 0, test: 0, trees: 0 };
+    const counting: Toolchain = {
+      name: "counting",
+      check: (d, o) => (runs.check++, toolchain.check(d, o)),
+      test: (d, o) => (runs.test++, toolchain.test(d, o)),
+      trees: (d, o) => (runs.trees++, toolchain.trees(d, o)),
+    };
+    const batches: MagicPreviewRequest[][] = [];
+    // The first draw overflows: the judge says so.
+    const previewer: Previewer = { name: "fake", render: async (rs) => (batches.push(rs), rs.map((r, i) => ({ errors: [], text: 40, nodes: 20, drawn: false, scrollW: i === 0 ? 2000 : r.width, scrollH: r.height, png: "AA==" }))) };
+    const readme = { name: "write_file", input: { why: "README", path: "README.md", content: "# Weather\n" } };
+    const r = await buildPackage(base(dir, [{ calls: [...writes(example("weather"), "weather")!, tool("check"), tool("test"), tool("preview"), readme, tool("check")], answer: "Done." }], { toolchain: counting, previewer: async () => previewer }));
+    // check ran on the last files and verify reused it; test and trees ran again on the README's change, once each.
+    expect(runs).toEqual({ check: 2, test: 2, trees: 2 });
+    expect(batches).toHaveLength(2);
+    expect(batches[0]!.slice(0, 2).map((x) => [x.width, x.height, x.tree.theme])).toEqual([[...PREVIEW_SIZES.narrow, "dark"], [...PREVIEW_SIZES.wide, "light"]]);
+    expect(r.verdict.warnings).toContain(`Lisbon, narrow (${PREVIEW_SIZES.narrow.join("×")}), dark: content is 2000px wide in a ${PREVIEW_SIZES.narrow[0]}px window`);
+    expect(r.verdict.shot).toBe("AA==");
   });
 
   it("fails when the person declines, with the reason in the agent's context", async () => {

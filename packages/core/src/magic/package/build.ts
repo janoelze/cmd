@@ -14,7 +14,7 @@
 
 import os from "node:os";
 import { spawnSync } from "node:child_process";
-import type { WidgetPermissions } from "@cmd/protocol";
+import type { MagicStep, WidgetPermissions } from "@cmd/protocol";
 import type { Backend, Usage } from "../../ai/backends.ts";
 import { magicDenyPaths } from "../../lib/paths-deny.ts";
 import type { Previewer } from "../previewer.ts";
@@ -22,10 +22,9 @@ import type { WidgetPackage } from "../../widgets/package.ts";
 import { commandsSupported, type SandboxMode } from "../../lib/sandbox.ts";
 import { runTool, toolsFor, type ToolContext, type ToolOutput } from "../tools.ts";
 import { snapshotFiles } from "./files.ts";
-import { previewTrees } from "./preview.ts";
 import { buildPackageRequest, buildPackageSystem, promptHash, type Workspace } from "./prompt.ts";
 import { defaultToolchain, type RunOptions, type Toolchain } from "./toolchain.ts";
-import { PACKAGE_TOOL_SPECS, permissionStep, runPackageTool, type PackageEnding, type PackageToolContext, type PackageToolState } from "./tools.ts";
+import { PACKAGE_TOOL_SPECS, checkOnce, permissionStep, previewOnce, runPackageTool, testOnce, type PackageEnding, type PackageToolContext, type PackageToolState } from "./tools.ts";
 
 /** One tool call of a build, as the trace (and an eval's report) keeps it. */
 export interface TraceStep {
@@ -50,6 +49,29 @@ export type BuildEvent =
   | { type: "title"; title: string; icon?: string; at: number }
   | { type: "verify"; at: number }
   | { type: "repair"; reason: string; at: number };
+
+/** What a step is about, for the person: its command, path or URL, else the tool's name. */
+export const stepDetail = (tool: string, input: Record<string, unknown>): string => String(input.command ?? input.path ?? input.url ?? "").replace(/\s+/g, " ").slice(0, 160) || tool;
+
+/**
+ * A build's tool calls as the steps a Magic window shows (MagicStep; the window, `cmd magic`'s
+ * lines): one per call, told at its start and again, with its time and output, at its end.
+ */
+export function stepLog(onStep: (s: MagicStep) => void): { steps: MagicStep[]; take(e: BuildEvent): void; add(s: MagicStep): void } {
+  const steps: MagicStep[] = [];
+  const add = (s: MagicStep) => (steps.push(s), onStep({ ...s }));
+  return {
+    steps,
+    add,
+    take(e) {
+      if (e.type === "step-start") add({ id: e.id, tool: e.tool, why: e.why, detail: stepDetail(e.tool, e.input) });
+      else if (e.type === "step-end") {
+        const s = steps.find((x) => x.id === e.id);
+        if (s) onStep({ ...Object.assign(s, { ms: e.ms, isError: e.isError, output: e.output.slice(0, 4000) }) });
+      }
+    },
+  };
+}
 
 /** An obvious shell command (shell syntax, a program this Mac has, nothing that reads like a sentence): the command; else null. */
 export function fastCommand(prompt: string): string | null {
@@ -84,8 +106,8 @@ export interface PackageBuildOptions {
   systemFile?: string;
   /** Skip the fast path (changes). */
   noFast?: boolean;
-  /** Default: the checkout's, else package.json only (defaultToolchain); null: none. */
-  toolchain?: Toolchain | null;
+  /** Default: the checkout's, else package.json only (defaultToolchain). */
+  toolchain?: Toolchain;
   previewer?: () => Promise<Previewer | null>;
   /** The permission step (see tools.ts); none: nothing is asked, the grant is the caller's. */
   ask?: PackageToolContext["ask"];
@@ -131,10 +153,9 @@ const EMPTY_USAGE: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 const tokens = (u: Usage) => u.input + u.output + u.cacheRead + u.cacheWrite;
 const EMPTY_VERDICT: PackageVerdict = { ok: false, usable: false, problems: [], warnings: [], pkg: null };
 
-/** cmd's own check of what the agent made: package.json and types, the tests, the trees drawn. */
+/** cmd's own check of what the agent made: package.json and types, the tests, the trees drawn (each reused when the agent ran it on the same files). */
 export async function verifyPackage(c: PackageToolContext, state: PackageToolState): Promise<PackageVerdict> {
-  if (!c.toolchain) return { ...EMPTY_VERDICT, problems: ["cmd can't check packages here (its TypeScript and Vitest aren't installed)"] };
-  const check = await c.toolchain.check(c.dir, c.run);
+  const check = await checkOnce(c);
   // A package that asks for permissions is asked about here too, if the agent never ran check.
   if (check.pkg) await permissionStep(check.pkg, c, state);
   if (!check.ok) return { ...EMPTY_VERDICT, problems: check.problems, pkg: check.pkg };
@@ -142,7 +163,7 @@ export async function verifyPackage(c: PackageToolContext, state: PackageToolSta
   const warnings: string[] = [];
   // Declined: it can't run as it is; the agent hears why and may ask for less.
   if (state.declined) return { ...EMPTY_VERDICT, problems: ["The person declined what package.json asks for: ask for less, or say what the widget can't do without it."], pkg: check.pkg };
-  const test = await c.toolchain.test(c.dir, c.run);
+  const test = await testOnce(c);
   if (test.skipped) warnings.push(`tests not run: ${test.skipped}`);
   else if (!test.ok) problems.push(...test.problems.map((p) => `test: ${p}`), ...test.failed.map((f) => `test failed: ${f.name}\n${f.message}`));
   const pkg = check.pkg!;
@@ -150,9 +171,8 @@ export async function verifyPackage(c: PackageToolContext, state: PackageToolSta
   for (const w of tree) if (!snapshotFiles(c.dir)[w.main.replace(/\.tsx?$/, ".story.tsx")]) warnings.push(`no story for ${w.id}: write ${w.main.replace(/\.tsx?$/, ".story.tsx")} with a state per fixture`);
   let shot: string | undefined;
   if (tree.length) {
-    const t = await c.toolchain.trees(c.dir, c.run);
+    const { trees: t, drawn } = await previewOnce(c);
     problems.push(...t.problems);
-    const drawn = t.variants.length ? await previewTrees(await c.previewer().catch(() => null), t.variants, new Map(tree.map((w) => [w.id, w]))) : null;
     if (drawn) {
       problems.push(...drawn.problems);
       warnings.push(...drawn.warnings, ...(drawn.skipped ? [`not drawn: ${drawn.skipped}`] : []));
@@ -201,8 +221,8 @@ export async function buildPackage(o: PackageBuildOptions): Promise<PackageBuild
   const deny = o.deny ?? magicDenyPaths();
   const ctx: ToolContext = { cwd: o.cwd, home: os.homedir(), deny, sandbox, signal: ac.signal };
   const run: RunOptions = { sandbox, deny, signal: ac.signal, cmdVersion: o.cmdVersion ?? null };
-  const pc: PackageToolContext = { dir: o.dir, toolchain: o.toolchain === undefined ? defaultToolchain() : o.toolchain, run, previewer: o.previewer ?? (async () => null), ask: o.ask, granted: o.granted };
-  const state: PackageToolState = { dirty: false, ending: null, declined: null, onPackage: (title, icon) => emit({ type: "title", title, icon, at: at() }) };
+  const pc: PackageToolContext = { dir: o.dir, toolchain: o.toolchain ?? defaultToolchain(), run, previewer: o.previewer ?? (async () => null), ask: o.ask, granted: o.granted, runs: new Map() };
+  const state: PackageToolState = { ending: null, declined: null, onPackage: (title, icon) => emit({ type: "title", title, icon, at: at() }) };
   const trace: TraceStep[] = [];
   const timings: PackageBuildResult["timings"] = { done: 0 };
   let stepId = 0;
