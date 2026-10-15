@@ -1,8 +1,8 @@
 // Recent Commands against the fake host (@cmd/widget-api/testing): the native Commands view's
 // job. Running first, then finished, newest first; a failure's exit status and the title bar's
 // count; a command recorded again as it ends replaces its running row; a click goes to its
-// terminal; Run Again opens a terminal with the command typed, not run; Failed Only and the scope
-// from the title menu, kept per window; the empty states.
+// terminal; Run Again opens a terminal with the command typed, not run, and says why when it
+// can't; Failed Only and the scope from the title menu, kept per window; the empty states.
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
@@ -54,6 +54,24 @@ describe("Recent Commands", () => {
     // Outside the workspace's folder there is nowhere for it to open.
     const menu = tree.rows()[1]!.props.menu as { label: string; disabled?: boolean }[];
     expect(menu.find((m) => m.label === "Run Again")?.disabled).toBe(true);
+  });
+
+  it("says why when Run Again is refused, and nothing when the person said no", async () => {
+    const refused = createHost({ terminals: [pane()], events: [command({ command: "pnpm test", exitCode: 1 })], deny: { "terminals.open": 'act: ["terminals.open"]' } });
+    const tree = await render(<RecentCommands />, refused);
+    await tree.choose(tree.rows()[0]!, "Run Again");
+    await tree.idle();
+    const sent = refused.calls.filter((c) => c[0] === "notify.send");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]![1]).toMatchObject({ key: "run-again", title: "Run Again · couldn't open" });
+    expect(String((sent[0]![1] as { body: string }).body)).toContain("terminals.open");
+
+    const declined = createHost({ terminals: [pane()], events: [command({ command: "pnpm test", exitCode: 1 })], approve: false });
+    const again = await render(<RecentCommands />, declined);
+    await again.choose(again.rows()[0]!, "Run Again");
+    await again.idle();
+    expect(declined.requests.some((r) => r[0] === "terminals.open")).toBe(true);
+    expect(declined.calls.some((c) => c[0] === "notify.send")).toBe(false);
   });
 
   it("switches to Failed Only and to every workspace from the title menu, kept in the window's state", async () => {

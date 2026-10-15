@@ -2,10 +2,10 @@
 // Commands view's job): every command this workspace's terminals ran (or every workspace's),
 // from the log's command events. Running ones first, then the rest, newest first; a failed one
 // says its exit status. A click goes to its terminal; Run Again opens a terminal in its folder
-// with the command typed, not run (cmd.terminals.open, API 1.1). The title menu switches the
-// scope and Failed Only, kept per window.
+// with the command typed, not run (cmd.terminals.open, API 1.1); refused, a notification says
+// why. The title menu switches the scope and Failed Only, kept per window.
 
-import { Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, useEvents, useData, useTerminals, useWorkspace, useStoredState, useNow, fmt, cmd, type Event } from "@cmd/widget-api";
+import { ApiCallError, Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, useEvents, useData, useTerminals, useWorkspace, useStoredState, useNow, fmt, cmd, type Event } from "@cmd/widget-api";
 
 type Scope = "workspace" | "all";
 
@@ -60,7 +60,11 @@ function Commands({ runs: all, failedOnly, scope, setScope, setFailedOnly, error
   /** In a folder of this workspace's (where a terminal may open): the workspace's own commands. */
   const here = (r: Run) => !!ws?.root && r.workspaceId === ws.id && (r.cwd === ws.root || r.cwd.startsWith(ws.root + "/"));
   const go = (r: Run) => r.terminalId && open.has(r.terminalId) && void cmd.windows.select(r.terminalId).catch(() => {});
-  const again = (r: Run) => void cmd.terminals.open({ cwd: r.cwd, command: r.command ?? "" }).catch(() => {});
+  // A refusal says why (a folder that stays private, a command cmd won't type); the person's own no says nothing.
+  const again = (r: Run) =>
+    void cmd.terminals.open({ cwd: r.cwd, command: r.command ?? "" }).catch((e: unknown) => {
+      if (!(e instanceof ApiCallError && e.code === "denied")) void cmd.notify.send({ key: "run-again", title: "Run Again · couldn't open", body: e instanceof Error ? e.message : String(e) }).catch(() => {});
+    });
 
   const row = (r: Run) => {
     const bad = failed(r);

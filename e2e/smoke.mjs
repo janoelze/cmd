@@ -10,6 +10,7 @@
 // Dialog test measure that). E2E_MOTION=1 keeps real motion.
 import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import http from "node:http";
@@ -2641,41 +2642,53 @@ export default function Act() {
 // Recent Commands (packages/widgets/commands): the native Commands' job as a package. Commands
 // run in a terminal show as rows, a failure with its exit status and the count in the title bar;
 // Run Again from a row's menu opens a terminal with the command typed, not run (a built-in package
-// follows the permission levels: Show things is Allow, so no sheet).
+// follows the permission levels: Show things is Allow, so no sheet). In a workspace of its own, so
+// what earlier scenarios ran in Home (a refused `cmd tool`) isn't counted, in a folder outside the
+// e2e home: that is inside .cmd-dev, cmd's own state, where an act won't open a terminal.
 await scenario("widget-commands", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
-  await menu("file.newTerminal");
-  const term = await shellReady();
-  const homeId = term.workspaceId;
-  await menu("view.grid");
-  const w = await call("widget.add", { ref: "pkg:commands/commands", workspaceId: homeId });
-  await tileIn(w.id);
-  const tile = win.locator(`.tile[data-pane="${w.id}"]`);
-  await focusIn(term.id);
-  await win.keyboard.type("false");
-  await win.keyboard.press("Enter");
-  await win.keyboard.type("echo e2e-commands-ok");
-  await win.keyboard.press("Enter");
-  const rows = () => tile.locator(".ui-list-row").allTextContents();
-  const shown = await until(rows, (r) => r.some((t) => t.includes("echo e2e-commands-ok")) && r.some((t) => t.includes("Failed · exit 1")), 20_000);
-  const status = await until(() => tile.locator(".tile-title").textContent(), (t) => t.includes("1 failed"));
-  await shot(win, "widget-commands.png");
-  check(shown.some((t) => /false/.test(t) && t.includes("Failed · exit 1")) && status.includes("1 failed"), `it lists the commands, the failure with its exit status and the count in its title bar (${shown.map((t) => t.slice(0, 40)).join(" | ")}; ${status})`);
+  const where = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-e2e-commands-")));
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === ws.name);
+  const terminals = () => call("pane.list").then((l) => l.filter((p) => p.workspaceId === ws.id).map((p) => p.id));
+  try {
+    await menu("file.newTerminal");
+    const [termId] = await until(terminals, (l) => l.length === 1);
+    await until(() => paneText(termId, 5), (t) => /\S/.test(t)); // its prompt
+    await menu("view.grid");
+    const w = await call("widget.add", { ref: "pkg:commands/commands", workspaceId: ws.id });
+    await tileIn(w.id);
+    const tile = win.locator(`.tile[data-pane="${w.id}"]`);
+    await select(termId);
+    await focusIn(termId);
+    await win.keyboard.type("false");
+    await win.keyboard.press("Enter");
+    await win.keyboard.type("echo e2e-commands-ok");
+    await win.keyboard.press("Enter");
+    const rows = () => tile.locator(".ui-list-row").allTextContents();
+    const shown = await until(rows, (r) => r.some((t) => t.includes("echo e2e-commands-ok")) && r.some((t) => t.includes("Failed · exit 1")), 20_000);
+    const status = await until(() => tile.locator(".tile-title").textContent(), (t) => t.includes("1 failed"));
+    await shot(win, "widget-commands.png");
+    check(shown.some((t) => /false/.test(t) && t.includes("Failed · exit 1")) && status.includes("1 failed"), `it lists the commands, the failure with its exit status and the count in its title bar (${shown.map((t) => t.slice(0, 40)).join(" | ")}; ${status})`);
 
-  const before = await call("pane.list").then((l) => l.map((p) => p.id));
-  await select(w.id); // in view: the terminal typed into was selected
-  await choosing("Run Again");
-  await tile.locator(".ui-list-row", { hasText: "echo e2e-commands-ok" }).click({ button: "right" });
-  const labels = await until(() => app.evaluate(() => globalThis.__lastMenu ?? []), (l) => l.includes("Run Again"), 5000);
-  await unchoosing();
-  const opened = (await until(() => call("pane.list").then((l) => l.map((p) => p.id)), (l) => l.length === before.length + 1, 10_000)).find((id) => !before.includes(id));
-  const typed = await until(() => paneText(opened, 5), (t) => t.includes("echo e2e-commands-ok"), 15_000);
-  check(labels.includes("Show Terminal") && typed.includes("echo e2e-commands-ok") && !/^e2e-commands-ok$/m.test(typed), `Run Again opens a terminal with the command typed, not run (${labels.join(", ")}; ${JSON.stringify(typed.trim().slice(-60))})`);
-  await shot(win, "widget-commands-run-again.png");
-  await call("pane.kill", { paneId: opened }).catch(() => {});
-  await call("pane.kill", { paneId: term.id }).catch(() => {});
-  await call("window.close", { id: w.id });
+    const before = await terminals();
+    await select(w.id); // in view: the terminal typed into was selected
+    await choosing("Run Again");
+    await tile.locator(".ui-list-row", { hasText: "echo e2e-commands-ok" }).click({ button: "right" });
+    const labels = await until(() => app.evaluate(() => globalThis.__lastMenu ?? []), (l) => l.includes("Run Again"), 5000);
+    await unchoosing();
+    const opened = (await until(terminals, (l) => l.length === before.length + 1, 10_000)).find((id) => !before.includes(id));
+    const typed = opened ? await until(() => paneText(opened, 5), (t) => t.includes("echo e2e-commands-ok"), 15_000) : "";
+    check(labels.includes("Show Terminal") && !!opened && typed.includes("echo e2e-commands-ok") && !/^e2e-commands-ok$/m.test(typed), `Run Again opens a terminal with the command typed, not run (${labels.join(", ")}; ${JSON.stringify(typed.trim().slice(-60))})`);
+    await shot(win, "widget-commands-run-again.png");
+    await call("window.close", { id: w.id });
+  } finally {
+    for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
+    await call("workspace.close", { id: ws.id });
+    fs.rmSync(where, { recursive: true, force: true });
+  }
 });
 
 // Countdown (packages/widgets/timer): the native Timer's job as a package. Set to 3 seconds and
