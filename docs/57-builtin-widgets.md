@@ -228,9 +228,9 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | One ranked list (waiting, working, finished-unseen, the rest) with no headings; the package has three headed sections and loses the "unseen" rank | d | one `List` sorted by the same rank (`bucket` is there: "needs", "unseen", "rest"). Fixed (widget-port-fixes). |
 | A row's end is two dim lines, where it works over how long ago, right-aligned; the package puts the place after the title and the age in a `Chip` | d | `ListRowEnd` > `Stack align="end" gap={0}` > two `Text size="xs" tone="dim"`. Fixed (widget-port-fixes). |
 | The place's tooltip (the full folder or worktree) | d | `ListRow tip={agent.cwd}`. Fixed (widget-port-fixes). |
-| With All Workspaces the place says which workspace | c | `workspaces` topic (C6) |
-| A click marks the clicked agent seen (a subagent too); the package selects the host's window, which marks only the host | c | `agents.select(id)` (C9) |
-| Empty: a "New Claude Session" button | c | `agents.start` without a prompt (C10) |
+| With All Workspaces the place says which workspace | c | `workspaces` topic (C6): built (widget-data) |
+| A click marks the clicked agent seen (a subagent too); the package selects the host's window, which marks only the host | c | `agents.select(id)` (C9): built (widget-data) |
+| Empty: a "New Claude Session" button | c | `agents.start` without a prompt (C10): built (widget-data) |
 
 **Commands → Recent Commands** (ported on 1.1 and not moved to 1.2)
 
@@ -238,11 +238,11 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 |---|---|---|
 | A list to the window's edges (`Panel`/`PanelBody`); the package's sits in an inset `View` | d | `Panel` > `PanelBody` (1.2). Fixed (widget-port-fixes). |
 | Run Again on hover (`ListRowActions`) | d | `ListRowActions` > `IconButton` (1.2). Fixed (widget-port-fixes). |
-| Run Again types the command into its own terminal and runs it, when that terminal is open and at a prompt; the package opens a new terminal with it typed, not run | c | `terminals.rerun(key)` (C11) |
+| Run Again types the command into its own terminal and runs it, when that terminal is open and at a prompt; the package opens a new terminal with it typed, not run | c | `terminals.rerun(key)` (C11): built (widget-data) |
 | Copy Command and New Terminal Here in a row's menu | d | `cmd.clipboard.write` (1.2) and `cmd.terminals.open({ cwd })`. Fixed (widget-port-fixes). |
 | The place chip is the project's hue with the worktree or branch (`whereOf`); the package's is a neutral chip with the branch | a | `fmt.hue(name)` (A11), the app's `projectHue`; the place from the event's `git` |
 | The age is a `ListValue`; the package's is a `Chip` | d | `ListValue`. Fixed (widget-port-fixes). |
-| All Workspaces adds the workspace's name to the detail | c | `workspaces` topic (C6) |
+| All Workspaces adds the workspace's name to the detail | c | `workspaces` topic (C6): built (widget-data) |
 | The README has no "How it differs" section | d | write it. Fixed (widget-port-fixes). |
 
 **Event Stream → Event Log**
@@ -260,7 +260,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Difference | Class | Fix |
 |---|---|---|
 | Edge-to-edge `Panel` | d | `Panel` > `PanelBody`. Fixed (widget-port-fixes). |
-| A click goes to the window a notification is about (a widget's), and its menu says Show Window | c | `ApiEvent.windowId` (C8) |
+| A click goes to the window a notification is about (a widget's), and its menu says Show Window | c | `ApiEvent.windowId` (C8): built (widget-data) |
 | Notifications about nothing in particular (the CLI's) show in every workspace | e | the same rule as Event Log: no workspace, no widget |
 | A terminal moved since counts for the workspace it is in now, not the one it was sent in | e | the log's `workspaceId` is what was recorded; rewriting it per read would make two readers disagree |
 | Clear clears the app's list for every workspace; the package's Clear is its window's own | e | decided for 1.2 (no `notify.clear`). With `cmd.storage` (the other 1.3 branch) its "cleared at" can move to the `package` scope, which clears every Notification Log at once, the closest a widget can come to the native without a verb |
@@ -271,9 +271,9 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 |---|---|---|
 | The sparkline is inside the stat's tile, in the chart palette (CPU series 0, memory series 1, green); the package's sits under the tile in accent and neutral | a | `Stat` children and `Sparkline series` (A8) |
 | A terminal's name and icon are the sidebar's (an agent's name and its kind's icon: "Codex · sqlite viewer", ✦); the package's are the terminal's title and a generic `sparkles` | d | `useAgents` by `agentId`: `agent.name`, `agent.icon`. Fixed (widget-port-fixes). |
-| Other workspaces' terminals say the workspace's name; the package's say their folder | c | `workspaces` topic (C6) |
-| A "cmd" pane: the app and the background process | c | `app.usage` (C12) |
-| A Task Manager link in the footer | c | `app.open("taskManager")` (C13), Jan to decide |
+| Other workspaces' terminals say the workspace's name; the package's say their folder | c | `workspaces` topic (C6): built (widget-data) |
+| A "cmd" pane: the app and the background process | c | `app.usage` (C12): built (widget-data) |
+| A Task Manager link in the footer | c | `app.open("taskManager")` (C13): rejected by Jan (2026-10-15), widgets never open cmd's own windows |
 | The package's header sorts; the native is always busiest first | e | an improvement, kept: the default without a sort is the native order |
 
 **Stats → Usage Stats**
@@ -284,20 +284,20 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | The sparkline is inside the tile, as wide as it | a | `Stat` children (A8) |
 | The "cmd" pane (core memory, stalls, the log's size) | d | `stats.query` can read them today: `events: ["system"]` (a declarable class) and `workspace: ["all"]` for a stat with no workspace; add both grants and the pane. Fixed (widget-port-fixes). The package now declares `events: ["system"]`. |
 | In This Workspace the native page still shows your active time and when you work (they have no workspace) | d | query `you.active` with `scope: "all"` beside the workspace's stats (the package already holds `workspace: ["all"]`). Fixed (widget-port-fixes). |
-| A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | a chart's `delta` and `note` (A9); `quantiles` (C3) |
-| Counted again when the core says a stat it shows changed; the package follows `command` and `agent.stop` events and a minute's timer | c | `stats` topic, `useStat(query)` (C2) |
-| A detail ranks by the stat's "many" dimension ("By command"); `ApiStatInfo.dims` doesn't say which | c | `dims[].many` and `kind` (C3) |
-| "Updated" is when cmd counted (`asOf`); the package's is when it asked | c | `asOf` (C3) |
+| A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | a chart's `delta` and `note` (A9); `quantiles` (C3): built (widget-data) |
+| Counted again when the core says a stat it shows changed; the package follows `command` and `agent.stop` events and a minute's timer | c | `stats` topic, `useStat(query)` (C2): built (widget-data) |
+| A detail ranks by the stat's "many" dimension ("By command"); `ApiStatInfo.dims` doesn't say which | c | `dims[].many` and `kind` (C3): built (widget-data) |
+| "Updated" is when cmd counted (`asOf`); the package's is when it asked | c | `asOf` (C3): built (widget-data) |
 | The package keeps its own copy of the Stats window's formatters | a | `fmt.value`, `fmt.delta` (A11) |
 
 **Journal → Work Log**
 
 | Difference | Class | Fix |
 |---|---|---|
-| Writes the days that are stale when it opens ("Writing up what happened…"), Write Again on today's heading, and an empty state that sets up AI | c | `journal.write` (C5) and `app.open("settings:ai")` (C13), both Jan's call; without them the package stays a reader that points at the Journal |
-| "This week" above the days: the week's headline and threads | c | `journal.week()` (C4) |
-| All Workspaces, with a project chip per entry when there is more than one | c | `journal.days({ scope: "all" })` and `ApiJournalEntry.project` (a folder's name, never a path) (C4); `fmt.hue` (A11) |
-| Reads again when something it reads is recorded, and at the day's turn; the package every 5 minutes | c | `journal` topic, `useJournal()` (C4) |
+| Writes the days that are stale when it opens ("Writing up what happened…"), Write Again on today's heading, and an empty state that sets up AI | c | `journal.write` (C5) and `app.open("settings:ai")` (C13): both rejected by Jan (2026-10-15), Work Log stays read-only and widgets never open cmd's own windows; the package stays a reader that points at the Journal |
+| "This week" above the days: the week's headline and threads | c | `journal.week()` (C4): built (widget-data) |
+| All Workspaces, with a project chip per entry when there is more than one | c | `journal.days({ scope: "all" })` and `ApiJournalEntry.project` (a folder's name, never a path) (C4): built (widget-data); `fmt.hue` (A11) |
+| Reads again when something it reads is recorded, and at the day's turn; the package every 5 minutes | c | `journal` topic, `useJournal()` (C4): built (widget-data) |
 | A picked bar in the ribbon scrolls its entry into view | a | `reveal` on `TimelineEntry` (A10) |
 | The title menu says the scope; the package's says "Options" (Read Again) | d | Read Again as the native's small `IconButton` on Today's heading; the title menu becomes the scope once C4 exists. Fixed (widget-port-fixes). Read Again on the newest day's heading; no title menu until C4. |
 
@@ -316,7 +316,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Describe with AI and Open Dev Servers in a Browser (app settings) in the menu | e | a widget never changes cmd's settings: it would be the one door from a package into every window's behaviour |
 | The tooltip: command → script, the file and line it comes from, "Asks before it runs"; Open <file> in the menu | c | `ApiAction.script`, `source` (C14); `windows.open` of the file |
 | "in <branch>": the same action running in another worktree, a link to its terminal | c | `ApiAction.elsewhere` (C14) |
-| A callout for a source file that can't be read; "Describing actions…" with a spinner, or "Set up AI" in the footer | c | `useActionsInfo()` (C14); `app.open("settings:ai")` (C13) |
+| A callout for a source file that can't be read; "Describing actions…" with a spinner, or "Set up AI" in the footer | c | `useActionsInfo()` (C14); `app.open("settings:ai")` (C13): rejected by Jan (2026-10-15), widgets never open cmd's own windows |
 | The footer names the branch and folder when they aren't the workspace's | c | `useActionsInfo()` (C14) |
 | How long a run took comes from the command events of its terminal (wrong when two runs share it) | c | `ApiAction.startedAt`, `endedAt` (C14) |
 | Enter in the filter runs the first match | a | `ToolbarSearchField onSubmit` (A7) |
@@ -381,18 +381,18 @@ General primitives first; one-off elements only where the native view is a kit p
 **C. Data: topics, verbs and fields** (C1–C15)
 
 1. **`media` topic**, `useMedia()`: `media.get` live, pushed on the core's `nowPlaying.changed`; holds the Now Playing stream while subscribed (`holdNowPlaying`), `media: ["read"]`. The artwork rides only when it changes (the topic's value is diffed like any other; an unchanged `data:` string isn't re-sent). Folds in the candidate. Used by: Media Controls.
-2. **`stats` topic**, `useStat(query)`: `stats.query` live, again 1.5 s after a `stats.changed` that names its stat, and once a minute for a stat counted in time. Same permission as the verb. Folds in the candidate. Used by: Usage Stats.
-3. **`ApiStatResult` and `ApiStatInfo`**: `quantiles?: { p50: number; p90: number }` (with `quantiles: true` in the query), `asOf: number`; `ApiStatInfo.kind` (`"count" | "gauge" | "distribution" | "rate"`, what chart a detail draws) and `dims[].many`. Data within API 1. Folds in the quantiles candidate. Used by: Usage Stats.
-4. **Journal**: `journal` topic (`useJournal({ count, scope })`, pushed when a day is written); `journal.days({ scope: "all" })` with `workspace: ["all"]`; `journal.week({ scope }): ApiJournalWeek | null` (`{ headline, themes: { title, summary }[] }`, read only, written by the Journal); `ApiJournalEntry.project: string | null` (a folder's name, never a path). Folds in the live-journal and week candidates; **rejects** `journal.days({ before })`: the native view doesn't page either, so no port needs it. Used by: Work Log.
-5. **`journal.write({ date })`**, for Jan to decide: an act right after a press (and once when the widget opens, for stale days, as the native does), `ai: ["journal"]` (a new value: the grants sheet says "Write your journal with your AI model"), never from a paired device. It writes what the native Journal writes with the person's model. 1.2 said a widget never has a day written; that keeps a model run out of any package's hands, and the grant is the answer to it: only a widget that declares and is granted it can. Without it Work Log stays a reader.
-6. **`workspaces` topic**, `useWorkspaces()` / `workspaces.list(): { id, name }[]`, `workspace: ["all"]`: names only, no folders. Folds in the candidate. Used by: Agents, Recent Commands, Terminal Usage.
+2. **`stats` topic**, `useStat(query)`: `stats.query` live, again 1.5 s after a `stats.changed` that names its stat, and once a minute for a stat counted in time. Same permission as the verb. Folds in the candidate. Used by: Usage Stats. **Built (widget-data).**
+3. **`ApiStatResult` and `ApiStatInfo`**: `quantiles?: { p50: number; p90: number }` (with `quantiles: true` in the query), `asOf: number`; `ApiStatInfo.kind` (`"count" | "gauge" | "distribution" | "rate"`, what chart a detail draws) and `dims[].many`. Data within API 1. Folds in the quantiles candidate. Used by: Usage Stats. **Built (widget-data).**
+4. **Journal**: `journal` topic (`useJournal({ count, scope })`, pushed when a day is written); `journal.days({ scope: "all" })` with `workspace: ["all"]`; `journal.week({ scope }): ApiJournalWeek | null` (`{ headline, themes: { title, summary }[] }`, read only, written by the Journal); `ApiJournalEntry.project: string | null` (a folder's name, never a path). Folds in the live-journal and week candidates; **rejects** `journal.days({ before })`: the native view doesn't page either, so no port needs it. Used by: Work Log. **Built (widget-data).**
+5. ~~**`journal.write({ date })`**~~: **rejected by Jan (2026-10-15)**: Work Log stays read-only; a widget never has a day written, so a model run stays out of any package's hands. What was proposed: an act right after a press (and once when the widget opens, for stale days, as the native does), `ai: ["journal"]` (a new value: the grants sheet says "Write your journal with your AI model"), never from a paired device. It writes what the native Journal writes with the person's model. 1.2 said a widget never has a day written; that keeps a model run out of any package's hands, and the grant is the answer to it: only a widget that declares and is granted it can. Without it Work Log stays a reader.
+6. **`workspaces` topic**, `useWorkspaces()` / `workspaces.list(): { id, name }[]`, `workspace: ["all"]`: names only, no folders. Folds in the candidate. Used by: Agents, Recent Commands, Terminal Usage. **Built (widget-data).**
 7. ~~`ApiAgent.workspaceName`~~: rejected in favour of C6 (one list, not a name copied into every record).
-8. **`ApiEvent.windowId`**: the window an event is about. Data within API 1. Folds in the candidate. Used by: Notification Log.
-9. **`agents.select(id)`**: an act like `windows.select` (no permission, within the widget's scope): shows the agent's terminal (a subagent's host's), in its workspace, and marks that agent seen. Used by: Agents.
-10. **`agents.start` without `prompt`**: an interactive session in the workspace's folder; the sheet says "Start a Claude session?". Used by: Agents' empty state.
-11. **`terminals.rerun(key)`**: confirm, ask "type", `typed: "person"` (a built-in follows the levels; a person's package asks every time). The text is the command cmd's log recorded under `key` in that terminal, not the widget's, so the widget can't type its own words; refused when the terminal is gone or not at a prompt ("isn't at a prompt"). Used by: Recent Commands.
-12. **`app.usage()`** and topic `appUsage`: `{ app: { cpu, memory }, background: { cpu, memory } }`, `events: ["system"]` (the class that already holds cmd's own health). Used by: Terminal Usage's "cmd" pane.
-13. **`app.open(place)`**, for Jan to decide: an act right after a press, local only, no permission, `place` one of `"taskManager" | "settings:ai" | "settings:actions"` (a closed list cmd owns, so a widget opens nothing else). 1.2 decided a widget never opens the app's own windows; these three are the only places the ports link to, and each is a link the native view shows.
+8. **`ApiEvent.windowId`**: the window an event is about. Data within API 1. Folds in the candidate. Used by: Notification Log. **Built (widget-data).**
+9. **`agents.select(id)`**: an act like `windows.select` (no permission, within the widget's scope): shows the agent's terminal (a subagent's host's), in its workspace, and marks that agent seen. Used by: Agents. **Built (widget-data).**
+10. **`agents.start` without `prompt`**: an interactive session in the workspace's folder; the sheet says "Start a Claude session?". Used by: Agents' empty state. **Built (widget-data).**
+11. **`terminals.rerun(key)`**: confirm, ask "type", `typed: "person"` (a built-in follows the levels; a person's package asks every time). The text is the command cmd's log recorded under `key` in that terminal, not the widget's, so the widget can't type its own words; refused when the terminal is gone or not at a prompt ("isn't at a prompt"). Used by: Recent Commands. **Built (widget-data).**
+12. **`app.usage()`** and topic `appUsage`: `{ app: { cpu, memory }, background: { cpu, memory } }`, `events: ["system"]` (the class that already holds cmd's own health). Used by: Terminal Usage's "cmd" pane. **Built (widget-data).**
+13. ~~**`app.open(place)`**~~: **rejected by Jan (2026-10-15)**: widgets never open cmd's own windows (as 1.2 decided); a port says where a place is in words instead of linking to it. What was proposed: an act right after a press, local only, no permission, `place` one of `"taskManager" | "settings:ai" | "settings:actions"` (a closed list cmd owns, so a widget opens nothing else). 1.2 decided a widget never opens the app's own windows; these three are the only places the ports link to, and each is a link the native view shows.
 14. **Actions**: `ApiAction` gains `script`, `args` (it needs arguments: `actions.run` types it into a new terminal), `hidden`, `source: { kind: "file" | "history" | "readme"; file: string | null; line: number | null }` (a path relative to the root), `history: { runs: number } | null`, `startedAt`, `endedAt`, `elsewhere: { branch: string | null; terminalId: string; url: string | null }[]`; `useActions({ root, include: ["history", "suggested"] })` where `root` must be a worktree of the workspace's repository (`git.worktrees`); `useActionsInfo({ root })` → `{ root, branch, linked, describing, errors: { file, error }[] }`; `actions.run(name, { fresh, root })`; and a risky action **asks every time** (its sheet names it and shows its command, never kept) instead of being refused, for Jan to decide. Used by: Run Scripts.
 15. Unchanged from docs/57's wave 3: the audio-levels feed and the YouTube player element are not needed by these ten and stay candidates for Visualizer and YouTube.
 
@@ -409,9 +409,11 @@ First, one small commit on master that the branches fork from, so none of them b
 | `widget-actions` | C14 | core `widgets/api/model.ts` `apiAction` only, `actions/`' list options, `act.ts`'s `actions.run` branch | Run Scripts (with `widget-display`) |
 | `widget-port-fixes` | every (d) above, on today's 1.2 | `packages/widgets/*` only | none: it is the first pass; the re-ports above build on it |
 
-`widget-data` and `widget-actions` both touch `act.ts` and `model.ts`, in different functions; if that proves noisy, run them one after the other. Jan decides C5 (`journal.write`), C13 (`app.open`) and C14's risky asks before `widget-data` and `widget-actions` start; each is a row that can be left out without changing the others. `widget-port-fixes` can start now and in parallel with all of them.
+`widget-data`, as built (2026-10-16): the stat fields, `ApiJournalEntry.project`, `ApiEvent.windowId` and `asOf` are optional in the types, as every field added within API 1 is; `journal.week` returns `start` and `writtenAt` besides the headline and themes, and needs `events: ["agents"]` as `journal.days` does; `app.usage`'s `app` and `background` are null where cmd can't tell (no app open, no procinfo), and the app tells the core its process on each connect (`app.attach`), which samples the app's process tree, without the core's when the app started it; an interactive `agents.start` carries no typed text, so it follows the levels and a yes can be kept; `terminals.rerun` refuses a command over several lines and one the deny-list names, and checks the terminal again after the person answers. The journal topic reads again 2 s after a write of its scope, and those reads don't count against the widget's ten journal reads a minute.
 
-Re-ports, each in its own branch once its last dependency is merged: **Media Controls** (size, picture), **Countdown** (size, display), **Usage Stats** (display, data), **Work Log** (display, data, and C5 if approved), **Terminal Usage** (display, data), **Agents** (data), **Recent Commands** (display, data), **Notification Log** (data; `cmd.storage` for a shared Clear when it lands), **Event Log** (display), **Run Scripts** (display, actions). `cmd.storage` (built in `cmd-widget-storage`) also gives Event Log's hidden classes a `package` scope (one preference for every Event Log) and leaves Countdown, Agents and Run Scripts' folds in the window's scope, where they are now.
+`widget-data` and `widget-actions` both touch `act.ts` and `model.ts`, in different functions; if that proves noisy, run them one after the other. Jan decided C5 (`journal.write`) and C13 (`app.open`) before `widget-data` started: both rejected (2026-10-15); C14's risky asks are still his to decide before `widget-actions` starts. `widget-port-fixes` can start now and in parallel with all of them.
+
+Re-ports, each in its own branch once its last dependency is merged: **Media Controls** (size, picture), **Countdown** (size, display), **Usage Stats** (display, data), **Work Log** (display, data), **Terminal Usage** (display, data), **Agents** (data), **Recent Commands** (display, data), **Notification Log** (data; `cmd.storage` for a shared Clear when it lands), **Event Log** (display), **Run Scripts** (display, actions). `cmd.storage` (built in `cmd-widget-storage`) also gives Event Log's hidden classes a `package` scope (one preference for every Event Log) and leaves Countdown, Agents and Run Scripts' folds in the window's scope, where they are now.
 
 ## After the ports: retiring native views
 
