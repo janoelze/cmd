@@ -4,7 +4,7 @@
 // own wire is widget-tree.ts; this is the app's side of it.
 
 import type { WindowId } from "./model.ts";
-import type { WidgetEnv, WidgetPatch, WidgetTree } from "./widget-tree.ts";
+import type { ApiError, WidgetEnv, WidgetPatch, WidgetTree, WireValue } from "./widget-tree.ts";
 import type { WidgetPermissions } from "./widget-package.ts";
 import type { Def } from "./settings.ts";
 
@@ -55,16 +55,27 @@ export interface WidgetHostMethods {
    */
   "widget.frameSource": { params: { windowId: WindowId }; result: { dir: string; media: string[] } | null };
   /**
-   * A frame widget's call (FRAME_VERBS), through the same API adapter and access table as its
-   * process's: `state.set`, or `windows.open` of an http(s) URL with `pressed`, which the app sets
-   * only right after the person pressed in the frame (its gesture rule, AR1-11-05).
+   * A frame's call (docs/56, "The frame surface"): any verb of the API (widget-verbs.ts), through
+   * its window's API, with the grants, scope and limits of the widget's process. `frame`: which
+   * frame of the window it is (the app's id for it, one per page it loads). `pressed`: the app's
+   * gesture rule saw a press in that frame (AR1-11-05), set only for a verb that needs one
+   * (needsPress); the core takes at most one a second per frame. A refusal is `ok: false` with
+   * the error the process would get.
    */
-  "widget.frame": { params: { windowId: WindowId; verb: FrameVerb; params: unknown[]; pressed?: boolean }; result: unknown };
+  "widget.frame": { params: { windowId: WindowId; frame?: string; verb: string; params: unknown[]; pressed?: boolean }; result: WidgetFrameResult };
+  /**
+   * A frame's live topic (API_TOPIC: agents, terminals, events…), the same subscription as the
+   * process's hooks: its value at once, then each change, as widget.frameEvent to this connection
+   * only, until widget.frameUnsubscribe, the connection closes or the widget stops (an `end`).
+   * `sub` is the app's id for it within the frame.
+   */
+  "widget.frameSubscribe": { params: { windowId: WindowId; frame: string; sub: number; topic: string; query?: unknown }; result: WidgetFrameResult };
+  /** Stop a frame's subscription, or with no `sub` all of them (the frame is gone or loads again). */
+  "widget.frameUnsubscribe": { params: { windowId: WindowId; frame: string; sub?: number }; result: null };
 }
 
-/** What a frame widget's view.html may ask of cmd (widget.frame): its window's state, and a link opened after a press. */
-export const FRAME_VERBS = ["state.set", "windows.open"] as const;
-export type FrameVerb = (typeof FRAME_VERBS)[number];
+/** What a frame's call or subscription got: a value, or the refusal the widget's process would get. */
+export type WidgetFrameResult = { ok: true; value: WireValue } | { ok: false; error: ApiError };
 
 /** A package widget's console line or error, for `cmd widget dev`'s terminal (and nothing else: the app doesn't show them). */
 export interface WidgetHostLog {
@@ -74,10 +85,12 @@ export interface WidgetHostLog {
   stack?: string | null;
 }
 
-/** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window; its console, for whoever listens. */
+/** A package widget's tree (whole, or a patch on the last rev) or its process's status, for its window; its console, for whoever listens; a frame's subscription, for its connection. */
 export type WidgetHostEvent =
   | { type: "widget.tree"; windowId: WindowId; message: WidgetTree | WidgetPatch | WidgetHostStatus }
-  | ({ type: "widget.log"; windowId: WindowId } & WidgetHostLog);
+  | ({ type: "widget.log"; windowId: WindowId } & WidgetHostLog)
+  /** A frame's subscription (widget.frameSubscribe): its value now, or its `end` (the widget stopped, or its window closed). */
+  | { type: "widget.frameEvent"; windowId: WindowId; frame: string; sub: number; data?: WireValue; end?: ApiError };
 
 /** Widgets' settings, taken into SETTINGS_SCHEMA where they always stood (placed in the Settings window's Magic Widgets and Notifications pages). */
 export const WIDGET_SETTINGS = {

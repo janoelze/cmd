@@ -34,7 +34,7 @@ export interface WidgetScope {
   widget: PackageWidget;
   /** declared ∩ granted. */
   permissions: WidgetPermissions;
-  /** The person's last press in the widget (host/press.ts): an act or windows.open takes it, one per press. */
+  /** The person's last press in the widget's tree (host/press.ts): an act or windows.open takes it, one per press. A frame's call brings its own. */
   press: Press;
   /** The tools' approvals and board marks the acts ask and show through; none: acts are refused. */
   acts?: () => ActDeps | null;
@@ -50,8 +50,8 @@ export interface WidgetScope {
 export interface WidgetApi {
   /** The verbs it serves (`cmd.env.has`). */
   readonly verbs: ApiVerb[];
-  /** A verb; throws ApiRefusal for a refused or failed one. */
-  call(verb: string, params: WireValue[]): Promise<WireValue>;
+  /** A verb; throws ApiRefusal for a refused or failed one. `press`: a frame's (host/press.ts FramePress), else the window's. */
+  call(verb: string, params: WireValue[], press?: Press): Promise<WireValue>;
   /** A live topic: `push` at once with the current value, then on each change; returns what stops it. */
   subscribe(topic: string, query: unknown, push: (data: WireValue) => void): () => void;
   /** The process is gone: its acts waiting for the person are a no, its session's yeses go. */
@@ -151,6 +151,19 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
   });
   const run = widgetRunner({ permissions: perms, root: () => core.workspaces.get(own())?.root ?? null, exec: scope.exec });
 
+  /** windows.open, after the press it takes: one window per press. */
+  const open = (target: unknown, press: Press) => {
+    if (Date.now() - press.at() > OPEN_AFTER_PRESS_MS) throw invalid("windows.open works right after the person presses something in the widget.");
+    if (typeof target !== "string" || !target.trim()) throw invalid("windows.open: name a URL, a path or a widget");
+    press.take(); // one window per press
+    const ws = workspace();
+    const type = parsePackageKind(target) || core.windowTypes.get(target)?.role === "widget" ? core.windowTypes.get(target) : null;
+    const w = type ? core.windows.open(type.kind, {}, ws) : core.windows.openTarget(target.trim(), ws);
+    if (!w) throw invalid(`cmd can't open "${target.slice(0, 120)}" in a window`);
+    core.opened(w);
+    return { id: w.id };
+  };
+
   const VERBS: Verbs = {
     "workspace.get": () => {
       allowed();
@@ -192,17 +205,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       return waitForLine(core, p.id, re, Math.max(0, Math.min(Number(opts?.timeoutMs) || 30_000, WAIT_MAX_MS)));
     },
     "windows.list": (q) => windows(q),
-    "windows.open": (target) => {
-      if (Date.now() - scope.press.at() > OPEN_AFTER_PRESS_MS) throw invalid("windows.open works right after the person presses something in the widget.");
-      if (typeof target !== "string" || !target.trim()) throw invalid("windows.open: name a URL, a path or a widget");
-      scope.press.take(); // one window per press
-      const ws = workspace();
-      const type = parsePackageKind(target) || core.windowTypes.get(target)?.role === "widget" ? core.windowTypes.get(target) : null;
-      const w = type ? core.windows.open(type.kind, {}, ws) : core.windows.openTarget(target.trim(), ws);
-      if (!w) throw invalid(`cmd can't open "${target.slice(0, 120)}" in a window`);
-      core.opened(w);
-      return { id: w.id };
-    },
+    "windows.open": (target) => open(target, scope.press),
     "windows.select": (id) => {
       const w = typeof id === "string" ? core.windows.list().find((x) => x.id === id) : undefined;
       if (!w || !(w.workspaceId === own() || level === "all")) throw invalid(`No window ${String(id).slice(0, 60)} in this widget's reach.`);
@@ -283,7 +286,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
 
   return {
     verbs: [...API_VERBS],
-    async call(verb, params) {
+    async call(verb, params, press = scope.press) {
       if (!(API_VERBS as readonly string[]).includes(verb)) throw new ApiRefusal({ code: "unknown", message: `This cmd doesn't serve ${String(verb).slice(0, 60)}.` });
       const v = verb as ApiVerb;
       const p = Array.isArray(params) ? params : [];
@@ -292,7 +295,8 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       if (needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
       if (needs === "ai" && !perms.ai.includes(v.split(".")[1]!)) throw missing("ai", v.split(".")[1]!, "Using cmd's AI");
       // An act: act.ts checks its grant, the press, its scope, and asks.
-      if (isActVerb(v)) return acts.call(v, p);
+      if (isActVerb(v)) return acts.call(v, p, press);
+      if (v === "windows.open") return open(p[0], press);
       const fn = VERBS[v] as (...p: WireValue[]) => unknown;
       return ((await fn(...p)) ?? null) as WireValue;
     },

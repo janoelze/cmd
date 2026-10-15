@@ -74,7 +74,7 @@ interface Plan {
 }
 
 /** One widget process's acts: the queue, the windows it opened, what waits for the person. */
-export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActVerb, params: WireValue[]): Promise<WireValue>; dispose(): void } {
+export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActVerb, params: WireValue[], press?: Press): Promise<WireValue>; dispose(): void } {
   const rate = new RateLimit(20);
   const opened = new Set<string>();
   const waiting = new Set<string>();
@@ -284,15 +284,15 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
   }
 
   return {
-    async call(verb, params) {
+    async call(verb, params, press = scope.press) {
       if (disposed) throw failed("This widget is stopping.");
       const ns = verb.split(".")[0]!;
       if (!mayAct(scope.permissions, verb)) throw missing("act", ns, `${permissionOf(API[verb].ask)?.title ?? "Acting"} (${verb})`);
       // One act per press, right after it: a widget can't act by itself, nor many times on one click.
-      const at = scope.press.at();
+      const at = press.at();
       if (Date.now() - at > ACT_AFTER_PRESS_MS) throw invalid(`${verb} works right after the person presses something in the widget.`);
-      const remote = scope.press.remote();
-      scope.press.take();
+      const remote = press.remote();
+      press.take();
       rate.take(verb);
       const plan = plans[verb](Array.isArray(params) ? params : []);
       // Acts go one at a time, in the order pressed; the next waits for the person's answer to this one.

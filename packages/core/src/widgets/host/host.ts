@@ -11,6 +11,8 @@
 // the error, no strike, until the next save. A save in a package (reload(), widgets/reload.ts)
 // restarts its windows once. The window sees each state as a widget.tree status. A package
 // waiting for a grant is asked once, not per window (asking(), widget.ask: the grants sheet).
+// The window's API (api/adapter.ts) is made at its start with a grant, before hello, so a frame's
+// page (frame.ts) uses the process's adapter, Deno or not; it ends with the process or the window.
 
 import { WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
@@ -30,6 +32,7 @@ import { HOST_TIMES, WIDGET_MEMORY_MB } from "../limits.ts";
 import { loadError, realDir } from "./load-error.ts";
 import type { ActDeps } from "../api/act.ts";
 import { TreeState } from "./tree.ts";
+import { WidgetFrames } from "./frame.ts";
 
 const log = logger("widgets");
 
@@ -46,7 +49,7 @@ export interface HostTimes extends ConnectionTimes {
 }
 
 
-type HostCore = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "widgetTokens" | "broadcast" | "settings" | "agents" | "panes" | "data" | "actions" | "notifications" | "ai" | "opened" | "call">;
+type HostCore = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "widgetTokens" | "broadcast" | "settings" | "agents" | "panes" | "data" | "actions" | "notifications" | "ai" | "opened" | "call" | "server">;
 
 export interface HostOptions {
   stateDir: string | null;
@@ -71,7 +74,10 @@ interface Instance {
   proc: RuntimeProcess | null;
   token: string | null;
   conn: HostConnection | null;
+  /** The window's API, from its start with a grant (frames use it before hello, and without a process). */
   adapter: WidgetApi | null;
+  /** The process said hello: the wire is open. */
+  hello: boolean;
   subs: Map<number, () => void>;
   crashes: number[];
   /** Why we're stopping it ourselves (null: an exit is a crash). */
@@ -108,6 +114,8 @@ export class WidgetHost {
   fetchImpl: typeof fetch | undefined;
   /** Its windows' config values and its packages' secrets (widget.config, widget.secret). */
   readonly config: PackageConfig;
+  /** Frame widgets' pages: what they load, their calls and live topics (frame.ts). */
+  readonly frames: WidgetFrames;
 
   constructor(core: HostCore, o: HostOptions) {
     this.#core = core;
@@ -115,6 +123,13 @@ export class WidgetHost {
     this.#t = { ...HOST_TIMES, ...o.times };
     this.#aiUsage = new AiUsage(o.stateDir);
     this.config = new PackageConfig({ windows: core.windows, packages: o.packages, stateDir: o.stateDir, onChange: () => o.onAsk?.() });
+    this.frames = new WidgetFrames({ windows: () => core.windows.others(), packages: o.packages, granted: (name) => this.#granted(name), api: (id) => this.api(id), send: (conn, e) => core.server.send(conn, e) });
+  }
+
+  /** The window's API while its widget may use it (a frame's page, frame.ts), or null: not started, waiting for a grant, stopped, closed. */
+  api(windowId: WindowId): WidgetApi | null {
+    const inst = this.#all.get(windowId);
+    return inst && !inst.timers.stop ? inst.adapter : null;
   }
 
   /** Swap the runtime (tests: a fake one; or tighter times). */
@@ -167,7 +182,7 @@ export class WidgetHost {
   /** What the person did in the window; `remote`: on a paired device (an act it leads to asks on the Mac). */
   interact(windowId: WindowId, handler: number, event: string, value?: unknown, remote = false): void {
     const inst = this.#must(windowId);
-    if (!inst.conn || !inst.adapter) throw new Error("this widget isn't running");
+    if (!inst.conn || !inst.hello) throw new Error("this widget isn't running");
     if (!Number.isInteger(handler) || typeof event !== "string") throw new Error("an interaction names a handler and its event");
     if (!inst.press.interaction(inst.tree, handler, event, value, remote)) return;
     inst.conn.send({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value: value as WireValue }) });
@@ -182,7 +197,7 @@ export class WidgetHost {
     };
     if (JSON.stringify(next) === JSON.stringify(inst.env)) return;
     inst.env = next;
-    if (inst.adapter) inst.conn?.send({ kind: "env", env: this.#env(inst) });
+    if (inst.hello) inst.conn?.send({ kind: "env", env: this.#env(inst) });
   }
 
   restart(windowId: WindowId): void {
@@ -272,6 +287,7 @@ export class WidgetHost {
     this.#disposed = true;
     for (const inst of this.#all.values()) {
       this.#stop(inst, null);
+      this.#endApi(inst);
       for (const t of Object.values(inst.timers)) if (t) clearTimeout(t);
     }
     this.#all.clear();
@@ -291,6 +307,7 @@ export class WidgetHost {
       token: null,
       conn: null,
       adapter: null,
+      hello: false,
       subs: new Map(),
       crashes: [],
       stopping: null,
@@ -313,6 +330,7 @@ export class WidgetHost {
   #launch(inst: Instance): void {
     if (this.#disposed || inst.proc) return;
     if (inst.timers.restart) clearTimeout(inst.timers.restart);
+    this.#endApi(inst); // one without a process (no runtime) is made again with the grant as it is now
     const pkg = this.#o.packages.forKind(inst.kind);
     const widget = pkg?.widgets.find((x) => x.kind === inst.kind) ?? null;
     inst.pkg = pkg;
@@ -320,8 +338,9 @@ export class WidgetHost {
     if (!pkg || !widget) return this.#status(inst, { kind: "status", state: "stopped", reason: "isn't installed" });
     const g = this.#granted(pkg.name);
     if (needsGrant(pkg.permissions, g?.permissions)) return this.#status(inst, { kind: "status", state: "waiting-grant" });
-    if (!this.#o.runtime) return this.#status(inst, { kind: "status", state: "stopped", reason: "can't run here" });
     inst.permissions = effective(pkg.permissions, g?.permissions);
+    inst.adapter = this.#api(inst, pkg, widget, inst.permissions);
+    if (!this.#o.runtime) return this.#status(inst, { kind: "status", state: "stopped", reason: "can't run here" });
     const w = this.#core.windows.others().find((x) => x.id === inst.windowId);
     const token = this.#core.widgetTokens.issue(
       { widgetId: inst.windowId, workspaceId: w?.workspaceId ?? null, events: [], attach: (send, close) => this.#attach(inst, token, send, close) },
@@ -340,10 +359,11 @@ export class WidgetHost {
     } catch (e) {
       this.#core.widgetTokens.revoke(token);
       inst.token = null;
+      this.#endApi(inst);
       return this.#status(inst, { kind: "status", state: "stopped", reason: (e as Error).message });
     }
     inst.timers.hello = setTimeout(() => {
-      if (inst.token === token && !inst.adapter) this.#kill(inst, "didn't start");
+      if (inst.token === token && !inst.hello) this.#kill(inst, "didn't start");
     }, this.#t.helloMs);
     inst.timers.hello.unref?.();
   }
@@ -361,8 +381,8 @@ export class WidgetHost {
 
   #message(inst: Instance, conn: HostConnection, m: WidgetOut): void {
     if (conn !== inst.conn) return;
-    if (m.kind === "error" && !inst.adapter) inst.loadError = loadError(m.message, m.stack, inst.pkg ? realDir(inst.pkg.dir) : undefined);
-    if (m.kind !== "hello" && !inst.adapter) return; // nothing else before hello
+    if (m.kind === "error" && !inst.hello) inst.loadError = loadError(m.message, m.stack, inst.pkg ? realDir(inst.pkg.dir) : undefined);
+    if (m.kind !== "hello" && !inst.hello) return; // nothing else before hello
     switch (m.kind) {
       case "hello":
         return this.#hello(inst, m);
@@ -403,24 +423,13 @@ export class WidgetHost {
   }
 
   #hello(inst: Instance, m: Extract<WidgetOut, { kind: "hello" }>): void {
-    if (inst.adapter) return;
+    if (inst.hello || !inst.adapter) return;
     const pkg = inst.pkg!;
     if (typeof m.api !== "number" || m.api !== WIDGET_API) return this.#kill(inst, `made for ${m.api > WIDGET_API ? "a newer" : "an older"} cmd`);
     if (m.package !== pkg.name || m.widget !== inst.widget!.id) return this.#kill(inst, "said it was another widget");
     if (inst.timers.hello) clearTimeout(inst.timers.hello);
     inst.loadError = null; // it loaded: an error before hello didn't stop it, and a later exit is a crash
-    inst.adapter = widgetApi(this.#core, {
-      windowId: inst.windowId,
-      workspaceId: () => this.#core.windows.others().find((w) => w.id === inst.windowId)?.workspaceId ?? "",
-      pkg,
-      widget: inst.widget!,
-      permissions: inst.permissions!,
-      press: inst.press,
-      acts: () => this.#o.acts?.() ?? null,
-      secret: (key) => this.config.secrets(pkg.name).get(inst.widget!.id)[key] ?? null,
-      aiUsage: this.#aiUsage,
-      fetchImpl: this.fetchImpl,
-    });
+    inst.hello = true;
     const w = this.#core.windows.others().find((x) => x.id === inst.windowId);
     const config = this.#config(inst, w);
     inst.config = JSON.stringify(config);
@@ -488,12 +497,12 @@ export class WidgetHost {
   }
 
   #cleanup(inst: Instance): void {
-    inst.adapter?.dispose();
+    this.#endApi(inst);
     for (const off of inst.subs.values()) off();
     inst.subs.clear();
     inst.conn?.close();
     inst.conn = null;
-    inst.adapter = null;
+    inst.hello = false;
     if (inst.token) this.#core.widgetTokens.revoke(inst.token);
     inst.token = null;
     inst.proc = null;
@@ -510,7 +519,7 @@ export class WidgetHost {
       delete inst.timers.stop;
       if (!inst.proc && inst.status.state !== "stopped") this.#launch(inst);
     }
-    if (!inst.adapter) return;
+    if (!inst.hello) return;
     const config = this.#config(inst, w);
     const text = JSON.stringify(config);
     if (text !== inst.config) {
@@ -522,8 +531,10 @@ export class WidgetHost {
   #removed(id: WindowId): void {
     const inst = this.#all.get(id);
     if (!inst || inst.timers.stop) return;
+    this.frames.ended(id, { code: "failed", message: "This widget's window closed." });
     inst.timers.stop = setTimeout(() => {
       this.#stop(inst, null);
+      this.#endApi(inst);
       if (inst.timers.restart) clearTimeout(inst.timers.restart);
       this.#all.delete(id);
     }, this.#t.stopAfterMs);
@@ -532,6 +543,21 @@ export class WidgetHost {
   }
 
   // ── helpers ────────────────────────────────────────────
+
+  /** The window's API under `permissions` (declared ∩ granted). */
+  #api(inst: Instance, pkg: WidgetPackage, widget: PackageWidget, permissions: WidgetPermissions): WidgetApi {
+    const workspaceId = () => this.#core.windows.others().find((w) => w.id === inst.windowId)?.workspaceId ?? "";
+    const host = this; // tests set fetchImpl late
+    return widgetApi(this.#core, { windowId: inst.windowId, workspaceId, pkg, widget, permissions, press: inst.press, acts: () => this.#o.acts?.() ?? null, secret: (key) => this.config.secrets(pkg.name).get(widget.id)[key] ?? null, aiUsage: this.#aiUsage, get fetchImpl() { return host.fetchImpl; } });
+  }
+
+  /** The window's API ends: its acts waiting for the person are a no, its frames' subscriptions end. */
+  #endApi(inst: Instance): void {
+    if (!inst.adapter) return;
+    inst.adapter.dispose();
+    inst.adapter = null;
+    this.frames.ended(inst.windowId);
+  }
 
   #status(inst: Instance, s: WidgetHostStatus): void {
     const was = inst.status.state;

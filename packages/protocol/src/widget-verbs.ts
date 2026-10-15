@@ -28,10 +28,10 @@ export type ApiNeed = "workspace" | "events" | "net" | "ai" | "act" | "run" | nu
  * always needs `act`. `ask` is the tools' permission the sheet asks under (docs/55);
  * `typed`: the act carries text the person reads before it runs, so it asks every time and
  * is never kept (true), or does so for a person's package while a built-in one follows the
- * levels ("person").
+ * levels ("person"). `press`: an "act" that also needs a press in the widget right before it.
  */
 export type ApiVerbSpec =
-  | { since: ApiMinor; mode: "read" | "act"; needs: Exclude<ApiNeed, "act"> }
+  | { since: ApiMinor; mode: "read" | "act"; needs: Exclude<ApiNeed, "act">; press?: true }
   | { since: ApiMinor; mode: "confirm"; needs: "act"; ask: Permission; typed?: true | "person" };
 
 /** A minor of API 1. */
@@ -48,7 +48,7 @@ export const API = {
   "terminals.read": { since: "1.0", mode: "read", needs: "workspace" },
   "terminals.waitFor": { since: "1.0", mode: "read", needs: "workspace" },
   "windows.list": { since: "1.0", mode: "read", needs: "workspace" },
-  "windows.open": { since: "1.0", mode: "act", needs: null }, // only right after the person pressed something in the widget
+  "windows.open": { since: "1.0", mode: "act", needs: null, press: true }, // only right after the person pressed something in the widget
   "windows.select": { since: "1.0", mode: "act", needs: null }, // within the widget's scope: its workspace, or all with "all"
   "events.query": { since: "1.0", mode: "read", needs: "events" },
   "events.stats": { since: "1.0", mode: "read", needs: "events" },
@@ -86,6 +86,12 @@ export type ApiActNamespace = ApiActVerb extends `${infer N}.${string}` ? N : ne
 export const API_ACT_NAMESPACES = [...new Set(API_ACT_VERBS.map((v) => v.split(".")[0]!))] as ApiActNamespace[];
 /** What package.json's `ai` may name: the ai verbs' names ("complete"). */
 export const API_AI_USES = API_VERBS.filter((v) => API[v].needs === "ai").map((v) => v.split(".")[1]!);
+
+/** Whether a verb needs a press in the widget right before it, taking it (one each): every act that asks, and windows.open. */
+export const needsPress = (v: string): boolean => {
+  const row = (API as Record<string, ApiVerbSpec>)[v];
+  return !!row && (row.mode === "confirm" || ("press" in row && row.press === true));
+};
 
 /** A typed act asks every time and is never kept: always, or for a person's package only. */
 export const actTyped = (v: ApiActVerb, builtin: boolean): boolean => {

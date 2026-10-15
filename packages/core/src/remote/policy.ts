@@ -143,6 +143,8 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "widget.secrets": "never",
   "widget.frameSource": "never", // the app's frame host
   "widget.frame": "never", // a frame's calls, after the app's own checks
+  "widget.frameSubscribe": "never", // a frame's live topics, to the app's connection
+  "widget.frameUnsubscribe": "never",
   "fs.list": "view",
   "fs.resolve": "never", // an existence oracle for any path; the web client resolves terminal links within workspaces later
   "fs.read": "view",
@@ -557,6 +559,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "remote.input":
     case "widget.library":
     case "widget.log": // a widget's console, for cmd widget dev on this Mac
+    case "widget.frameEvent": // a frame's subscription, to the Mac's app connection that made it
     case "window.closedChanged": // window.closed and window.reopen aren't remote
     case "actions.changed":
     case "stats.changed":

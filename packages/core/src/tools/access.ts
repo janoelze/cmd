@@ -122,6 +122,8 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "widget.secrets": "never",
   "widget.frameSource": "never", // the app's frame host
   "widget.frame": "never", // a frame's calls, after the app's own checks
+  "widget.frameSubscribe": "never", // a frame's live topics, to the app's connection
+  "widget.frameUnsubscribe": "never",
   "fs.list": "read",
   "fs.resolve": "never",
   "fs.read": "read",
