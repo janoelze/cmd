@@ -1,9 +1,11 @@
 // Notification Log against the fake host (@cmd/widget-api/testing): the native Notifications'
-// job. Rows newest first under Today and Earlier, each with its source's icon, title, body and
-// time; one that needs you in its tone; live as they are sent; a click goes to its terminal, a
-// row's menu copies its text; Clear is the widget's own "cleared at", kept across a reload; every
+// job, drawn as it is. Rows newest first under Today and Earlier, each with its source's icon,
+// title, body and time (today's in the app's locale, earlier ones as an age); one that needs you
+// in its tone; live as they are sent; a click goes to the terminal or window it is about while
+// it is open, a row's menu says which and copies its text; Clear keeps when it cleared in the
+// package's storage, so every Notification Log clears with it, across a reload too; every
 // workspace's from the title menu; refused without the grant, with a way back; empty; many; the
-// list runs to the window's edges, as natively.
+// list runs to the window's edges.
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
@@ -13,9 +15,9 @@ import NotificationLog, { KEEP, iconOf, newestFirst } from "./notifications.tsx"
 vi.useFakeTimers({ now: new Date(2026, 9, 15, 12, 0, 0), toFake: ["Date"] });
 afterAll(() => void vi.useRealTimers());
 
-const { event, pane } = fixtures;
-const note = (over: { title: string; body?: string; source?: string; urgent?: boolean; at?: number; terminalId?: string | null; workspaceId?: string }) =>
-  event({ type: "notification", at: over.at ?? Date.now(), terminalId: over.terminalId ?? null, ...(over.workspaceId ? { workspaceId: over.workspaceId } : {}), data: { source: over.source ?? "agent-done", title: over.title, body: over.body ?? "", urgent: !!over.urgent, alert: true } });
+const { event, pane, window } = fixtures;
+const note = (over: { title: string; body?: string; source?: string; urgent?: boolean; at?: number; terminalId?: string | null; windowId?: string | null; workspaceId?: string }) =>
+  event({ type: "notification", at: over.at ?? Date.now(), terminalId: over.terminalId ?? null, windowId: over.windowId ?? null, ...(over.workspaceId ? { workspaceId: over.workspaceId } : {}), data: { source: over.source ?? "agent-done", title: over.title, body: over.body ?? "", urgent: !!over.urgent, alert: true } });
 const yesterday = new Date(new Date().setHours(0, 0, 0, 0) - 3_600_000).getTime();
 const titles = (rows: { props: Record<string, unknown> }[]) => rows.map((r) => JSON.stringify(r).match(/"title":"([^"]+)"/)?.[1]);
 
@@ -35,8 +37,13 @@ describe("Notification Log", () => {
     expect(titles(tree.rows())).toEqual(["pnpm e2e · done", "Tours · needs you", "cmd · done"]);
     expect(tree.findAll("ListRowIcon").map((i) => i.props.icon)).toEqual(["terminal", "person.crop.circle.badge.questionmark", "person.crop.circle.badge.checkmark"]);
     expect(tree.findAll("ListRowContent").map((c) => c.props.tone ?? null)).toEqual([null, "needs", null]);
-    expect(tree.findAll("ListValue")[0]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d\d:\d\d$/) });
-    expect(tree.findAll("ListValue")[2]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d+ (min|h)$/) });
+    expect(tree.findAll("ListValue")[0]!.children[0]).toMatchObject({ text: "11:59 AM" });
+    expect(tree.findAll("ListValue")[2]!.children[0]).toMatchObject({ text: "13h" });
+  });
+
+  it("writes today's times in the app's locale", async () => {
+    const tree = await render(<NotificationLog />, createHost({ env: { locale: "de-DE" }, events: log }));
+    expect(tree.findAll("ListValue")[0]!.children[0]).toMatchObject({ text: "11:59" });
   });
 
   it("shows a notification as it is sent", async () => {
@@ -55,10 +62,25 @@ describe("Notification Log", () => {
     expect(host.calls).toEqual([["windows.select", "t-zsh"]]);
     await tree.press(tree.rows()[2]!); // about no terminal: nowhere to go
     expect(host.calls).toHaveLength(1);
-    expect((tree.rows()[2]!.props.menu as { label: string; disabled?: boolean }[])[0]).toMatchObject({ label: "Show Terminal", disabled: true });
+    expect((tree.rows()[2]!.props.menu as { label: string; disabled?: boolean }[])[0]).toMatchObject({ label: "Show Window", disabled: true });
     await tree.choose(tree.rows()[1]!, "Copy Text");
     expect(host.calls[1]).toEqual(["clipboard.write", "Tours · needs you\nAllow “pnpm tour”?"]);
   });
+
+  it("goes to the window it is about (a widget's), and not to one that's closed", async () => {
+    const host = createHost({
+      windows: [window({ title: "Countdown", kind: "pkg:timer/timer" })],
+      events: [note({ title: "25 min timer · done", source: "widget", windowId: "w-countdown", at: Date.now() - 5000 }), note({ title: "Gone · done", source: "widget", windowId: "w-gone", at: Date.now() - 9000 })],
+    });
+    const tree = await render(<NotificationLog />, host);
+    expect((tree.rows()[0]!.props.menu as { label: string; disabled?: boolean }[])[0]).toMatchObject({ label: "Show Window", disabled: false });
+    await tree.press(tree.rows()[0]!);
+    expect(host.calls).toEqual([["windows.select", "w-countdown"]]);
+    await tree.press(tree.rows()[1]!);
+    expect(host.calls).toHaveLength(1);
+    expect((tree.rows()[1]!.props.menu as { label: string; disabled?: boolean }[])[0]).toMatchObject({ label: "Show Window", disabled: true });
+  });
+
 
   it("runs to the window's edges: a Panel, not an inset View", async () => {
     const tree = await render(<NotificationLog />, createHost({ events: log }));
@@ -67,19 +89,28 @@ describe("Notification Log", () => {
     expect(tree.find("Panel").children.map((c) => (c as { type: string }).type)).toEqual(["PanelBody"]);
   });
 
-  it("clears its own list from the title menu, keeps it cleared across a reload, and shows what comes after", async () => {
+  it("clears from the title menu for every Notification Log, keeps it cleared across a reload, and shows what comes after", async () => {
     const host = createHost({ events: log });
     const tree = await render(<NotificationLog />, host);
     await tree.choose(tree.find("Window"), "Clear Notifications");
     expect(tree).toShowState("empty", "No notifications");
-    const cleared = host.requests.find((r) => r[0] === "state.set" && r[1] === "clearedAt");
-    expect(typeof cleared?.[2]).toBe("number");
-    expect(host.calls).toEqual([]); // no verb: the widget's own
+    const cleared = host.storage("package").clearedAt;
+    expect(typeof cleared).toBe("number");
+    expect(host.calls).toEqual([]); // no verb: the package's storage
     host.emit(note({ title: "Later · done", at: Date.now() + 10 }));
     await tree.idle();
     expect(titles(tree.rows())).toEqual(["Later · done"]);
-    const again = await render(<NotificationLog />, createHost({ events: log, state: { clearedAt: cleared![2] as number } }));
+    const again = await render(<NotificationLog />, createHost({ events: log, storage: { package: { clearedAt: cleared! } } }));
     expect(again).toShowState("empty", "No notifications");
+  });
+
+  it("clears when another Notification Log clears, in any workspace", async () => {
+    const host = createHost({ events: log });
+    const tree = await render(<NotificationLog />, host);
+    expect(tree.rows()).toHaveLength(3);
+    host.set({ storage: { package: { clearedAt: Date.now() } } });
+    await tree.idle();
+    expect(tree).toShowState("empty", "No notifications");
   });
 
   it("reads every workspace's from the title menu, live", async () => {

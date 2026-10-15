@@ -267,10 +267,13 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Difference | Class | Fix |
 |---|---|---|
 | Edge-to-edge `Panel` | d | `Panel` > `PanelBody`. Fixed (widget-port-fixes). |
-| A click goes to the window a notification is about (a widget's), and its menu says Show Window | c | `ApiEvent.windowId` (C8): built (widget-data) |
+| A click goes to the window a notification is about (a widget's), and its menu says Show Window | c | `ApiEvent.windowId` (C8): built (widget-data). Fixed (reports-a): a click goes to the terminal, else the window, while it is open (`useTerminals`/`useWindows` in scope), as natively; the menu says Show Terminal or Show Window, greyed when it's closed |
 | Notifications about nothing in particular (the CLI's) show in every workspace | e | the same rule as Event Log: no workspace, no widget |
 | A terminal moved since counts for the workspace it is in now, not the one it was sent in | e | the log's `workspaceId` is what was recorded; rewriting it per read would make two readers disagree |
-| Clear clears the app's list for every workspace; the package's Clear is its window's own | e | decided for 1.2 (no `notify.clear`). With `cmd.storage` (the other 1.3 branch) its "cleared at" can move to the `package` scope, which clears every Notification Log at once, the closest a widget can come to the native without a verb |
+| Clear clears the app's list for every workspace; the package's Clear is its window's own | e | decided for 1.2 (no `notify.clear`). With `cmd.storage` (the other 1.3 branch) its "cleared at" can move to the `package` scope, which clears every Notification Log at once, the closest a widget can come to the native without a verb. Fixed (reports-a): `useStorage("package", "clearedAt")`. Left (e): the native's Clear and the package's don't see each other's; the app records its Clear (`notification.clear`) with no workspace, which a widget never reads. Matching would need `notify.clear` (declined for 1.2) or the clear marker readable by notification readers |
+| Times: today's as `toLocaleTimeString` in the app's locale, earlier ones as the sidebar's age ("5h", "2d"); the package wrote 24-hour "14:05" and "5 h" | d | Fixed (reports-a): `toLocaleTimeString(env.locale, …)` and `fmt.ago`, the same text ("just now" under a minute, which the native never shows under Earlier, is `fmt.ago`'s "now") |
+| After a Clear the empty state said "Cleared ones stay in the Event Log"; the native's says what goes here | d | Fixed (reports-a): the native's line |
+| Compared side by side (reports-a): the native story `windows/notifications/notificationsview` on the Workbench's log with the package story's `Busy.events` imported into it, at the three sizes, Light and Dark: `.cmd-dev/shots/reports/notification-log/` | | rows, sections, icons, tones and the empty state match; the fake host pins en-US, so the package's times read "12:50 AM" where the native story's locale writes "00:50" |
 
 **Resources → Terminal Usage**
 

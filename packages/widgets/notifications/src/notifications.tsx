@@ -1,13 +1,14 @@
-// Notification Log, a built-in widget package (docs/57, wave 2; the native Notifications' job):
-// the notifications cmd sent in this workspace (or every workspace's), shown or not, so one
-// missed while away is still here. One live query over the log's notification events
+// Notification Log, a built-in widget package (docs/57; the native Notifications' job, drawn as
+// it is): the notifications cmd sent in this workspace (or every workspace's), shown or not, so
+// one missed while away is still here. One live query over the log's notification events
 // (useEvents; notes need no class), newest first, under Today and Earlier, in a list that runs
-// to the window's edges (a Panel, as natively). A click goes to the
-// terminal a notification is about (cmd.windows.select); its menu copies its text. Clear is the
-// widget's own: a "cleared at" kept per window (useStoredState), so clearing here clears no
-// other list. A refusal (All Workspaces without the grant) says what it needs.
+// to the window's edges (a Panel). A click goes to the terminal or window a notification is
+// about (the event's terminalId or windowId) while it is open; its menu says which, and copies
+// its text. Clear Notifications keeps when it cleared in the package's storage, so it clears
+// every Notification Log at once, in every workspace, as the native Clear does. A refusal (All
+// Workspaces without the grant) says what it needs.
 
-import { Window, View, Panel, PanelBody, EmptyState, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, ListValue, useEvents, useStoredState, useNow, fmt, cmd, ApiCallError, type Event } from "@cmd/widget-api";
+import { Window, View, Panel, PanelBody, EmptyState, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, ListValue, useEnv, useEvents, useStorage, useStoredState, useTerminals, useWindows, useNow, fmt, cmd, ApiCallError, type Event } from "@cmd/widget-api";
 import { Component, type ReactNode } from "react";
 
 type Scope = "workspace" | "all";
@@ -24,6 +25,8 @@ export interface Note {
   urgent: boolean;
   at: number;
   terminalId: string | null;
+  /** The window it is about (a widget's, a timer's), when it isn't about a terminal. */
+  windowId: string | null;
 }
 
 /** Each source's icon (the native view's). */
@@ -42,7 +45,7 @@ export const iconOf = (source: string) => ICONS[source] ?? "bell";
 
 export function noteOf(e: Event): Note {
   const d = e.data as { source?: string; title?: string; body?: string; urgent?: boolean };
-  return { key: e.key ?? `#${e.id}`, source: String(d.source ?? ""), title: String(d.title ?? "") || "Notification", body: String(d.body ?? ""), urgent: !!d.urgent, at: e.at, terminalId: e.terminalId ?? null };
+  return { key: e.key ?? `#${e.id}`, source: String(d.source ?? ""), title: String(d.title ?? "") || "Notification", body: String(d.body ?? ""), urgent: !!d.urgent, at: e.at, terminalId: e.terminalId ?? null, windowId: e.windowId ?? null };
 }
 
 /** Newest first, one row per notification (one recorded again replaces the earlier). */
@@ -58,22 +61,28 @@ export function newestFirst(events: readonly Event[]): Note[] {
 }
 
 const startOfDay = (t: number) => new Date(t).setHours(0, 0, 0, 0);
-const AGO_UNIT: Record<string, string> = { s: " s", m: " min", h: " h", d: " d" };
-/** "now", "40 s", "7 min", "3 h", "2 d": an age without "ago", as the native list writes it. */
-const age = (t: number, now: number) => fmt.ago(t, now).replace(/^(\d+)([smhd])$/, (_, n: string, u: string) => `${n}${AGO_UNIT[u]}`);
 
 function Notifications() {
   const [scope, setScope] = useStoredState<Scope>("scope", "workspace");
-  const [clearedAt, setClearedAt] = useStoredState<number>("clearedAt", 0);
+  const [clearedAt, setClearedAt] = useStorage("package", "clearedAt", 0);
+  const { locale } = useEnv();
   const now = useNow(30_000);
-  const notes = newestFirst(useEvents({ types: ["notification"], limit: KEEP, ...(scope === "all" ? { scope } : {}) })).filter((n) => n.at > clearedAt);
+  const where = scope === "all" ? { scope } : {};
+  const notes = newestFirst(useEvents({ types: ["notification"], limit: KEEP, ...where })).filter((n) => n.at > clearedAt);
+  // What is still open to go to: the terminals and windows in scope.
+  const open = new Set([...useTerminals(where).map((t) => t.id), ...useWindows(where).map((w) => w.id)]);
   const today = startOfDay(now);
   const groups = [
     { title: "Today", items: notes.filter((n) => n.at >= today) },
     { title: "Earlier", items: notes.filter((n) => n.at < today) },
   ].filter((g) => g.items.length > 0);
 
-  const go = (n: Note) => n.terminalId && void cmd.windows.select(n.terminalId).catch(() => {});
+  /** The terminal or window it is about, while it is open. */
+  const target = (n: Note) => [n.terminalId, n.windowId].find((id) => id && open.has(id)) ?? null;
+  const go = (n: Note) => {
+    const id = target(n);
+    if (id) void cmd.windows.select(id).catch(() => {});
+  };
 
   return (
     <Window
@@ -96,14 +105,14 @@ function Notifications() {
                     tip={n.body.length > 60 ? n.body : undefined}
                     onClick={() => go(n)}
                     menu={[
-                      { label: "Show Terminal", disabled: !n.terminalId, run: () => go(n) },
+                      { label: n.terminalId ? "Show Terminal" : "Show Window", disabled: !target(n), run: () => go(n) },
                       { label: "Copy Text", run: () => void cmd.clipboard.write(n.body ? `${n.title}\n${n.body}` : n.title).catch(() => {}) },
                     ]}
                   >
                     <ListRowIcon icon={iconOf(n.source)} />
                     <ListRowContent title={n.title} detail={n.body || " "} tone={n.urgent && n.source !== "timer" ? "needs" : undefined} />
                     <ListRowEnd>
-                      <ListValue>{n.at >= today ? fmt.time(n.at) : age(n.at, now)}</ListValue>
+                      <ListValue>{n.at >= today ? new Date(n.at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : fmt.ago(n.at, now)}</ListValue>
                     </ListRowEnd>
                   </ListRow>
                 ))}
@@ -111,12 +120,7 @@ function Notifications() {
             ))}
           </List>
           {notes.length === 0 && (
-            <EmptyState
-              compact
-              icon="bell"
-              title="No notifications"
-              text={clearedAt ? "New ones show up here. Cleared ones stay in the Event Log." : "When an agent needs you or a long command finishes, it shows up here, even if you missed it."}
-            />
+            <EmptyState compact icon="bell" title="No notifications" text="When an agent needs you or a long command finishes, it shows up here, even if you missed it." />
           )}
         </PanelBody>
       </Panel>

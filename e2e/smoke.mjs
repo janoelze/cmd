@@ -3181,7 +3181,8 @@ await scenario("widget-journal", async () => {
 
 // Notification Log (packages/widgets/notifications): the native Notifications' job as a package.
 // Added from the Widget Library, it shows a notification about a terminal of its workspace as it
-// is sent, a click goes to that terminal, and Clear Notifications empties its own list.
+// is sent, a click goes to that terminal, and Clear Notifications empties the list (kept in the
+// package's storage, so every Notification Log clears with it).
 await scenario("widget-notifications", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
@@ -3196,7 +3197,7 @@ await scenario("widget-notifications", async () => {
     const [termId] = await until(terminals, (l) => l.length === 1);
     await menu("view.grid");
     const { id, source } = await addFromLibrary("Notification Log", "pkg:notifications/notifications");
-    check(source === "Built-in · notifications 1.0.0", `the Widget Library lists Notification Log under Built-in (${source})`);
+    check(source === "Built-in · notifications 1.1.0", `the Widget Library lists Notification Log under Built-in (${source})`);
     await tileIn(id);
     const tile = win.locator(`.tile[data-pane="${id}"]`);
     await until(() => tile.textContent(), (t) => t.includes("No notifications"), 30_000);
@@ -3216,7 +3217,7 @@ await scenario("widget-notifications", async () => {
     await unchoosing();
     const cleared = await until(() => tile.textContent(), (t) => t.includes("No notifications"), 10_000).catch(() => "");
     const still = await call("data.query", { query: { types: ["notification"], at: [0, Date.now() + 60_000], order: "desc", limit: 50 } });
-    check(cleared.includes("No notifications") && still.some((e) => e.data?.title === "e2e-notify · done"), "Clear Notifications empties its own list, and the notification stays in the log");
+    check(cleared.includes("No notifications") && still.some((e) => e.data?.title === "e2e-notify · done"), "Clear Notifications empties the list, and the notification stays in the log");
     await call("window.close", { id });
   } finally {
     for (const t of await terminals()) await call("pane.kill", { paneId: t }).catch(() => {});
