@@ -1,5 +1,6 @@
 // `cmd widget check <dir>` on widget packages (docs/56): the good fixture passes with 0,
-// each bad-* fixture fails with 2 and names the field that's wrong; the CLI sandboxes the
+// each bad-* fixture fails with 2 and names the field that's wrong; a Frame's src naming no
+// page of the package is a warning; the CLI sandboxes the
 // toolchain by the core's own rule.
 
 import { execFileSync } from "node:child_process";
@@ -57,6 +58,21 @@ describe("cmd widget check on packages", () => {
       expect(r.code).toBe(2);
       expect(r.err).toContain(`  ${field}: `);
     });
+
+  it("warns, without failing, about a Frame's src that names no page of the package", async () => {
+    const err: string[] = [];
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((s) => (err.push(String(s)), true));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(await checkPackage(path.join(fixtures, "frame-pages"), false, "0.30.0", async () => null, { types: false })).toBe(0);
+    } finally {
+      write.mockRestore();
+      log.mockRestore();
+    }
+    const warnings = err.filter((l) => l.includes("isn't in this package"));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("src/main.tsx:8: meter.html isn't in this package");
+  });
 
   it("asks the running cmd for its version when it has none of its own, and says when nobody answers", async () => {
     const err: string[] = [];

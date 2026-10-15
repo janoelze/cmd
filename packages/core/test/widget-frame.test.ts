@@ -5,11 +5,13 @@
 // adapter: its grant, scope and limits), refusing what the grant lacks as the process is
 // refused; a verb that needs a press takes the frame's own (the app's gesture rule, at most one
 // a second), one act or window per press; widget.frameSubscribe is the process's live topic,
-// pushed to the connection that asked until it unsubscribes, closes, or the widget stops.
+// pushed to the connection that asked until it unsubscribes, closes, or the widget stops. A
+// tree's Frame elements (1.2) reach the same API; a page a Frame names that isn't in the package
+// is one line in the widget's log.
 
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import { API, API_VERBS, API_TOPICS, needsPress, type ApiVerb, type AppWindow, type CoreEvent, type WidgetFrameResult, type WidgetPermissions } from "@cmd/protocol";
+import { API, API_VERBS, API_TOPICS, needsPress, type ApiVerb, type AppWindow, type CoreEvent, type TreeNode, type WidgetFrameResult, type WidgetPermissions } from "@cmd/protocol";
 import type { Connection } from "../src/kernel/connection.ts";
 import { Core } from "../src/kernel/core.ts";
 import { fakeFactory } from "./fake-pty.ts";
@@ -255,5 +257,20 @@ describe("frame widgets", () => {
     rt.last.send({ kind: "tree", rev: 2, nodes: [{ id: 5, type: "View", props: {}, children: [] }] });
     await until(() => !core.library.host.frames.source(w.id), "no Frame any more");
     await expect(call(w.id, "agents.list")).rejects.toThrow(/not a frame widget/);
+  });
+
+  it("tells the widget's log once when a tree's Frame names a page that isn't in the package", async () => {
+    const { rt, home, open, served, events } = await setup([{ name: "chart" }]);
+    fs.writeFileSync(`${home}/chart/chart.html`, "<canvas></canvas>");
+    served.receive(JSON.stringify({ id: 1, method: "events.subscribe", params: {} }));
+    const frame = (id: number, src: string): TreeNode => ({ id, type: "Frame", props: { src, label: src }, children: [] });
+    rt.boot = (p) => void p.connect().hello().send({ kind: "tree", rev: 1, nodes: [{ id: 1, type: "View", props: {}, children: [frame(2, "chart.html"), frame(3, "meter.html")] }] });
+    const w = await open("pkg:chart/main");
+    const lines = () => events.filter((e): e is Extract<CoreEvent, { type: "widget.log" }> => e.type === "widget.log" && e.windowId === w.id).map((e) => e.message);
+    await until(() => lines().length, "the line");
+    // A patch that keeps the tree as it is says nothing again.
+    rt.last.send({ kind: "patch", rev: 2, ops: [{ op: "props", id: 2, set: { label: "Chart" }, unset: [] }] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(lines()).toEqual(["Frame: meter.html isn't in this package"]);
   });
 });

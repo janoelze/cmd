@@ -8,7 +8,8 @@
     "./magic": "./src/magic/index.ts",
     "./activity/fixture": "./src/agents/activity/fixture.ts",
     "./activity/view": "./src/data/views/activity.ts",
-    "./widgets/package": "./src/widgets/package.ts"
+    "./widgets/package": "./src/widgets/package.ts",
+    "./widgets/pages": "./src/widgets/pages.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.71",

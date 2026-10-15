@@ -1,0 +1,11 @@
+{
+  "name": "frame-pages",
+  "version": "1.0.0",
+  "description": "A fixture package whose tree has Frames: chart.html is in it, meter.html isn't (cmd widget check warns).",
+  "license": "MIT",
+  "cmd": {
+    "api": 1,
+    "widgets": [{ "id": "main", "title": "Frame Pages", "icon": "chart.bar", "main": "src/main.tsx", "size": "m" }],
+    "permissions": {}
+  }
+}

@@ -33,6 +33,13 @@ export class TreeState {
     return false;
   }
 
+  /** Each Frame's `src` in the tree (its pages, frame.ts). */
+  pages(): string[] {
+    const out = new Set<string>();
+    for (const node of this.#tree.nodes()) if (node.type === "Frame" && typeof (node as TreeElement).props.src === "string") out.add((node as TreeElement).props.src as string);
+    return [...out];
+  }
+
   /** Whether the tree has an element of `type` (a Frame: its window serves frames, frame.ts). */
   has(type: string): boolean {
     for (const node of this.#tree.nodes()) if (node.type === type) return true;

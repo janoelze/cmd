@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { IpcMain } from "electron";
-import { API_TOPICS, API_VERBS, WIDGET_API, WIDGET_API_MINOR } from "@cmd/protocol";
+import { API_TOPICS, API_VERBS, WIDGET_API, WIDGET_API_MINOR, missingPage } from "@cmd/protocol";
 import runtime from "../package-frame/frame.js?raw";
 import type { PackageFrameRequest } from "../shared/ipc.ts";
 
@@ -142,7 +142,7 @@ export function registerPackageFrame(req: PackageFrameRequest): string {
       page = req.page.split("/").filter(Boolean).map(encodeURIComponent).join("/");
     }
     file = resolveInPackage(root, page);
-    if (!file) throw new Error(`no page ${String(req.page ?? "view.html").slice(0, 120)} in the package`);
+    if (!file) throw new Error(missingPage(String(req.page ?? "view.html").slice(0, 120)));
   }
   const appearance = req.init?.appearance === "light" ? "light" : "dark";
   const init = { appearance, vars: req.init?.vars ?? {}, state: req.init?.state ?? {}, config: req.init?.config ?? {}, data: req.init?.data ?? null, placement: req.init?.placement === "sidebar" ? ("sidebar" as const) : ("board" as const) } as const;

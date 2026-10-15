@@ -23,6 +23,8 @@ import { effective, needsGrant, type Grants } from "../grants.ts";
 import type { PackageWidget, WidgetPackage } from "../package.ts";
 import type { WidgetPackages } from "../packages.ts";
 import { FramePress } from "./press.ts";
+import { missingPage, pageExists } from "../pages.ts";
+import type { TreeState } from "./tree.ts";
 
 const log = logger("widgets");
 
@@ -59,6 +61,8 @@ export class WidgetFrames {
   #subs = new Map<Connection, Map<string, Sub>>();
   /** Each frame's presses, by window and frame. */
   #presses = new Map<string, FramePress>();
+  /** The Frame pages each window's tree named, looked for once each (a missing one said then). */
+  #checked = new Map<WindowId, Set<string>>();
 
   constructor(d: FramesDeps) {
     this.#d = d;
@@ -156,6 +160,19 @@ export class WidgetFrames {
         this.#d.send(s.conn, { type: "widget.frameEvent", windowId, frame: s.frame, sub: s.sub, end: why });
       }
     for (const k of this.#presses.keys()) if (k.startsWith(`${windowId}\n`)) this.#presses.delete(k);
+    this.#checked.delete(windowId); // a save may have added or removed a page
+  }
+
+  /** The window's tree changed: a Frame page it names that isn't in the package goes to the widget's log (`cmd widget dev`), once. */
+  pages(windowId: WindowId, dir: string | undefined, tree: TreeState, log: (message: string) => void): void {
+    if (!dir) return;
+    let checked = this.#checked.get(windowId);
+    for (const src of tree.pages()) {
+      if (checked?.has(src)) continue;
+      if (!checked) this.#checked.set(windowId, (checked = new Set()));
+      checked.add(src);
+      if (!pageExists(dir, src)) log(`Frame: ${missingPage(src)}`);
+    }
   }
 
   /** Live subscriptions (tests). */

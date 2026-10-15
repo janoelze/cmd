@@ -41,16 +41,18 @@ export interface FrameHostProps {
   data?: unknown;
   /** The page sent a value (`cmd.post`). */
   onPost?(value: unknown): void;
+  /** Its page couldn't be served (not in the package): why, in a line. Without it, the console. */
+  onFail?(message: string): void;
   style?: CSSProperties;
 }
 
-export function FrameHost({ windowId, title, serve, reloadKey, active, kv, config, placement, data = null, onPost, style }: FrameHostProps) {
+export function FrameHost({ windowId, title, serve, reloadKey, active, kv, config, placement, data = null, onPost, onFail, style }: FrameHostProps) {
   const ref = useRef<HTMLIFrameElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [src, setSrc] = useState<string | null>(null);
   const [painted, setPainted] = useState(false);
-  const latest = useRef({ kv, config, data, onPost, serve, placement });
-  latest.current = { kv, config, data, onPost, serve, placement };
+  const latest = useRef({ kv, config, data, onPost, onFail, serve, placement });
+  latest.current = { kv, config, data, onPost, onFail, serve, placement };
   /** The page's widget API, one per load of its URL. */
   const api = useRef<FrameApi | null>(null);
 
@@ -67,7 +69,12 @@ export function FrameHost({ windowId, title, serve, reloadKey, active, kv, confi
         if (live) setSrc(u);
         else if (u) cmd.releasePackageFrame(u);
       })
-      .catch((e: Error) => console.warn(`widget ${windowId ?? "story"}: its frame couldn't start: ${e.message}`));
+      .catch((e: Error) => {
+        if (!live) return;
+        const why = e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+        if (latest.current.onFail) latest.current.onFail(why);
+        else console.warn(`widget ${windowId ?? "story"}: its frame couldn't start: ${why}`);
+      });
     return () => {
       live = false;
       if (url) cmd.releasePackageFrame(url);

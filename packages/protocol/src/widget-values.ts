@@ -91,6 +91,11 @@ function options(v: unknown): ValueCheck {
 /** A Frame's `src`: an .html file of the package, by a relative path with no dot-file or `..` in it ("chart.html", "pages/meter.html"). */
 export const isPackagePage = (s: unknown): s is string => typeof s === "string" && s.length <= 200 && /^[\w-][\w .-]*(\/[\w-][\w .-]*)*\.html$/i.test(s) && !s.split("/").some((seg) => seg.startsWith("."));
 
+/** What a Frame says, in place and in its widget's log, when its page isn't there (a typo, a page not built yet). */
+export const missingPage = (src: string): string => `${src} isn't in this package`;
+/** The file a missingPage line names, or null when the line is about something else. */
+export const missingPageOf = (message: string): string | null => /(\S+\.html) isn't in this package/.exec(message)?.[1] ?? null;
+
 /** Plain data (a Frame's `data`, its page's message): no handler refs, no functions, not too deep, at most VALUE_MAX_BYTES. */
 function plain(v: unknown): ValueCheck {
   const walk = (x: unknown, depth: number): string | null => {

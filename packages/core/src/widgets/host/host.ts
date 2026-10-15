@@ -389,12 +389,10 @@ export class WidgetHost {
       case "tree":
         if (!Array.isArray(m.nodes) || typeof m.rev !== "number") return;
         inst.tree.setTree(m);
-        return this.#emit(inst, m);
+        return void (this.#emit(inst, m), this.#pages(inst));
       case "patch":
         if (!Array.isArray(m.ops)) return;
-        if (inst.tree.apply(m)) this.#emit(inst, m);
-        else conn.send({ kind: "resync" });
-        return;
+        return void (inst.tree.apply(m) ? (this.#emit(inst, m), this.#pages(inst)) : conn.send({ kind: "resync" }));
       case "call":
         return void this.#call(inst, m.id, m.method, m.params);
       case "subscribe": {
@@ -551,6 +549,8 @@ export class WidgetHost {
     return widgetApi(this.#core, { windowId: inst.windowId, workspaceId, pkg, widget, permissions, press: inst.press, acts: () => this.#o.acts?.() ?? null, secret: (key) => this.config.secrets(pkg.name).get(widget.id)[key] ?? null, aiUsage: this.#aiUsage, get fetchImpl() { return host.fetchImpl; } });
   }
 
+  /** A Frame page the tree names that isn't in the package: one line in the widget's log. */
+  #pages = (inst: Instance) => this.frames.pages(inst.windowId, inst.pkg?.dir, inst.tree, (message) => inst.logs.push({ level: "warn", message }) && log.info(`widget ${inst.pkg?.name}: ${message}`));
   /** The window's API ends: its acts waiting for the person are a no, its frames' subscriptions end. */
   #endApi(inst: Instance): void {
     if (!inst.adapter) return;

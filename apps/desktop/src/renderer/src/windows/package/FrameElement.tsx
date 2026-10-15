@@ -3,13 +3,15 @@
 // its own iframe, token and Gesture, so several can share a window. What it needs to draw comes
 // from FramesContext, which the package view gives a live window (PackageView.tsx) and a story
 // gives its own page; without one (Magic's preview, a package's story, the phone) its label
-// stands in, so a tree stays drawable without running pixels. `data` goes to the page as it
+// stands in at the Frame's height, so a tree stays drawable without running pixels and lays out
+// as the live window does. A page that isn't in the package says so in place (a Callout naming
+// the file; the core puts the same line in the widget's log). `data` goes to the page as it
 // changes; what the page posts (`cmd.post`) goes to the process as onMessage, plain data only
 // and at most POSTS_PER_SECOND, and never as a press (the core's press model).
 
-import { EmptyState } from "@cmd/ui";
-import { createContext, useContext, useRef } from "react";
-import { checkValue, type WindowId, type WireValue } from "@cmd/protocol";
+import { Callout, EmptyState } from "@cmd/ui";
+import { createContext, useContext, useRef, useState } from "react";
+import { checkValue, missingPageOf, type WindowId, type WireValue } from "@cmd/protocol";
 import { on, str, type Drawn } from "./draw.ts";
 import { FrameHost, type FrameInit } from "./FrameHost.tsx";
 
@@ -39,7 +41,23 @@ export function FrameElement({ p, ctx }: Drawn) {
   const height = typeof p.height === "number" && p.height > 0 ? Math.min(p.height, 4000) : undefined;
   const send = on(ctx, p.onMessage, "onMessage");
   const sent = useRef<number[]>([]);
-  if (!frames || !src) return <EmptyState icon="rectangle.dashed" title={label || "Frame"} compact>Drawn in the widget's window.</EmptyState>;
+  const [failed, setFailed] = useState<{ key: string; why: string } | null>(null);
+  const size = height ? { height } : { minHeight: "var(--frame-min-h)" };
+  if (!frames || !src)
+    return (
+      <div style={{ ...size, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        <EmptyState icon="rectangle.dashed" title={label || "Frame"} compact>
+          Drawn in the widget's window.
+        </EmptyState>
+      </div>
+    );
+  const key = `${frames.reloadKey}\n${src}`;
+  if (failed?.key === key)
+    return (
+      <Callout tone="warning" title={missingPageOf(failed.why) ? `${missingPageOf(failed.why)} isn't in this package` : `${label || "This frame"} couldn't load`}>
+        {missingPageOf(failed.why) ? "Check the Frame's src, or add the page beside package.json." : failed.why}
+      </Callout>
+    );
   const onPost = (value: unknown) => {
     if (!send) return;
     const now = Date.now();
@@ -55,13 +73,14 @@ export function FrameElement({ p, ctx }: Drawn) {
       windowId={frames.windowId}
       title={label}
       serve={(init) => frames.serve(src, init)}
-      reloadKey={`${frames.reloadKey}\n${src}`}
+      reloadKey={key}
       active={frames.active}
       kv={frames.kv}
       config={frames.config}
       placement={frames.placement}
       data={p.data ?? null}
       onPost={onPost}
+      onFail={(why) => setFailed({ key, why })}
       style={height ? { flex: "none", height, background: "transparent" } : { minHeight: "var(--frame-min-h)", background: "transparent" }}
     />
   );
