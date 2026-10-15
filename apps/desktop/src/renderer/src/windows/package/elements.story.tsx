@@ -18,7 +18,7 @@ import AgentActivity from "@cmd/widget-api/examples/v1/agents.tsx";
 import Countdown from "@cmd/widget-api/examples/v1/countdown.tsx";
 import Usage from "@cmd/widget-api/examples/v1/usage.tsx";
 import type { HostData } from "@cmd/widget-api/testing/host";
-import type { StatInfo, StatResult } from "@cmd/protocol";
+import type { ApiStatResult, StatInfo, StatResult } from "@cmd/protocol";
 import { RefWindow } from "../../reference/RefWindow.tsx";
 import { Timer } from "../timer/TimerView.tsx";
 import { StatDetail, Stats } from "../stats/Stats.tsx";
@@ -447,7 +447,8 @@ const WEEK = {
   runs: statWeek("commands.runs", "Commands", "count", [120, 160, 40, 210, 260, 140, 180], 1110),
 };
 
-const USAGE_STATS = Object.fromEntries(Object.values(WEEK).map((r) => [r.stat.id, r]));
+/** The same results as the widget reads them (its `kind` the API's: a count). */
+const USAGE_STATS: Record<string, ApiStatResult> = Object.fromEntries(Object.values(WEEK).map((r) => [r.stat.id, { ...r, stat: { ...r.stat, kind: "count" as const } }]));
 /** packages/widget-api/examples/v1/usage.tsx (Stat trend and children, fmt.value and fmt.delta) beside the native Stats window's tiles. */
 export const UsageBesideStats = () => (
   <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
