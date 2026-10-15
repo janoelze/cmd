@@ -49,7 +49,7 @@ async function setup(pkgs: FakePackage[], o: { runtime?: boolean } = {}) {
 }
 
 /** Every permission there is, for a frame widget that may do everything. */
-const FULL: Partial<WidgetPermissions> = { workspace: ["read", "all"], events: ["agents"], net: ["example.com"], ai: ["complete"], run: ["ps"], act: ["agents", "terminals", "actions", "windows"] };
+const FULL: Partial<WidgetPermissions> = { workspace: ["read", "all"], events: ["agents"], net: ["example.com"], ai: ["complete"], run: ["ps"], act: ["agents", "terminals", "actions", "windows"], media: ["read", "control"] };
 
 /** Arguments that answer at once for each verb (an id that isn't there, a query of a class to declare). */
 const ARGS: { [V in ApiVerb]: unknown[] } = {
@@ -59,6 +59,7 @@ const ARGS: { [V in ApiVerb]: unknown[] } = {
   "actions.list": [], "notify.send": [{ key: "k", title: "Hi" }], "state.get": ["k"], "state.set": ["k", 1], "state.history": ["k", 1], "net.fetch": ["https://example.com/"],
   "ai.complete": [{ prompt: "hi" }], "agents.start": [{ kind: "claude" }], "agents.send": ["a-none", "hi"], "agents.stop": ["a-none"], "terminals.type": ["p-none", "ls"],
   "terminals.open": [{}], "actions.run": ["none"], "windows.close": ["w-none"], "run.exec": ["ps", "not a list"],
+  "actions.stop": ["none"], "events.classes": [], "terminals.usage": [], "stats.query": [{ stat: "agents.turns" }], "journal.days": [{ count: 1 }], "media.get": [], "media.control": ["toggle"], "clipboard.write": ["hi"],
 };
 
 describe("frame widgets", () => {

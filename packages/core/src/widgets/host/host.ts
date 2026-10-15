@@ -49,7 +49,7 @@ export interface HostTimes extends ConnectionTimes {
 }
 
 
-type HostCore = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "widgetTokens" | "broadcast" | "settings" | "agents" | "panes" | "data" | "actions" | "notifications" | "ai" | "opened" | "call" | "server">;
+type HostCore = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "widgetTokens" | "broadcast" | "settings" | "agents" | "panes" | "data" | "actions" | "notifications" | "ai" | "opened" | "call" | "server" | "resources" | "stats" | "journal">;
 
 export interface HostOptions {
   stateDir: string | null;

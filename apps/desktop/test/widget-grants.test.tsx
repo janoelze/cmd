@@ -27,6 +27,9 @@ describe("what a package asks for, in words", () => {
     expect(labels({ act: ["actions.run"] })).toEqual(["Run Workspace Actions, asking first"]);
     expect(labels({ act: ["agents", "terminals.type", "windows"] })).toEqual(["Start, message and stop agents, asking first", "Open and type in terminals, asking first", "Close windows, asking first"]);
     expect(labels({ ai: ["complete"] })).toEqual(["Use your AI, counts against your usage"]);
+    expect(labels({ act: ["actions.run", "actions.stop"] })).toEqual(["Run and stop Workspace Actions, asking first"]);
+    expect(labels({ media: ["read"] })).toEqual(["See what's playing"]);
+    expect(labels({ media: ["read", "control"] })).toEqual(["See and control what's playing"]);
     expect(labels({})).toEqual([]);
   });
 

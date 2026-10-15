@@ -1,5 +1,5 @@
 // The widget API's acts (API 1.1, docs/56 phase 4): start, message and stop agents, type into
-// or open a terminal, run a Workspace Action, close a window. A widget process is untrusted, so
+// or open a terminal, run, restart or stop (1.2) a Workspace Action, close a window. A widget process is untrusted, so
 // each act, in this order:
 //
 //   1. needs its grant (`act: ["agents"]` or `act: ["agents.start"]`, access.ts's mayAct);
@@ -19,7 +19,7 @@
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { API, actTyped, kindLabel, permissionOf, type Agent, type ApiActVerb, type ApiAgentStart, type ApiTerminalOpen, type AppWindow, type Permission, type ToolActivity, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { API, actTyped, kindLabel, permissionOf, type ActionsList, type Agent, type ApiActVerb, type ApiAgentStart, type ApiTerminalOpen, type AppWindow, type Permission, type ToolActivity, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../../kernel/context.ts";
 import { isDeniedPath, remotePrivatePaths } from "../../lib/paths-deny.ts";
@@ -136,6 +136,18 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
     const rel = p ? path.relative(own().root || os.homedir(), p.cwd) : "";
     return p ? `the terminal in ${rel && !rel.startsWith("..") ? rel : path.basename(p.cwd) || p.cwd}` : "a terminal";
   };
+  /** A Workspace Action of the widget's workspace by name, as actions.list gives it. */
+  const action = (name: unknown, verb: string) => {
+    if (typeof name !== "string" || !name.trim()) throw invalid(`${verb}: name the action, as actions.list gives it`);
+    const ws = own();
+    if (!ws.root) throw invalid("This widget's workspace has no folder, so no actions.");
+    const list = core.actions.list(ws.root);
+    const a = list.actions.find((x) => x.id === name) ?? list.actions.find((x) => x.name === name && !x.package) ?? list.actions.find((x) => x.name === name);
+    if (!a) throw invalid(`No action “${name.slice(0, 60)}” in this workspace.`);
+    return { ws, list, a };
+  };
+  /** The terminal an action is running in now, or null. */
+  const running = (list: ActionsList, id: string): string | null => list.runs.find((r) => r.actionId === id && r.endedAt === null)?.paneId ?? null;
   const windowName = (w: AppWindow) => (w.kind === "terminal" ? terminalName(w.id) : `the window “${w.title}”`);
 
   const plans: { [V in ApiActVerb]: (p: WireValue[]) => Plan } = {
@@ -205,22 +217,30 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
         },
       };
     },
-    "actions.run": ([name]) => {
-      if (typeof name !== "string" || !name.trim()) throw invalid("actions.run: name the action, as actions.list gives it");
-      const ws = own();
-      if (!ws.root) throw invalid("This widget's workspace has no folder, so no actions.");
-      const list = core.actions.list(ws.root);
-      const a = list.actions.find((x) => x.id === name) ?? list.actions.find((x) => x.name === name && !x.package) ?? list.actions.find((x) => x.name === name);
-      if (!a) throw invalid(`No action “${name.slice(0, 60)}” in this workspace.`);
+    "actions.run": ([name, opts]) => {
+      const { ws, list, a } = action(name, "actions.run");
       if (a.risky) throw new ApiRefusal({ code: "denied", message: `“${a.name}” is risky (it deploys, publishes or drops something): run it from Workspace Actions.` });
+      // 1.2: Restart, one act: ⌃C to its run, then the same command again in that terminal (as Workspace Actions' Restart).
+      const restart = !!(opts && typeof opts === "object" && (opts as { restart?: unknown }).restart === true) && running(list, a.id) !== null;
       return {
-        approval: { title: `Run “${a.name}”`, exact: a.command },
-        target: null,
+        approval: { title: `${restart ? "Restart" : "Run"} “${a.name}”`, exact: a.command },
+        target: restart ? running(list, a.id) : null,
         async run() {
-          const r = await core.call("actions.run", { root: list.root, actionId: a.id, workspaceId: ws.id, restart: false, confirmed: false });
+          const r = await core.call("actions.run", { root: list.root, actionId: a.id, workspaceId: ws.id, restart, confirmed: false });
           if (r.started) opened.add(r.paneId);
           return { value: { terminalId: r.paneId, started: r.started }, target: r.paneId };
         },
+      };
+    },
+    // 1.2: ⌃C to a running action of the workspace, whoever started it.
+    "actions.stop": ([name]) => {
+      const { list, a } = action(name, "actions.stop");
+      const pane = running(list, a.id);
+      if (!pane) throw invalid(`“${a.name}” isn't running.`);
+      return {
+        approval: { title: `Stop “${a.name}”`, exact: a.command },
+        target: pane,
+        run: async () => (await core.call("actions.stop", { root: list.root, actionId: a.id }), { value: null }),
       };
     },
     "windows.close": ([id]) => {

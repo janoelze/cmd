@@ -13,6 +13,12 @@ import type {
   ApiAgent,
   ApiCompletion,
   ApiCompletionRequest,
+  ApiEventClass,
+  ApiJournalDay,
+  ApiNowPlaying,
+  ApiStatQuery,
+  ApiStatResult,
+  ApiTerminalUsage,
   ApiFetchInit,
   ApiFetchResponse,
   ApiEvent,
@@ -33,7 +39,7 @@ import type {
   WireValue,
 } from "@cmd/protocol/widget-tree";
 import type { Transport } from "../connection.ts";
-import { workspace as fixtureWorkspace } from "./fixtures.ts";
+import { classes as fixtureClasses, stat as fixtureStat, workspace as fixtureWorkspace } from "./fixtures.ts";
 import { verbs } from "../cmd.ts";
 import { WIDGET_API, WIDGET_API_MINOR } from "../version.ts";
 
@@ -74,6 +80,16 @@ export interface HostData {
    * @since 1.1
    */
   approve?: boolean | ((verb: ApiVerb, args: unknown[]) => boolean);
+  /** What `cmd.terminals.usage` and `useTerminalUsage` give (`fixtures.usage()`). @since 1.2 */
+  terminalUsage?: ApiTerminalUsage[];
+  /** The log's classes `cmd.events.classes` lists; `fixtures.classes()` unless given. @since 1.2 */
+  classes?: ApiEventClass[];
+  /** What `cmd.stats.query` answers, by stat id, or a function of the query; `fixtures.stat()` of the query unless given. @since 1.2 */
+  stats?: Record<string, ApiStatResult> | ((q: ApiStatQuery) => ApiStatResult);
+  /** The written days `cmd.journal.days` gives, newest first. @since 1.2 */
+  journal?: ApiJournalDay[];
+  /** What `cmd.media.get` gives: what plays, or null (the default). @since 1.2 */
+  playing?: ApiNowPlaying | null;
 }
 
 /** A fake program run: exit code 0 and nothing on stderr unless given. @since 1.1 */
@@ -244,6 +260,21 @@ export function createHost(data: HostData = {}): FakeHost {
     },
     "windows.close": done,
     "run.exec": ([program, args]) => runOf(String(program), Array.isArray(args) ? args.map(String) : []),
+    // 1.2
+    "actions.stop": ([name]) => {
+      if (!(d.actions ?? []).some((x) => x.name === name)) throw new Error(`No action ${String(name)}`);
+      return null;
+    },
+    "events.classes": () => d.classes ?? fixtureClasses(),
+    "terminals.usage": ([q]) => (d.terminalUsage ?? []).filter((u) => inScope(q, id(), u)),
+    "stats.query": ([q]) => {
+      const query = (q ?? { stat: "" }) as ApiStatQuery;
+      return typeof d.stats === "function" ? d.stats(query) : (d.stats?.[query.stat] ?? fixtureStat(query));
+    },
+    "journal.days": ([q]) => (d.journal ?? []).slice(0, Math.min(q?.count ?? 7, 30)),
+    "media.get": () => d.playing ?? null,
+    "media.control": done,
+    "clipboard.write": done,
   };
   const serve = (method: string, p: unknown[]): unknown => {
     if (!Object.hasOwn(SERVE, method)) throw Object.assign(new Error(`This cmd doesn't serve ${method}.`), { code: "unknown" });

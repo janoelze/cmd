@@ -36,8 +36,13 @@ export function permissionLines(declared: WidgetPermissions, granted: WidgetPerm
     const ns = a.split(".")[0]!;
     acts.set(ns, [...(acts.get(ns) ?? []), a]);
   }
-  for (const [ns, values] of acts) out.push({ icon: "bolt", label: (ACT as Record<string, string>)[ns] ?? `Use ${ns}, asking first`, added: isNew("act", ...values) });
+  for (const [ns, values] of acts) {
+    // Stopping them too (1.2): the namespace, or actions.stop by name.
+    const label = ns === "actions" && values.some((v) => v === "actions" || v === "actions.stop") ? "Run and stop Workspace Actions, asking first" : ((ACT as Record<string, string>)[ns] ?? `Use ${ns}, asking first`);
+    out.push({ icon: "bolt", label, added: isNew("act", ...values) });
+  }
   if (declared.ai.length) out.push({ icon: "sparkles", label: "Use your AI, counts against your usage", added: isNew("ai", ...declared.ai) });
+  if (declared.media.length) out.push({ icon: "music.note", label: declared.media.includes("control") ? "See and control what's playing" : "See what's playing", added: isNew("media", ...declared.media) });
   return out;
 }
 

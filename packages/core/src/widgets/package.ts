@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { API_ACT_NAMESPACES, API_AI_USES, PERMISSION_KEYS, WIDGET_API, noPermissions, packageKind, type MagicMark, type WidgetPermissions } from "@cmd/protocol";
+import { API_ACT_NAMESPACES, API_AI_USES, API_MEDIA_USES, PERMISSION_KEYS, WIDGET_API, noPermissions, packageKind, type MagicMark, type WidgetPermissions } from "@cmd/protocol";
 import { POLICY, declarable } from "../data/policy.ts";
 import { ESCAPES } from "../lib/policy.ts";
 import { expandPath, magicDenyPaths, privateMatcher } from "../lib/paths-deny.ts";
@@ -195,6 +195,7 @@ function permissions(v: unknown, errors: string[], home: string): WidgetPermissi
   const may = declarable("widget");
   for (const c of out.events) if (!may.includes(c as never)) errors.push(`cmd.permissions.events: "${c}" ${c in POLICY.widget ? "can't be read by widgets" : "isn't a class of events"} (${may.join(", ")})`);
   for (const a of out.ai) if (!AI.includes(a)) errors.push(`cmd.permissions.ai: "${a}" isn't something widgets may ask of cmd's AI (${AI.join(", ")})`);
+  for (const m of out.media) if (!(API_MEDIA_USES as readonly string[]).includes(m)) errors.push(`cmd.permissions.media: "${m}" should be "read" (see what's playing) or "control" (play, pause, skip)`);
   for (const a of out.act) {
     const [ns, verb, more] = a.split(".");
     if (!ACT.includes(ns!) || more !== undefined || (verb !== undefined && !/^[a-zA-Z]+$/.test(verb))) errors.push(`cmd.permissions.act: "${a}" should be one of ${ACT.join(", ")}, or a verb of one, like "actions.run"`);

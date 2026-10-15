@@ -38,7 +38,7 @@ const ALL: WidgetPermissions = { ...noPermissions(), workspace: ["read", "all"],
 function adapter(permissions: WidgetPermissions): WidgetApi {
   const pkg = core.library.packages.forKind("pkg:demo/main")!;
   // The services as a feature gets them (kernel/context.ts), with `opened` counting nothing.
-  const ctx = { agents: core.agents, panes: core.panes, windows: core.windows, windowTypes: core.windowTypes, workspaces: core.workspaces, data: core.data, actions: core.actions, notifications: core.notifications, ai: core.ai, settings: core.settings, broadcast: (e: CoreEvent) => core.server.broadcast(e), opened: <W>(w: W) => w, call: core.call.bind(core) as never };
+  const ctx = { agents: core.agents, panes: core.panes, windows: core.windows, windowTypes: core.windowTypes, workspaces: core.workspaces, data: core.data, actions: core.actions, notifications: core.notifications, ai: core.ai, settings: core.settings, resources: core.resources, stats: core.stats, journal: core.journal, broadcast: (e: CoreEvent) => core.server.broadcast(e), opened: <W>(w: W) => w, call: core.call.bind(core) as never };
   return widgetApi(ctx, { windowId, workspaceId: () => A.id, pkg, widget: pkg.widgets[0]!, permissions, press: { at: () => pressed, remote: () => false, take: () => void (pressed = 0) }, secret: () => null, aiUsage: new AiUsage(null) });
 }
 
@@ -152,7 +152,7 @@ describe("API 1", () => {
     const diff = await call(api, "git.diff", "a.txt");
     expect(diff).toMatchObject({ text: expect.stringContaining("+two"), clipped: false });
     expect(await call(api, "git.worktrees")).toEqual([{ path: expect.any(String), branch: "main", main: true }]);
-    expect(await call(api, "actions.list")).toEqual(expect.arrayContaining([{ name: "test", title: expect.any(String), risky: false }]));
+    expect(await call(api, "actions.list")).toEqual(expect.arrayContaining([expect.objectContaining({ name: "test", title: expect.any(String), risky: false })]));
 
     const notes: AppNotification[] = [];
     core.notifications.on("notification", (n) => notes.push(n));

@@ -13,12 +13,13 @@
 
 import type { ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
+import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
 
 // ── versions ────────────────────────────────────────────
 
 /** The API major this file describes. */
 export const WIDGET_API = 1;
-/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`; 1.2 the window-content elements (docs/57). */
+/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`; 1.2 the window-content elements and the built-ins' verbs (docs/57). */
 export const WIDGET_API_MINOR = 2;
 
 // ── the tree ────────────────────────────────────────────
@@ -261,9 +262,18 @@ export interface ApiMethods {
   "agents.stop": { params: [id: string]; result: null };
   "terminals.type": { params: [id: string, text: string, opts?: { submit?: boolean }]; result: null };
   "terminals.open": { params: [req?: ApiTerminalOpen]; result: { id: string } };
-  "actions.run": { params: [name: string]; result: ApiActionStarted };
+  "actions.run": { params: [name: string, opts?: ApiActionRunOptions]; result: ApiActionStarted };
   "windows.close": { params: [id: string]; result: null };
   "run.exec": { params: [program: string, args?: string[], opts?: ApiRunOptions]; result: ApiRunResult };
+  // 1.2 (widget-tree-1.2.ts)
+  "actions.stop": { params: [name: string]; result: null };
+  "events.classes": { params: []; result: ApiEventClass[] };
+  "terminals.usage": { params: [query?: ApiUsageQuery]; result: ApiTerminalUsage[] };
+  "stats.query": { params: [query: ApiStatQuery]; result: ApiStatResult };
+  "journal.days": { params: [query?: ApiJournalQuery]; result: ApiJournalDay[] };
+  "media.get": { params: []; result: ApiNowPlaying | null };
+  "media.control": { params: [command: ApiMediaCommand | null, opts?: { seek?: number }]; result: null };
+  "clipboard.write": { params: [text: string]; result: null };
 }
 
 /** ApiMethods has exactly the verbs of API_VERBS (tsc fails here otherwise). */
@@ -278,6 +288,7 @@ export interface TopicQuery {
   events: ApiEventQuery;
   git: null;
   actions: null;
+  terminalUsage: ApiUsageQuery;
 }
 export interface TopicData {
   workspace: ApiWorkspace;
@@ -288,6 +299,7 @@ export interface TopicData {
   events: ApiEvent[];
   git: ApiGitStatus | null;
   actions: ApiAction[];
+  terminalUsage: ApiTerminalUsage[];
 }
 
 // ── the data, in the product's words ────────────────────
@@ -402,6 +414,8 @@ export interface ApiEvent {
   until?: number | null;
   /** 1.1: the terminal it happened in, if any. */
   terminalId?: string | null;
+  /** 1.2: the log's one line for it, as the Event Stream shows it ("pnpm test", "Committed “Fix the footer”"); null when it has none. */
+  text?: string | null;
 }
 
 export interface ApiEventStats {
@@ -428,6 +442,30 @@ export interface ApiAction {
   title: string;
   /** Running it asks first (a deploy, a push). */
   risky: boolean;
+  /** 1.2: what is typed in its terminal ("pnpm run dev"). */
+  command?: string;
+  /** 1.2: what it is for: "dev", "test", "build", "check", "deploy", "setup", "clean", "run" or "agent" (a skill run as an agent). */
+  kind?: string;
+  /** 1.2: the workspace package it belongs to in a monorepo, null at the root. */
+  package?: string | null;
+  /** 1.2: pinned to the top of the list in Workspace Actions. */
+  pinned?: boolean;
+  /** 1.2: the one to show big (usually dev); at most one is. */
+  primary?: boolean;
+  /** 1.2: its latest run in this folder is still going (from any window). */
+  running?: boolean;
+  /** 1.2: the terminal its latest run is in, null when it hasn't run here. */
+  terminalId?: string | null;
+  /** 1.2: the local address it serves while it runs (http://localhost:5173/), null when none or not running. */
+  url?: string | null;
+  /** 1.2: how its latest run ended: the exit status, null while it runs or when it hasn't. */
+  exitCode?: number | null;
+}
+
+/** How `cmd.actions.run` runs an action. */
+export interface ApiActionRunOptions {
+  /** 1.2: one that is running is stopped (⌃C) and run again in its terminal: Restart. An older cmd runs it only when it isn't running. */
+  restart?: boolean;
 }
 
 /** A request the core makes for the widget (the process has no network of its own). */
@@ -524,3 +562,4 @@ export type ApiTone = "neutral" | "accent" | "success" | "warning" | "danger";
 
 export * from "./widget-elements.ts";
 export * from "./widget-verbs.ts";
+export * from "./widget-tree-1.2.ts";

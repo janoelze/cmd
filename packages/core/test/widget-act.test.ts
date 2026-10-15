@@ -187,6 +187,16 @@ describe("acting widgets (API 1.1)", () => {
     const run = await t.act("actions.run", ["test"]);
     expect(run.ask.approval).toMatchObject({ permission: "run", title: "Run “test”" });
     expect(run.result).toMatchObject({ ok: true, value: { terminalId: expect.any(String), started: true } });
+    const runIn = (run.result as unknown as { value: { terminalId: string } }).value.terminalId;
+    // 1.2: Restart, one act on a running one (⌃C, then the command again in its terminal), and actions.stop.
+    const restart = await t.act("actions.run", ["test", { restart: true }]);
+    expect(restart.ask.approval).toMatchObject({ permission: "run", title: "Restart “test”" });
+    expect(restart.ask.target).toBe(runIn);
+    expect(restart.result).toMatchObject({ ok: true, value: { terminalId: runIn } });
+    const stopped = await t.act("actions.stop", ["test"]);
+    expect(stopped.ask.approval).toMatchObject({ permission: "stop", title: "Stop “test”", exact: expect.stringContaining("test") });
+    expect(stopped.result).toMatchObject({ ok: true, value: null });
+    expect(t.ptyOf(runIn).written.join("")).toContain("\x03");
 
     // windows.close: a window it didn't open is "stop"; one it opened is "show".
     const files = t.core.windows.open("files", {}, t.ws);
@@ -199,9 +209,9 @@ describe("acting widgets (API 1.1)", () => {
 
     // Every act verb has a confirm row (protocol widget-verbs.ts), and each was asked for above.
     const acts = API_VERBS.filter((v) => API[v].mode === "confirm");
-    expect(acts.sort()).toEqual(["actions.run", "agents.send", "agents.start", "agents.stop", "terminals.open", "terminals.type", "windows.close"]);
+    expect(acts.sort()).toEqual(["actions.run", "actions.stop", "agents.send", "agents.start", "agents.stop", "terminals.open", "terminals.type", "windows.close"]);
     expect(new Set(t.acting.filter((a) => a.state === "waiting").map((a) => a.tool))).toEqual(new Set(acts));
-    expect(acts.every((v) => API[v].since === "1.1")).toBe(true);
+    expect(acts.every((v) => API[v].since === (v === "actions.stop" ? "1.2" : "1.1"))).toBe(true);
     expect([...API_ACT_VERBS].sort()).toEqual(acts);
   });
 

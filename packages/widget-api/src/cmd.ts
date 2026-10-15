@@ -54,6 +54,14 @@ const VERBS: Verbs = {
   "actions.run": verb("actions.run"),
   "windows.close": verb("windows.close"),
   "run.exec": verb("run.exec"),
+  "actions.stop": verb("actions.stop"),
+  "events.classes": verb("events.classes"),
+  "terminals.usage": verb("terminals.usage"),
+  "stats.query": verb("stats.query"),
+  "journal.days": verb("journal.days"),
+  "media.get": verb("media.get"),
+  "media.control": verb("media.control"),
+  "clipboard.write": verb("clipboard.write"),
 };
 
 /** cmd.run: a function (`cmd.run("gh", ["run", "list"])`) that is also the namespace of its one verb (`cmd.run.exec`). */
@@ -143,6 +151,14 @@ export const cmd = {
      * @since 1.1
      */
     open: VERBS["terminals.open"],
+    /**
+     * What each terminal of this workspace uses now (or of every workspace with `{ scope: "all" }`,
+     * which needs `workspace: ["all"]`): CPU (percent of one core), memory and processes of its
+     * whole process tree, sampled every few seconds; a terminal not sampled yet isn't listed.
+     * cmd's own processes aren't terminals and aren't here. Live: the hook `useTerminalUsage()`.
+     * @since 1.2
+     */
+    usage: VERBS["terminals.usage"],
     /** Live: the hook `useTerminals()`. @since 1.0 */
     use: useTerminals,
   },
@@ -169,6 +185,13 @@ export const cmd = {
     query: VERBS["events.query"],
     /** Counts of events matching the query, by type. @since 1.0 */
     stats: VERBS["events.stats"],
+    /**
+     * The log's classes a widget may name in `events`, as Settings → Data names them: each
+     * class, its title and the event types it holds ("agent." takes every agent event). It says
+     * what exists, not what happened, so it needs no permission.
+     * @since 1.2
+     */
+    classes: VERBS["events.classes"],
     /** Calls `fn` with each batch of new events matching `query` (the first: the query's result); returns a function that stops it. @since 1.0 */
     subscribe(query: ApiEventQuery, fn: (events: ApiMethods["events.query"]["result"]) => void): () => void {
       return connection().subscribe("events", query, (d) => fn(d as ApiMethods["events.query"]["result"]));
@@ -194,12 +217,62 @@ export const cmd = {
     /**
      * Runs a Workspace Action by name in a terminal of its own. Asks first; only after a
      * press. A risky one (a deploy, a publish) is refused: the person runs those from
-     * Workspace Actions. Needs `act: ["actions"]` (or `"actions.run"`).
+     * Workspace Actions. With `{ restart: true }` (1.2) one that is running is stopped and run
+     * again in its terminal, one act. Needs `act: ["actions"]` (or `"actions.run"`).
      * @since 1.1
      */
     run: VERBS["actions.run"],
+    /**
+     * Stops a running Workspace Action of this workspace (⌃C in its terminal), whoever started
+     * it. Asks first; only after a press. Needs `act: ["actions"]` (or `"actions.stop"`).
+     * @since 1.2
+     */
+    stop: VERBS["actions.stop"],
     /** Live: the hook `useActions()`. @since 1.0 */
     use: useActions,
+  },
+  /** Stats (docs/49): how cmd is used, counted from the event log, as the Stats window shows them. @since 1.2 */
+  stats: {
+    /**
+     * One stat over a range, by bucket: `{ stat: "agents.time", range: "7d" }`, split with `by`,
+     * compared with the range before (`compare`) or ranked (`top`). This workspace's unless
+     * `{ scope: "all" }` (with `workspace: ["all"]`); a stat that can't tell workspaces apart
+     * needs "all". Needs `events: [<class>]` for the class it is counted from (an error names it).
+     * @since 1.2
+     */
+    query: VERBS["stats.query"],
+  },
+  /** The journal (docs/23): what happened in this workspace, a few lines a day. @since 1.2 */
+  journal: {
+    /**
+     * The last `count` work days of this workspace with something in them (default 7, at most
+     * 30), newest first, as the Journal has written them; a day not written yet isn't there (a
+     * widget never has one written). Needs `workspace: ["read"]` and `events: ["agents"]`
+     * (a day is written from the agents' prompts and work).
+     * @since 1.2
+     */
+    days: VERBS["journal.days"],
+  },
+  /** What the Mac is playing (any app that tells macOS: Music, Spotify, a browser tab). @since 1.2 */
+  media: {
+    /** The track, its app, position and cover, or null when nothing plays. Needs `media: ["read"]`. @since 1.2 */
+    get: VERBS["media.get"],
+    /**
+     * Play or pause (`"toggle"`), `"next"`, `"previous"`, 15 seconds `"back15"` or `"forward15"`,
+     * or `(null, { seek })` to a position in seconds. Only right after a press in the widget on
+     * this Mac (never from a paired device), once per press. Needs `media: ["control"]`.
+     * @since 1.2
+     */
+    control: VERBS["media.control"],
+  },
+  /** The Mac's clipboard. @since 1.2 */
+  clipboard: {
+    /**
+     * Puts text on the clipboard: Copy. Only right after a press in the widget on this Mac
+     * (never from a paired device), once per press; text past 64 KB is cut. Needs no permission.
+     * @since 1.2
+     */
+    write: VERBS["clipboard.write"],
   },
   /** Notifications. They need no permission. @since 1.0 */
   notify: {

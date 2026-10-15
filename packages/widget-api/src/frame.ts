@@ -50,8 +50,11 @@ export type FrameNamespaces = {
   [N in keyof Process as N extends Omitted ? never : N]: Omit<Process[N], "use" | "subscribe"> & (N extends ApiTopic ? Live<N> : unknown);
 };
 
+/** Live topics that aren't a namespace of verbs (1.2's `terminalUsage`, the live `cmd.terminals.usage`): `cmd.terminalUsage.subscribe(fn)`. */
+export type FrameTopics = { [T in Exclude<ApiTopic, keyof Process>]: Live<T> };
+
 /** The `cmd` of a frame widget's page. Everything is async but `state.get`, `state.all`, `config`, `theme` and `env`. */
-export type FrameCmd = FrameNamespaces & {
+export type FrameCmd = FrameNamespaces & FrameTopics & {
   /** Programs, through the core: `cmd.run("gh", ["run", "list"])`. Needs `run: [<program>]`. @since 1.1 */
   run: Process["run"];
   /** Small values kept by the core for this window, shared with the widget's process. */

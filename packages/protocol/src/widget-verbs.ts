@@ -17,9 +17,10 @@ import type { Permission } from "./tools.ts";
  * - "ai": `ai: ["<name>"]`, the verb's own name (`ai: ["complete"]` for ai.complete).
  * - "act": `act: ["<namespace>"]` or `act: ["<namespace>.<verb>"]` (1.1).
  * - "run": `run: [<program>]`, decided per program (1.1).
+ * - "media": `media: ["read"]` for a read, `media: ["control"]` for an act (1.2): what the Mac plays.
  * - null: nothing (its own state, its own notifications, selecting a window).
  */
-export type ApiNeed = "workspace" | "events" | "net" | "ai" | "act" | "run" | null;
+export type ApiNeed = "workspace" | "events" | "net" | "ai" | "act" | "run" | "media" | null;
 
 /**
  * One verb. `mode`: "read" runs at once within the grant; "act" runs at once and changes
@@ -29,9 +30,11 @@ export type ApiNeed = "workspace" | "events" | "net" | "ai" | "act" | "run" | nu
  * `typed`: the act carries text the person reads before it runs, so it asks every time and
  * is never kept (true), or does so for a person's package while a built-in one follows the
  * levels ("person"). `press`: an "act" that also needs a press in the widget right before it.
+ * `local`: never for a press from a paired device (it acts on this Mac: its clipboard, what it
+ * plays). `class`: a read that also needs `events: [<class>]` beside its `needs` (1.2).
  */
 export type ApiVerbSpec =
-  | { since: ApiMinor; mode: "read" | "act"; needs: Exclude<ApiNeed, "act">; press?: true }
+  | { since: ApiMinor; mode: "read" | "act"; needs: Exclude<ApiNeed, "act">; press?: true; local?: true; class?: "agents" }
   | { since: ApiMinor; mode: "confirm"; needs: "act"; ask: Permission; typed?: true | "person" };
 
 /** A minor of API 1. */
@@ -71,6 +74,15 @@ export const API = {
   "actions.run": { since: "1.1", mode: "confirm", needs: "act", ask: "run" }, // a risky one is refused before any sheet
   "windows.close": { since: "1.1", mode: "confirm", needs: "act", ask: "stop" }, // "show" for a window the widget opened
   "run.exec": { since: "1.1", mode: "read", needs: "run" }, // read-only commands only (lib/policy.ts), through the core
+  // 1.2: what the built-ins' ports needed (docs/57, wave 2).
+  "actions.stop": { since: "1.2", mode: "confirm", needs: "act", ask: "stop" }, // ⌃C to a running action of the workspace
+  "events.classes": { since: "1.2", mode: "read", needs: null }, // what the log's classes are, as Settings names them: no data
+  "terminals.usage": { since: "1.2", mode: "read", needs: "workspace" }, // CPU and memory of the workspace's terminals
+  "stats.query": { since: "1.2", mode: "read", needs: "events" }, // the stat's class, decided per query; the workspace forced unless "all"
+  "journal.days": { since: "1.2", mode: "read", needs: "workspace", class: "agents" }, // the workspace's written days; never writes one
+  "media.get": { since: "1.2", mode: "read", needs: "media" }, // media: ["read"]
+  "media.control": { since: "1.2", mode: "act", needs: "media", press: true, local: true }, // media: ["control"], right after a press on this Mac
+  "clipboard.write": { since: "1.2", mode: "act", needs: null, press: true, local: true }, // text, right after a press on this Mac
 } as const satisfies Record<string, ApiVerbSpec>;
 
 export type ApiVerb = keyof typeof API;
@@ -86,6 +98,15 @@ export type ApiActNamespace = ApiActVerb extends `${infer N}.${string}` ? N : ne
 export const API_ACT_NAMESPACES = [...new Set(API_ACT_VERBS.map((v) => v.split(".")[0]!))] as ApiActNamespace[];
 /** What package.json's `ai` may name: the ai verbs' names ("complete"). */
 export const API_AI_USES = API_VERBS.filter((v) => API[v].needs === "ai").map((v) => v.split(".")[1]!);
+
+/** What package.json's `media` may name: "read" (media.get), "control" (media.control). */
+export const API_MEDIA_USES = ["read", "control"] as const;
+/** The `media` value a verb needs: "read" for a read, "control" for an act. */
+export const mediaUse = (v: ApiVerb): (typeof API_MEDIA_USES)[number] => (API[v].mode === "read" ? "read" : "control");
+/** The event class a verb needs beside its `needs` (journal.days: "agents"), or null. */
+export const verbClass = (v: string): string | null => ((API as Record<string, ApiVerbSpec>)[v] as { class?: string } | undefined)?.class ?? null;
+/** Whether a verb is never for a press from a paired device: it acts on this Mac (the clipboard, what it plays). */
+export const localOnly = (v: string): boolean => ((API as Record<string, ApiVerbSpec>)[v] as { local?: true } | undefined)?.local === true;
 
 /** Whether a verb needs a press in the widget right before it, taking it (one each): every act that asks, and windows.open. */
 export const needsPress = (v: string): boolean => {
@@ -108,6 +129,7 @@ export const API_TOPIC = {
   events: { verb: "events.query" },
   git: { verb: "git.status" },
   actions: { verb: "actions.list" },
+  terminalUsage: { verb: "terminals.usage" }, // 1.2: useTerminalUsage
 } as const satisfies Record<string, { verb: ApiVerb }>;
 
 export type ApiTopic = keyof typeof API_TOPIC;

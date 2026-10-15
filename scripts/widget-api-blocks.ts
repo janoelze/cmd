@@ -13,7 +13,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { API, API_ACT_VERBS, API_AI_USES, API_ELEMENTS, API_TOPICS, type ApiNeed, type ApiVerb } from "../packages/protocol/src/widget-tree.ts";
+import { API, API_ACT_VERBS, API_AI_USES, API_ELEMENTS, API_MEDIA_USES, API_TOPICS, type ApiNeed, type ApiVerb } from "../packages/protocol/src/widget-tree.ts";
 import { PERMISSION_KEYS } from "../packages/protocol/src/widget-package.ts";
 import { DATA_CLASSES, type DataClass } from "../packages/protocol/src/events.ts";
 import { POLICY, declarable } from "../packages/core/src/data/policy.ts";
@@ -78,14 +78,15 @@ function permissionLines(): string[] {
   const ws = namespaces(verbsNeeding("workspace")).map((n) => q(`cmd.${n}`));
   const lines: Record<(typeof PERMISSION_KEYS)[number], string> = {
     net: `hosts ${list(verbsNeeding("net").map((v) => q(`cmd.${v}`)))} may reach (${q('"api.open-meteo.com"')}); no ${q("*")}.`,
-    workspace: `${q('["read"]')} to see this workspace's agents, terminals, windows, git status and Actions (${list(ws)}, and their hooks); ${q('["read", "all"]')} for every workspace's, read with \`{ scope: "all" }\` (${list(LIVE.filter((h) => h.keys.includes("scope")).map((h) => q(h.name)))}, and their verbs).`,
-    events: `classes of cmd's event log beyond ${list(ev.free)}, which need none: ${ev.named.map(gloss).join(", ")}.`,
+    workspace: `${q('["read"]')} to see this workspace's agents, terminals and what they use, windows, git status, Actions and journal (${list(ws)}, and their hooks); ${q('["read", "all"]')} for every workspace's, read with \`{ scope: "all" }\` (${list(LIVE.filter((h) => h.keys.includes("scope")).map((h) => q(h.name)))}, and their verbs).`,
+    events: `classes of cmd's event log beyond ${list(ev.free)}, which need none: ${ev.named.map(gloss).join(", ")}; ${q("cmd.stats.query")} needs the class its stat is counted from, ${q("cmd.journal.days")} ${q('"agents"')}.`,
     ai: `${q(JSON.stringify(API_AI_USES))} to use the person's AI (it counts against their usage: only when the request is about it).`,
     run: `the programs ${q("cmd.run")} runs, by name (${q('["ps"]')}, ${q('["gh"]')}); never a shell or an interpreter (sh, node, python).`,
     read: `full paths of folders ${q("cmd.run")} may run in besides the workspace's (${q('["~/Notes"]')}); never the home folder itself or anything private.`,
+    media: `${q(JSON.stringify(API_MEDIA_USES))}: ${q('"read"')} to see what the Mac is playing (${q("cmd.media.get")}), ${q('"control"')} to play, pause and skip it after a press (${q("cmd.media.control")}).`,
     act: `what it may ask to do, a namespace or one verb: ${acts()}. Only what a button in the widget does.`,
   };
-  const order = ["net", "workspace", "events", "ai", "run", "read", "act"] as const satisfies readonly (typeof PERMISSION_KEYS)[number][];
+  const order = ["net", "workspace", "events", "ai", "run", "read", "media", "act"] as const satisfies readonly (typeof PERMISSION_KEYS)[number][];
   const free = verbsNeeding(null);
   const whole = namespaces(free).filter((ns) => (Object.keys(API) as string[]).filter((v) => v.startsWith(`${ns}.`)).every((v) => free.includes(v as ApiVerb)));
   const none = [...whole.map((ns) => q(`cmd.${ns}`)), ...free.filter((v) => !whole.includes(v.split(".")[0]!)).map((v) => q(`cmd.${v}`))];
@@ -104,6 +105,7 @@ function permissionKeys(): string {
     `${q("events: [<class>]")} (${ev.named.map((c) => `"${c}"`).join(", ")}; ${list(ev.free)} need none)`,
     `${q("act: [<namespace>]")} (${ns.map((c) => `"${c}"`).join(", ")}, or one verb like "${ONE_ACT}")`,
     q(`ai: ${JSON.stringify(API_AI_USES)}`),
+    q(`media: ${JSON.stringify(API_MEDIA_USES)}`),
   ].join(", ");
 }
 

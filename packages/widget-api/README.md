@@ -72,6 +72,7 @@ Terminals. Needs `workspace: ["read"]`.
 | `cmd.terminals.waitFor(id: string, pattern: string, opts?: { timeoutMs?: number \| undefined; } \| undefined): Promise<{ matched: boolean; line: string \| null; }>` | 1.0 | `workspace: ["read"]` | Waits until a line of the terminal matches `pattern` (a regular expression), or the timeout. |
 | `cmd.terminals.type(id: string, text: string, opts?: { submit?: boolean \| undefined; } \| undefined): Promise<null>` | 1.1 | `act: ["terminals"]`, asks | Types `text` into a terminal of this workspace, and presses Return only with `{ submit: true }`. Typed text always asks, every time, showing exactly what; some commands are refused outright (root, piping a download into a shell, credentials). Only after a press. Needs `act: ["terminals"]` (or `"terminals.type"`). |
 | `cmd.terminals.open(req?: ApiTerminalOpen \| undefined): Promise<{ id: string; }>` | 1.1 | `act: ["terminals"]`, asks | Opens a terminal in this workspace, in `cwd`, with `command` typed at its prompt but not run: the person reads it and presses Return. Asks first; only after a press. Needs `act: ["terminals"]` (or `"terminals.open"`). |
+| `cmd.terminals.usage(query?: ApiUsageQuery \| undefined): Promise<ApiTerminalUsage[]>` | 1.2 | `workspace: ["read"]` | What each terminal of this workspace uses now (or of every workspace with `{ scope: "all" }`, which needs `workspace: ["all"]`): CPU (percent of one core), memory and processes of its whole process tree, sampled every few seconds; a terminal not sampled yet isn't listed. cmd's own processes aren't terminals and aren't here. Live: the hook `useTerminalUsage()`. |
 | `cmd.terminals.use(query?: ApiScopeQuery): ApiTerminal[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useTerminals()`. |
 
 #### `cmd.windows`
@@ -94,6 +95,7 @@ The event log (docs/28), within the classes the widget declares in `events`.
 |---|---|---|---|
 | `cmd.events.query(query: ApiEventQuery): Promise<ApiEvent[]>` | 1.0 | `events: [<class>]` | Events matching the query, oldest first. |
 | `cmd.events.stats(query: ApiEventQuery): Promise<ApiEventStats>` | 1.0 | `events: [<class>]` | Counts of events matching the query, by type. |
+| `cmd.events.classes(): Promise<ApiEventClass[]>` | 1.2 | none | The log's classes a widget may name in `events`, as Settings → Data names them: each class, its title and the event types it holds ("agent." takes every agent event). It says what exists, not what happened, so it needs no permission. |
 | `cmd.events.subscribe(query: ApiEventQuery, fn: (events: ApiEvent[]): void) => () => void` | 1.0 | `events: [<class>]` | Calls `fn` with each batch of new events matching `query` (the first: the query's result); returns a function that stops it. |
 | `cmd.events.use(query?: ApiEventQuery): ApiEvent[]` | 1.0 | `events: [<class>]` | Live: the hook `useEvents(query)`. |
 
@@ -115,8 +117,42 @@ Workspace Actions (docs/36).
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.actions.list(): Promise<ApiAction[]>` | 1.0 | `workspace: ["read"]` | The workspace's Actions. |
-| `cmd.actions.run(name: string): Promise<ApiActionStarted>` | 1.1 | `act: ["actions"]`, asks | Runs a Workspace Action by name in a terminal of its own. Asks first; only after a press. A risky one (a deploy, a publish) is refused: the person runs those from Workspace Actions. Needs `act: ["actions"]` (or `"actions.run"`). |
+| `cmd.actions.run(name: string, opts?: ApiActionRunOptions \| undefined): Promise<ApiActionStarted>` | 1.1 | `act: ["actions"]`, asks | Runs a Workspace Action by name in a terminal of its own. Asks first; only after a press. A risky one (a deploy, a publish) is refused: the person runs those from Workspace Actions. With `{ restart: true }` (1.2) one that is running is stopped and run again in its terminal, one act. Needs `act: ["actions"]` (or `"actions.run"`). |
+| `cmd.actions.stop(name: string): Promise<null>` | 1.2 | `act: ["actions"]`, asks | Stops a running Workspace Action of this workspace (⌃C in its terminal), whoever started it. Asks first; only after a press. Needs `act: ["actions"]` (or `"actions.stop"`). |
 | `cmd.actions.use(): ApiAction[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useActions()`. |
+
+#### `cmd.stats`
+
+Stats (docs/49): how cmd is used, counted from the event log, as the Stats window shows them.
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.stats.query(query: ApiStatQuery): Promise<ApiStatResult>` | 1.2 | `events: [<class>]` | One stat over a range, by bucket: `{ stat: "agents.time", range: "7d" }`, split with `by`, compared with the range before (`compare`) or ranked (`top`). This workspace's unless `{ scope: "all" }` (with `workspace: ["all"]`); a stat that can't tell workspaces apart needs "all". Needs `events: [<class>]` for the class it is counted from (an error names it). |
+
+#### `cmd.journal`
+
+The journal (docs/23): what happened in this workspace, a few lines a day.
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.journal.days(query?: ApiJournalQuery \| undefined): Promise<ApiJournalDay[]>` | 1.2 | `workspace: ["read"]`, `events: ["agents"]` | The last `count` work days of this workspace with something in them (default 7, at most 30), newest first, as the Journal has written them; a day not written yet isn't there (a widget never has one written). Needs `workspace: ["read"]` and `events: ["agents"]` (a day is written from the agents' prompts and work). |
+
+#### `cmd.media`
+
+What the Mac is playing (any app that tells macOS: Music, Spotify, a browser tab).
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.media.get(): Promise<ApiNowPlaying \| null>` | 1.2 | `media: ["read"]` | The track, its app, position and cover, or null when nothing plays. Needs `media: ["read"]`. |
+| `cmd.media.control(command: ApiMediaCommand \| null, opts?: { seek?: number \| undefined; } \| undefined): Promise<null>` | 1.2 | `media: ["control"]`, acts | Play or pause (`"toggle"`), `"next"`, `"previous"`, 15 seconds `"back15"` or `"forward15"`, or `(null, { seek })` to a position in seconds. Only right after a press in the widget on this Mac (never from a paired device), once per press. Needs `media: ["control"]`. |
+
+#### `cmd.clipboard`
+
+The Mac's clipboard.
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.clipboard.write(text: string): Promise<null>` | 1.2 | none, acts | Puts text on the clipboard: Copy. Only right after a press in the widget on this Mac (never from a paired device), once per press; text past 64 KB is cut. Needs no permission. |
 
 #### `cmd.notify`
 
@@ -212,6 +248,7 @@ The reads as subscriptions: each gets the current value at once and every change
 | `useNow(every?: number): number` | 1.0 | The time now, re-rendering every `every` ms (default 1000): for ages that move. |
 | `useStoredState<T extends WireValue>(key: string, initial: T): [T, (next: T \| ((prev: T) => T)) => void]` | 1.0 | A value kept by the core for this window across reloads and restarts, like useState. The first render already has the stored value. |
 | `useTerminals(query?: ApiScopeQuery): ApiTerminal[]` | 1.0 | The terminals of this workspace (or all), live. |
+| `useTerminalUsage(query?: ApiUsageQuery): ApiTerminalUsage[]` | 1.2 | What each terminal of this workspace (or all, with `{ scope: "all" }` and `workspace: ["all"]`) uses, live: CPU, memory and processes of its process tree, a new sample every few seconds when it moved. Empty until the first arrives. Needs `workspace: ["read"]`. |
 | `useWindows(query?: ApiScopeQuery): ApiWindow[]` | 1.0 | The windows of this workspace (or all), live, with which is selected. |
 | `useWorkspace(): ApiWorkspace \| null` | 1.0 | The widget's workspace (id, name, folder, branch), live; null until it arrives. Needs `workspace: ["read"]`. |
 
@@ -223,7 +260,7 @@ A frame widget's page (`"surface": "frame"`, its `view.html`) has a `cmd` of its
 
 | Member | What |
 |---|---|
-| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
+| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions \| terminalUsage>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
 | `cmd.state.get(key: string): WireValue` | A stored value, at once (null when none). |
 | `cmd.state.set(key: string, value: WireValue): Promise<null>` | Stores a value (null removes it); sent a moment later, with others set meanwhile. |
 | `cmd.state.all(): Record<string, WireValue>` | Every stored value. |

@@ -4,7 +4,7 @@
 // it and no widget notices.
 
 import path from "node:path";
-import { agentIcon, agentLight, bucketOf, type Agent, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiTerminal, type ApiWindow, type ApiWorkspace, type AppWindow, type DataEvent, type Pane, type WireValue, type Workspace } from "@cmd/protocol";
+import { agentIcon, agentLight, bucketOf, type ActionsList, type Agent, type ApiAction, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiTerminal, type ApiWindow, type ApiWorkspace, type AppWindow, type DataEvent, type Pane, type WireValue, type Workspace, type WorkspaceAction } from "@cmd/protocol";
 
 const STATE: Record<Agent["state"], ApiAgentState> = { starting: "starting", working: "working", idle: "idle", needs_input: "waiting", done: "done", exited: "exited", failed: "failed" };
 
@@ -50,5 +50,25 @@ export function apiWorkspace(ws: Workspace, branch: string | null): ApiWorkspace
 }
 
 export function apiEvent(e: DataEvent): ApiEvent {
-  return { id: e.seq, at: e.at, type: e.type, workspaceId: e.workspaceId, data: (e.data ?? {}) as { [key: string]: WireValue }, key: e.id, until: e.until ?? null, terminalId: e.paneId ?? null };
+  return { id: e.seq, at: e.at, type: e.type, workspaceId: e.workspaceId, data: (e.data ?? {}) as { [key: string]: WireValue }, key: e.id, until: e.until ?? null, terminalId: e.paneId ?? null, text: e.text ?? null };
+}
+
+/** A Workspace Action with its latest run in the folder (`runs`: the list's, from any window). */
+export function apiAction(a: WorkspaceAction, list: Pick<ActionsList, "runs" | "primary">): ApiAction {
+  const run = list.runs.filter((r) => r.actionId === a.id).sort((x, y) => y.startedAt - x.startedAt)[0];
+  const running = !!run && run.endedAt === null;
+  return {
+    name: a.name,
+    title: a.description ?? a.command,
+    risky: a.risky,
+    command: a.command,
+    kind: a.kind,
+    package: a.package ?? null,
+    pinned: !!a.pinned,
+    primary: list.primary === a.id,
+    running,
+    terminalId: run?.paneId ?? null,
+    url: running ? (run.url ?? a.url ?? null) : null,
+    exitCode: run && run.endedAt !== null ? run.exitCode : null,
+  };
 }

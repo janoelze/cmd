@@ -15,7 +15,9 @@ export function permissionLines(p: WidgetPermissions): string[] {
   if (p.workspace.includes("all")) out.push("see every workspace");
   else if (p.workspace.includes("read")) out.push("see this workspace");
   if (p.events.length) out.push(`read ${p.events.join(", ")} events`);
-  for (const ns of new Set(p.act.map((a) => a.split(".")[0]!))) out.push(ACT[ns] ?? `use ${ns}`);
+  for (const ns of new Set(p.act.map((a) => a.split(".")[0]!))) out.push(ns === "actions" && p.act.some((a) => a === "actions" || a === "actions.stop") ? "run and stop Workspace Actions" : (ACT[ns] ?? `use ${ns}`));
   if (p.ai.length) out.push("use your AI");
+  if (p.media.includes("control")) out.push("see and control what's playing");
+  else if (p.media.includes("read")) out.push("see what's playing");
   return out;
 }

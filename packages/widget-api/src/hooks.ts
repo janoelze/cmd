@@ -5,7 +5,7 @@
 // useCompletion asks the person's AI (`cmd.ai.complete`) once per request.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ApiCompletion, ApiCompletionRequest, ApiAction, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { mergeEvents } from "@cmd/protocol/widget-events";
 import { connection, type ApiCallError } from "./connection.ts";
 
@@ -55,6 +55,16 @@ export function useAgents(query: ApiAgentQuery = {}): ApiAgent[] {
  */
 export function useTerminals(query: ApiScopeQuery = {}): ApiTerminal[] {
   return useTopic("terminals", query, []);
+}
+
+/**
+ * What each terminal of this workspace (or all, with `{ scope: "all" }` and `workspace: ["all"]`)
+ * uses, live: CPU, memory and processes of its process tree, a new sample every few seconds
+ * when it moved. Empty until the first arrives. Needs `workspace: ["read"]`.
+ * @since 1.2
+ */
+export function useTerminalUsage(query: ApiUsageQuery = {}): ApiTerminalUsage[] {
+  return useTopic("terminalUsage", query, []);
 }
 
 /**

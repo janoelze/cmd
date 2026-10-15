@@ -2,7 +2,7 @@
 // whole API objects from a few fields, with ids derived from the name (agent "Tours" is
 // a-tours in window w-tours, terminal t-tours) so a test can name what it expects.
 
-import { agentIcon, agentLight, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiTerminal, type ApiWindow, type ApiWorkspace } from "@cmd/protocol/widget-tree";
+import { agentIcon, agentLight, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiEventClass, type ApiJournalDay, type ApiJournalEntry, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminal, type ApiTerminalUsage, type ApiWindow, type ApiWorkspace } from "@cmd/protocol/widget-tree";
 
 /** The workspace fixtures live in unless told otherwise. */
 export const WORKSPACE_ID = "ws-1";
@@ -83,5 +83,59 @@ export function command(over: { command?: string; cwd?: string; exitCode?: numbe
   });
 }
 
-/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `command()` (1.1), `workspace()`. @since 1.0 */
-export const fixtures = { agent, pane, window, event, command, workspace };
+/** What a terminal uses (`terminals.usage`): 1.2 MB and nothing busy unless given. @since 1.2 */
+export function usage(over: Partial<ApiTerminalUsage> = {}): ApiTerminalUsage {
+  const memory = over.memory ?? 1.2 * 2 ** 20;
+  return { id: "t-zsh", workspaceId: WORKSPACE_ID, cpu: 0, memory, processes: 1, top: [{ name: "zsh", memory }], at: Date.now(), ...over };
+}
+
+/** A few of the log's classes as `events.classes` lists them (the real list is cmd's: Settings → Data). @since 1.2 */
+export function classes(): ApiEventClass[] {
+  return [
+    { class: "agents", title: "Agent events", types: ["agent.", "pane.activity", "session.name"] },
+    { class: "output", title: "Command output", types: ["command", "agent.output"] },
+    { class: "actions", title: "Your actions", types: ["user.", "workspace."] },
+    { class: "git", title: "Git", types: ["git."] },
+    { class: "notes", title: "Notes and notifications", types: ["note", "notification", "notification.clear", "summary."] },
+  ];
+}
+
+/**
+ * A stat's answer to a query (`stats.query`): seven daily buckets ending today with `values`
+ * (by default 1 to 7) as one series, or `series` as given; a count unless `unit` says. @since 1.2
+ */
+export function stat(q: Partial<ApiStatQuery> = {}, over: { values?: (number | null)[]; series?: { key: string; label: string; values: (number | null)[] }[]; unit?: ApiStatResult["stat"]["unit"]; title?: string } = {}): ApiStatResult {
+  const day = 86_400_000;
+  const today = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+  const values = over.values ?? [1, 2, 3, 4, 5, 6, 7];
+  const buckets = values.map((_, i) => today - (values.length - 1 - i) * day);
+  const series = (over.series ?? [{ key: "total", label: "Total", values }]).map((x) => ({ ...x, total: x.values.reduce<number>((a, b) => a + (b ?? 0), 0) }));
+  const total = series.reduce((a, x) => a + x.total, 0);
+  const id = q.stat || "commands.runs";
+  return {
+    stat: { id, title: over.title ?? id, description: "", unit: over.unit ?? "count", dims: [], class: "output" },
+    from: buckets[0] ?? today,
+    to: today + day,
+    grain: "day",
+    measure: "n",
+    buckets,
+    series,
+    total,
+    ...(q.compare ? { previous: { total: Math.round(total / 2), values: values.map((v) => (v === null ? null : Math.round(v / 2))) } } : {}),
+  };
+}
+
+/** A work day as the journal wrote it (`journal.days`): today, one entry unless given. @since 1.2 */
+export function day(over: Partial<ApiJournalDay> & { entries?: Partial<ApiJournalEntry>[] } = {}): ApiJournalDay {
+  const date = over.date ?? new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+  const entries = (over.entries ?? [{}]).map((e, i): ApiJournalEntry => ({ id: `e-${date}-${i}`, kind: "feature", title: "Built the thing", summary: "What was done and why.", outcome: "merged", start: date + 9 * 3_600_000, end: date + 11 * 3_600_000, counts: { agents: 1, prompts: 3, commands: 4, commits: 2, pages: 0, files: 5 }, ...e }));
+  return { date, headline: over.headline ?? "A day of work", writtenAt: over.writtenAt ?? date + 86_400_000, entries };
+}
+
+/** A track playing (`media.get`). @since 1.2 */
+export function playing(over: Partial<ApiNowPlaying> = {}): ApiNowPlaying {
+  return { app: "com.apple.Music", title: "Song", artist: "Artist", album: "Album", playing: true, duration: 240, elapsed: 60, at: Date.now(), rate: 1, artwork: null, ...over };
+}
+
+/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `command()` (1.1), `workspace()`; `usage()`, `classes()`, `stat()`, `day()`, `playing()` (1.2). @since 1.0 */
+export const fixtures = { agent, pane, window, event, command, workspace, usage, classes, stat, day, playing };

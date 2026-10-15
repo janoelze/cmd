@@ -61,7 +61,7 @@ describe("package.json", () => {
         api: 1,
         dir,
         experimental: [],
-        permissions: { net: ["api.github.com"], run: ["gh"], read: [], workspace: ["read"], events: ["agents"], act: ["actions.run"], ai: [] },
+        permissions: { net: ["api.github.com"], run: ["gh"], read: [], workspace: ["read"], events: ["agents"], act: ["actions.run"], ai: [], media: [] },
         widgets: [{ id: "ci", kind: "pkg:ci-runs/ci", title: "CI", icon: "checkmark.seal", main: "src/ci.tsx", size: "m", surface: "tree", config: [{ key: "token", title: "Token", type: "string", secret: true, host: "api.github.com" }] }],
       },
     });

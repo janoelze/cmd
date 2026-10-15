@@ -4,10 +4,12 @@
 // widget notices.
 // A widget sees its own window's workspace unless granted `workspace: ["all"]`; a terminal's
 // screen comes back clipped and marked untrusted; events go through data/policy.ts's widget row.
-// Live topics (subscribe) are topics.ts's, over the same reads.
+// Live topics (subscribe) are topics.ts's, over the same reads; 1.2's reads are reads.ts's.
+// A verb that needs a press (windows.open, media.control, clipboard.write; the acts in act.ts)
+// takes the one it came after, and one marked `local` is never for a paired device's press.
 
 import path from "node:path";
-import { API, API_VERBS, isActVerb, parsePackageKind, topicVerb, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { API, API_VERBS, isActVerb, localOnly, mediaUse, needsPress, parsePackageKind, topicVerb, verbClass, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { PolicyError } from "../../data/policy.ts";
 import { widgetRead, type WidgetIdentity } from "../../data/widgets.ts";
@@ -17,13 +19,15 @@ import { stripAnsi } from "../../terminals/commands.ts";
 import type { PackageWidget, WidgetPackage } from "../package.ts";
 import { ApiRefusal, RateLimit, failed, invalid, missing, workspaceScope } from "./access.ts";
 import { widgetComplete, type AiUsage } from "./ai.ts";
-import { apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
+import { apiAction, apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
+import { CLIPBOARD_MAX, widgetReads } from "./reads.ts";
+import { writeClipboard } from "./clipboard.ts";
 import { brokeredFetch } from "./net.ts";
 import { subscribeTopic } from "./topics.ts";
 import { widgetActs, type ActDeps, type Press } from "./act.ts";
 import { widgetRunner, type RunScope } from "./run.ts";
 
-export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call">;
+export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call" | "resources" | "stats" | "journal">;
 
 /** The window a widget runs for, and what it may do. */
 export interface WidgetScope {
@@ -40,6 +44,8 @@ export interface WidgetScope {
   acts?: () => ActDeps | null;
   /** Tests: what cmd.run runs instead of execArgv. */
   exec?: RunScope["exec"];
+  /** Tests: what clipboard.write writes to instead of the Mac's clipboard. */
+  clipboard?: (text: string) => Promise<void>;
   /** A secret config field's value. */
   secret(key: string): string | null;
   aiUsage: AiUsage;
@@ -58,7 +64,7 @@ export interface WidgetApi {
   dispose(): void;
 }
 
-/** windows.open is allowed this long after the person pressed something. */
+/** windows.open (and 1.2's media.control, clipboard.write) are allowed this long after the person pressed something. */
 export const OPEN_AFTER_PRESS_MS = 5000;
 const SCREEN_MAX = 16 * 1024;
 const DIFF_MAX = 256 * 1024;
@@ -132,7 +138,8 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     allowed();
     const r = root();
     if (!r) return [];
-    return core.actions.list(r).actions.map((a) => ({ name: a.name, title: a.description ?? a.command, risky: a.risky }));
+    const list = core.actions.list(r);
+    return list.actions.map((a) => apiAction(a, list));
   };
   const win = (): AppWindow => {
     const w = core.windows.others().find((x) => x.id === scope.windowId);
@@ -150,12 +157,18 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     deps: () => scope.acts?.() ?? null,
   });
   const run = widgetRunner({ permissions: perms, root: () => core.workspaces.get(own())?.root ?? null, exec: scope.exec });
+  const reads = widgetReads(core, { own, level, perms });
 
-  /** windows.open, after the press it takes: one window per press. */
-  const open = (target: unknown, press: Press) => {
-    if (Date.now() - press.at() > OPEN_AFTER_PRESS_MS) throw invalid("windows.open works right after the person presses something in the widget.");
+  /** The press a verb that needs one came after (not the acts: act.ts takes theirs): right before it, from this Mac when `local`; taken, one verb per press. */
+  const pressed = (v: ApiVerb, press: Press) => {
+    if (Date.now() - press.at() > OPEN_AFTER_PRESS_MS) throw invalid(`${v} works right after the person presses something in the widget.`);
+    if (localOnly(v) && press.remote()) throw new ApiRefusal({ code: "denied", message: `${v} works only for a press on this Mac, not from a paired device.` });
+    press.take();
+  };
+
+  /** windows.open, after the press it took: one window per press. */
+  const open = (target: unknown) => {
     if (typeof target !== "string" || !target.trim()) throw invalid("windows.open: name a URL, a path or a widget");
-    press.take(); // one window per press
     const ws = workspace();
     const type = parsePackageKind(target) || core.windowTypes.get(target)?.role === "widget" ? core.windowTypes.get(target) : null;
     const w = type ? core.windows.open(type.kind, {}, ws) : core.windows.openTarget(target.trim(), ws);
@@ -205,7 +218,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       return waitForLine(core, p.id, re, Math.max(0, Math.min(Number(opts?.timeoutMs) || 30_000, WAIT_MAX_MS)));
     },
     "windows.list": (q) => windows(q),
-    "windows.open": (target) => open(target, scope.press),
+    "windows.open": (target) => open(target),
     "windows.select": (id) => {
       const w = typeof id === "string" ? core.windows.list().find((x) => x.id === id) : undefined;
       if (!w || !(w.workspaceId === own() || level === "all")) throw invalid(`No window ${String(id).slice(0, 60)} in this widget's reach.`);
@@ -279,6 +292,20 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     },
     // 1.1: cmd.run runs read-only commands through the core (run.ts).
     "run.exec": (program, args, opts) => run(program, args, opts) as never,
+    // 1.2 (reads.ts).
+    "events.classes": () => reads.classes(),
+    "terminals.usage": (q) => reads.usage(q),
+    "stats.query": (q) => reads.stat(q),
+    "journal.days": (q) => reads.days(q),
+    "media.get": () => reads.media(),
+    "media.control": async (command, opts) => (await core.call("nowPlaying.control", reads.control(command, opts)), null),
+    "clipboard.write": async (text) => {
+      if (typeof text !== "string") throw invalid("clipboard.write: give it text");
+      await (scope.clipboard ?? writeClipboard)(text.slice(0, CLIPBOARD_MAX)).catch((e: Error) => {
+        throw failed(`clipboard.write: ${e.message.slice(0, 200)}`);
+      });
+      return null;
+    },
   };
 
   /** A topic's read: its verb, the row already checked (topics.ts). */
@@ -294,14 +321,18 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       const needs = API[v].needs;
       if (needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
       if (needs === "ai" && !perms.ai.includes(v.split(".")[1]!)) throw missing("ai", v.split(".")[1]!, "Using cmd's AI");
+      if (needs === "media" && !perms.media.includes(mediaUse(v))) throw missing("media", mediaUse(v), mediaUse(v) === "read" ? "Seeing what's playing" : "Controlling what's playing");
+      const cls = verbClass(v);
+      if (cls && !perms.events.includes(cls)) throw missing("events", cls, `${v} (it reads ${cls} events)`);
       // An act: act.ts checks its grant, the press, its scope, and asks.
       if (isActVerb(v)) return acts.call(v, p, press);
-      if (v === "windows.open") return open(p[0], press);
+      if (needsPress(v)) pressed(v, press);
       const fn = VERBS[v] as (...p: WireValue[]) => unknown;
       return ((await fn(...p)) ?? null) as WireValue;
     },
     dispose() {
       acts.dispose();
+      reads.dispose();
     },
     subscribe(topic, query, push) {
       const verb = topicVerb(topic);

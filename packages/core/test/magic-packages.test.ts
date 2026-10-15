@@ -111,7 +111,7 @@ describe("buildPackage", () => {
     let granted: string[] | null = null;
     const o = base(dir, [{ calls: [...writes(example("weather"), "weather")!, tool("check"), tool("test"), tool("preview")], answer: "Shows Lisbon's weather." }], {
       ask: async (pkg) => (asked.push(pkg.permissions.net), (granted = pkg.permissions.net), { allow: true }),
-      granted: () => (granted ? { net: granted, run: [], read: [], workspace: [], events: [], act: [], ai: [] } : null),
+      granted: () => (granted ? { net: granted, run: [], read: [], workspace: [], events: [], act: [], ai: [], media: [] } : null),
     });
     const r = await buildPackage(o);
     expect(r.verdict.problems).toEqual([]);
@@ -278,6 +278,6 @@ describe("names and words", () => {
     expect(slugOf("how many agents are waiting in this workspace")).toBe("agents-waiting-workspace");
     expect(slugOf("the latest CI runs of this repo")).toBe("ci-runs-repo");
     expect(slugOf("!!!")).toBe("widget");
-    expect(wantsText({ net: ["api.github.com"], run: [], read: [], workspace: ["read"], events: [], act: [], ai: [] })).toBe("Wants to reach api.github.com and see this workspace");
+    expect(wantsText({ net: ["api.github.com"], run: [], read: [], workspace: ["read"], events: [], act: [], ai: [], media: [] })).toBe("Wants to reach api.github.com and see this workspace");
   });
 });

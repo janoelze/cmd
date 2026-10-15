@@ -18,11 +18,13 @@ export interface WidgetPermissions {
   act: string[];
   /** cmd's AI, through the core ("complete"); the widget never holds a key. */
   ai: string[];
+  /** 1.2: what the Mac plays: "read" (media.get), "control" (media.control). */
+  media: string[];
 }
 
-export const PERMISSION_KEYS = ["net", "run", "read", "workspace", "events", "act", "ai"] as const satisfies readonly (keyof WidgetPermissions)[];
+export const PERMISSION_KEYS = ["net", "run", "read", "workspace", "events", "act", "ai", "media"] as const satisfies readonly (keyof WidgetPermissions)[];
 
-export const noPermissions = (): WidgetPermissions => ({ net: [], run: [], read: [], workspace: [], events: [], act: [], ai: [] });
+export const noPermissions = (): WidgetPermissions => ({ net: [], run: [], read: [], workspace: [], events: [], act: [], ai: [], media: [] });
 
 /**
  * A config field of a package's widget (`cmd.widgets[].config`), as the app's Configure sheet

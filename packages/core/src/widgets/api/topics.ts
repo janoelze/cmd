@@ -72,6 +72,8 @@ const TOPICS: { [T in Exclude<ApiTopic, "events">]: { listen: Listen; coalesceMs
     listen: (core, _s, changed) => [on(core.windows, "updated", changed), on(core.windows, "removed", changed), on(core.panes, "updated", changed), on(core.panes, "removed", changed), on(core.workspaces, "updated", changed)],
   },
   actions: { listen: (core, _s, changed) => [on(core.actions, "changed", changed)] },
+  // 1.2: a sample is a pane's update (panes.ts setUsage, only when it moved noticeably).
+  terminalUsage: { listen: (core, _s, changed) => [on(core.panes, "updated", changed), on(core.panes, "removed", changed)] },
   git: {
     coalesceMs: GIT_COALESCE_MS,
     // Staging, committing, switching: the repository's index and HEAD.

@@ -42,7 +42,11 @@ const code = (s: string) => "`" + s.replace(/\s+/g, " ").replace(/\|/g, "\\|") +
 /** What a row needs, as package.json's cmd.permissions writes it (`ns`: the verb's namespace, for an act). */
 function permission(row: ApiVerbSpec | undefined, ns = ""): string {
   if (!row) return "none";
-  const need = ({ workspace: '`workspace: ["read"]`', events: "`events: [<class>]`", net: "`net: [<host>]`", ai: '`ai: ["complete"]`', act: `\`act: ["${ns}"]\``, run: "`run: [<program>]`" } as Record<string, string>)[row.needs ?? ""] ?? "none";
+  const media = row.mode === "read" ? "read" : "control";
+  const base = ({ workspace: '`workspace: ["read"]`', events: "`events: [<class>]`", net: "`net: [<host>]`", ai: '`ai: ["complete"]`', act: `\`act: ["${ns}"]\``, run: "`run: [<program>]`", media: `\`media: ["${media}"]\`` } as Record<string, string>)[row.needs ?? ""] ?? "none";
+  // A read that also needs a class of events (journal.days: agents).
+  const cls = (row as { class?: string }).class;
+  const need = cls ? `${base}, \`events: ["${cls}"]\`` : base;
   return row.mode === "read" ? need : `${need}, ${row.mode === "act" ? "acts" : "asks"}`;
 }
 
