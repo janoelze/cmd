@@ -1,53 +1,48 @@
-// Who draws a widget package before anyone sees it (docs/56, "Magic on V3"): the app, in an
-// offscreen window (main/preview.ts, through the core: previews.ts), or, for the CLI and a core
-// without an app, Playwright's Chromium loading the built renderer's preview page. Each render
-// reports script errors, whether anything was drawn, its size and where its content is, and
-// can return a screenshot. A package's trees come from its sandboxed test run (package/preview.ts).
+// Who draws a widget package's trees (docs/56, "Magic on V3"): the app, in an offscreen window
+// (main/preview.ts, through the core: previews.ts), or Playwright's Chromium loading the built
+// renderer's preview page over 127.0.0.1 (the CLI, evals, a core without an app). Both run the
+// same page and script (protocol's previewScript); each draw reports errors, whether anything was
+// drawn, its scroll size, and a screenshot when asked. What is drawn and how it is judged:
+// package/preview.ts's drawTrees.
 
-import { WIDGET_MEASURE, type MagicPreviewTree } from "@cmd/protocol";
-
-export interface PreviewRequest {
-  /** A complete page, or */
-  page?: string;
-  /** a package widget's tree, drawn by the app's kit (renderer/preview.html; magic/package/preview.ts). */
-  tree?: MagicPreviewTree;
-  width: number;
-  height: number;
-  /** Return a PNG (base64). */
-  shot?: boolean;
-}
-
-export interface PreviewShot {
-  errors: string[];
-  /** Characters of visible text. */
-  text: number;
-  /** Elements in the body. */
-  nodes: number;
-  /** Has a canvas, svg, img or video with a size. */
-  drawn: boolean;
-  scrollW: number;
-  scrollH: number;
-  /** Bounds of the visible content in the viewport. */
-  box?: { top: number; left: number; bottom: number; right: number } | null;
-  png?: string;
-}
+import fs from "node:fs";
+import http from "node:http";
+import path from "node:path";
+import { previewScript, type MagicPreviewRequest, type MagicPreviewShot } from "@cmd/protocol";
+import { REPO } from "./package/toolchain.ts";
 
 export interface Previewer {
   name: string;
-  render(requests: PreviewRequest[]): Promise<PreviewShot[]>;
+  render(requests: MagicPreviewRequest[]): Promise<MagicPreviewShot[]>;
+  /** Every theme the preview page has (`--themes all`); a previewer without the list draws dark and light. */
+  themes?(): Promise<string[]>;
 }
 
-/** Evaluated in the page after it settled. */
-export const MEASURE = WIDGET_MEASURE;
+/** The preview page of the built renderer (for Playwright; the app loads its own). */
+export const PREVIEW_PAGE = path.join(REPO, "apps/desktop/out/renderer/preview.html");
+export const previewPageBuilt = (): boolean => fs.existsSync(PREVIEW_PAGE);
 
-/** A window in the strip (cmd's default layout): a column the full height of the screen. */
-export const STRIP: [number, number] = [440, 880];
-/** A window in focus mode, or a wide grid cell. */
-export const WIDE: [number, number] = [1000, 560];
+const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".woff": "font/woff", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json" };
 
-// ── Playwright ───────────────────────────────────────────
+/**
+ * The built preview page over HTTP on 127.0.0.1 (Chromium won't load module scripts from
+ * file://): the renderer's build folder only, read-only, for one batch of draws.
+ */
+async function servePreviewPage(): Promise<{ url: string; origin: string; close(): void }> {
+  if (!previewPageBuilt()) throw new Error("the app isn't built (pnpm build), so trees can't be drawn here");
+  const root = path.dirname(PREVIEW_PAGE);
+  const server = http.createServer((req, res) => {
+    const rel = decodeURIComponent((req.url ?? "/").split("?")[0]!);
+    const file = path.join(root, path.normalize(rel));
+    if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return void res.writeHead(404).end();
+    res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" }).end(fs.readFileSync(file));
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  return { url: `${origin}/${path.basename(PREVIEW_PAGE)}`, origin, close: () => server.close() };
+}
 
-/** Headless Chromium through Playwright, when it is installed (dev checkouts, the CLI). */
+/** Headless Chromium through Playwright, when it is installed (dev checkouts, the CLI): one page per batch, resized and redrawn per request. */
 export async function playwrightPreviewer(): Promise<Previewer | null> {
   let chromium: typeof import("playwright").chromium;
   try {
@@ -55,42 +50,41 @@ export async function playwrightPreviewer(): Promise<Previewer | null> {
   } catch {
     return null;
   }
+  /** The preview page loaded in a fresh Chromium, for one batch; it may load its own files, nothing else. */
+  const session = async <T>(fn: (page: import("playwright").Page, errors: string[]) => Promise<T>): Promise<T> => {
+    const served = await servePreviewPage();
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 560, height: 460 }, deviceScaleFactor: 2 });
+      const errors: string[] = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      page.on("console", (m) => m.type() === "error" && !/Content Security Policy/.test(m.text()) && errors.push(m.text()));
+      await page.route("**/*", (route) => (route.request().url().startsWith(served.origin + "/") ? route.continue() : route.abort()));
+      await page.goto(served.url, { waitUntil: "load" });
+      return await fn(page, errors);
+    } finally {
+      served.close();
+      await browser.close();
+    }
+  };
   return {
     name: "playwright",
-    async render(requests) {
-      const browser = await chromium.launch();
-      let served: { url: string; origin: string; close(): void } | null = null;
-      try {
-        const out: PreviewShot[] = [];
+    render: (requests) =>
+      session(async (page, errors) => {
+        const out: MagicPreviewShot[] = [];
         for (const r of requests) {
-          const page = await browser.newPage({ viewport: { width: r.width, height: r.height }, deviceScaleFactor: 2 });
-          const errors: string[] = [];
-          page.on("pageerror", (e) => errors.push(e.message));
-          page.on("console", (m) => m.type() === "error" && !/Content Security Policy/.test(m.text()) && errors.push(m.text()));
-          let m: Omit<PreviewShot, "png">;
-          if (r.tree) {
-            // The built renderer's preview page draws the tree; it may load its own files, nothing else.
-            const { drawTree, servePreviewPage } = await import("./package/preview.ts");
-            served ??= await servePreviewPage();
-            const origin = served.origin;
-            await page.route("**/*", (route) => (route.request().url().startsWith(origin + "/") ? route.continue() : route.abort()));
-            await page.goto(served.url, { waitUntil: "load" });
-            m = (await page.evaluate(drawTree(r.tree))) as Omit<PreviewShot, "png">;
-          } else {
-            await page.route("**/*", (route) => route.abort());
-            await page.setContent(r.page ?? "", { waitUntil: "load" });
-            await page.waitForTimeout(500);
-            m = (await page.evaluate(MEASURE)) as Omit<PreviewShot, "png">;
-          }
+          errors.length = 0;
+          await page.setViewportSize({ width: Math.round(r.width), height: Math.round(r.height) });
+          const m = (await page.evaluate(previewScript(r.tree))) as MagicPreviewShot;
           const png = r.shot ? (await page.screenshot()).toString("base64") : undefined;
           out.push({ ...m, errors: [...m.errors, ...errors], png });
-          await page.close();
         }
         return out;
-      } finally {
-        served?.close();
-        await browser.close();
-      }
-    },
+      }),
+    themes: () =>
+      session(async (page) => {
+        await page.waitForFunction(() => typeof (window as unknown as { __cmdPreviewThemes?: unknown }).__cmdPreviewThemes === "function");
+        return page.evaluate(() => (window as unknown as { __cmdPreviewThemes(): string[] }).__cmdPreviewThemes());
+      }),
   };
 }

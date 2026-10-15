@@ -73,3 +73,11 @@ export interface MagicPreviewTree {
 /** The reference window sizes (the reference windows' matrix, docs/40): what previews and the Workbench draw widgets at. */
 export const PREVIEW_SIZES = { narrow: [320, 520], regular: [560, 460], wide: [900, 560] } as const;
 export type PreviewSize = keyof typeof PREVIEW_SIZES;
+
+/**
+ * Evaluated in the preview page (renderer/preview.html): once it has loaded its drawing (a module
+ * after load), draws the tree, waits for it to settle and measures it (a MagicPreviewShot without
+ * the PNG). The app's previewer and Playwright's run this same script.
+ */
+export const previewScript = (tree: MagicPreviewTree): string =>
+  `(async () => { for (let i = 0; i < 200 && !window.__cmdPreview; i++) await new Promise((r) => setTimeout(r, 25)); return window.__cmdPreview(${JSON.stringify(tree)}); })()`;

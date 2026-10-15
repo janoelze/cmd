@@ -9,7 +9,7 @@ import type { WidgetPermissions } from "@cmd/protocol";
 import { redact } from "../../lib/policy.ts";
 import type { ToolOutput, ToolSpec } from "../tools.ts";
 import type { Previewer } from "../previewer.ts";
-import type { WidgetPackage } from "../../widgets/package.ts";
+import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
 import { WRITABLE, listFiles, readFile, writeFile } from "./files.ts";
 import { previewTrees } from "./preview.ts";
 import type { RunOptions, Toolchain } from "./toolchain.ts";
@@ -51,7 +51,7 @@ export const PACKAGE_TOOL_SPECS: ToolSpec[] = [
   {
     name: "preview",
     explores: false,
-    description: "Render each state of the widget (its story's exports, else each fixture) with the fake host and draw the tree with cmd's kit: in a tall strip window (dark), wide (light), and the other states. Returns the trees as text and screenshots: look at them.",
+    description: "Render each state of the widget (its story's exports, else each fixture) with the fake host and draw the tree with cmd's kit: narrow (dark), wide (light), and the other states at their own size. Returns the trees as text and screenshots: look at them.",
     schema: obj({}, []),
   },
   {
@@ -183,15 +183,13 @@ export async function runPackageTool(name: string, input: Record<string, unknown
       const t = await c.toolchain.trees(c.dir, c.run);
       if (t.skipped) return { output: `Not rendered: ${t.skipped}.`, isError: false };
       if (!t.variants.length) return err(t.problems.join("\n") || "nothing rendered");
-      const r = await c.toolchain.check(c.dir, c.run);
-      const w = r.pkg?.widgets.find((x) => x.id === t.variants[0]!.widget);
-      const drawn = await previewTrees(await c.previewer().catch(() => null), t.variants, { title: w?.title ?? "Widget", icon: w?.icon ?? "puzzlepiece.extension" });
+      const drawn = await previewTrees(await c.previewer().catch(() => null), t.variants, widgetsOf(c.dir));
       const problems = [...t.problems, ...drawn.problems];
       if (!problems.length) state.dirty = false;
       const outlines = t.variants.map((v) => `--- ${v.widget} · ${v.name} ---\n${v.outline.split("\n").slice(0, 60).join("\n") || "(nothing)"}`).join("\n\n");
       const head = problems.length ? `Problems:\n- ${problems.join("\n- ")}` : "Renders cleanly in every state.";
       const warn = drawn.warnings.length ? `\nWarnings:\n- ${drawn.warnings.join("\n- ")}` : "";
-      const pics = drawn.skipped ? `\n(Not drawn: ${drawn.skipped}.)` : `\nScreenshots: ${t.variants[0]!.name} in a strip window (dark) and wide (light)${t.variants.length > 1 ? ", then the other states" : ""}.`;
+      const pics = drawn.skipped ? `\n(Not drawn: ${drawn.skipped}.)` : `\nScreenshots: ${t.variants[0]!.name} narrow (dark) and wide (light)${t.variants.length > 1 ? ", then the other states" : ""}.`;
       return { output: redact(`${head}${warn}${pics}\n\nThe trees:\n${outlines}`), isError: problems.length > 0, images: drawn.shots.slice(0, 4) };
     }
     case "terminal": {
@@ -223,4 +221,10 @@ function afterWrite(c: PackageToolContext, rel: string, state: PackageToolState)
   } catch (e) {
     return ` But it isn't valid JSON: ${(e as Error).message}`;
   }
+}
+
+/** The package's widgets' titles and icons, as package.json says now (the previews' title bars). */
+function widgetsOf(dir: string): Map<string, { title: string; icon: string }> {
+  const r = readPackage(dir);
+  return new Map(r.ok ? r.pkg.widgets.map((w) => [w.id, { title: w.title, icon: w.icon }]) : []);
 }

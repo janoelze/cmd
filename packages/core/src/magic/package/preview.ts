@@ -1,173 +1,113 @@
-// A package widget's trees, drawn for the Magic agent to look at (docs/56, "Magic on V3"):
-// each state the toolchain rendered (its story's, else its fixtures') goes to the previewer
-// as data, the app draws it with its own kit in a window of the reference sizes
-// (renderer/preview.html; Playwright loads the same page from the build), and the
-// screenshots come back with what each render reported. No widget code runs in the page:
-// the tree is data, drawn through the renderer's allow-list.
+// A package widget's trees drawn and judged (docs/56, "Magic on V3", "Developer ergonomics"):
+// each state the toolchain rendered (its story's, else its fixtures') goes to a previewer as
+// data, drawn by the app's own kit at the reference sizes (PREVIEW_SIZES) in the themes asked
+// for, and each draw is judged the same way: errors, drawing nothing, content wider than the
+// window, an empty state where the state gives data. Magic's build (previewTrees: what the agent
+// sees) and `cmd widget preview` (every theme and size, shots on disk) both draw through drawTrees.
 
 import fs from "node:fs";
-import http from "node:http";
 import path from "node:path";
-import { PREVIEW_SIZES, type PreviewSize } from "@cmd/protocol";
-import type { PreviewRequest, Previewer, PreviewShot } from "../previewer.ts";
-import { STRIP, WIDE } from "../previewer.ts";
+import { PREVIEW_SIZES, type MagicPreviewShot, type PreviewSize } from "@cmd/protocol";
+import type { Previewer } from "../previewer.ts";
 import type { TreeVariant } from "./toolchain.ts";
-import { REPO } from "./toolchain.ts";
 
-/** The preview page of the built renderer (for Playwright; the app loads its own). */
-export const PREVIEW_PAGE = path.join(REPO, "apps/desktop/out/renderer/preview.html");
-export const previewPageBuilt = (): boolean => fs.existsSync(PREVIEW_PAGE);
-
-const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".woff": "font/woff", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json" };
-
-/**
- * The built preview page over HTTP on 127.0.0.1, for Playwright (Chromium won't load module
- * scripts from file://): the renderer's build folder only, read-only, for one batch of renders.
- */
-export async function servePreviewPage(): Promise<{ url: string; origin: string; close(): void }> {
-  if (!previewPageBuilt()) throw new Error("the app isn't built (pnpm build), so trees can't be drawn here");
-  const root = path.dirname(PREVIEW_PAGE);
-  const server = http.createServer((req, res) => {
-    const rel = decodeURIComponent((req.url ?? "/").split("?")[0]!);
-    const file = path.join(root, path.normalize(rel));
-    if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return void res.writeHead(404).end();
-    res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" }).end(fs.readFileSync(file));
-  });
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  return { url: `${origin}/${path.basename(PREVIEW_PAGE)}`, origin, close: () => server.close() };
+/** One draw: a state, in a theme, at a reference size. */
+interface Draw {
+  variant: TreeVariant;
+  theme: string;
+  size: PreviewSize;
 }
 
-/** Evaluated in the preview page: once it has loaded its drawing (a module after load), draws the tree, waits for it to settle and measures it. */
-export const drawTree = (tree: PreviewRequest["tree"]): string =>
-  `(async () => { for (let i = 0; i < 200 && !window.__cmdPreview; i++) await new Promise((r) => setTimeout(r, 25)); return window.__cmdPreview(${JSON.stringify(tree)}); })()`;
-
-export interface TreePreview {
-  ok: boolean;
-  problems: string[];
-  warnings: string[];
-  /** Screenshots for the agent (base64 PNG): the first state in a strip window (dark), wide (light), then the others. */
-  shots: string[];
-  skipped?: string;
-}
-
-interface Case {
-  v: TreeVariant;
-  label: string;
-  theme: "dark" | "light";
-  size: [number, number];
-}
-
-/** The renders: the first state tall (dark) and wide (light), each other state tall; at most five. */
-function cases(variants: TreeVariant[]): Case[] {
-  const [first, ...rest] = variants;
-  if (!first) return [];
-  return [
-    { v: first, label: `${first.name}, a strip window (${STRIP.join("×")}), dark`, theme: "dark", size: STRIP },
-    { v: first, label: `${first.name}, wide (${WIDE.join("×")}), light`, theme: "light", size: WIDE },
-    ...rest.slice(0, 3).map((v): Case => ({ v, label: `${v.name}, a strip window, dark`, theme: "dark", size: STRIP })),
-  ];
-}
-
-/** Draw the states with the previewer; null previewer: say so (the agent still has the outlines). */
-export async function previewTrees(previewer: Previewer | null, variants: TreeVariant[], widget: { title: string; icon: string }): Promise<TreePreview> {
-  if (!previewer) return { ok: true, problems: [], warnings: [], shots: [], skipped: "no previewer (open the cmd app, or build it for the CLI: pnpm build)" };
-  const list = cases(variants);
-  if (!list.length) return { ok: true, problems: [], warnings: [], shots: [], skipped: "nothing to draw" };
-  let shots: PreviewShot[];
-  try {
-    shots = await previewer.render(list.map((c) => ({ tree: { messages: c.v.messages, title: widget.title, icon: widget.icon, theme: c.theme }, width: c.size[0], height: c.size[1], shot: true })));
-  } catch (e) {
-    return { ok: true, problems: [], warnings: [], shots: [], skipped: `the previewer failed: ${(e as Error).message}` };
-  }
-  const problems: string[] = [];
-  const warnings: string[] = [];
-  const pngs: string[] = [];
-  list.forEach((c, i) => {
-    const s = shots[i];
-    if (!s) return;
-    if (s.png) pngs.push(s.png);
-    for (const e of new Set(s.errors)) problems.push(`${c.label}: ${e}`);
-    if (s.text === 0 && s.nodes < 3) problems.push(`${c.label}: draws nothing`);
-    if (s.scrollW > c.size[0] + 2) warnings.push(`${c.label}: content is ${s.scrollW}px wide in a ${c.size[0]}px window`);
-  });
-  return { ok: !problems.length, problems, warnings, shots: pngs };
-}
-
-// ── every theme and size (cmd widget preview) ───────────────
-
-export interface MatrixOptions {
-  /** Theme ids, or "all" (every theme the preview page has). */
-  themes: string[] | "all";
-  /** Reference sizes; null: each state at its story's size, else regular. */
-  sizes: PreviewSize[] | null;
-  /** Where the shots go (created); none: no files. */
-  out?: string;
-}
-
-export interface MatrixShot {
+export interface DrawnTree {
   variant: string;
   widget: string;
   theme: string;
   size: PreviewSize;
   /** The PNG's path, when written. */
   file?: string;
-  /** What's wrong with this render: overflow, an empty state where the state has data, console errors. */
+  /** Base64, when not written to a file. */
+  png?: string;
+  /** What makes it wrong: errors, drawing nothing. */
   problems: string[];
+  /** What makes it look wrong: overflow, an empty state where the state gives data. */
+  warnings: string[];
+}
+
+export interface DrawOptions {
+  /** Theme ids, or "all" (every theme the preview page has). */
+  themes: string[] | "all";
+  /** Reference sizes; null: each state at its story's size, else regular. */
+  sizes: PreviewSize[] | null;
+  /** Where the shots go (created); none: they come back as base64. */
+  out?: string;
+}
+
+/** The size a state asks for in its story, else regular. */
+const ownSize = (v: TreeVariant): PreviewSize => (v.size && v.size in PREVIEW_SIZES ? (v.size as PreviewSize) : "regular");
+
+/** The one judge of a draw. */
+export function judge(v: TreeVariant, s: MagicPreviewShot, width: number): { problems: string[]; warnings: string[] } {
+  const problems = [...new Set(s.errors)];
+  if (s.text === 0 && s.nodes < 3) problems.push("draws nothing");
+  const warnings: string[] = [];
+  if (s.scrollW > width + 2) warnings.push(`content is ${s.scrollW}px wide in a ${width}px window`);
+  if (v.empty && v.data && !/empty|none|nothing|blank/i.test(v.name)) warnings.push("shows its empty state, though this state gives it data");
+  return { problems, warnings };
 }
 
 const fileSafe = (s: string) => s.replace(/[^\w.-]+/g, "-");
 
-/**
- * Each state × theme × size drawn by the built preview page in Playwright's Chromium (one page per
- * size, redrawn per theme), each checked: content wider than the window, an empty state where the
- * story gives data, and errors in the console, the page or the widget's own render.
- */
-export async function previewMatrix(variants: TreeVariant[], widgets: Map<string, { title: string; icon: string }>, o: MatrixOptions): Promise<MatrixShot[]> {
-  let chromium: typeof import("playwright").chromium;
-  try {
-    ({ chromium } = await import("playwright"));
-  } catch {
-    throw new Error("Playwright isn't installed here, so nothing can be drawn (a checkout's pnpm install has it)");
-  }
-  const served = await servePreviewPage();
-  const browser = await chromium.launch();
-  const out: MatrixShot[] = [];
-  try {
-    if (o.out) fs.mkdirSync(o.out, { recursive: true });
-    const page = await browser.newPage({ viewport: { width: 560, height: 460 }, deviceScaleFactor: 2 });
-    const errors: string[] = [];
-    page.on("pageerror", (e) => errors.push(e.message));
-    page.on("console", (m) => m.type() === "error" && !/Content Security Policy/.test(m.text()) && errors.push(m.text()));
-    await page.route("**/*", (route) => (route.request().url().startsWith(served.origin + "/") ? route.continue() : route.abort()));
-    await page.goto(served.url, { waitUntil: "load" });
-    await page.waitForFunction(() => typeof (window as unknown as { __cmdPreview?: unknown }).__cmdPreview === "function");
-    const themes = o.themes === "all" ? await page.evaluate(() => (window as unknown as { __cmdPreviewThemes(): string[] }).__cmdPreviewThemes()) : o.themes;
-    for (const v of variants) {
-      const w = widgets.get(v.widget) ?? { title: v.widget, icon: "puzzlepiece.extension" };
-      const own = v.size && v.size in PREVIEW_SIZES ? (v.size as PreviewSize) : "regular";
-      for (const size of o.sizes ?? [own]) {
-        const [width, height] = PREVIEW_SIZES[size];
-        await page.setViewportSize({ width, height });
-        for (const theme of themes) {
-          errors.length = 0;
-          const m = (await page.evaluate(drawTree({ messages: v.messages, title: w.title, icon: w.icon, theme }))) as Omit<PreviewShot, "png">;
-          const problems = [...new Set([...v.errors, ...m.errors, ...errors])];
-          if (m.scrollW > width + 2) problems.push(`content is ${m.scrollW}px wide in a ${width}px window`);
-          if (v.empty && v.data && !/empty|none|nothing|blank/i.test(v.name)) problems.push("shows its empty state, though this state gives it data");
-          if (m.text === 0 && m.nodes < 3) problems.push("draws nothing");
-          let file: string | undefined;
-          if (o.out) {
-            file = path.join(o.out, `${fileSafe(variants.some((x) => x.widget !== v.widget) ? `${v.widget}-${v.name}` : v.name)}-${size}-${fileSafe(theme)}.png`);
-            await page.screenshot({ path: file });
-          }
-          out.push({ variant: v.name, widget: v.widget, theme, size, file, problems });
-        }
-      }
+/** Every state × theme × size (or each state at its own size) drawn by the previewer and judged; shots to `out`, else as base64. */
+export async function drawTrees(previewer: Previewer, variants: TreeVariant[], widgets: Map<string, { title: string; icon: string }>, o: DrawOptions): Promise<DrawnTree[]> {
+  const themes = o.themes === "all" ? ((await previewer.themes?.()) ?? ["dark", "light"]) : o.themes;
+  return draw(previewer, variants.flatMap((v) => (o.sizes ?? [ownSize(v)]).flatMap((size) => themes.map((theme) => ({ variant: v, theme, size })))), widgets, o.out);
+}
+
+async function draw(previewer: Previewer, draws: Draw[], widgets: Map<string, { title: string; icon: string }>, out?: string): Promise<DrawnTree[]> {
+  const several = new Set(draws.map((d) => d.variant.widget)).size > 1;
+  const shots = await previewer.render(
+    draws.map((d) => {
+      const w = widgets.get(d.variant.widget) ?? { title: d.variant.widget, icon: "puzzlepiece.extension" };
+      const [width, height] = PREVIEW_SIZES[d.size];
+      return { tree: { messages: d.variant.messages, title: w.title, icon: w.icon, theme: d.theme }, width, height, shot: true };
+    }),
+  );
+  if (out) fs.mkdirSync(out, { recursive: true });
+  return draws.map((d, i): DrawnTree => {
+    const s = shots[i] ?? { errors: ["not drawn"], text: 0, nodes: 0, drawn: false, scrollW: 0, scrollH: 0 };
+    const v = d.variant;
+    let file: string | undefined;
+    if (out && s.png) {
+      file = path.join(out, `${fileSafe(several ? `${v.widget}-${v.name}` : v.name)}-${d.size}-${fileSafe(d.theme)}.png`);
+      fs.writeFileSync(file, Buffer.from(s.png, "base64"));
     }
-  } finally {
-    served.close();
-    await browser.close();
+    return { variant: v.name, widget: v.widget, theme: d.theme, size: d.size, ...(file ? { file } : s.png ? { png: s.png } : {}), ...judge(v, s, PREVIEW_SIZES[d.size][0]) };
+  });
+}
+
+export interface TreePreview {
+  ok: boolean;
+  problems: string[];
+  warnings: string[];
+  /** Screenshots for the agent (base64 PNG): the first state narrow (dark), wide (light), then the others. */
+  shots: string[];
+  skipped?: string;
+}
+
+/** What Magic's agent looks at: the first state narrow (dark) and wide (light), each other state at its own size (dark); at most five. */
+export async function previewTrees(previewer: Previewer | null, variants: TreeVariant[], widgets: Map<string, { title: string; icon: string }>): Promise<TreePreview> {
+  if (!previewer) return { ok: true, problems: [], warnings: [], shots: [], skipped: "no previewer (open the cmd app, or build it for the CLI: pnpm build)" };
+  const [first, ...rest] = variants;
+  if (!first) return { ok: true, problems: [], warnings: [], shots: [], skipped: "nothing to draw" };
+  const draws: Draw[] = [{ variant: first, theme: "dark", size: "narrow" }, { variant: first, theme: "light", size: "wide" }, ...rest.slice(0, 3).map((v): Draw => ({ variant: v, theme: "dark", size: ownSize(v) }))];
+  let drawn: DrawnTree[];
+  try {
+    drawn = await draw(previewer, draws, widgets);
+  } catch (e) {
+    return { ok: true, problems: [], warnings: [], shots: [], skipped: `the previewer failed: ${(e as Error).message}` };
   }
-  return out;
+  const label = (d: DrawnTree) => `${d.variant}, ${d.size} (${PREVIEW_SIZES[d.size].join("×")}), ${d.theme}`;
+  const problems = drawn.flatMap((d) => d.problems.map((p) => `${label(d)}: ${p}`));
+  const warnings = drawn.flatMap((d) => d.warnings.map((p) => `${label(d)}: ${p}`));
+  return { ok: !problems.length, problems, warnings, shots: drawn.flatMap((d) => (d.png ? [d.png] : [])) };
 }

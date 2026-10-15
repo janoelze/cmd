@@ -1,14 +1,15 @@
 // `cmd widget preview [dir]` (docs/56, "Developer ergonomics"; the previewer of docs/14, over
 // trees): each state of the package's story (else its fixtures) rendered against the fake host
 // by the toolchain Magic previews with (sandboxed Vitest), then drawn by the app's own preview
-// page in every theme and reference size asked for (magic/package/preview.ts's previewMatrix).
+// page in Playwright, in every theme and reference size asked for, and judged as Magic's build
+// judges its previews (magic/package/preview.ts's drawTrees).
 // Shots go to <dir>/.cmd-preview; it exits 2 when any render overflows its window, shows its
 // empty state though the state gives it data, or logs an error.
 
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { PREVIEW_SIZES, type PreviewSize } from "@cmd/protocol";
-import { checkoutToolchain, previewMatrix, previewPageBuilt, sandboxAvailable, type MatrixShot } from "@cmd/core/magic";
+import { checkoutToolchain, drawTrees, playwrightPreviewer, previewPageBuilt, sandboxAvailable, type DrawnTree } from "@cmd/core/magic";
 import { readPackage } from "@cmd/core/widgets/package";
 import { dim, green, red } from "./magic.ts";
 import { tilde } from "./widget-link.ts";
@@ -56,13 +57,20 @@ export async function previewCommand(argv: string[]): Promise<number> {
   }
   const out = path.resolve(o.out ?? path.join(dir, ".cmd-preview"));
   const widgets = new Map(r.pkg.widgets.map((w) => [w.id, { title: w.title, icon: w.icon }]));
-  let shots: MatrixShot[];
+  const previewer = await playwrightPreviewer();
+  if (!previewer) {
+    console.error(red("Playwright isn't installed here, so nothing can be drawn (a checkout's pnpm install has it)"));
+    return 2;
+  }
+  let drawn: DrawnTree[];
   try {
-    shots = await previewMatrix(trees.variants, widgets, { themes, sizes, out });
+    drawn = await drawTrees(previewer, trees.variants, widgets, { themes, sizes, out });
   } catch (e) {
     console.error(red((e as Error).message));
     return 2;
   }
+  // One list per draw for the person: the tree run's own errors, what the judge found.
+  const shots = drawn.map(({ warnings, ...d }) => ({ ...d, problems: [...new Set([...(trees.variants.find((v) => v.name === d.variant && v.widget === d.widget)?.errors ?? []), ...d.problems, ...warnings])] }));
   if (o.json) {
     console.log(JSON.stringify({ ok: shots.every((s) => !s.problems.length), out, shots }, null, 2));
     return shots.some((s) => s.problems.length) ? 2 : 0;

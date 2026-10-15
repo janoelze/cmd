@@ -465,7 +465,7 @@ export type CoreEvent =
   | { type: "workspace.show"; workspaceId: WorkspaceId; newWindow: boolean }
   /** A Magic widget's run: agent steps, the header, the body so far, done or failed. */
   | { type: "magic.stream"; id: WindowId; progress: MagicProgress }
-  /** To the previewer connection only: render these pages offscreen and answer with magic.previewResult. */
+  /** To the previewer connection only: draw these trees offscreen and answer with magic.previewResult. */
   | { type: "magic.previewRequest"; reqId: string; requests: MagicPreviewRequest[] }
   /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a workspace). */
   | { type: "widget.library"; entries: WidgetEntry[] }

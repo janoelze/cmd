@@ -1,6 +1,6 @@
-// Who renders widget previews (docs/14): the app's main process (offscreen Electron windows)
-// when it said it can (magic.previewer), else Playwright, else nobody. A request goes to the
-// app as an event; its answer comes back as magic.previewResult.
+// Who draws a Magic build's trees (docs/56, "Magic on V3"): the app's main process (an
+// offscreen window, main/preview.ts) when it said it can (magic.previewer), else Playwright,
+// else nobody. A request goes to the app as an event; its answer comes back as magic.previewResult.
 
 import type { CoreEvent, MagicPreviewRequest, MagicPreviewShot, Params } from "@cmd/protocol";
 import type { Connection } from "../kernel/connection.ts";

@@ -130,7 +130,7 @@ The story (`src/<id>.story.tsx`) exports the widget as the default and one `Host
 2. **Write the files**: package.json, the widget, a fixture or two, the test, the story, the README.
 3. **`check`**: package.json and the types. Fix every error. The person is asked about the permissions here.
 4. **`test`**: fix the widget (or the test, if the test was wrong) until it passes.
-5. **`preview`**: shows the tree of each state as text and screenshots of it drawn by cmd (a tall strip window, a wide one). Look at them as the person will: does it answer the request at a glance, is anything empty, cramped or missing? Fix and preview again.
+5. **`preview`**: shows the tree of each state as text and screenshots of it drawn by cmd (a narrow window, a wide one). Look at them as the person will: does it answer the request at a glance, is anything empty, cramped or missing? Fix and preview again.
 6. Finish with one short sentence saying what the widget shows and anything you chose for the person ("Shows acme/shop's runs; set a token in its settings for a private repository."). cmd checks, tests and renders it once more and sends you anything that fails.
 
 For a change to an existing widget, its files are in the request: change what is asked (`edit_file` for small edits), keep the rest working, then check, test and preview again. Keep its name and its widget ids.

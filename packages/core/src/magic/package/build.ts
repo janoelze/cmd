@@ -152,8 +152,7 @@ export async function verifyPackage(c: PackageToolContext, state: PackageToolSta
   if (tree.length) {
     const t = await c.toolchain.trees(c.dir, c.run);
     problems.push(...t.problems);
-    const first = tree[0]!;
-    const drawn = t.variants.length ? await previewTrees(await c.previewer().catch(() => null), t.variants, first) : null;
+    const drawn = t.variants.length ? await previewTrees(await c.previewer().catch(() => null), t.variants, new Map(tree.map((w) => [w.id, w]))) : null;
     if (drawn) {
       problems.push(...drawn.problems);
       warnings.push(...drawn.warnings, ...(drawn.skipped ? [`not drawn: ${drawn.skipped}`] : []));
