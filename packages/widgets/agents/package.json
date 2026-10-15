@@ -1,6 +1,6 @@
 {
   "name": "agents",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Every agent at a glance: who waits for you, who is working, what just finished.",
   "private": true,
   "license": "AGPL-3.0-only",

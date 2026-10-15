@@ -17,7 +17,7 @@ const team = [
   agent({ name: "Codex", kind: "codex", state: "idle", place: "web", stateSince: min(95) }),
 ];
 
-/** Waiting for you first, then working (a subagent under its host), then the rest; the counts in the title bar. */
+/** One ranked list: waiting for you first, then working (a subagent under its host), then finished, then the rest; the counts in the title bar. */
 export const Busy: HostData = { agents: team };
 
 /** All Workspaces from the title menu: agents of other workspaces too. */

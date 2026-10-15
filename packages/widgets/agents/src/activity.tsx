@@ -1,22 +1,24 @@
 // Agents, a built-in widget package (docs/56, "Built-ins and dogfooding"): every agent in
-// this workspace, or all of them, at a glance. Who waits for you first, then who is
-// working, then the rest, most recent first; subagents under their host. A click goes to
+// this workspace, or all of them, at a glance, in one ranked list as the native Agent
+// Activity: who waits for you first, then who is working, then what finished that you
+// haven't seen, then the rest, most recent first; subagents under their host. A row's end
+// says where it works and how long ago, as the sidebar does. A click goes to
 // the agent's terminal (a subagent's: its host's), in its workspace. The counts are the
 // title bar's status, and its menu switches the scope, kept per window.
 
 import type { ReactNode } from "react";
-import { Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, useAgents, useStoredState, useNow, fmt, cmd, type Agent } from "@cmd/widget-api";
+import { Window, View, List, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Stack, Text, useAgents, useStoredState, useNow, fmt, cmd, type Agent } from "@cmd/widget-api";
 
 type Scope = "workspace" | "all";
 
-/** Waiting for you, working, the rest: the section an agent (and its subagents) sit in. */
-const SECTIONS = [
-  { title: "Waiting for you", tone: "needs" as const, has: (a: Agent) => a.bucket === "needs" },
-  { title: "Working", has: (a: Agent) => a.bucket !== "needs" && (a.state === "working" || a.state === "starting") },
-  { title: "Others", has: (a: Agent) => a.bucket !== "needs" && a.state !== "working" && a.state !== "starting" },
-];
+/** Waiting for you, then working, then finished and not seen yet, then the rest. */
+export function rank(a: Agent): number {
+  if (a.bucket === "needs") return 0;
+  if (a.state === "working" || a.state === "starting") return 1;
+  return a.bucket === "unseen" ? 2 : 3;
+}
 
-/** Hosts with their subagents under them, each level most recent first. */
+/** Hosts with their subagents under them, each level by rank, then most recent first. */
 function tree(agents: Agent[]): { roots: Agent[]; under: (a: Agent) => Agent[] } {
   const ids = new Set(agents.map((a) => a.id));
   const kids = new Map<string, Agent[]>();
@@ -25,9 +27,9 @@ function tree(agents: Agent[]): { roots: Agent[]; under: (a: Agent) => Agent[] }
     if (a.parentId && ids.has(a.parentId)) kids.set(a.parentId, [...(kids.get(a.parentId) ?? []), a]);
     else roots.push(a);
   }
-  const recent = (x: Agent, y: Agent) => y.stateSince - x.stateSince;
-  roots.sort(recent);
-  for (const list of kids.values()) list.sort(recent);
+  const order = (x: Agent, y: Agent) => rank(x) - rank(y) || y.stateSince - x.stateSince;
+  roots.sort(order);
+  for (const list of kids.values()) list.sort(order);
   return { roots, under: (a) => kids.get(a.id) ?? [] };
 }
 
@@ -40,11 +42,20 @@ function windowOf(a: Agent, byId: Map<string, Agent>): string | null {
 
 function Row({ agent, depth, now, go }: { agent: Agent; depth: number; now: number; go: (a: Agent) => void }) {
   return (
-    <ListRow depth={depth} onClick={() => go(agent)}>
+    <ListRow depth={depth} tip={agent.cwd} onClick={() => go(agent)}>
       <ListRowIcon icon={agent.icon} light={agent.light} />
-      <ListRowContent title={agent.name} place={agent.place ?? undefined} detail={agent.statusLine} tone={agent.bucket === "needs" ? "needs" : undefined} />
+      <ListRowContent title={agent.name} detail={agent.statusLine} tone={agent.bucket === "needs" ? "needs" : undefined} />
       <ListRowEnd>
-        <Chip>{fmt.ago(agent.stateSince, now)}</Chip>
+        <Stack gap={0} align="end">
+          {agent.place && (
+            <Text size="xs" tone="dim" truncate>
+              {agent.place}
+            </Text>
+          )}
+          <Text size="xs" tone="dim">
+            {fmt.ago(agent.stateSince, now)}
+          </Text>
+        </Stack>
       </ListRowEnd>
     </ListRow>
   );
@@ -80,16 +91,7 @@ export default function Agents() {
           agents.length ? null : { icon: "person.2", title: scope === "all" ? "No agents running" : "No agents in this workspace", text: "Agents you start show up here as they work." }
         }
       >
-        <List>
-          {SECTIONS.map((s) => {
-            const mine = roots.filter(s.has);
-            return mine.length ? (
-              <ListSection key={s.title} title={s.title} count={mine.length} tone={s.tone}>
-                {mine.flatMap((a) => rows(a, 0))}
-              </ListSection>
-            ) : null;
-          })}
-        </List>
+        <List>{roots.flatMap((a) => rows(a, 0))}</List>
       </View>
     </Window>
   );

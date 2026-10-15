@@ -1,5 +1,6 @@
-// The Agents widget against the fake host (@cmd/widget-api/testing): the order, the tree
-// of subagents, where a click goes, and the scope in the title menu, kept per window.
+// The Agents widget against the fake host (@cmd/widget-api/testing): one ranked list as the
+// native view (waiting, working, finished unseen, the rest), the tree of subagents, a row's
+// end (where, how long ago) and tooltip, where a click goes, and the scope in the title menu, kept per window.
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
@@ -9,14 +10,39 @@ const { agent } = fixtures;
 const titles = (rows: { children: unknown[] }[]) => rows.map((r) => JSON.stringify(r).match(/"title":"([^"]+)"/)?.[1]);
 
 describe("Agents", () => {
-  it("lists waiting agents first, then working, then the rest, with the counts in the title bar", async () => {
+  it("ranks waiting agents first, then working, then finished ones not seen yet, then the rest, in one list", async () => {
+    const host = createHost({
+      agents: [
+        agent({ name: "Idle", state: "idle", stateSince: Date.now() - 1000 }),
+        agent({ name: "Docs", state: "done", stateSince: Date.now() - 60_000 }),
+        agent({ name: "Seen", state: "done", bucket: "rest", stateSince: Date.now() - 2000 }),
+        agent({ name: "Perf", state: "working" }),
+        agent({ name: "Tours", state: "waiting", statusLine: "Wants to run pnpm e2e" }),
+      ],
+    });
+    const tree = await render(<Agents />, host);
+    expect(tree.sections()).toHaveLength(0);
+    expect(titles(tree.rows())).toEqual(["Tours", "Perf", "Docs", "Idle", "Seen"]);
+    expect(tree.find("Window").props.status).toBe("1 waiting for you · 1 working · 2 done");
+  });
+
+  it("says where an agent works and how long ago at the row's end, its folder in the tooltip", async () => {
+    const tree = await render(<Agents />, createHost({ agents: [agent({ name: "Tours", place: "cmd-tours", cwd: "/Users/me/src/cmd-tours", stateSince: Date.now() - 4 * 60_000 })] }));
+    const row = tree.rows()[0]!;
+    expect(row.props.tip).toBe("/Users/me/src/cmd-tours");
+    expect(tree.find("ListRowContent").props.place).toBeUndefined();
+    expect(tree.find("Stack").props).toMatchObject({ gap: 0, align: "end" });
+    expect(tree.findAll("Text").map((t) => [t.props.size, t.props.tone])).toEqual([["xs", "dim"], ["xs", "dim"]]);
+    expect(tree.text()).toContain("cmd-tours");
+    expect(tree.text()).toContain("4m");
+    expect(tree.findAll("Chip")).toHaveLength(0);
+  });
+
+  it("puts the counts in the title bar", async () => {
     const host = createHost({
       agents: [agent({ name: "Docs", state: "done" }), agent({ name: "Perf", state: "working" }), agent({ name: "Tours", state: "waiting", statusLine: "Wants to run pnpm e2e" })],
     });
     const tree = await render(<Agents />, host);
-    expect(tree).toHaveSection("Waiting for you", { count: 1 });
-    expect(tree.sections().map((s) => s.props.title)).toEqual(["Waiting for you", "Working", "Others"]);
-    expect(titles(tree.rows())).toEqual(["Tours", "Perf", "Docs"]);
     expect(tree.find("Window").props.status).toBe("1 waiting for you · 1 working · 1 done");
   });
 
@@ -31,7 +57,6 @@ describe("Agents", () => {
     const tree = await render(<Agents />, host);
     expect(titles(tree.rows())).toEqual(["Tours", "Perf", "Explore"]);
     expect(tree.rows().map((r) => r.props.depth)).toEqual([0, 0, 1]);
-    expect(tree).toHaveSection("Working", { count: 2 });
   });
 
   it("selects the host's window when a subagent is clicked", async () => {
