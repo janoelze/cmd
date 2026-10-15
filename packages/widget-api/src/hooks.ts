@@ -76,18 +76,41 @@ export function useWindows(query: ApiScopeQuery = {}): ApiWindow[] {
 }
 
 /**
+ * An event as `useEvents` keeps it: `again` counts how often its key was recorded again since
+ * it first came to this subscription (a command recorded as it starts, then as it ends: 1), as
+ * the Event Stream's "recorded again ×n" does; 0 for one recorded once, and for events without
+ * a key. Counted as cmd sends them: recordings within one burst (50 ms) arrive as one.
+ * @since 1.3
+ */
+export type LiveEvent = ApiEvent & { again: number };
+
+/** `incoming` after `prev`, a key's last kept (mergeEvents), each carrying how often its key came again. */
+function countAgain(prev: LiveEvent[], incoming: ApiEvent[]): LiveEvent[] {
+  const seen = new Map<string, number>();
+  for (const e of prev) if (e.key) seen.set(e.key, e.again);
+  const next = incoming.map((e): LiveEvent => {
+    if (!e.key) return { ...e, again: 0 };
+    const n = seen.has(e.key) ? seen.get(e.key)! + 1 : 0;
+    seen.set(e.key, n);
+    return { ...e, again: n };
+  });
+  return mergeEvents(prev, next);
+}
+
+/**
  * Events from the log matching `query`, newest last: the query's result first, then each
  * new one as it happens; at most `query.limit` (default 200) are kept. An event recorded again
- * (a command as it ends: the same `key`, since 1.1) replaces the one before. Needs
+ * (a command as it ends: the same `key`, since 1.1) replaces the one before, and since 1.3
+ * carries `again`, how often that happened while subscribed (LiveEvent). Needs
  * `events: [<class>]` for each class of events it reads. `{ scope: "all" }` reads every
  * workspace's, with `workspace: ["all"]` (live since cmd of 2026-10-15; an older cmd refuses
  * it, and `cmd.events.query` reads them).
  * @since 1.0
  */
-export function useEvents(query: ApiEventQuery = {}): ApiEvent[] {
+export function useEvents(query: ApiEventQuery = {}): LiveEvent[] {
   const limit = query.limit ?? 200;
-  // The last of each key wins, within the new ones too (a command's start and end in one burst).
-  return useTopic("events", query, [], (prev, next) => mergeEvents(prev, next).slice(-limit));
+  // The last of each key wins, within the new ones too (a command's start and end in one burst), counting how often it came again.
+  return useTopic("events", query, [], (prev, next) => countAgain(prev as LiveEvent[], next).slice(-limit)) as LiveEvent[];
 }
 
 /**

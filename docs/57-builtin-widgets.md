@@ -252,7 +252,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Edge-to-edge `Panel` | d | `Panel` > `WindowToolbar` + `PanelBody`. Fixed (widget-port-fixes). |
 | The classes are in the title menu, whose button says "All Events" or "3 hidden"; the package's title menu says "This Workspace" and the classes are a toolbar `Show` menu | a | `Window menuLabel` (A7); then classes and scope share the title menu as natively |
 | A chip says the class's title ("Agents") in `projectHue(class)`; the package's says the class id in its own hash's hue | d, a | `titleOf(fam)`; `fmt.hue` (A11). Fixed (widget-port-fixes). The title part (d); the hue waits for A11. |
-| "recorded again ×n" in the detail | d | count the events per key before `newestFirst` drops them. Fixed (widget-port-fixes). Counted from `cmd.events.subscribe` (`useEvents` merges them away). |
+| "recorded again ×n" in the detail | d | count the events per key before `newestFirst` drops them. Fixed (widget-port-fixes). Counted from `cmd.events.subscribe` (`useEvents` merges them away). Since API 1.3 `useEvents`' events carry `again` (`LiveEvent`): how often the key was recorded again while subscribed; built (widget-data), the re-port drops its own count (`useLog`) for it. |
 | Events of no workspace (the data layer's own) are shown | e | a widget reads its workspace's, or every workspace's with `workspace: ["all"]`, never what belongs to none: matching would hand any widget with an events grant cmd's own records |
 
 **Notifications → Notification Log**

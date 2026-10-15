@@ -3,7 +3,7 @@
 
 import { describe, expect, it, test } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
-import { Stat, Inline, useData, useCompletion, useTerminalUsage, useStat, useJournal, useWorkspaces, useAppUsage, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
+import { Stat, Inline, useData, useCompletion, useTerminalUsage, useEvents, useStat, useJournal, useWorkspaces, useAppUsage, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
 import Widget from "../examples/v1/agents.tsx";
 
 test("waiting agents come first", async () => {
@@ -249,6 +249,26 @@ describe("API 1.2's verbs in the fake host", () => {
 });
 
 describe("API 1.3's data in the fake host", () => {
+  it("counts how often useEvents' events were recorded again while subscribed", async () => {
+    function Log() {
+      const events = useEvents({ types: ["command"] });
+      return <Text>{events.map((e) => `${e.key}:${e.again}`).join(" ")}</Text>;
+    }
+    const start = fixtures.command({ key: "command:1" });
+    const host = createHost({ events: [start, fixtures.event({ type: "command", key: undefined })] });
+    const tree = await render(<Log />, host);
+    // The query's result: nothing came again yet (an event without a key counts 0 too).
+    expect(tree.text()).toBe("command:1:0 undefined:0");
+    // Recorded again as it ends, then once more; another key is new; a burst with the same key twice counts both.
+    host.emit({ ...start, until: start.at + 10, data: { ...start.data, exitCode: 0 } });
+    await tree.idle();
+    expect(tree.text()).toBe("undefined:0 command:1:1");
+    host.emit({ ...start, until: start.at + 20 }, fixtures.command({ key: "command:2" }));
+    host.emit(fixtures.command({ key: "command:3" }), fixtures.command({ key: "command:3" }));
+    await tree.idle();
+    expect(tree.text()).toBe("undefined:0 command:1:2 command:2:0 command:3:1");
+  });
+
   it("serves useStat, useJournal, useWorkspaces and useAppUsage live, and journal.week", async () => {
     function Data() {
       const runs = useStat({ stat: "commands.runs" });
