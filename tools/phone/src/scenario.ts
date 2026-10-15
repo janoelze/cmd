@@ -144,6 +144,10 @@ export async function seed(conn: Connection, s: Scenario, ctx: ScenarioContext, 
   const call = conn.client.call.bind(conn.client);
   const out: Seeded[] = [];
   const agents: { pane: ScenarioPane; paneId: PaneId }[] = [];
+  // What a PTY host kept from the last start (one stop couldn't reach) goes first, so it starts the same each time.
+  const left = await call("pane.list", {});
+  for (const p of left) await call("pane.kill", { paneId: p.id });
+  if (left.length) await waitFor(async () => (await call("pane.list", {})).length === 0, "the last start's terminals to close");
   for (const w of s.workspaces) {
     let workspaceId: string | undefined;
     let dir: string | undefined;

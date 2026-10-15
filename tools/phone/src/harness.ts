@@ -1,7 +1,9 @@
 // What the phone's harnesses share (e2e/web.mjs, the phone driver): the web client
-// on Vite, a core on a throwaway CMD_HOME with remote access on, the Mac's side of
-// pairing over the core's socket (as `cmd remote pair` does), the iPhones we
-// emulate and a browser to emulate them in. Runs on Node directly, like the tools.
+// on Vite, a core on a throwaway CMD_HOME, its remote settings (a local relay, or
+// its own listener), the Mac's side of pairing over the core's socket (as `cmd
+// remote pair` does), the iPhones we emulate and a browser to emulate them in.
+// The driver reaches cores through scripts/phone-origin's proxy; e2e/web.mjs
+// through the relay or the core's own listener. Runs on Node directly.
 
 import fs from "node:fs";
 import net from "node:net";
@@ -61,8 +63,8 @@ export interface Web {
   close(): Promise<void>;
 }
 
-/** apps/web on Vite's dev server (HMR), on `port` (0: any; else exactly that one, or it throws). */
-export async function startWeb(port = 0): Promise<Web> {
+/** apps/web on Vite's dev server (HMR), on `port` (0: any; else exactly that one, or it throws), with these Vite plugins. */
+export async function startWeb(port = 0, plugins: object[] = []): Promise<Web> {
   // vite is apps/web's dependency, not the root's.
   const vite = await import(pathToFileURL(path.join(root, "apps/web/node_modules/vite/dist/node/index.js")).href);
   const server = await vite.createServer({
@@ -70,6 +72,7 @@ export async function startWeb(port = 0): Promise<Web> {
     configFile: path.join(root, "apps/web/vite.config.ts"),
     server: { port, strictPort: port !== 0, host: "localhost" },
     logLevel: "error",
+    plugins,
   });
   await server.listen();
   return { url: (server.resolvedUrls.local[0] as string).replace(/\/$/, ""), close: () => server.close() };

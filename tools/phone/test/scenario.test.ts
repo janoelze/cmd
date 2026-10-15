@@ -46,3 +46,15 @@ describe("scenarios", () => {
     expect(() => ctx.claude("nope", home)).toThrow("fake-claude has no “nope” session");
   });
 });
+
+describe("forgetReplaced", () => {
+  it("keeps one pairing per core: a core under a new host key gives up its old one", async () => {
+    const { forgetReplaced } = await import("../src/state.ts");
+    const file = path.join(home, "pairings.json");
+    expect(forgetReplaced("scenario:default", "A", file)).toBeNull();
+    expect(forgetReplaced("scenario:default", "A", file)).toBeNull(); // restarts: same key
+    expect(forgetReplaced("dev:/w1", "S", file)).toBeNull();
+    expect(forgetReplaced("scenario:default", "B", file)).toBe("A"); // its folder was deleted
+    expect(forgetReplaced("dev:/w1", "S", file)).toBeNull();
+  });
+});

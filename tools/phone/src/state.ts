@@ -1,8 +1,8 @@
 // Where the phone driver keeps things: $CMD_HOME/phone (else this checkout's
 // .cmd-dev/phone): the browser profiles (the pairing lives in their IndexedDB),
-// the ports it keeps (the web client's origin and the relay's address are part
-// of a pairing), the relay's routes, the scenario cores, its log and state.json,
-// which says that it runs and where its control port is.
+// the Vite port it keeps (the origin holds the pairings), which pairing each core
+// had, the scenario cores, its log and state.json, which says that it runs and
+// where its control port is.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -10,9 +10,10 @@ import { worktreeHome } from "../../../packages/protocol/src/instance.ts";
 import { root, type BrowserName, type DeviceName } from "./harness.ts";
 
 export const baseHome = (): string => path.resolve(process.env.CMD_HOME || worktreeHome(root) || path.join(root, ".cmd-dev"));
-export const phoneHome = (): string => path.join(baseHome(), "phone");
-export const stateFile = (): string => path.join(phoneHome(), "state.json");
-export const logFile = (): string => path.join(phoneHome(), "phone.log");
+/** The driver's own folder (not phone-origin's ~/.cmd-phone). */
+export const driverHome = (): string => path.join(baseHome(), "phone");
+export const stateFile = (): string => path.join(driverHome(), "state.json");
+export const logFile = (): string => path.join(driverHome(), "phone.log");
 export const shotsDir = path.join(root, ".cmd-dev", "shots");
 
 export interface PhoneState {
@@ -21,8 +22,9 @@ export interface PhoneState {
   control: number;
   ready: boolean;
   web: string;
-  relay: string;
-  core: { kind: "scenario" | "dev"; name?: string; home: string };
+  /** Where the client dials: /c/dev on Vite (the phone origin's proxy). */
+  socket: string;
+  core: { kind: "scenario" | "dev"; name?: string; home: string | null };
   browser: BrowserName;
   device: DeviceName;
   /** How this start came to be paired: it already was, or it paired now. */
@@ -47,12 +49,11 @@ export const alive = (pid: number): boolean => {
   }
 };
 
-/** The ports kept across starts, so the origin (and so the pairing) stays the same. */
+/** The Vite port kept across starts, so the origin (and so the pairing) stays the same. */
 export interface Ports {
   web: number;
-  relay: number;
 }
-const portsFile = () => path.join(phoneHome(), "ports.json");
+const portsFile = () => path.join(driverHome(), "ports.json");
 export function readPorts(): Ports | null {
   try {
     return JSON.parse(fs.readFileSync(portsFile(), "utf8")) as Ports;
@@ -61,3 +62,21 @@ export function readPorts(): Ports | null {
   }
 }
 export const writePorts = (p: Ports): void => fs.writeFileSync(portsFile(), JSON.stringify(p));
+
+/**
+ * The host key each core was last paired under (scenario:<name>, dev:<home>).
+ * When one changes (a scenario's folder was deleted, so its core made a new
+ * host key), returns the old key, whose pairing in the profile is dead: the
+ * profile then holds one pairing per core, however often it restarts.
+ */
+export function forgetReplaced(label: string, key: string, file = path.join(driverHome(), "pairings.json")): string | null {
+  let map: Record<string, string> = {};
+  try {
+    map = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, string>;
+  } catch {}
+  const old = map[label];
+  map[label] = key;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(map, null, 2));
+  return old && old !== key ? old : null;
+}

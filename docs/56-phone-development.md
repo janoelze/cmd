@@ -1,6 +1,6 @@
 # Phone development
 
-**Status:** built (2026-10-15): `pnpm phone:serve`, `phone:core`, `phone:use` and `phone:pair` in `scripts/phone-origin/`, unit tests in `test/phone-origin.test.ts`, `pnpm e2e:phone-origin`; not yet tried on a real phone.
+**Status:** built (2026-10-15): `pnpm phone:serve`, `phone:core`, `phone:use` and `phone:pair` in `scripts/phone-origin/`, unit tests in `test/phone-origin.test.ts`, `pnpm e2e:phone-origin`; not yet tried on a real phone. The phone driver for agents (`pnpm phone`, `tools/phone/`) uses the same proxy.
 
 Working on the web client (`apps/web`, docs/13, docs/38) on a real phone used to mean re-pairing all the time and no hot reload: the core serves a built `dist`, and a phone keeps its pairings per origin (IndexedDB), so every new address was a new, unpaired device. This sets up **one fixed HTTPS origin** for the phone, served by Vite with hot reload, that reaches both the installed app's core (your real sessions) and a dev core. You pair once with the installed app and once with the phone's dev core, which keeps one state dir whatever worktree it runs ("The phone's dev core"), and stay paired.
 
@@ -88,6 +88,23 @@ So for `/c/release` the installed app needs Settings → Remote Access on, conne
 - **X-Forwarded-For.** The listener rate-limits connections and lists sessions by the rightmost entry, the address its one trusted proxy saw. Tailscale Serve, in front of Vite, appends the phone's tailnet address, so the proxy passes the header on untouched and that address stays rightmost. Without a proxy in front (localhost), it adds the address it saw, which is what the listener would have used.
 - **Tailscale-User-Login.** Serve sets it and strips any a client sends; passed on as is, so a core in Tailscale mode still shows who's connecting (its `identify` hook). A core in Your own URL mode has no `identify` and shows none, as without the proxy.
 - `Host` is set to the listener's, `X-Forwarded-Host` keeps the phone origin's, and only `/c/<target>/r/<route>` is forwarded (anything else gets 404; an unreachable core 502, a core without remote access 503, each with a line in the `phone:serve` terminal).
+
+## Phone driver: the agents' side
+
+Agents can't hold a phone, so `pnpm phone` (`tools/phone/`) drives the same client in an emulated iPhone from short commands, the way `pnpm workbench` drives the desktop UI. It reaches its core the way the phone origin does: `tools/phone/src/daemon.ts` runs Vite for `apps/web` with `phoneProxy` mounted (its `info` points `/c/dev` at the driver's core and refuses `/c/release`), makes the core reachable with `reachable()` (Your own URL on its loopback port) and pairs through a link moved to Vite by `rewriteLink()`. So the client stays on Vite with hot reload, and no core gets another access mode than `phone:use` would give it.
+
+```sh
+pnpm phone start [--core scenario[:<name>]|dev] [--browser webkit|chromium] [--device se|15|promax]
+pnpm phone shot [--device se] [--theme light|dark|all] [--keyboard] [--out dir]   # .cmd-dev/shots/phone-<screen>-<device>-<theme>.png
+pnpm phone ls | goto <id|title|now> | tap <selector|text> | type <text> | key <enter|esc|ctrl-c…>
+pnpm phone eval '<js>' | logs [--lines n] | status | stop
+```
+
+- `start` runs it in the background with its own control port; the other commands go to it. The browser is WebKit, or Chromium when WebKit can't start (as in the Agent Safehouse sandbox), with a persistent profile in `$CMD_HOME/phone/profile/<browser>` (else `.cmd-dev/phone`), so pairings survive `stop` and `start`. The Vite port is kept in `ports.json`, since the origin holds the pairings.
+- **Pairing.** The daemon reads the profile's pairings (IndexedDB, keyed by host key) on a page of the origin that doesn't run the app, and opens the one whose device the core knows (`remote.devices`); none: it pairs, approving over the core's socket, and logs `pairing: paired this browser now`; later starts log `pairing: kept, no pairing ran`. It drops pairings for other addresses, and a core's old one when the core comes back under a new host key (`pairings.json`), so the profile holds one pairing per core however often it restarts (10 restarts: still 1); a scenario core also revokes devices it paired before.
+- **`--core scenario:<name>`** (the default: `default`): a throwaway core in `$CMD_HOME/phone/scenario-<name>`, its host key and paired devices kept in that folder (stable across starts), seeded on every start from `tools/phone/scenarios/<name>.ts`: workspaces with terminals, each a command, folder and environment, and for an agent the hook events it would send (`tools/phone/src/scenario.ts`). `default` has a shell, a long build log, htop and the README shots' stand-in Claude (`scripts/readme-shots/fake-claude.mjs`, detected as Claude) asking, working and done. `stop` stops it and its terminals.
+- **`--core dev`**: the worktree's own dev core (`$CMD_HOME`, else the worktree's `.cmd-dev`), for a branch's core changes. A running one is used as it is and never stopped; none running, it starts one as `pnpm core` would and leaves it running. Never the phone's dev core in `~/.cmd-phone/home` (`phone:core`'s, the developer's; agents' sandboxes can't write there either) nor the main checkout's dev instance: it refuses both. It doesn't change `/c/dev` for `phone:serve`.
+- `--keyboard` shrinks the visual viewport as iOS does when the keyboard opens (`apps/web/src/main.tsx` sizes the app to it) and draws a keyboard there. Shots wait for a terminal to refit. `e2e/web.mjs` shares Vite and core helpers with it (`tools/phone/src/harness.ts`).
 
 ## Tests
 

@@ -8,7 +8,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { HELP, parseArgs, type Parsed } from "./args.ts";
 import { sleep, stopCore } from "./harness.ts";
-import { alive, logFile, phoneHome, readState, stateFile, type PhoneState } from "./state.ts";
+import { alive, logFile, driverHome, readState, stateFile, type PhoneState } from "./state.ts";
 
 let parsed: Parsed;
 try {
@@ -23,7 +23,7 @@ const running = (): (PhoneState & { notes?: string[] }) | null => {
   const s = readState();
   return s && alive(s.pid) ? s : null;
 };
-const where = (s: PhoneState) => (s.core.kind === "dev" ? `the dev core (${s.core.home})` : `scenario ${s.core.name}`);
+const where = (s: PhoneState) => (s.core.kind === "dev" ? `this worktree's dev core (${s.core.home})` : `scenario ${s.core.name}`);
 
 async function send(command: string, args: string[] = [], flags: Record<string, string | true> = {}): Promise<{ ok: boolean; out: string }> {
   const s = running();
@@ -41,7 +41,7 @@ async function start() {
     console.log(`The phone is already running: ${s.device} in ${s.browser}, paired with ${where(s)}. pnpm phone stop first to start it differently.`);
     return;
   }
-  fs.mkdirSync(phoneHome(), { recursive: true });
+  fs.mkdirSync(driverHome(), { recursive: true });
   fs.rmSync(stateFile(), { force: true });
   const from = fs.existsSync(logFile()) ? fs.statSync(logFile()).size : 0;
   const out = fs.openSync(logFile(), "a");
@@ -85,7 +85,7 @@ async function stop() {
   for (let t = 0; t < 15_000 && alive(s.pid); t += 200) await sleep(200);
   if (alive(s.pid)) {
     process.kill(s.pid, "SIGKILL");
-    if (s.core.kind === "scenario") await stopCore(s.core.home, { terminals: true });
+    if (s.core.kind === "scenario" && s.core.home) await stopCore(s.core.home, { terminals: true });
     fs.rmSync(stateFile(), { force: true });
   }
   console.log("Phone stopped.");
@@ -95,7 +95,7 @@ function status() {
   const s = running();
   if (!s) return console.log("The phone isn't running. Start it with pnpm phone start.");
   console.log(`Running (pid ${s.pid}): ${s.device} in ${s.browser}`);
-  console.log(`Web client: ${s.web}  relay: ${s.relay}`);
+  console.log(`Web client: ${s.web}  cores at: ${s.socket}`);
   console.log(`Core: ${where(s)}`);
   console.log(`Paired: device ${s.deviceId} (${s.pairing === "kept" ? "kept from before" : "paired at this start"})`);
   console.log(`Log: ${logFile()}`);

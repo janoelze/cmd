@@ -1,21 +1,29 @@
 // The phone driver's long-lived side (`pnpm phone start` runs it in the background):
-// a relay and the web client on Vite (HMR) on ports it keeps, a core (a scenario's
-// throwaway one, or this checkout's dev core), and an emulated iPhone in a
-// persistent browser profile, so the pairing in its IndexedDB survives restarts.
-// Paired with that core already: it opens the client. Not: it pairs, approving
-// on the core's socket as the Mac's app would. Then it takes commands (shot, tap,
-// type, key, goto, eval, ls, logs) on a control port on loopback; cli.ts sends them.
+// the web client on Vite (HMR) on a port it keeps, a core (a scenario's throwaway
+// one, or this worktree's own dev core), and an emulated iPhone in a persistent browser profile, so
+// the pairing in its IndexedDB survives restarts. Paired with that core already: it
+// opens the client. Not: it pairs, approving on the core's socket as the Mac's app
+// would. Then it takes commands (shot, tap, type, key, goto, eval, ls, logs) on a
+// control port on loopback; cli.ts sends them.
 //
-// Relay, not the core's own listener: the client then comes from Vite, so an edit
-// to apps/web is in the next shot without a build (the direct listener serves the
-// built client). Both ports are kept in ports.json: the origin holds the pairing
-// (IndexedDB is per origin) and the pairing holds the relay's address.
+// The phone reaches the core as on the phone origin (docs/56-phone-development.md):
+// Vite carries scripts/phone-origin's proxy, the core is made reachable on its own
+// loopback listener (Your own URL, reachable()), and the client dials /c/dev on
+// Vite, which here always means the driver's core. So the client stays on Vite (an
+// edit to apps/web is in the next shot) and no core changes its access mode beyond
+// what phone:use does. The Vite port is kept in ports.json: IndexedDB is per origin.
 
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { devices, type BrowserContext, type Page } from "playwright";
 import type { PaneId } from "../../../packages/protocol/src/model.ts";
+import { worktreeHome } from "../../../packages/protocol/src/instance.ts";
+import { connect } from "../../../packages/protocol/src/node.ts";
+import { rewriteLink } from "../../../scripts/phone-origin/link.ts";
+import { phoneHosts, phoneProxy } from "../../../scripts/phone-origin/proxy.ts";
+import { coreInfo, devTarget, phoneHome as phoneCoreHome, reachable, type TargetName } from "../../../scripts/phone-origin/targets.ts";
 import { parseCore, deviceName, browserName, keyName, isSelector, type CoreChoice } from "./args.ts";
 import {
   DEVICES,
@@ -25,9 +33,8 @@ import {
   freePort,
   pairRequests,
   portFree,
-  relaySettings,
+  root,
   startCore,
-  startRelay,
   startWeb,
   stopCore,
   waitFor,
@@ -37,54 +44,83 @@ import {
   type DeviceName,
 } from "./harness.ts";
 import { loadScenario, scenarioContext, seed, type Seeded } from "./scenario.ts";
-import { baseHome, phoneHome, readPorts, shotsDir, stateFile, writePorts, type PhoneState } from "./state.ts";
+import { driverHome, forgetReplaced, readPorts, shotsDir, stateFile, writePorts, type PhoneState } from "./state.ts";
 
 const opts = JSON.parse(process.argv[2] ?? "{}") as { core?: string; browser?: string; device?: string };
 const core: CoreChoice = parseCore(opts.core);
 const device: DeviceName = deviceName(opts.device ?? "15");
 const asked: BrowserName | null = browserName(opts.browser);
-const home = phoneHome();
+const home = driverHome();
 fs.mkdirSync(home, { recursive: true });
 
 const log = (line: string) => console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
 const notes: string[] = [];
-const coreHome = core.kind === "dev" ? baseHome() : path.join(home, `scenario-${core.name}`);
+// --core dev: this worktree's own core ($CMD_HOME, else its .cmd-dev). Not the phone's dev core
+// (phone:core's, in ~/.cmd-phone/home): that's the developer's, and agents' sandboxes can't
+// write there anyway. Not the main checkout's dev instance either: the developer's own.
+const devHome = process.env.CMD_HOME || worktreeHome(root) || null;
+const coreTarget = devTarget(core.kind === "dev" ? devHome : path.join(home, `scenario-${core.name}`));
+const coreHome = coreTarget.home;
+const coreLog = path.join(coreHome ? path.join(coreHome, "logs") : path.join(os.homedir(), "Library/Logs/cmd-dev"), "core.log");
+/** Which core this is, for the pairings kept per core (state.ts). */
+const label = core.kind === "dev" ? `dev:${coreHome}` : `scenario:${core.name}`;
 
 // Failing to start: say why in the log (cli.ts prints it) and leave no scenario core behind.
+let failedPage: Page | null = null;
 const fatal = async (err: unknown) => {
   log(`failed: ${(err as Error)?.stack ?? err}`);
-  if (core.kind === "scenario") await stopCore(coreHome, { terminals: true }).catch(() => {});
+  // What the phone showed then.
+  const shot = path.join(home, "failed.png");
+  if (failedPage && (await failedPage.screenshot({ path: shot }).then(() => true, () => false))) log(`the phone's screen then: ${shot}`);
+  if (core.kind === "scenario" && coreHome) await stopCore(coreHome, { terminals: true }).catch(() => {});
   process.exit(1);
 };
 process.on("uncaughtException", fatal);
 process.on("unhandledRejection", fatal);
+if (core.kind === "dev" && !devHome) throw new Error("--core dev uses a worktree's own core, and this is the main checkout. Run it from a worktree, or set CMD_HOME to a folder of its own.");
+if (core.kind === "dev" && path.resolve(devHome!) === path.resolve(phoneCoreHome()))
+  throw new Error("CMD_HOME is your phone's dev core (pnpm phone:core), which the phone driver leaves alone. Set CMD_HOME to this worktree's .cmd-dev instead.");
 
-// ── relay and web client, on the ports kept from last time ──
+// ── the web client, on the port kept from last time, with the phone origin's proxy ──
 let ports = readPorts();
-if (ports && !((await portFree(ports.web)) && (await portFree(ports.relay)))) {
-  notes.push(`Port ${ports.web} or ${ports.relay} is taken now, so the phone moved and pairs again.`);
+if (ports && !(await portFree(ports.web))) {
+  notes.push(`Port ${ports.web} is taken now, so the phone moved and pairs again.`);
   ports = null;
 }
-ports ??= { web: await freePort(), relay: await freePort() };
+ports ??= { web: await freePort() };
 writePorts(ports);
-const relay = await startRelay({ port: ports.relay, stateFile: path.join(home, "relay.json"), log: (m) => log(`relay: ${m}`) });
-const web = await startWeb(ports.web);
-log(`web client ${web.url}, relay ${relay.url}`);
+// /c/dev is the driver's core, whatever phone:use says; /c/release isn't reachable from here.
+const proxy = phoneProxy({
+  hosts: phoneHosts(ports.web, null),
+  info: (t: TargetName) => (t === "dev" ? coreInfo(coreTarget) : Promise.reject(new Error("the phone driver reaches only its own core, at /c/dev"))),
+  log: (m) => log(`proxy: ${m}`),
+});
+const web = await startWeb(ports.web, [
+  {
+    name: "cmd-phone-proxy",
+    configureServer(s: { httpServer: http.Server | null }) {
+      s.httpServer?.on("upgrade", (req, socket, head) => void proxy(req, socket, head));
+    },
+  },
+]);
+/** Where the client dials, as the pairing link says: /c/dev on Vite. */
+const socketUrl = `${web.url.replace(/^http/, "ws")}/c/dev`;
+log(`web client ${web.url}, cores at ${socketUrl}`);
 
 // ── the core ──
 let conn: Connection;
 let seeded: Seeded[] = [];
 if (core.kind === "scenario") {
-  await stopCore(coreHome, { terminals: true });
-  const ctx = await scenarioContext(coreHome);
+  // Its host key and paired devices stay in its folder across starts (only its terminals are seeded afresh).
+  await stopCore(coreHome!, { terminals: true });
+  const ctx = await scenarioContext(coreHome!);
   const scenario = await loadScenario(core.name, ctx);
-  const zdotdir = path.join(coreHome, "zsh");
+  const zdotdir = path.join(coreHome!, "zsh");
   fs.mkdirSync(zdotdir, { recursive: true });
   fs.writeFileSync(path.join(zdotdir, ".zshrc"), [`path=(${ctx.bin} $path)`, "unset HISTFILE", "PROMPT='%F{blue}%~%f %F{magenta}❯%f '", "RPROMPT=''"].join("\n") + "\n");
   startCore(
-    coreHome,
+    coreHome!,
     {
-      ...relaySettings(relay.url, web.url),
       // Seeded afresh each start; nothing of the user's touched (hooks, AI calls).
       "restore.terminals": false,
       "agents.hooks.auto": false,
@@ -95,22 +131,34 @@ if (core.kind === "scenario") {
       "theme.appearance": "auto",
       ...scenario.settings,
     },
-    { ZDOTDIR: zdotdir, CMD_TRANSCRIPTS_HOME: path.join(coreHome, "transcripts"), CMD_USAGE_URL: "off" },
+    { ZDOTDIR: zdotdir, CMD_TRANSCRIPTS_HOME: path.join(coreHome!, "transcripts"), CMD_USAGE_URL: "off" },
   );
-  conn = await connectCore(coreHome);
+  conn = await connectCore(coreHome!);
   log(`scenario ${core.name}: ${scenario.description}`);
   seeded = await seed(conn, scenario, ctx, log);
 } else {
-  // Running already (pnpm dev, pnpm core): use it; else start it, as pnpm core would.
-  const running = await connectCore(coreHome, 1500).catch(() => null);
-  // Left running after stop, like pnpm core's (stopping it here would stop the instances inside it too).
-  if (!running) (startCore(coreHome, null), notes.push("Started the dev core. It keeps running after pnpm phone stop; pnpm core:stop stops it."));
-  conn = running ?? (await connectCore(coreHome));
-  for (const [key, value] of Object.entries(relaySettings(relay.url, web.url))) await conn.client.call("settings.set", { key, value });
-  log(`dev core at ${coreHome}: remote access set to this relay and web client`);
+  // Running already (pnpm dev, pnpm core, phone:core): used as it is, and never stopped from here.
+  let running = await connectSocket(coreTarget.socket, 1500);
+  if (!running) {
+    // As pnpm core starts it; left running after stop, like that one.
+    startCore(coreHome!, null);
+    notes.push(`Started this worktree's dev core. It keeps running after pnpm phone stop; CMD_HOME=${coreHome} pnpm core:stop stops it.`);
+    running = await connectSocket(coreTarget.socket, 20_000);
+    if (!running) throw new Error(`The dev core didn't start. Its log: ${coreLog}`);
+  }
+  conn = running;
+  log(`dev core at ${coreHome}`);
 }
 const call = conn.client.call.bind(conn.client);
-await waitFor(async () => (await call("remote.status", {})).state === "online", "the core to reach the relay", 20_000);
+// Its own listener on loopback (Your own URL), as phone:use makes a dev core reachable.
+const { info, changed } = await reachable(coreTarget, conn);
+if (!info.origin) throw new Error(`The core's remote access isn't ready: ${info.error}`);
+if (changed && core.kind === "dev") notes.push(`Turned on the dev core's remote access (Your own URL, 127.0.0.1:${info.port}), as pnpm phone:use does.`);
+log(`core listens on 127.0.0.1:${info.port} (${info.origin})`);
+
+async function connectSocket(sock: string, ms: number): Promise<Connection | null> {
+  return waitFor(() => connect(sock), `the core at ${sock}`, ms).catch(() => null);
+}
 
 // ── the phone ──
 const preset = devices[DEVICES[device]]!;
@@ -127,6 +175,7 @@ try {
   context = await launch(engine);
 }
 const page: Page = context.pages()[0] ?? (await context.newPage());
+failedPage = page;
 let scheme: "light" | "dark" = "light";
 
 const consoleLines: string[] = [];
@@ -138,7 +187,7 @@ page.on("console", (m) => keep(`[${m.type()}] ${m.text()}`));
 page.on("pageerror", (e) => keep(`[pageerror] ${e.message}`));
 page.on("crash", () => keep("[crash] the page crashed"));
 
-/** This browser's pairings: IndexedDB key (the Mac's host key), device id and where it dials. */
+/** This browser's pairings (the web client's IndexedDB store): keyed by the Mac's host key, with the device id and where it dials. */
 const pairings = () =>
   page.evaluate(
     () =>
@@ -158,35 +207,67 @@ const pairings = () =>
         };
       }),
   );
+const forget = (keys: string[]) =>
+  page.evaluate(
+    (keys) =>
+      new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open("cmd-remote", 1);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const tx = req.result.transaction("identity", "readwrite");
+          for (const k of keys) tx.objectStore("identity").delete(k);
+          tx.oncomplete = () => (req.result.close(), resolve());
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    keys,
+  );
 const onNow = () => page.locator("header.bar h1", { hasText: "Now" }).waitFor({ timeout: 20_000 });
 
-await page.goto(web.url);
+// The pairings are read and dropped on a page of the origin that doesn't run the app
+// (it would write the one it opens back, with its last use).
+const offApp = `${web.url}/favicon.svg`;
+await page.goto(offApp);
+// Pairings this profile can't use: another address (the driver only dials /c/dev here).
+const elsewhere = (await pairings()).filter((p) => p.socket !== socketUrl).map((p) => p.key);
+if (elsewhere.length) (await forget(elsewhere), log(`pairing: forgot ${elsewhere.length} for other addresses`));
 const known = await call("remote.devices", {});
-let mine = (await pairings()).find((p) => p.socket === relay.url && known.some((d) => d.id === p.deviceId));
+let mine = (await pairings()).find((p) => known.some((d) => d.id === p.deviceId));
 let pairing: PhoneState["pairing"];
 if (mine) {
   pairing = "kept";
   const d = known.find((k) => k.id === mine!.deviceId)!;
-  await page.goto(`${web.url}/?mac=${encodeURIComponent(mine.key)}`);
-  await onNow();
   log(`pairing: kept, no pairing ran (device ${d.id}, paired ${new Date(d.pairedAt).toISOString()})`);
 } else {
   pairing = "new";
   const requests = await pairRequests(conn);
   const { url } = await call("remote.pair", { scope: "control" });
-  await page.goto(url);
+  // As phone:pair does: the page opens on Vite and dials /c/dev there.
+  await page.goto(rewriteLink(url, web.url, "dev"));
   await page.getByRole("button", { name: "Pair This Browser" }).click({ timeout: 20_000 });
   const request = await requests.next(20_000);
   await call("remote.approve", { requestId: request.requestId, allow: true, scope: "control" });
   await onNow();
-  // This core's: the browser may be paired with other cores on the same relay (another --core).
+  // This core's: the profile may hold pairings with other cores (another --core).
   mine = await waitFor(async () => {
     const ids = (await call("remote.devices", {})).map((d) => d.id);
-    return (await pairings()).find((p) => p.socket === relay.url && ids.includes(p.deviceId));
+    return (await pairings()).find((p) => ids.includes(p.deviceId));
   }, "the pairing to be saved");
   log(`pairing: paired this browser now (device ${mine.deviceId}, words ${request.words.join(" ")})`);
+  // A scenario core is the driver's alone: the devices it paired before (a lost profile) go.
+  if (core.kind === "scenario")
+    for (const d of await call("remote.devices", {})) if (d.id !== mine.deviceId) await call("remote.revoke", { id: d.id });
 }
 const mac = mine.key;
+// The pairing this core had before, under another host key (its folder was deleted): gone, so they don't pile up.
+const stale = forgetReplaced(label, mac);
+if (stale) {
+  await page.goto(offApp);
+  await forget([stale]);
+  log("pairing: forgot this core's earlier one");
+}
+await page.goto(`${web.url}/?mac=${encodeURIComponent(mac)}`);
+await onNow();
 
 // ── commands ──
 type Flags = Record<string, string | true>;
@@ -372,11 +453,11 @@ const ls: Handler = async () => {
 
 const logs: Handler = async (_args, flags) => {
   const n = Number(flags.lines ?? 40);
-  let coreLog: string[] = [];
+  let lines: string[] = [];
   try {
-    coreLog = fs.readFileSync(path.join(coreHome, "logs", "core.log"), "utf8").trimEnd().split("\n").slice(-n);
+    lines = fs.readFileSync(coreLog, "utf8").trimEnd().split("\n").slice(-n);
   } catch {}
-  return [`Browser (${engine}):`, ...(consoleLines.slice(-n).length ? consoleLines.slice(-n) : ["  nothing yet"]), "", `Core (${path.join(coreHome, "logs", "core.log")}):`, ...coreLog].join("\n");
+  return [`Browser (${engine}):`, ...(consoleLines.slice(-n).length ? consoleLines.slice(-n) : ["  nothing yet"]), "", `Core (${coreLog}):`, ...lines].join("\n");
 };
 
 const handlers: Record<string, Handler> = { shot, tap, type, key, goto, eval: evaluate, ls, logs };
@@ -409,7 +490,7 @@ const state: PhoneState & { notes: string[] } = {
   control,
   ready: true,
   web: web.url,
-  relay: relay.url,
+  socket: socketUrl,
   core: core.kind === "dev" ? { kind: "dev", home: coreHome } : { kind: "scenario", name: core.name, home: coreHome },
   browser: engine,
   device,
@@ -431,14 +512,16 @@ async function quit() {
   await context.close().catch(() => {});
   conn.close();
   await web.close().catch(() => {});
-  await relay.close().catch(() => {});
-  if (core.kind === "scenario") await stopCore(coreHome, { terminals: true });
+  if (core.kind === "scenario" && coreHome) await stopCore(coreHome, { terminals: true });
   try {
     if ((JSON.parse(fs.readFileSync(stateFile(), "utf8")) as PhoneState).pid === process.pid) fs.rmSync(stateFile(), { force: true });
   } catch {}
   log("stopped");
   process.exit(0);
 }
+// Vite's server exits on SIGTERM by itself, before the browser, the core and state.json are cleaned up: ours instead.
+process.removeAllListeners("SIGTERM");
+process.removeAllListeners("SIGINT");
 process.on("SIGTERM", quit);
 process.on("SIGINT", quit);
 context.on("close", () => void quit());
