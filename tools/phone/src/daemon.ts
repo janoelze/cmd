@@ -201,6 +201,17 @@ const settle = () =>
     const finite = document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity);
     await Promise.race([Promise.all(finite.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 1500))]);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // A terminal refits to a new size through the Mac (its program redraws): until its rows hold still for 300 ms, at most 3 s.
+    const rows = document.querySelector(".term .xterm-rows");
+    if (!rows) return;
+    const look = () => `${rows.childElementCount}:${(rows as HTMLElement).innerText}`;
+    let last = look();
+    for (let still = 0, t = 0; still < 300 && t < 3000; t += 100) {
+      await new Promise((r) => setTimeout(r, 100));
+      const now = look();
+      still = now === last ? still + 100 : 0;
+      last = now;
+    }
   });
 
 /**

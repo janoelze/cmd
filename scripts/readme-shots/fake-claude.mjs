@@ -188,7 +188,11 @@ export const SCENARIOS = {
 function draw(s) {
   const w = Math.max(30, process.stdout.columns || 80);
   const h = Math.max(10, process.stdout.rows || 24);
-  const header = box([`${orange("✻")} Welcome to ${bold("Claude Code")}!`, "", gray(`  cwd: ${process.cwd().replace(/^\/Users\/[^/]+/, "~")}`)], Math.min(w, 52), orange);
+  const bw = Math.min(w, 52);
+  // A long folder keeps its end, so the box holds together.
+  let cwd = process.cwd().replace(/^\/Users\/[^/]+/, "~");
+  if (cwd.length > bw - 11) cwd = "…" + cwd.slice(cwd.length - (bw - 12));
+  const header = box([`${orange("✻")} Welcome to ${bold("Claude Code")}!`, "", gray(`  cwd: ${cwd}`)], bw, orange);
   const body = [prompt(s.prompt), blank(), ...s.blocks].flatMap((b) => b(w));
   const foot = ["", ...(s.footer ? s.footer(w) : input(w))];
   let lines = [...header, "", ...body];
