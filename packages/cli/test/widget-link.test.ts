@@ -13,22 +13,18 @@ import type { WidgetEntry } from "@cmd/protocol";
 import { Core, type PtyFactory } from "@cmd/core";
 import { widgetCommand } from "../src/widget.ts";
 
-/** Folder watches that never fire while `off` (a busy Mac's late event, at its worst). */
-const watching = vi.hoisted(() => ({ off: false }));
-vi.mock("../../core/src/lib/watch.ts", async (original) => {
-  const m = await original<typeof import("../../core/src/lib/watch.ts")>();
-  class WatchService extends m.WatchService {
-    override watch(p: string, since?: number): boolean {
-      return watching.off ? false : super.watch(p, since);
-    }
-  }
-  return { ...m, WatchService };
-});
-
 const fixtures = path.join(import.meta.dirname, "fixtures", "widgets");
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-link-")));
 let home: string;
 const env = { home: process.env.CMD_WIDGETS_HOME, socket: process.env.CMD_SOCKET };
+
+/** While on, the packages folder (and the folders above it) can't be watched: a busy Mac's late event, at its worst. */
+const watching = { off: false };
+const fsWatch = fs.watch;
+vi.spyOn(fs, "watch").mockImplementation(((dir: fs.PathLike, ...rest: unknown[]) => {
+  if (watching.off && (home + path.sep).startsWith(path.resolve(String(dir)) + path.sep)) throw new Error("no watch here");
+  return (fsWatch as (...a: unknown[]) => fs.FSWatcher)(dir, ...rest);
+}) as typeof fs.watch);
 
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(scratch, "home-"));
