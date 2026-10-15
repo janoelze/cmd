@@ -12,7 +12,7 @@ import path from "node:path";
 import { DATA_CLASSES, NOW_PLAYING_COMMANDS, type ApiAppUsage, type ApiJournalWeek, type ApiJournalWeekQuery, type ApiStatInfo, type ApiWorkspaceName, type JournalWeek, type ApiEventClass, type ApiJournalDay, type ApiJournalQuery, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminalUsage, type ApiUsageQuery, type NowPlaying, type NowPlayingCommand, type StatQuery, type StatResult, type WidgetPermissions, type JournalDay } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { declarable, readsClass } from "../../data/policy.ts";
-import { holdNowPlaying } from "../../nowplaying/feature.ts";
+import { holdNowPlaying, type NowPlayingHold } from "../../nowplaying/feature.ts";
 import { RateLimit, invalid, missing } from "./access.ts";
 
 export type ReadsCore = Pick<CoreContext, "panes" | "resources" | "processes" | "stats" | "journal" | "workspaces" | "windows" | "broadcast" | "call">;
@@ -23,8 +23,15 @@ export interface ReadsScope {
   /** What the grant lets it see: its workspace or every one ("none" is refused by the adapter first). */
   level: "none" | "workspace" | "all";
   perms: WidgetPermissions;
-  /** Tests: what plays and the controls, instead of the Mac's (nowplaying/). */
-  media?: { get(): Promise<NowPlaying | null>; control(o: { command?: NowPlayingCommand; seek?: number }): Promise<void> };
+  /** Tests: what plays and the controls, instead of the Mac's (nowplaying/); `hold`, the live topic's (else `get`, never changing). */
+  media?: { get(): Promise<NowPlaying | null>; control(o: { command?: NowPlayingCommand; seek?: number }): Promise<void>; hold?(): NowPlayingHold };
+}
+
+/** What plays, held for one live `media` subscription (1.3, topics.ts): read it, hear each change, let it go. */
+export interface MediaHold {
+  read(): Promise<ApiNowPlaying | null>;
+  on(fn: () => void): () => void;
+  release(): void;
 }
 
 /** Journal days are read from the whole log: at most this many reads a minute per process. */
@@ -170,6 +177,13 @@ export function widgetReads(core: ReadsCore, s: ReadsScope) {
     return n && apiNowPlaying(n);
   };
 
+  /** The live topic's own hold on the stream (1.3): released when its subscription ends, not with the process as media.get's. */
+  const hold = (): MediaHold => {
+    const fake = s.media;
+    const h: NowPlayingHold = fake ? (fake.hold?.() ?? { read: () => fake.get(), on: () => () => {}, release: () => {} }) : holdNowPlaying(core);
+    return { read: async () => ((n) => n && apiNowPlaying(n))(await h.read()), on: (fn) => h.on(fn), release: () => h.release() };
+  };
+
   /** media.control, as the Now Playing window sends it: a command, or a seek in seconds. */
   const control = async (command: unknown, opts: unknown): Promise<null> => {
     const seek = opts && typeof opts === "object" ? (opts as { seek?: unknown }).seek : undefined;
@@ -195,6 +209,7 @@ export function widgetReads(core: ReadsCore, s: ReadsScope) {
     workspaces,
     appUsage,
     media,
+    hold,
     control,
     dispose() {
       playing?.release();

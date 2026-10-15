@@ -147,6 +147,7 @@ export const API_TOPIC = {
   journal: { verb: "journal.days" }, // 1.3: useJournal, again when a day is written
   workspaces: { verb: "workspaces.list" }, // 1.3: useWorkspaces
   appUsage: { verb: "app.usage" }, // 1.3: useAppUsage, every 2 s while subscribed
+  media: { verb: "media.get" }, // 1.3: useMedia, pushed on each change of what plays; the artwork only when it changed
 } as const satisfies Record<string, { verb: ApiVerb }>;
 
 export type ApiTopic = keyof typeof API_TOPIC;

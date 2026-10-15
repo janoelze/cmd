@@ -21,7 +21,7 @@ import type { ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWor
 
 /** The API major this file describes. */
 export const WIDGET_API = 1;
-/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`; 1.2 the window-content elements and the built-ins' verbs (docs/57); 1.3 storage in three scopes (`cmd.storage`). */
+/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`; 1.2 the window-content elements and the built-ins' verbs (docs/57); 1.3 storage in three scopes (`cmd.storage`), `Picture` and the live `media` topic. */
 export const WIDGET_API_MINOR = 3;
 
 // ── the tree ────────────────────────────────────────────
@@ -313,6 +313,7 @@ export interface TopicQuery {
   journal: ApiJournalQuery;
   workspaces: null;
   appUsage: null;
+  media: null;
 }
 export interface TopicData {
   workspace: ApiWorkspace;
@@ -330,6 +331,8 @@ export interface TopicData {
   journal: ApiJournalDay[];
   workspaces: ApiWorkspaceName[];
   appUsage: ApiAppUsage;
+  /** What plays, or null (1.3). On the wire a value without `artwork` keeps the last one sent: the cover crosses only when it changes. */
+  media: ApiNowPlaying | null;
 }
 
 // ── the data, in the product's words ────────────────────

@@ -3,7 +3,9 @@
 // a port included when it names one); https only, plain http only to localhost; no redirect to
 // another host; a 30 s timeout; the body back as text, clipped at 256 KB. `init.auth` names a
 // secret config field: its value goes in the field's header, and only when the URL's host is
-// the field's own. The value never appears in a result, an error or a log line.
+// the field's own. The value never appears in a result, an error or a log line. A Picture's
+// https src (1.3, picture.ts) goes through the same request (brokeredResponse), its body read
+// as bytes.
 
 import type { ApiFetchInit, ApiFetchResponse } from "@cmd/protocol";
 import type { ConfigField } from "../package.ts";
@@ -28,10 +30,10 @@ export interface FetchScope {
 }
 
 /** "host" or "host:port" of a URL, as a grant writes it. */
-const hostOf = (u: URL) => (u.port ? `${u.hostname}:${u.port}` : u.hostname);
+export const hostOf = (u: URL) => (u.port ? `${u.hostname}:${u.port}` : u.hostname);
 
 /** Whether the grant reaches this URL's host. */
-function granted(net: string[], u: URL): boolean {
+export function granted(net: string[], u: URL): boolean {
   return net.includes("*") || net.includes(hostOf(u)) || (!u.port && net.includes(u.hostname));
 }
 
@@ -52,6 +54,17 @@ function parse(url: string): URL {
 const scrub = (s: string, secret: string | null) => (secret && secret.length >= 4 ? s.replaceAll(secret, "[secret]") : s);
 
 export async function brokeredFetch(url: string, init: ApiFetchInit | null | undefined, scope: FetchScope): Promise<ApiFetchResponse> {
+  const { res, secret } = await brokeredResponse(url, init, scope);
+  const out: Record<string, string> = {};
+  res.headers.forEach((v, k) => {
+    if (k !== "set-cookie") out[k] = v;
+  });
+  const { text, clipped } = await readClipped(res, FETCH_BODY_MAX);
+  return { status: res.status, headers: out, body: scrub(text, secret), clipped };
+}
+
+/** The request net.fetch makes (the grant, the method, the headers, a secret, the redirects), up to the response, its body unread. */
+export async function brokeredResponse(url: string, init: ApiFetchInit | null | undefined, scope: FetchScope): Promise<{ res: Response; url: URL; secret: string | null }> {
   const o = init ?? {};
   let u = parse(url);
   if (!granted(scope.net, u)) throw missing("net", hostOf(u), `Fetching ${hostOf(u)}`);
@@ -96,18 +109,18 @@ export async function brokeredFetch(url: string, init: ApiFetchInit | null | und
     const why = (e as Error).name === "TimeoutError" ? `didn't answer within ${FETCH_TIMEOUT_MS / 1000} s` : scrub(((e as { cause?: Error }).cause?.message ?? (e as Error).message).slice(0, 200), secret);
     throw failed(`net.fetch: ${hostOf(u)} ${why.startsWith("didn't") ? why : `couldn't be reached (${why})`}`);
   }
-
-  const out: Record<string, string> = {};
-  res.headers.forEach((v, k) => {
-    if (k !== "set-cookie") out[k] = v;
-  });
-  const { text, clipped } = await readClipped(res, FETCH_BODY_MAX);
-  return { status: res.status, headers: out, body: scrub(text, secret), clipped };
+  return { res: res!, url: u, secret };
 }
 
 /** A response's body as text, at most `max` bytes. */
 async function readClipped(res: Response, max: number): Promise<{ text: string; clipped: boolean }> {
-  if (!res.body) return { text: "", clipped: false };
+  const { bytes, clipped } = await readBytes(res, max);
+  return { text: new TextDecoder().decode(bytes), clipped };
+}
+
+/** A response's body, at most `max` bytes (`clipped`: there was more, and it wasn't read). */
+export async function readBytes(res: Response, max: number): Promise<{ bytes: Buffer; clipped: boolean }> {
+  if (!res.body) return { bytes: Buffer.alloc(0), clipped: false };
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -125,5 +138,5 @@ async function readClipped(res: Response, max: number): Promise<{ text: string; 
     chunks.push(value);
     size += value.length;
   }
-  return { text: new TextDecoder().decode(Buffer.concat(chunks)), clipped };
+  return { bytes: Buffer.concat(chunks), clipped };
 }

@@ -3,8 +3,8 @@
 // (with declared ∩ granted; a package asking for more than its grant waits, nothing started)
 // and stopped a minute after the window closes. Its connection carries the widget wire: hello
 // checks its API major and starts the API (api/adapter.ts), the tree and patches go to the window as
-// widget.tree events (the last whole tree kept, so a window drawn later gets it), and the
-// window's interactions come back. Lifecycle is a contract: a loop stuck for 20 s or a heap
+// widget.tree events (the last whole tree kept, so a window drawn later gets it; each Picture's
+// src resolved by pictures.ts, never a remote URL), and the window's interactions come back. Lifecycle is a contract: a loop stuck for 20 s or a heap
 // over the limit stops it with the reason; a crash restarts it, three in five minutes stop it
 // ("crashed"); Restart (widget.restart) starts it again. A widget whose code doesn't load (a
 // syntax error: an `error` on the wire, then an exit before hello) stops with "didn't load" and
@@ -35,6 +35,8 @@ import { loadError, realDir } from "./load-error.ts";
 import type { ActDeps } from "../api/act.ts";
 import { newInstance, type Instance } from "./instance.ts";
 import { WidgetFrames } from "./frame.ts";
+import { TreePictures } from "./pictures.ts";
+import { PictureCache } from "../api/picture.ts";
 import type { WidgetStorage } from "../storage.ts";
 
 const log = logger("widgets");
@@ -91,6 +93,8 @@ export class WidgetHost {
   readonly config: PackageConfig;
   /** Frame widgets' pages: what they load, their calls and live topics (frame.ts). */
   readonly frames: WidgetFrames;
+  /** Pictures fetched for Pictures' https srcs, by URL, shared by every window (api/picture.ts). */
+  readonly pictures = new PictureCache();
 
   constructor(core: HostCore, o: HostOptions) {
     this.#core = core;
@@ -150,7 +154,7 @@ export class WidgetHost {
   resync(windowId: WindowId): void {
     const inst = this.#must(windowId);
     this.#emit(inst, inst.status);
-    if (inst.tree.ready) this.#emit(inst, inst.tree.tree());
+    if (inst.tree.ready) this.#emitTree(inst);
     else inst.conn?.send({ kind: "resync" });
   }
 
@@ -296,6 +300,8 @@ export class WidgetHost {
     if (needsGrant(pkg.permissions, g?.permissions)) return this.#status(inst, { kind: "status", state: "waiting-grant" });
     inst.permissions = effective(pkg.permissions, g?.permissions);
     inst.adapter = this.#api(inst, pkg, widget, inst.permissions);
+    const adapter = inst.adapter;
+    inst.pictures = new TreePictures({ fetch: (src) => adapter.picture(src), changed: () => inst.adapter === adapter && inst.tree.ready && this.#emitTree(inst), warn: (message) => void (inst.logs.push({ level: "warn", message }) && log.info(`widget ${pkg.name}: ${message}`)) });
     if (!this.#o.runtime) return this.#status(inst, { kind: "status", state: "stopped", reason: "can't run here" });
     const w = this.#core.windows.others().find((x) => x.id === inst.windowId);
     const token = this.#core.widgetTokens.issue(
@@ -347,10 +353,10 @@ export class WidgetHost {
       case "tree":
         if (!Array.isArray(m.nodes) || typeof m.rev !== "number") return;
         inst.tree.setTree(m);
-        return void (this.#emit(inst, m), this.#pages(inst));
+        return void (this.#emitTree(inst), this.#pages(inst));
       case "patch":
         if (!Array.isArray(m.ops)) return;
-        return void (inst.tree.apply(m) ? (this.#emit(inst, m), this.#pages(inst)) : conn.send({ kind: "resync" }));
+        return void (inst.tree.apply(m) ? (this.#emit(inst, inst.pictures ? inst.pictures.patch(m, inst.tree) : m), this.#pages(inst)) : conn.send({ kind: "resync" }));
       case "call":
         return void this.#call(inst, m.id, m.method, m.params);
       case "subscribe": {
@@ -521,13 +527,14 @@ export class WidgetHost {
     const host = this; // tests set fetchImpl late
     const st = this.#o.storage;
     const storage = st ? { store: st.store, owner: st.owner(pkg), declared: pkg.storage?.version ?? 1 } : undefined;
-    return widgetApi(this.#core, { windowId: inst.windowId, workspaceId, pkg, widget, permissions, press: inst.press, acts: () => this.#o.acts?.() ?? null, secret: (key) => this.config.secrets(pkg.name).get(widget.id)[key] ?? null, aiUsage: this.#aiUsage, storage, get fetchImpl() { return host.fetchImpl; } });
+    return widgetApi(this.#core, { windowId: inst.windowId, workspaceId, pkg, widget, permissions, press: inst.press, acts: () => this.#o.acts?.() ?? null, secret: (key) => this.config.secrets(pkg.name).get(widget.id)[key] ?? null, aiUsage: this.#aiUsage, storage, pictures: this.pictures, get fetchImpl() { return host.fetchImpl; } });
   }
 
   /** A Frame page the tree names that isn't in the package: one line in the widget's log. */
   #pages = (inst: Instance) => this.frames.pages(inst.windowId, inst.pkg?.dir, inst.tree, (message) => inst.logs.push({ level: "warn", message }) && log.info(`widget ${inst.pkg?.name}: ${message}`));
   /** The window's API ends: its acts waiting for the person are a no, its frames' subscriptions end. */
   #endApi(inst: Instance): void {
+    inst.pictures?.end();
     if (!inst.adapter) return;
     inst.adapter.dispose();
     inst.adapter = null;
@@ -555,6 +562,11 @@ export class WidgetHost {
 
   #emit(inst: Instance, message: Extract<WidgetOut, { kind: "tree" | "patch" }> | WidgetHostStatus): void {
     this.#core.broadcast({ type: "widget.tree", windowId: inst.windowId, message });
+  }
+
+  /** The whole tree, its Pictures resolved (pictures.ts): the renderer never gets a remote URL. */
+  #emitTree(inst: Instance): void {
+    this.#emit(inst, inst.pictures ? inst.pictures.tree(inst.tree.tree()) : inst.tree.tree());
   }
 
   #env(inst: Instance): WidgetEnv {

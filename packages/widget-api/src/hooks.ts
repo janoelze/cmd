@@ -5,7 +5,7 @@
 // useCompletion asks the person's AI (`cmd.ai.complete`) once per request.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ApiBox, ApiAppUsage, ApiJournalDay, ApiJournalQuery, ApiStatQuery, ApiStatResult, ApiWorkspaceName, ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiBox, ApiNowPlaying, ApiAppUsage, ApiJournalDay, ApiJournalQuery, ApiStatQuery, ApiStatResult, ApiWorkspaceName, ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { mergeEvents } from "@cmd/protocol/widget-events";
 import { connection, type ApiCallError } from "./connection.ts";
 
@@ -168,6 +168,22 @@ export function useWorkspaces(): ApiWorkspaceName[] {
  */
 export function useAppUsage(): ApiAppUsage | null {
   return useTopic("appUsage", null, null as unknown as ApiAppUsage);
+}
+
+/**
+ * What the Mac is playing (the track, its app, position and cover), live: a change of track,
+ * a pause or a skip from anywhere shows at once. null while nothing plays (and until the first
+ * value). The position is `elapsed` at `at`, moving on at `rate` while `playing`: draw it with
+ * `useNow`. Needs `media: ["read"]`.
+ * @since 1.3
+ */
+export function useMedia(): ApiNowPlaying | null {
+  return useTopic("media", null, null, keepCover);
+}
+
+/** The core sends the cover only when it changed: a value without `artwork` keeps the last one. */
+export function keepCover(prev: ApiNowPlaying | null, next: ApiNowPlaying | null): ApiNowPlaying | null {
+  return next && !("artwork" in next) ? { ...(next as Omit<ApiNowPlaying, "artwork">), artwork: prev?.artwork ?? null } : next;
 }
 
 function usePushed<T>(read: () => T): T {

@@ -82,6 +82,12 @@
   /** fn(value) now and on each change of a live topic; returns what stops it. A refusal goes to onError (else the console). */
   const subscribe = (topic, query, fn, onError) => {
     if (typeof fn !== "function") throw new TypeError("subscribe: give it a function");
+    // 1.3's media: the core sends the cover only when it changed; a value without `artwork` keeps the last one.
+    if (topic === "media") {
+      const page = fn;
+      let cover = null;
+      fn = (v) => (v && typeof v === "object" && !("artwork" in v) ? page({ ...v, artwork: cover }) : ((cover = v ? v.artwork : null), page(v)));
+    }
     const sub = ++nextSub;
     subs.set(sub, { fn, onError });
     post({ type: "subscribe", sub, topic: String(topic), query: copy(query) ?? null });

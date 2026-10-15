@@ -40,6 +40,11 @@ export class TreeState {
     return [...out];
   }
 
+  /** A node's element type ("#text" for a text), or undefined when it isn't in the tree. */
+  typeOf(id: number): string | undefined {
+    return this.#tree.get(id)?.type;
+  }
+
   /** Whether the tree has an element of `type` (a Frame: its window serves frames, frame.ts). */
   has(type: string): boolean {
     for (const node of this.#tree.nodes()) if (node.type === type) return true;

@@ -9,6 +9,7 @@ import { LogLimit } from "./log-limit.ts";
 import { WindowPress } from "./press.ts";
 import type { RuntimeProcess } from "./runtime.ts";
 import { TreeState } from "./tree.ts";
+import type { TreePictures } from "./pictures.ts";
 
 export interface Instance {
   windowId: WindowId;
@@ -17,6 +18,8 @@ export interface Instance {
   widget: PackageWidget | null;
   status: WidgetHostStatus;
   tree: TreeState;
+  /** Its Pictures as the renderer gets them (pictures.ts), from its start with a grant. */
+  pictures: TreePictures | null;
   proc: RuntimeProcess | null;
   token: string | null;
   conn: HostConnection | null;
@@ -49,6 +52,7 @@ export function newInstance(w: AppWindow, theme: "light" | "dark", log: Construc
     widget: null,
     status: { kind: "status", state: "starting" },
     tree: new TreeState(),
+    pictures: null,
     proc: null,
     token: null,
     conn: null,

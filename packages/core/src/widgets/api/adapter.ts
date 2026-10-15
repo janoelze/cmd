@@ -7,6 +7,7 @@
 // Live topics (subscribe) are topics.ts's, over the same reads; 1.2's reads are reads.ts's;
 // 1.3's storage, with 1.0's `state.*` (its window scope), is storage.ts's; 1.3's other reads are
 // reads.ts's, agents.select is here (windows.select's, for an agent) and terminals.rerun act.ts's.
+// A Picture's src (1.3: a data: image checked, an https one fetched within the grant and the net limit) is picture.ts's.
 // A verb that needs a press (windows.open, media.control, clipboard.write; the acts in act.ts)
 // takes the one it came after, and one marked `local` is never for a paired device's press.
 
@@ -26,6 +27,7 @@ import { apiAction, apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, se
 import { CLIPBOARD_MAX, widgetReads, type ReadsScope } from "./reads.ts";
 import { writeClipboard } from "./clipboard.ts";
 import { brokeredFetch } from "./net.ts";
+import { PictureCache, checkDataSrc, fetchPicture, pictureUrl } from "./picture.ts";
 import { subscribeTopic } from "./topics.ts";
 import { widgetActs, type ActDeps, type Press } from "./act.ts";
 import { widgetRunner, type RunScope } from "./run.ts";
@@ -57,6 +59,8 @@ export interface WidgetScope {
   secret(key: string): string | null;
   aiUsage: AiUsage;
   fetchImpl?: typeof fetch;
+  /** Fetched pictures, shared by every window (WidgetHost's); none (tests): one of its own. */
+  pictures?: PictureCache;
   /** Its package's storage (widgets/storage.ts): whose rows (the package, or "link:<name>") and package.json's `cmd.storage.version`; none (tests): a store in memory. */
   storage?: { store: WidgetStorage; owner: string; declared: number };
 }
@@ -69,6 +73,8 @@ export interface WidgetApi {
   call(verb: string, params: WireValue[], press?: Press): Promise<WireValue>;
   /** A live topic: `push` at once with the current value, then on each change; returns what stops it. */
   subscribe(topic: string, query: unknown, push: (data: WireValue) => void): () => void;
+  /** A Picture's src as the renderer may get it: a data: image, checked, or an https one fetched (picture.ts); throws ApiRefusal saying why not. */
+  picture(src: string): Promise<string>;
   /** At the start of the process (before ready): the places whose storage this window migrates now, in order (host.ts). */
   migrateStart(): Promise<ApiStorageMigrate[]>;
   /** A place's migration ended (the process's `migrated`): kept, or dropped with the later ones; the error when keeping it failed. */
@@ -94,6 +100,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
   const level = workspaceScope(perms);
   const limits = { net: new RateLimit(60), ai: new RateLimit(10), notify: new RateLimit(10) };
   const sent = new Map<string, string>();
+  const pictures = scope.pictures ?? new PictureCache();
 
   /** The workspace part of a read: its own unless "all" was asked (and granted). */
   const allowed = (q?: ApiScopeQuery | null): "workspace" | "all" => {
@@ -346,6 +353,11 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       const fn = VERBS[v] as (...p: WireValue[]) => unknown;
       return ((await fn(...p)) ?? null) as WireValue;
     },
+    async picture(src) {
+      if (src.startsWith("data:")) return checkDataSrc(src);
+      const u = pictureUrl(src, perms.net);
+      return pictures.get(u.href, () => fetchPicture(u, { net: perms.net, fetchImpl: scope.fetchImpl }), () => limits.net.take("net.fetch, with the pictures it fetches"));
+    },
     migrateStart: () => storage.migrateStart(),
     migrateEnd: (scope, ok) => storage.migrateEnd(scope, ok),
     storageBehind: () => storage.behind(),
@@ -360,7 +372,8 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       // A live read of a verb that reads a class of events (the journal, cmd's own use) needs it as the verb does.
       const cls = verb ? verbClass(verb) : null;
       if (verb && cls && !perms.events.includes(cls)) throw missing("events", cls, `${topic} (it reads ${cls} events)`);
-      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null, windowId: scope.windowId, storage: { store: st.store, owner: st.owner } }, push);
+      if (verb && API[verb].needs === "media" && !perms.media.includes("read")) throw missing("media", "read", "Seeing what's playing");
+      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null, windowId: scope.windowId, storage: { store: st.store, owner: st.owner }, media: reads.hold }, push);
     },
   };
 }

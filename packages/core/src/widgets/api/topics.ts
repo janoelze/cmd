@@ -9,8 +9,11 @@
 // 1.3's others (docs/57 C2–C12): a stat again 1.5 s after the core says it changed (as the Stats
 // window does) and each minute for one counted in time; the journal when a day or week of its
 // scope is written; workspaces as they change; cmd's own use every 2 s.
+// `media` (1.3) holds the Now Playing stream while subscribed (its own hold, let go with the
+// subscription) and pushes each change; the cover rides only when it changed (a value
+// without `artwork` keeps the last one: @cmd/widget-api's useMedia and a frame's page fill it in).
 
-import { API_TOPIC, mergeEvents, topicVerb, type ApiEvent, type ApiEventQuery, type ApiTopic, type ApiVerb, type DataEvent, type WidgetPermissions, type WireValue } from "@cmd/protocol";
+import { API_TOPIC, mergeEvents, topicVerb, type ApiEvent, type ApiNowPlaying, type ApiEventQuery, type ApiTopic, type ApiVerb, type DataEvent, type WidgetPermissions, type WireValue } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { matchesQuery } from "../../data/match.ts";
 import { clampRows, clampQuery, type Reader } from "../../data/policy.ts";
@@ -20,6 +23,7 @@ import { logger } from "@cmd/protocol/node";
 import { ApiRefusal } from "./access.ts";
 import { apiEvent } from "./model.ts";
 import type { StorageChange, WidgetStorage } from "../storage.ts";
+import type { MediaHold } from "./reads.ts";
 
 const log = logger("widgets");
 
@@ -49,6 +53,8 @@ export interface TopicScope {
   /** The subscribing window, and its package's storage (the `storage` topic). */
   windowId?: string;
   storage?: { store: WidgetStorage; owner: string };
+  /** A hold on what plays, for the `media` topic (reads.ts); the grant is checked before. */
+  media?: () => MediaHold;
 }
 
 type Off = () => void;
@@ -79,8 +85,8 @@ function on(em: Emitter, event: string, fn: (...a: never[]) => void): Off {
 /** What a topic listens to, calling `changed` on each change; what it returns stops it. */
 type Listen = (core: TopicCore, s: TopicScope, changed: () => void) => Off[];
 
-/** Each topic but events (subscribeEvents): what it listens to while subscribed, and how long a burst is gathered. */
-const TOPICS: { [T in Exclude<ApiTopic, "events">]: { listen: Listen; coalesceMs?: number } } = {
+/** Each topic but events (subscribeEvents) and media (subscribeMedia): what it listens to while subscribed, and how long a burst is gathered. */
+const TOPICS: { [T in Exclude<ApiTopic, "events" | "media">]: { listen: Listen; coalesceMs?: number } } = {
   workspace: { listen: (core, _s, changed) => [on(core.workspaces, "updated", changed)] },
   agents: { listen: (core, _s, changed) => [on(core.agents, "updated", changed), on(core.agents, "removed", changed)] },
   terminals: { listen: (core, _s, changed) => [on(core.panes, "updated", changed), on(core.panes, "removed", changed)] },
@@ -155,6 +161,7 @@ export function subscribeTopic(core: TopicCore, s: TopicScope, push: (data: Wire
   const verb = topicVerb(s.topic);
   if (!verb) throw new ApiRefusal({ code: "unknown", message: `This cmd has no live ${String(s.topic).slice(0, 40)}.` });
   if (s.topic === "events") return subscribeEvents(core, s, push);
+  if (s.topic === "media") return subscribeMedia(s, push);
   const topic = TOPICS[s.topic];
   const q = s.query && typeof s.query === "object" ? s.query : {};
   const read = (live = false): unknown => s.read(verb, q, live);
@@ -232,5 +239,46 @@ function subscribeEvents(core: TopicCore, s: TopicScope, push: (data: WireValue)
     closed = true;
     if (timer) clearTimeout(timer);
     for (const off of offs) off();
+  };
+}
+
+/**
+ * `media` (1.3): what plays now, then again after each change of the stream (a burst
+ * coalesced), sent when it differs. The stream runs while this holds it; the hold goes with
+ * the subscription, so the last subscriber leaving lets it stop. The cover (a data: URL of up
+ * to some hundred KB) is left out of a value whose cover is the one sent last.
+ */
+function subscribeMedia(s: TopicScope, push: (data: WireValue) => void): Off {
+  if (!s.media) throw new ApiRefusal({ code: "unknown", message: "This cmd has no live media here." });
+  const hold = s.media();
+  let last = "";
+  /** The cover the widget has: the last one sent, undefined after a null (nothing to keep). */
+  let cover: string | null | undefined;
+  let closed = false;
+  let timer: NodeJS.Timeout | null = null;
+  const send = (n: ApiNowPlaying | null) => {
+    const text = JSON.stringify(n);
+    if (closed || text === last) return;
+    last = text;
+    if (n && cover !== undefined && n.artwork === cover) {
+      const { artwork: _, ...rest } = n;
+      return push(rest as unknown as WireValue);
+    }
+    cover = n ? n.artwork : undefined;
+    push(n as unknown as WireValue);
+  };
+  const read = () => void hold.read().then(send, (e) => log.debug(`a widget's media read failed: ${(e as Error).message}`));
+  const off = hold.on(() => {
+    if (timer || closed) return;
+    timer = setTimeout(() => ((timer = null), read()), TOPIC_COALESCE_MS);
+    timer.unref?.();
+  });
+  read();
+  return () => {
+    if (closed) return;
+    closed = true;
+    if (timer) clearTimeout(timer);
+    off();
+    hold.release();
   };
 }

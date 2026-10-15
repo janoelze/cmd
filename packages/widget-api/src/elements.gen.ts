@@ -1175,6 +1175,33 @@ export interface DialProps {
  */
 export const Dial = el<DialProps>("Dial");
 
+/** Picture's props. @since 1.3 */
+export interface PictureProps {
+  /**
+   * data:image/png|jpeg|webp|gif;base64,… (at most 512 KB), or https://<a granted host>/… (cmd fetches it: at most 2 MB and 4096 px a side, kept an hour); null shows the placeholder. Never SVG.
+   */
+  src?: string | null;
+  /** What it shows, in words (its accessible name; what stands in on a paired device that draws none). */
+  alt: string;
+  /** Fills its box, cropped (default), or fits inside it. */
+  fit?: "cover" | "contain";
+  /** Width over height (default 1: square). */
+  ratio?: 1 | 1.333 | 1.5 | 1.778;
+  /** Its width in px (default 64), or "fill": as large as the room left allows (a cover above a player). */
+  size?: 24 | 32 | 44 | 64 | 96 | 128 | "fill";
+  /** Its corners (default md). */
+  radius?: "sm" | "md" | "none";
+  /** An SF Symbol name. On the placeholder box (no src, loading, or failed), in the chart track colour. */
+  icon?: string;
+  /** Pressed. */
+  onClick?: () => void;
+}
+/**
+ * An image: a cover, a thumbnail, a logo. From a data: URL, or an https URL of a host in the package's net grant, which cmd fetches; never loaded by the page.
+ * @since 1.3
+ */
+export const Picture = el<PictureProps>("Picture");
+
 /** Each element's props type, by name (tests hold them to the protocol's allow-list). */
 export interface ElementProps {
   Window: WindowProps;
@@ -1238,4 +1265,5 @@ export interface ElementProps {
   Adapt: AdaptProps;
   Case: CaseProps;
   Dial: DialProps;
+  Picture: PictureProps;
 }

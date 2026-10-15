@@ -64,6 +64,7 @@ export const ELEMENT_SINCE: Record<string, string> = {
   Adapt: "1.3",
   Case: "1.3",
   Dial: "1.3",
+  Picture: "1.3",
 };
 
 /** The minor each prop, event or children added to an older element came in ("Stat.trend": "1.3"), which `cmd.env.has("Stat.trend")` reads. */

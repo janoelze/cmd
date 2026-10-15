@@ -1,7 +1,7 @@
 // Now Playing as one feature (kernel/features.ts): the widget's type, its methods
 // (NowPlayingMethods, protocol nowplaying.ts) and the adapter's stream (adapter.ts), which
 // runs only while a Now Playing window is open, or a widget package reads it (holdNowPlaying,
-// the widget API's media.get), and tells the app each change.
+// the widget API's media.get and its live `media` topic), and tells the app each change.
 
 import type { NowPlaying, NowPlayingMethods } from "@cmd/protocol";
 import type { CoreContext } from "../kernel/context.ts";
@@ -47,9 +47,10 @@ const FIRST_MS = 1500;
 /**
  * Keeps the stream running for a reader beside the windows (a widget package's media.get):
  * `read()` is what plays now, waiting a moment for the stream's first word when it just started;
- * `release()` lets it stop again.
+ * `on(fn)` hears each change while held (what the app hears as nowPlaying.changed); `release()`
+ * lets it stop again.
  */
-export function holdNowPlaying(core: Pick<CoreContext, "broadcast" | "windows">): { read(): Promise<NowPlaying | null>; release(): void } {
+export function holdNowPlaying(core: Pick<CoreContext, "broadcast" | "windows">): NowPlayingHold {
   const e = entryOf(core);
   const me = {};
   e.holds.add(me);
@@ -63,10 +64,22 @@ export function holdNowPlaying(core: Pick<CoreContext, "broadcast" | "windows">)
             const t = setTimeout(done, FIRST_MS);
             e.stream.on("changed", done);
           }),
+    on(fn) {
+      e.stream.on("changed", fn);
+      return () => void e.stream.off("changed", fn);
+    },
     release() {
       if (e.holds.delete(me)) sync(core);
     },
   };
+}
+
+/** The stream kept running for one reader (holdNowPlaying). */
+export interface NowPlayingHold {
+  read(): Promise<NowPlaying | null>;
+  /** Hears each change; returns what stops it. */
+  on(fn: () => void): () => void;
+  release(): void;
 }
 
 export const nowPlayingFeature = {

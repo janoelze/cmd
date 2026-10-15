@@ -165,7 +165,7 @@ describe("frame widgets", () => {
   });
 
   it("pushes a live topic to the connection that asked, until it unsubscribes, the window closes or the connection does", async () => {
-    const { core, open, ctx, conn, served, frameEvents } = await setup([{ name: "radio", surface: "frame", permissions: { workspace: ["read"] } }, { name: "bare", surface: "frame" }]);
+    const { core, open, ctx, conn, served, frameEvents } = await setup([{ name: "radio", surface: "frame", permissions: { workspace: ["read"], media: ["read"] } }, { name: "bare", surface: "frame" }]);
     core.library.host.grant("radio");
     const w = await open();
     const sub = (windowId: string, s: number, topic: string, query?: unknown) => core.handlers["widget.frameSubscribe"]({ windowId, frame: "f1", sub: s, topic, query }, ctx);
@@ -188,6 +188,7 @@ describe("frame widgets", () => {
     expect(await sub(bare.id, 2, "agents")).toMatchObject({ ok: false, error: { code: "permission", permission: 'workspace: ["read"]' } });
     expect(await sub(w.id, 3, "agents", { scope: "all" })).toMatchObject({ ok: false, error: { code: "permission", permission: 'workspace: ["all"]' } });
     expect(await sub(w.id, 4, "pages")).toMatchObject({ ok: false, error: { code: "unknown" } });
+    expect(await sub(bare.id, 5, "media")).toMatchObject({ ok: false, error: { code: "permission", permission: 'media: ["read"]' } });
     // Each topic with a query it takes; 1.3's that need more than this grant name what.
     const QUERY: Record<string, unknown> = { storage: { scope: "package", key: "k" }, stats: { stat: "git.commits" } };
     const MORE: Record<string, string> = { workspaces: 'workspace: ["all"]', journal: 'events: ["agents"]', appUsage: 'events: ["system"]' };

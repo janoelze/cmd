@@ -12,6 +12,7 @@ import { ALIGN, BREAKS, DISABLED, LIGHTS, SPACE, SYMBOL, TEXT_SIZES, TIP, TONES,
 import { ELEMENTS_1_2 } from "./widget-elements-1.2.ts";
 import { ELEMENTS_1_3_LAYOUT, STACK_1_3, TEXT_1_3 } from "./widget-elements-1.3-layout.ts";
 import { ELEMENTS_1_3_DISPLAY, REVEAL_1_3, SEARCH_EVENTS_1_3, SPARKLINE_1_3, STAT_1_3, WINDOW_1_3 } from "./widget-elements-1.3-display.ts";
+import { ELEMENTS_1_3_PICTURE } from "./widget-elements-1.3-picture.ts";
 
 export { SPACE, TONES, LIGHTS, TEXT_SIZES, ALIGN, BREAKS, UNITS, API_ENUMS, TOOLBAR_ITEM, isShape } from "./widget-spec.ts";
 export type { MenuEntryOf, ActionOf, ViewStateOf, OptionOf, WireMenuEntry, ApiFieldType, ApiFieldSpec, ApiShape, ApiPropType, ApiPropSpec, ApiGesture, ApiEventSpec, ApiElementSpec } from "./widget-spec.ts";
@@ -338,7 +339,7 @@ const ELEMENTS_1_0 = {
 } as const satisfies Record<string, ApiElementSpec>;
 
 /** API 1's elements (1.0's, then each minor's): the allow-list the renderer enforces. */
-export const API_ELEMENTS = { ...ELEMENTS_1_0, ...ELEMENTS_1_2, ...ELEMENTS_1_3_LAYOUT, ...ELEMENTS_1_3_DISPLAY } as const satisfies Record<string, ApiElementSpec>;
+export const API_ELEMENTS = { ...ELEMENTS_1_0, ...ELEMENTS_1_2, ...ELEMENTS_1_3_LAYOUT, ...ELEMENTS_1_3_DISPLAY, ...ELEMENTS_1_3_PICTURE } as const satisfies Record<string, ApiElementSpec>;
 
 export type ApiElement = keyof typeof API_ELEMENTS;
 export const API_ELEMENT_NAMES = Object.keys(API_ELEMENTS) as ApiElement[];
@@ -396,3 +397,4 @@ export type EventValueOf<S> = S extends { value: infer V } ? WireTypeOf<V> | (S 
 
 export * from "./widget-values.ts";
 export { BOX_STEP, BOX_EVERY_MS, WINDOW_BAR_H, roundBox, sizeClassOf, sizeEnv, type ApiBox } from "./widget-elements-1.3-layout.ts";
+export { PICTURE_DATA, PICTURE_DATA_MAX, PICTURE_TREE_MAX, PICTURE_TYPES, isPictureData } from "./widget-elements-1.3-picture.ts";

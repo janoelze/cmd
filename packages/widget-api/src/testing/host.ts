@@ -107,6 +107,8 @@ export interface HostData {
   appUsage?: ApiAppUsage;
   /** What `cmd.media.get` gives: what plays, or null (the default). @since 1.2 */
   playing?: ApiNowPlaying | null;
+  /** What `useMedia` and `cmd.media.get` give (`playing` under the topic's name; this one wins); `host.set({ media })` is a change of track or a pause, pushed at once. @since 1.3 */
+  media?: ApiNowPlaying | null;
   /**
    * What `cmd.storage` holds at start, by scope (`window` is `state` too), and the places whose
    * migration is due (`migrate: [{ scope: "package", from: 1, to: 2 }]`): the widget's registered
@@ -317,7 +319,7 @@ export function createHost(data: HostData = {}): FakeHost {
       return typeof d.stats === "function" ? d.stats(query) : (d.stats?.[query.stat] ?? fixtureStat(query));
     },
     "journal.days": ([q]) => (d.journal ?? []).slice(0, Math.min(q?.count ?? 7, 30)),
-    "media.get": () => d.playing ?? null,
+    "media.get": () => (d.media !== undefined ? d.media : (d.playing ?? null)),
     "media.control": done,
     "clipboard.write": done,
     // 1.3
@@ -414,6 +416,7 @@ export function createHost(data: HostData = {}): FakeHost {
       // A topic's data is under its name; events come through emit().
       const changed = new Set(API_TOPICS.filter((t) => t !== "events" && t !== "storage" && t in next));
       if (next.workspace) for (const t of ["agents", "terminals", "windows"] as const) changed.add(t);
+      if ("playing" in next) changed.add("media");
       for (const [id, s] of subs) if (changed.has(s.topic)) deliver({ kind: "event", sub: id, data: topicData(s.topic, s.query) });
     },
     emit(...events) {
