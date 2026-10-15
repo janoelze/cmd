@@ -14,8 +14,7 @@
 import type { ApiBox, ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
-import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, MediaTopicData, MediaTopicQuery, WidgetMigrated, WidgetEnvLocale } from "./widget-tree-1.3.ts";
-import type { ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWorkspaceName } from "./widget-tree-1.3.ts";
+import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, MediaTopicData, MediaTopicQuery, WidgetMigrated, WidgetEnvLocale, ApiActionMore, ApiActionRunMore, ApiActionsInfo, ApiActionsInfoQuery, ApiActionsQuery, ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWorkspaceName } from "./widget-tree-1.3.ts";
 
 // ── versions ────────────────────────────────────────────
 
@@ -257,7 +256,7 @@ export interface ApiMethods {
   "git.status": { params: []; result: ApiGitStatus | null };
   "git.diff": { params: [file?: string]; result: { text: string; clipped: boolean } };
   "git.worktrees": { params: []; result: ApiGitWorktree[] };
-  "actions.list": { params: []; result: ApiAction[] };
+  "actions.list": { params: [query?: ApiActionsQuery]; result: ApiAction[] };
   "notify.send": { params: [note: ApiNotification]; result: null };
   "state.get": { params: [key: string]; result: WireValue };
   "state.set": { params: [key: string, value: WireValue]; result: null };
@@ -273,7 +272,7 @@ export interface ApiMethods {
   "windows.close": { params: [id: string]; result: null };
   "run.exec": { params: [program: string, args?: string[], opts?: ApiRunOptions]; result: ApiRunResult };
   // 1.2 (widget-tree-1.2.ts)
-  "actions.stop": { params: [name: string]; result: null };
+  "actions.stop": { params: [name: string, opts?: { root?: string }]; result: null };
   "events.classes": { params: []; result: ApiEventClass[] };
   "terminals.usage": { params: [query?: ApiUsageQuery]; result: ApiTerminalUsage[] };
   "stats.query": { params: [query: ApiStatQuery]; result: ApiStatResult };
@@ -293,6 +292,7 @@ export interface ApiMethods {
   "agents.select": { params: [id: string]; result: null };
   "terminals.rerun": { params: [key: string]; result: ApiRerun };
   "app.usage": { params: []; result: ApiAppUsage };
+  "actions.info": { params: [query?: ApiActionsInfoQuery]; result: ApiActionsInfo | null };
 }
 
 /** ApiMethods has exactly the verbs of API_VERBS (tsc fails here otherwise). */
@@ -306,13 +306,14 @@ export interface TopicQuery extends MediaTopicQuery {
   windows: ApiScopeQuery;
   events: ApiEventQuery;
   git: null;
-  actions: null;
+  actions: ApiActionsQuery | null;
   terminalUsage: ApiUsageQuery;
   storage: ApiStorageQuery;
   stats: ApiStatQuery;
   journal: ApiJournalQuery;
   workspaces: null;
   appUsage: null;
+  actionsInfo: ApiActionsInfoQuery | null;
 }
 export interface TopicData extends MediaTopicData {
   workspace: ApiWorkspace;
@@ -330,6 +331,7 @@ export interface TopicData extends MediaTopicData {
   journal: ApiJournalDay[];
   workspaces: ApiWorkspaceName[];
   appUsage: ApiAppUsage;
+  actionsInfo: ApiActionsInfo | null;
 }
 
 // ── the data, in the product's words ────────────────────
@@ -469,7 +471,7 @@ export interface ApiGitWorktree {
   main: boolean;
 }
 
-export interface ApiAction {
+export interface ApiAction extends ApiActionMore {
   name: string;
   title: string;
   /** Running it asks first (a deploy, a push). */
@@ -495,7 +497,7 @@ export interface ApiAction {
 }
 
 /** How `cmd.actions.run` runs an action. */
-export interface ApiActionRunOptions {
+export interface ApiActionRunOptions extends ApiActionRunMore {
   /** 1.2: one that is running is stopped (⌃C) and run again in its terminal: Restart. An older cmd runs it only when it isn't running. */
   restart?: boolean;
 }

@@ -2,7 +2,7 @@
 // whole API objects from a few fields, with ids derived from the name (agent "Tours" is
 // a-tours in window w-tours, terminal t-tours) so a test can name what it expects.
 
-import { agentIcon, agentLight, type ApiAppUsage, type ApiJournalWeek, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiEventClass, type ApiJournalDay, type ApiJournalEntry, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminal, type ApiTerminalUsage, type ApiWindow, type ApiWorkspace } from "@cmd/protocol/widget-tree";
+import { agentIcon, agentLight, type ApiAction, type ApiAppUsage, type ApiJournalWeek, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiEventClass, type ApiJournalDay, type ApiJournalEntry, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminal, type ApiTerminalUsage, type ApiWindow, type ApiWorkspace } from "@cmd/protocol/widget-tree";
 
 /** The workspace fixtures live in unless told otherwise. */
 export const WORKSPACE_ID = "ws-1";
@@ -150,5 +150,16 @@ export function appUsage(over: Partial<ApiAppUsage> = {}): ApiAppUsage {
   return { app: { cpu: 3.2, memory: 640 * 2 ** 20 }, background: { cpu: 0.8, memory: 120 * 2 ** 20 }, at: Date.now(), ...over };
 }
 
-/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `command()` (1.1), `workspace()`; `usage()`, `classes()`, `stat()`, `day()`, `playing()` (1.2); `week()`, `appUsage()` (1.3). @since 1.0 */
-export const fixtures = { agent, pane, window, event, command, workspace, usage, classes, stat, day, playing, week, appUsage };
+/**
+ * A Workspace Action as `cmd.actions.list` gives it: `pnpm run <name>` from package.json, not
+ * running, unless given. A `source.kind` of "history" or "readme" lists it only with that `include`.
+ * @since 1.3
+ */
+export function action(over: Partial<ApiAction> = {}): ApiAction {
+  const name = over.name ?? "dev";
+  const command = over.command ?? `pnpm run ${name}`;
+  return { name, title: command, risky: false, command, kind: "run", package: null, pinned: false, primary: false, running: false, terminalId: null, url: null, exitCode: null, script: null, args: false, hidden: false, source: { kind: "file", file: "package.json", line: null }, history: null, startedAt: null, endedAt: null, elsewhere: [], ...over };
+}
+
+/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `command()` (1.1), `workspace()`; `usage()`, `classes()`, `stat()`, `day()`, `playing()` (1.2); `week()`, `appUsage()`, `action()` (1.3). @since 1.0 */
+export const fixtures = { agent, pane, window, event, command, workspace, usage, classes, stat, day, playing, week, appUsage, action };

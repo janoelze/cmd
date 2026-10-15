@@ -118,10 +118,11 @@ Workspace Actions (docs/36).
 
 | Verb | Since | Permission | What |
 |---|---|---|---|
-| `cmd.actions.list(): Promise<ApiAction[]>` | 1.0 | `workspace: ["read"]` | The workspace's Actions. |
-| `cmd.actions.run(name: string, opts?: ApiActionRunOptions \| undefined): Promise<ApiActionStarted>` | 1.1 | `act: ["actions"]`, asks | Runs a Workspace Action by name in a terminal of its own. Asks first; only after a press. A risky one (a deploy, a publish) is refused: the person runs those from Workspace Actions. With `{ restart: true }` (1.2) one that is running is stopped and run again in its terminal, one act. Needs `act: ["actions"]` (or `"actions.run"`). |
-| `cmd.actions.stop(name: string): Promise<null>` | 1.2 | `act: ["actions"]`, asks | Stops a running Workspace Action of this workspace (⌃C in its terminal), whoever started it. Asks first; only after a press. Needs `act: ["actions"]` (or `"actions.stop"`). |
-| `cmd.actions.use(): ApiAction[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useActions()`. |
+| `cmd.actions.list(query?: ApiActionsQuery \| undefined): Promise<ApiAction[]>` | 1.0 | `workspace: ["read"]` | The workspace's Actions. Since 1.3, `{ root }` lists another worktree's of the workspace's repository (a `path` from `cmd.git.worktrees`; any other folder is refused) and `{ include: ["history", "suggested"] }` adds commands from the person's history and the README. |
+| `cmd.actions.run(name: string, opts?: ApiActionRunOptions \| undefined): Promise<ApiActionStarted>` | 1.1 | `act: ["actions"]`, asks | Runs a Workspace Action by name in a terminal of its own. Asks first; only after a press. With `{ restart: true }` (1.2) one that is running is stopped and run again in its terminal, one act. Since 1.3: `{ fresh: true }` runs it in a new terminal, `{ root }` runs one of that worktree (as `list` was given it), one that needs arguments (`args`) is typed into a new terminal for the person to finish, never run, and a risky one (a deploy, a publish) asks every time, showing its command, never kept and never from a paired device (before 1.3 it was refused). Needs `act: ["actions"]` (or `"actions.run"`). |
+| `cmd.actions.stop(name: string, opts?: { root?: string \| undefined; } \| undefined): Promise<null>` | 1.2 | `act: ["actions"]`, asks | Stops a running Workspace Action of this workspace (⌃C in its terminal), whoever started it; `{ root }` (1.3) one of that worktree. Asks first; only after a press. Needs `act: ["actions"]` (or `"actions.stop"`). |
+| `cmd.actions.info(query?: ApiActionsInfoQuery \| undefined): Promise<ApiActionsInfo \| null>` | 1.3 | `workspace: ["read"]` | What Workspace Actions says about the folder (`{ root }` as `list`): its branch, whether it is a linked worktree, whether the AI is describing the actions, and source files that couldn't be read; null when the workspace has no folder. Needs `workspace: ["read"]`. |
+| `cmd.actions.use(query?: ApiActionsQuery \| undefined): ApiAction[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useActions(query)`; `info` is `useActionsInfo(query)`. |
 
 #### `cmd.stats`
 
@@ -295,7 +296,8 @@ The reads as subscriptions: each gets the current value at once and every change
 
 | Hook | Since | What |
 |---|---|---|
-| `useActions(): ApiAction[]` | 1.0 | The workspace's Actions (docs/36), live. |
+| `useActions(query?: ApiActionsQuery \| undefined): ApiAction[]` | 1.0 | The workspace's Actions (docs/36), live. Since 1.3, `{ root }` reads those of another worktree of the workspace's repository (a `path` from `cmd.git.worktrees`; any other folder is refused), and `{ include: ["history", "suggested"] }` adds the commands the person runs here often and the ones the README suggests (their `source.kind` says which). |
+| `useActionsInfo(query?: ApiActionsInfoQuery \| undefined): ApiActionsInfo \| null` | 1.3 | What Workspace Actions says about the folder, live: its branch and whether it is a linked worktree, whether the person's AI is describing the actions now, and source files that couldn't be read. `{ root }` as `useActions`. null until it arrives, or when the workspace has no folder. Needs `workspace: ["read"]`. |
 | `useAgents(query?: ApiScopeQuery): ApiAgent[]` | 1.0 | The agents of this workspace (or every workspace with `{ scope: "all" }`), live: a row updates when an agent's state, name or line changes. Empty until they arrive. Needs `workspace: ["read"]` (`["all"]` for every workspace). |
 | `useAppUsage(): ApiAppUsage \| null` | 1.3 | What cmd itself uses, live: the app's processes and the background one, CPU and memory, sampled every 2 seconds while the widget shows it. null until the first sample. Needs `events: ["system"]`. |
 | `useCompletion(request: ApiCompletionRequest \| null): CompletionState` | 1.0 | Asks the person's AI once per distinct `request` (a new prompt asks again; null asks nothing): `cmd.ai.complete` as a hook. Needs `ai: ["complete"]`. |

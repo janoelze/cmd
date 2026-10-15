@@ -79,6 +79,7 @@ const VERBS: Verbs = {
   "agents.select": verb("agents.select"),
   "terminals.rerun": verb("terminals.rerun"),
   "app.usage": verb("app.usage"),
+  "actions.info": verb("actions.info"),
 };
 
 /** cmd.run: a function (`cmd.run("gh", ["run", "list"])`) that is also the namespace of its one verb (`cmd.run.exec`). */
@@ -246,23 +247,39 @@ export const cmd = {
   },
   /** Workspace Actions (docs/36). @since 1.0 */
   actions: {
-    /** The workspace's Actions. @since 1.0 */
+    /**
+     * The workspace's Actions. Since 1.3, `{ root }` lists another worktree's of the workspace's
+     * repository (a `path` from `cmd.git.worktrees`; any other folder is refused) and
+     * `{ include: ["history", "suggested"] }` adds commands from the person's history and the README.
+     * @since 1.0
+     */
     list: VERBS["actions.list"],
     /**
      * Runs a Workspace Action by name in a terminal of its own. Asks first; only after a
-     * press. A risky one (a deploy, a publish) is refused: the person runs those from
-     * Workspace Actions. With `{ restart: true }` (1.2) one that is running is stopped and run
-     * again in its terminal, one act. Needs `act: ["actions"]` (or `"actions.run"`).
+     * press. With `{ restart: true }` (1.2) one that is running is stopped and run again in its
+     * terminal, one act. Since 1.3: `{ fresh: true }` runs it in a new terminal, `{ root }` runs
+     * one of that worktree (as `list` was given it), one that needs arguments (`args`) is typed
+     * into a new terminal for the person to finish, never run, and a risky one (a deploy, a
+     * publish) asks every time, showing its command, never kept and never from a paired device
+     * (before 1.3 it was refused). Needs `act: ["actions"]` (or `"actions.run"`).
      * @since 1.1
      */
     run: VERBS["actions.run"],
     /**
      * Stops a running Workspace Action of this workspace (⌃C in its terminal), whoever started
-     * it. Asks first; only after a press. Needs `act: ["actions"]` (or `"actions.stop"`).
+     * it; `{ root }` (1.3) one of that worktree. Asks first; only after a press. Needs
+     * `act: ["actions"]` (or `"actions.stop"`).
      * @since 1.2
      */
     stop: VERBS["actions.stop"],
-    /** Live: the hook `useActions()`. @since 1.0 */
+    /**
+     * What Workspace Actions says about the folder (`{ root }` as `list`): its branch, whether
+     * it is a linked worktree, whether the AI is describing the actions, and source files that
+     * couldn't be read; null when the workspace has no folder. Needs `workspace: ["read"]`.
+     * @since 1.3
+     */
+    info: VERBS["actions.info"],
+    /** Live: the hook `useActions(query)`; `info` is `useActionsInfo(query)`. @since 1.0 */
     use: useActions,
   },
   /** Stats (docs/49): how cmd is used, counted from the event log, as the Stats window shows them. @since 1.2 */

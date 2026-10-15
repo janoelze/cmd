@@ -3,7 +3,7 @@
 
 import { describe, expect, it, test } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
-import { Stat, Inline, useData, useCompletion, useTerminalUsage, useEvents, useStat, useJournal, useWorkspaces, useAppUsage, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
+import { Stat, Inline, useData, useCompletion, useTerminalUsage, useEvents, useStat, useJournal, useWorkspaces, useAppUsage, useActions, useActionsInfo, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
 import Widget from "../examples/v1/agents.tsx";
 
 test("waiting agents come first", async () => {
@@ -308,5 +308,34 @@ describe("API 1.3's data in the fake host", () => {
     await expect(cmd.terminals.rerun("nope")).rejects.toThrow(/no command under that key/);
     host.emit(fixtures.command({ key: "command:3", terminalId: "t-zsh" }));
     await expect(cmd.terminals.rerun("command:1")).rejects.toThrow(/isn't at a prompt/);
+  });
+
+  it("serves a worktree's actions with history and suggestions only when asked, and useActionsInfo; refuses another folder", async () => {
+    function Actions() {
+      const here = useActions();
+      const there = useActions({ root: "/Users/me/src/app-feat", include: ["history"] });
+      const info = useActionsInfo({ root: "/Users/me/src/app-feat" });
+      return <Text>{[here.map((a) => a.name).join("+"), there.map((a) => `${a.name}:${a.source?.kind}`).join("+"), `${info?.branch} ${info?.linked}`].join(" | ")}</Text>;
+    }
+    const worktrees = [{ path: "/Users/me/src/app", branch: "main", main: true }, { path: "/Users/me/src/app-feat", branch: "feat", main: false }];
+    const fmt = fixtures.action({ name: "cargo fmt", command: "cargo fmt", source: { kind: "history", file: null, line: null }, history: { runs: 12 } });
+    const docs = fixtures.action({ name: "serve docs", source: { kind: "readme", file: "README.md", line: null } });
+    const host = createHost({ worktrees, actions: (q) => (q.root === "/Users/me/src/app-feat" ? [fixtures.action({ name: "dev" }), fmt, docs] : [fixtures.action({ name: "test" }), docs]) });
+    const tree = await render(<Actions />, host);
+    expect(tree.text()).toBe("test | dev:file+cargo fmt:history | feat true");
+    expect((await cmd.actions.list({ include: ["suggested"] })).map((a) => a.name)).toEqual(["test", "serve docs"]);
+    await expect(cmd.actions.list({ root: "/tmp/elsewhere" })).rejects.toThrow(/isn't a worktree of this workspace's repository/);
+  });
+
+  it("asks for a risky action like any act, runs fresh, types one that needs arguments", async () => {
+    const host = createHost({ actions: [fixtures.action({ name: "deploy", risky: true }), fixtures.action({ name: "greet", command: "just greet", args: true }), fixtures.action({ name: "dev" })], approve: (verb, args) => !(verb === "actions.run" && args[0] === "deploy") });
+    await render(() => null, host);
+    await expect(cmd.actions.run("deploy")).rejects.toMatchObject({ code: "denied" });
+    expect(await cmd.actions.run("greet")).toEqual({ terminalId: "t-typed-greet", started: false });
+    const a = await cmd.actions.run("dev", { fresh: true });
+    const b = await cmd.actions.run("dev", { fresh: true });
+    expect(a.terminalId).not.toBe(b.terminalId);
+    expect(host.calls.map((c) => c[1])).toEqual(["greet", "dev", "dev"]);
+    expect(fixtures.action({ name: "x" })).toMatchObject({ script: null, args: false, hidden: false, source: { kind: "file", file: "package.json", line: null }, history: null, startedAt: null, endedAt: null, elsewhere: [] });
   });
 });

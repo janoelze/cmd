@@ -109,3 +109,77 @@ export interface MediaTopicQuery {
 export interface MediaTopicData {
   media: ApiNowPlaying | null;
 }
+
+// ── Workspace Actions as the native view has them (docs/57, "1.3 additions" C14) ──
+
+/**
+ * Which actions (`actions.list`, `useActions`): those of `root`, a worktree of the workspace's
+ * repository (a `path` from `cmd.git.worktrees`; the workspace's folder by default), and with
+ * `include` the commands from the person's history and the README's suggestions beside the files'.
+ */
+export interface ApiActionsQuery {
+  /** A worktree of the workspace's repository, as `cmd.git.worktrees` gives its path; anything else is refused. */
+  root?: string;
+  /** "history": commands run here often that no file names; "suggested": commands the README shows (described by the person's AI). */
+  include?: ("history" | "suggested")[];
+}
+
+/** Which folder `actions.info` is about: `root` as in ApiActionsQuery. */
+export type ApiActionsInfoQuery = Pick<ApiActionsQuery, "root">;
+
+/** Where an action was found: a file (relative to the root, with its line when known), the person's history, or the README. */
+export interface ApiActionSource {
+  kind: "file" | "history" | "readme";
+  /** Relative to the root ("package.json", "apps/web/package.json"); null for history. */
+  file: string | null;
+  line: number | null;
+}
+
+/** The same action running in another worktree of the repository: its branch, terminal and address. */
+export interface ApiActionElsewhere {
+  branch: string | null;
+  terminalId: string;
+  url: string | null;
+}
+
+/** About a folder's actions (`actions.info`, `useActionsInfo`): its checkout, whether the AI is describing, and files that couldn't be read. */
+export interface ApiActionsInfo {
+  /** The folder the actions are of (the workspace's, or the worktree asked for). */
+  root: string;
+  /** Its checkout's branch; null outside a repository or with HEAD detached. */
+  branch: string | null;
+  /** A linked worktree, not the repository's main checkout. */
+  linked: boolean;
+  /** The person's AI is writing the actions' descriptions now. */
+  describing: boolean;
+  /** Source files that couldn't be read (relative to the root): their last good actions are kept. */
+  errors: { file: string; error: string }[];
+}
+
+/** What an action says since 1.3 (ApiAction, widget-tree.ts, extends it): every field optional, as an older cmd sends none. */
+export interface ApiActionMore {
+  /** What it runs when that isn't `command`: a package.json script's text ("vite --port 3000"); null when the same. */
+  script?: string | null;
+  /** It needs arguments (a just recipe's parameters): `cmd.actions.run` types it into a new terminal for the person to finish, never runs it. */
+  args?: boolean;
+  /** A lifecycle script and the like, which Workspace Actions lists under More. */
+  hidden?: boolean;
+  /** Where it was found; a file's path is relative to the root. */
+  source?: ApiActionSource;
+  /** A command from the person's history: how often it ran in this folder; null for any other. */
+  history?: { runs: number } | null;
+  /** When its latest run here started (ms), null when it hasn't run. */
+  startedAt?: number | null;
+  /** When its latest run here ended (ms), null while it runs or when it hasn't. */
+  endedAt?: number | null;
+  /** The same action running now in other worktrees of the repository. */
+  elsewhere?: ApiActionElsewhere[];
+}
+
+/** How `cmd.actions.run` runs an action, since 1.3 (ApiActionRunOptions extends it). */
+export interface ApiActionRunMore {
+  /** In a new terminal, even when its last one is back at its prompt (Run in New Terminal). */
+  fresh?: boolean;
+  /** The worktree it is an action of, as `useActions({ root })` was given; the workspace's folder by default. */
+  root?: string;
+}

@@ -8,7 +8,8 @@
 // in any window of the package (widgets/storage.ts's `changed`), or this window's state.
 // 1.3's others (docs/57 C2–C12): a stat again 1.5 s after the core says it changed (as the Stats
 // window does) and each minute for one counted in time; the journal when a day or week of its
-// scope is written; workspaces as they change; cmd's own use every 2 s.
+// scope is written; workspaces as they change; cmd's own use every 2 s; a worktree's actions
+// (and their info) as they change, its folder kept read while subscribed.
 // `media` (1.3) holds the Now Playing stream while subscribed (its own hold, let go with the
 // subscription) and pushes each change; the cover rides only when it changed (a value
 // without `artwork` keeps the last one: @cmd/widget-api's useMedia and a frame's page fill it in).
@@ -50,6 +51,8 @@ export interface TopicScope {
   root: () => string | null;
   /** The adapter's read of a verb (adapter.ts), checking the grant as the verb does; `live`: a read again after a change (not the first). */
   read(verb: ApiVerb, query: unknown, live?: boolean): unknown;
+  /** 1.3: the folder an actions query is of, checked as the read checks it (adapter.ts); null without a folder. */
+  actionsRoot?(query: unknown): string | null;
   /** The subscribing window, and its package's storage (the `storage` topic). */
   windowId?: string;
   storage?: { store: WidgetStorage; owner: string };
@@ -93,7 +96,9 @@ const TOPICS: { [T in Exclude<ApiTopic, "events" | "media">]: { listen: Listen; 
   windows: {
     listen: (core, _s, changed) => [on(core.windows, "updated", changed), on(core.windows, "removed", changed), on(core.panes, "updated", changed), on(core.panes, "removed", changed), on(core.workspaces, "updated", changed)],
   },
-  actions: { listen: (core, _s, changed) => [on(core.actions, "changed", changed)] },
+  // 1.3: the folder read (the workspace's, or the worktree asked for) is kept read and watched while subscribed.
+  actions: { listen: (core, s, changed) => listenActions(core, s, changed) },
+  actionsInfo: { listen: (core, s, changed) => listenActions(core, s, changed) },
   // 1.2: a sample is a pane's update (panes.ts setUsage, only when it moved noticeably).
   terminalUsage: { listen: (core, _s, changed) => [on(core.panes, "updated", changed), on(core.panes, "removed", changed)] },
   // 1.3: a set of the key in any window of the package (the shared scopes), or this window's state (its own scope, and the workspace it is in).
@@ -154,6 +159,17 @@ const TOPICS: { [T in Exclude<ApiTopic, "events" | "media">]: { listen: Listen; 
       return [() => w.close()];
     },
   },
+};
+
+/** A folder's actions changed (a run there or in another worktree of it, its files, the AI's words); kept read and watched meanwhile (the service lets go of folders nobody shows). */
+const listenActions: Listen = (core, s, changed) => {
+  let r: string | null = null;
+  try {
+    r = s.actionsRoot?.(s.query) ?? null;
+  } catch {}
+  // Without a folder known here (a scope without the check): any folder's change.
+  if (!r) return [on(core.actions, "changed", changed)];
+  return [on(core.actions, "changed", (root: string) => root === r && changed()), core.actions.hold(r)];
 };
 
 /** Subscribe; throws ApiRefusal when the grant doesn't reach the topic (checked by its first read). */

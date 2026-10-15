@@ -1,7 +1,8 @@
 // The widget API's acts (API 1.1, docs/56 phase 4): start, message and stop agents, type into
 // or open a terminal, run, restart or stop (1.2) a Workspace Action, close a window; 1.3: start an
-// interactive agent session (no prompt), and run a command again where it ran (terminals.rerun:
-// the text is what cmd's log recorded, never the widget's). A widget process is untrusted, so
+// interactive agent session (no prompt), run a command again where it ran (terminals.rerun:
+// the text is what cmd's log recorded, never the widget's), and run an action of another
+// worktree, in a new terminal, typed when it needs arguments, or a risky one after asking. A widget process is untrusted, so
 // each act, in this order:
 //
 //   1. needs its grant (`act: ["agents"]` or `act: ["agents.start"]`, access.ts's mayAct);
@@ -11,10 +12,12 @@
 //      act per press: a widget can't act on its own, nor many times on one click);
 //   3. names only things in the widget's own workspace, never its own window, by ids the core
 //      checks (nothing the process sends picks another workspace, pane or window);
-//   4. is refused outright when tools/deny.ts names the typed text, or the action is risky;
+//   4. is refused outright when tools/deny.ts names the typed text, or (1.3) a risky action's
+//      press came from a paired device;
 //   5. asks the person through tools/approvals.ts (decideWidget): the sheet names the widget, its
 //      package and version, and a yes can be kept for the package in this workspace, except for
-//      typed text and a press from a paired device, which ask every time;
+//      typed text, a risky action (1.3: its command shown, the sheet's Run in red) and a press
+//      from a paired device, which ask every time;
 //   6. runs one at a time per widget, marked on the window it acts on with the widget's name
 //      (tool.acting, as an agent's tool call is), and goes into the log as a tool.call.
 
@@ -31,6 +34,7 @@ import { denied as deniedLine } from "../../tools/deny.ts";
 import type { Approval } from "../../tools/kit.ts";
 import type { PackageWidget, WidgetPackage } from "../package.ts";
 import { ApiRefusal, RateLimit, failed, invalid, mayAct, missing } from "./access.ts";
+import { actionsRootFor, findAction } from "./actions.ts";
 
 const log = logger("widgets");
 
@@ -74,6 +78,8 @@ interface Plan {
   target: string | null;
   /** 1.3: this call carries no typed text though its verb can (agents.start without a prompt): it follows the levels. */
   untyped?: true;
+  /** 1.3: refused, with this message, for a press from a paired device (a risky action). */
+  local?: string;
   run(): Promise<{ value: WireValue; target?: string | null }>;
 }
 
@@ -140,13 +146,13 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
     const rel = p ? path.relative(own().root || os.homedir(), p.cwd) : "";
     return p ? `the terminal in ${rel && !rel.startsWith("..") ? rel : path.basename(p.cwd) || p.cwd}` : "a terminal";
   };
-  /** A Workspace Action of the widget's workspace by name, as actions.list gives it. */
-  const action = (name: unknown, verb: string) => {
+  /** A Workspace Action of the widget's workspace (1.3: of a worktree of its repository, `root`) by name, as actions.list gives it. */
+  const action = (name: unknown, verb: string, root?: unknown) => {
     if (typeof name !== "string" || !name.trim()) throw invalid(`${verb}: name the action, as actions.list gives it`);
     const ws = own();
     if (!ws.root) throw invalid("This widget's workspace has no folder, so no actions.");
-    const list = core.actions.list(ws.root);
-    const a = list.actions.find((x) => x.id === name) ?? list.actions.find((x) => x.name === name && !x.package) ?? list.actions.find((x) => x.name === name);
+    const list = core.actions.list(actionsRootFor(ws.root, root)!);
+    const a = findAction(list, name);
     if (!a) throw invalid(`No action “${name.slice(0, 60)}” in this workspace.`);
     return { ws, list, a };
   };
@@ -235,23 +241,41 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
       };
     },
     "actions.run": ([name, opts]) => {
-      const { ws, list, a } = action(name, "actions.run");
-      if (a.risky) throw new ApiRefusal({ code: "denied", message: `“${a.name}” is risky (it deploys, publishes or drops something): run it from Workspace Actions.` });
-      // 1.2: Restart, one act: ⌃C to its run, then the same command again in that terminal (as Workspace Actions' Restart).
-      const restart = !!(opts && typeof opts === "object" && (opts as { restart?: unknown }).restart === true) && running(list, a.id) !== null;
+      const o = (opts && typeof opts === "object" ? opts : {}) as { restart?: unknown; fresh?: unknown; root?: unknown };
+      const { ws, list, a } = action(name, "actions.run", o.root);
+      // 1.3: a recipe that needs arguments is typed into a new terminal in its folder for the person to finish, never run (as Workspace Actions does).
+      if (a.args) {
+        return {
+          approval: { permission: "show", title: `Type “${a.name}” in a new terminal`, exact: a.command },
+          target: null,
+          async run() {
+            const pane = core.panes.create({ workspaceId: ws.id, cwd: a.cwd, env: { [RESTORE_COMMAND_ENV]: `${a.command} ` } });
+            opened.add(pane.id);
+            const w = core.windows.list().find((x) => x.id === pane.id);
+            if (w) core.opened(w);
+            return { value: { terminalId: pane.id, started: false }, target: pane.id };
+          },
+        };
+      }
+      // 1.3: `fresh`, a new terminal (Run in New Terminal); 1.2: Restart, one act: ⌃C to its run, then the same command again in that terminal.
+      const fresh = o.fresh === true;
+      const restart = !fresh && o.restart === true && running(list, a.id) !== null;
+      const verb = restart ? "Restart" : "Run";
       return {
-        approval: { title: `${restart ? "Restart" : "Run"} “${a.name}”`, exact: a.command },
+        // 1.3 (Jan, 2026-10-15): a risky one (a deploy, a publish) asks every time, its command shown, never kept, never from a paired device.
+        approval: a.risky ? { title: `${verb} “${a.name}”?`, exact: a.command, risky: true } : { title: `${verb} “${a.name}”${fresh ? " in a new terminal" : ""}`, exact: a.command },
         target: restart ? running(list, a.id) : null,
+        ...(a.risky ? { local: `“${a.name}” is risky, so it runs only from this Mac.` } : {}),
         async run() {
-          const r = await core.call("actions.run", { root: list.root, actionId: a.id, workspaceId: ws.id, restart, confirmed: false });
+          const r = await core.call("actions.run", { root: list.root, actionId: a.id, workspaceId: ws.id, restart, fresh, confirmed: a.risky });
           if (r.started) opened.add(r.paneId);
           return { value: { terminalId: r.paneId, started: r.started }, target: r.paneId };
         },
       };
     },
     // 1.2: ⌃C to a running action of the workspace, whoever started it.
-    "actions.stop": ([name]) => {
-      const { list, a } = action(name, "actions.stop");
+    "actions.stop": ([name, opts]) => {
+      const { list, a } = action(name, "actions.stop", opts && typeof opts === "object" ? (opts as { root?: unknown }).root : undefined);
       const pane = running(list, a.id);
       if (!pane) throw invalid(`“${a.name}” isn't running.`);
       return {
@@ -313,6 +337,10 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
       deps.show({ ...shown, target, state });
       core.data.record({ id: `tool:${id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", workspaceId: ws.id, windowId: target, text: a.title, data: { caller: scope.widget.title, widget: `${scope.pkg.name} ${scope.pkg.version}`, tool: verb, acts: true, state, permission: a.permission, site: null, ask: a.title, exact: answer ? (a.exact ?? null) : null, allowed: answer ? answer.allow : null, scope: answer?.scope ?? null, reason: answer?.reason ?? null, remembered: kept, remote, ms: Date.now() - t0, error: error ?? null } });
     };
+    if (plan.local && remote) {
+      end("denied");
+      throw new ApiRefusal({ code: "denied", message: plan.local });
+    }
     const d = deps.approvals.decideWidget(session, ws.id, a, { pkg: scope.pkg.name, builtin: !!scope.pkg.builtin, typed: !plan.untyped && actTyped(verb, !!scope.pkg.builtin), remote });
     if ("refuse" in d) {
       end("denied");
@@ -320,7 +348,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
     }
     if ("run" in d) kept = d.kept ?? null;
     else {
-      deps.show({ ...shown, state: "waiting", approval: { title: a.title, ...(a.exact ? { exact: a.exact } : {}), permission: a.permission, scopes: d.ask, widget: who } });
+      deps.show({ ...shown, state: "waiting", approval: { title: a.title, ...(a.exact ? { exact: a.exact } : {}), permission: a.permission, ...(a.risky ? { risky: true } : {}), scopes: d.ask, widget: who } });
       const timer = setTimeout(() => deps.approvals.cancel(id, "no answer in time"), ASK_MS);
       waiting.add(id);
       answer = await deps.approvals.wait(id, ws.id).finally(() => (clearTimeout(timer), waiting.delete(id)));

@@ -71,7 +71,7 @@ export const API = {
   "agents.stop": { since: "1.1", mode: "confirm", needs: "act", ask: "stop" },
   "terminals.type": { since: "1.1", mode: "confirm", needs: "act", ask: "type", typed: true },
   "terminals.open": { since: "1.1", mode: "confirm", needs: "act", ask: "show" }, // a command typed, not run
-  "actions.run": { since: "1.1", mode: "confirm", needs: "act", ask: "run" }, // a risky one is refused before any sheet
+  "actions.run": { since: "1.1", mode: "confirm", needs: "act", ask: "run" }, // 1.3: a risky one asks every time, never kept, never from a paired device
   "windows.close": { since: "1.1", mode: "confirm", needs: "act", ask: "stop" }, // "show" for a window the widget opened
   "run.exec": { since: "1.1", mode: "read", needs: "run" }, // read-only commands only (lib/policy.ts), through the core
   // 1.2: what the built-ins' ports needed (docs/57, wave 2).
@@ -95,6 +95,7 @@ export const API = {
   "agents.select": { since: "1.3", mode: "act", needs: null }, // within the widget's scope, as windows.select; marks the agent seen
   "terminals.rerun": { since: "1.3", mode: "confirm", needs: "act", ask: "type", typed: "person" }, // the command cmd's log recorded, never the widget's text
   "app.usage": { since: "1.3", mode: "read", needs: "events", class: "system" }, // cmd's own CPU and memory, as the Task Manager shows it
+  "actions.info": { since: "1.3", mode: "read", needs: "workspace" }, // a folder's actions: its checkout, the AI describing, files that couldn't be read
 } as const satisfies Record<string, ApiVerbSpec>;
 
 export type ApiVerb = keyof typeof API;
@@ -148,6 +149,7 @@ export const API_TOPIC = {
   workspaces: { verb: "workspaces.list" }, // 1.3: useWorkspaces
   appUsage: { verb: "app.usage" }, // 1.3: useAppUsage, every 2 s while subscribed
   media: { verb: "media.get" }, // 1.3: useMedia, pushed on each change of what plays; the artwork only when it changed
+  actionsInfo: { verb: "actions.info" }, // 1.3: useActionsInfo, as the actions change
 } as const satisfies Record<string, { verb: ApiVerb }>;
 
 export type ApiTopic = keyof typeof API_TOPIC;

@@ -90,6 +90,8 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
   #runs = new Map<PaneId, Tracked>();
   #cache: DescribedCache;
   #sweep: NodeJS.Timeout;
+  /** Folders a live reader holds (a widget's useActions): kept read and watched like an open window's. */
+  #held = new Map<string, number>();
 
   constructor(o: ActionsOptions) {
     super();
@@ -227,6 +229,19 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
       this.#o.db?.prepare(`INSERT OR REPLACE INTO workspace_actions_pins (root, id, json, at) VALUES (?, ?, ?, ?)`).run(this.#key(root), actionId, JSON.stringify(keep), Date.now());
     }
     this.emit("changed", root);
+  }
+
+  /** Keep a folder read and watched while someone reads it live (a widget's useActions); what it returns lets go. */
+  hold(root: string): () => void {
+    this.#held.set(root, (this.#held.get(root) ?? 0) + 1);
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      const n = (this.#held.get(root) ?? 1) - 1;
+      if (n > 0) this.#held.set(root, n);
+      else this.#held.delete(root);
+    };
   }
 
   /** Read the folder again now (tests, a manual refresh). */
@@ -412,7 +427,7 @@ export class ActionsService extends EventEmitter<{ changed: [root: string]; url:
 
   /** Let go of folders nobody shows or asked about lately. */
   #drop(): void {
-    const keep = new Set(this.#o.roots().map((r) => path.resolve(r)));
+    const keep = new Set([...this.#o.roots(), ...this.#held.keys()].map((r) => path.resolve(r)));
     const now = Date.now();
     for (const c of [...this.#catalogs.values()]) {
       if (keep.has(c.root) || now - c.usedAt < IDLE) continue;

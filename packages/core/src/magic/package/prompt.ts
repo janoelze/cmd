@@ -25,10 +25,10 @@ export interface Workspace {
 }
 
 export const API_README = path.join(REPO, "packages/widget-api/README.md");
-/** Where the API's data types are declared (protocol's widget-tree.ts; @cmd/widget-api re-exports them). */
-export const API_TYPES = path.join(REPO, "packages/protocol/src/widget-tree.ts");
+/** Where the API's data types are declared (protocol's widget-tree.ts, and 1.3's in widget-tree-1.3.ts; @cmd/widget-api re-exports them). */
+export const API_TYPES = [path.join(REPO, "packages/protocol/src/widget-tree.ts"), path.join(REPO, "packages/protocol/src/widget-tree-1.3.ts")];
 /** The data types a widget handles, as declared: what the reference names but doesn't spell out. */
-const DATA_TYPES = new Set(["WidgetEnv", "ApiScopeQuery", "ApiWorkspace", "ApiWindow", "ApiAgentState", "ApiTone", "ApiLight", "ApiAgent", "ApiTerminal", "ApiTerminalScreen", "ApiEventQuery", "ApiEvent", "ApiEventStats", "ApiGitStatus", "ApiGitWorktree", "ApiAction", "ApiFetchInit", "ApiFetchResponse", "ApiCompletionRequest", "ApiCompletion", "ApiNotification", "ApiAgentStart", "ApiStarted", "ApiTerminalOpen", "ApiActionStarted", "ApiRunOptions", "ApiRunResult"]);
+const DATA_TYPES = new Set(["WidgetEnv", "ApiScopeQuery", "ApiWorkspace", "ApiWindow", "ApiAgentState", "ApiTone", "ApiLight", "ApiAgent", "ApiTerminal", "ApiTerminalScreen", "ApiEventQuery", "ApiEvent", "ApiEventStats", "ApiGitStatus", "ApiGitWorktree", "ApiAction", "ApiFetchInit", "ApiFetchResponse", "ApiCompletionRequest", "ApiCompletion", "ApiNotification", "ApiAgentStart", "ApiStarted", "ApiTerminalOpen", "ApiActionStarted", "ApiRunOptions", "ApiRunResult", "ApiActionMore", "ApiActionSource", "ApiActionElsewhere", "ApiActionsQuery", "ApiActionsInfo", "ApiActionRunOptions", "ApiActionRunMore"]);
 
 /** The README's generated reference (between its reference markers), or a note when this cmd lacks it. */
 export function apiReference(file = API_README): string {
@@ -43,12 +43,12 @@ export function apiReference(file = API_README): string {
 }
 
 /** The declarations of the API's data types, with their comments (`Agent` in @cmd/widget-api is ApiAgent here). */
-export function apiTypes(file = API_TYPES): string {
-  let lines: string[];
-  try {
-    lines = fs.readFileSync(file, "utf8").split("\n");
-  } catch {
-    return "";
+export function apiTypes(files: string | string[] = API_TYPES): string {
+  const lines: string[] = [];
+  for (const file of typeof files === "string" ? [files] : files) {
+    try {
+      lines.push(...fs.readFileSync(file, "utf8").split("\n"));
+    } catch {}
   }
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {

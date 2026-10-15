@@ -5,7 +5,7 @@
 // useCompletion asks the person's AI (`cmd.ai.complete`) once per request.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ApiBox, ApiNowPlaying, ApiAppUsage, ApiJournalDay, ApiJournalQuery, ApiStatQuery, ApiStatResult, ApiWorkspaceName, ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiActionsInfo, ApiActionsInfoQuery, ApiActionsQuery, ApiBox, ApiNowPlaying, ApiAppUsage, ApiJournalDay, ApiJournalQuery, ApiStatQuery, ApiStatResult, ApiWorkspaceName, ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { mergeEvents } from "@cmd/protocol/widget-events";
 import { connection, type ApiCallError } from "./connection.ts";
 
@@ -122,11 +122,25 @@ export function useGit(): ApiGitStatus | null {
 }
 
 /**
- * The workspace's Actions (docs/36), live.
+ * The workspace's Actions (docs/36), live. Since 1.3, `{ root }` reads those of another
+ * worktree of the workspace's repository (a `path` from `cmd.git.worktrees`; any other folder is
+ * refused), and `{ include: ["history", "suggested"] }` adds the commands the person runs here
+ * often and the ones the README suggests (their `source.kind` says which).
  * @since 1.0
  */
-export function useActions(): ApiAction[] {
-  return useTopic("actions", null, []);
+export function useActions(query?: ApiActionsQuery): ApiAction[] {
+  return useTopic("actions", query ?? null, []);
+}
+
+/**
+ * What Workspace Actions says about the folder, live: its branch and whether it is a linked
+ * worktree, whether the person's AI is describing the actions now, and source files that
+ * couldn't be read. `{ root }` as `useActions`. null until it arrives, or when the workspace has
+ * no folder. Needs `workspace: ["read"]`.
+ * @since 1.3
+ */
+export function useActionsInfo(query?: ApiActionsInfoQuery): ApiActionsInfo | null {
+  return useTopic("actionsInfo", query ?? null, null);
 }
 
 /**

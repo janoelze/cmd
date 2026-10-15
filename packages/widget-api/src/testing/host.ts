@@ -10,6 +10,8 @@
 import { API, API_ELEMENT_NAMES, API_TOPIC, API_TOPICS, roundBox, sizeEnv } from "@cmd/protocol/widget-tree";
 import type {
   ApiAction,
+  ApiActionsInfo,
+  ApiActionsQuery,
   ApiAgent,
   ApiAppUsage,
   ApiJournalWeek,
@@ -70,7 +72,14 @@ export interface HostData {
   git?: ApiGitStatus | null;
   diff?: string;
   worktrees?: ApiGitWorktree[];
-  actions?: ApiAction[];
+  /**
+   * The workspace's actions (`fixtures.action()`), or (1.3) a function of the query: the actions
+   * of `root`, a path of `worktrees` or the workspace's folder (any other is refused, as cmd does).
+   * Those whose `source.kind` is "history" or "readme" are listed only with that `include`.
+   */
+  actions?: ApiAction[] | ((q: ApiActionsQuery) => ApiAction[]);
+  /** What `cmd.actions.info` and `useActionsInfo` give, or a function of the query; the folder's branch from `worktrees` (else `git`), nothing describing and no errors unless given. @since 1.3 */
+  actionsInfo?: ApiActionsInfo | null | ((q: ApiActionsQuery) => ApiActionsInfo | null);
   /**
    * Where the widget runs: theme, size class, placement, and (1.3) the content's `box`, which
    * follows the size class's reference window unless given (`sizeEnv("narrow")` is a narrow
@@ -284,7 +293,7 @@ export function createHost(data: HostData = {}): FakeHost {
     "git.status": () => d.git ?? null,
     "git.diff": () => ({ text: d.diff ?? "", clipped: false }),
     "git.worktrees": () => d.worktrees ?? [],
-    "actions.list": () => d.actions ?? [],
+    "actions.list": ([q]) => actionsOf(q),
     "notify.send": done,
     "state.get": ([key]) => state.get(String(key)) ?? null,
     "state.set": ([key, value]) => (state.set(String(key), value as WireValue), null),
@@ -299,17 +308,18 @@ export function createHost(data: HostData = {}): FakeHost {
     "agents.stop": done,
     "terminals.type": done,
     "terminals.open": () => ({ id: `w-opened-${++opened}` }),
-    "actions.run": ([name]) => {
-      const a = (d.actions ?? []).find((x) => x.name === name);
+    "actions.run": ([name, opts]) => {
+      // As the core: any action of the folder by name; a risky one asked like any act (`approve`); one that needs arguments typed, not run.
+      const a = actionsOf({ root: opts?.root, include: ["history", "suggested"] }).find((x) => x.name === name);
       if (!a) throw new Error(`No action ${String(name)}`);
-      if (a.risky) throw new Error(`“${a.name}” is risky: run it from Workspace Actions.`);
-      return { terminalId: `t-action-${a.name}`, started: true };
+      if (a.args) return { terminalId: `t-typed-${a.name}`, started: false };
+      return { terminalId: `t-action-${a.name}${opts?.fresh ? `-${++opened}` : ""}`, started: true };
     },
     "windows.close": done,
     "run.exec": ([program, args]) => runOf(String(program), Array.isArray(args) ? args.map(String) : []),
     // 1.2
-    "actions.stop": ([name]) => {
-      if (!(d.actions ?? []).some((x) => x.name === name)) throw new Error(`No action ${String(name)}`);
+    "actions.stop": ([name, opts]) => {
+      if (!actionsOf({ root: opts?.root, include: ["history", "suggested"] }).some((x) => x.name === name)) throw new Error(`No action ${String(name)}`);
       return null;
     },
     "events.classes": () => d.classes ?? fixtureClasses(),
@@ -341,7 +351,29 @@ export function createHost(data: HostData = {}): FakeHost {
       return { terminalId: e.terminalId };
     },
     "app.usage": () => d.appUsage ?? fixtureAppUsage(),
+    "actions.info": ([q]) => {
+      const root = actionsRoot(q);
+      if (typeof d.actionsInfo === "function") return d.actionsInfo({ ...(q ?? {}), root: root ?? undefined });
+      if (d.actionsInfo !== undefined) return d.actionsInfo;
+      if (!root) return null;
+      const wt = (d.worktrees ?? []).find((w) => w.path === root);
+      return { root, branch: wt ? wt.branch : (d.git?.branch ?? ws().branch), linked: !!wt && !wt.main, describing: false, errors: [] };
+    },
   };
+  /** The folder an actions query is of, as the core checks it: the workspace's, or a path of `worktrees`. */
+  function actionsRoot(q: ApiActionsQuery | null | undefined): string | null {
+    const asked = q && typeof q === "object" ? q.root : undefined;
+    if (asked === undefined || asked === null || asked === "" || asked === ws().root) return ws().root;
+    if (!(d.worktrees ?? []).some((w) => w.path === asked)) throw new Error(`${String(asked)} isn't a worktree of this workspace's repository.`);
+    return asked;
+  }
+  function actionsOf(q: ApiActionsQuery | null | undefined): ApiAction[] {
+    const query = q && typeof q === "object" ? q : {};
+    const root = actionsRoot(query);
+    const all = typeof d.actions === "function" ? d.actions({ ...query, root: root ?? undefined }) : root === ws().root ? (d.actions ?? []) : [];
+    const include = new Set(query.include ?? []);
+    return all.filter((a) => (a.source?.kind === "history" ? include.has("history") : a.source?.kind === "readme" ? include.has("suggested") : true));
+  }
   function history(at: string, value: unknown, max: unknown): number[] {
     const all = [...(histories.get(at) ?? []), ...(typeof value === "number" ? [value] : [])].slice(-1000);
     histories.set(at, all);

@@ -8,12 +8,13 @@
 // 1.3's storage, with 1.0's `state.*` (its window scope), is storage.ts's; 1.3's other reads are
 // reads.ts's, agents.select is here (windows.select's, for an agent) and terminals.rerun act.ts's.
 // A Picture's src (1.3: a data: image checked, an https one fetched within the grant and the net limit) is picture.ts's.
+// Workspace Actions of a worktree (actions.list's `root`, actions.info) are actions.ts's.
 // A verb that needs a press (windows.open, media.control, clipboard.write; the acts in act.ts)
 // takes the one it came after, and one marked `local` is never for a paired device's press.
 
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { API, API_VERBS, isActVerb, localOnly, mediaUse, needsPress, parsePackageKind, topicVerb, verbClass, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiStorageMigrate, type ApiStorageQuery, type ApiStorageScope, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { API, API_VERBS, isActVerb, localOnly, mediaUse, needsPress, parsePackageKind, topicVerb, verbClass, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiActionsQuery, type ApiScopeQuery, type ApiStorageMigrate, type ApiStorageQuery, type ApiStorageScope, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { PolicyError } from "../../data/policy.ts";
 import { widgetRead, type WidgetIdentity } from "../../data/widgets.ts";
@@ -23,13 +24,14 @@ import { stripAnsi } from "../../terminals/commands.ts";
 import type { PackageWidget, WidgetPackage } from "../package.ts";
 import { ApiRefusal, RateLimit, failed, invalid, missing, workspaceScope } from "./access.ts";
 import { widgetComplete, type AiUsage } from "./ai.ts";
-import { apiAction, apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
+import { apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
 import { CLIPBOARD_MAX, widgetReads, type ReadsScope } from "./reads.ts";
 import { writeClipboard } from "./clipboard.ts";
 import { brokeredFetch } from "./net.ts";
 import { PictureCache, checkDataSrc, fetchPicture, pictureUrl } from "./picture.ts";
 import { subscribeTopic } from "./topics.ts";
 import { widgetActs, type ActDeps, type Press } from "./act.ts";
+import { actionsInfo, actionsRootFor, widgetActions } from "./actions.ts";
 import { widgetRunner, type RunScope } from "./run.ts";
 import { windowStorage } from "./storage.ts";
 import { WidgetStorage } from "../storage.ts";
@@ -156,12 +158,13 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     if (!st) return null;
     return { root: st.root, branch: st.branch, ahead: st.ahead, behind: st.behind, files: Object.entries(st.files).slice(0, FILES_MAX).map(([p, f]) => ({ path: path.relative(st.root, p) || ".", status: f.state })) };
   };
-  const actions = () => {
+  /** 1.3: the workspace's folder, or a worktree of its repository the query names (actions.ts checks it). */
+  const actionsRoot = (q?: ApiActionsQuery | null) => actionsRootFor(root(), q && typeof q === "object" ? q.root : undefined);
+  const actions = (q?: ApiActionsQuery | null) => {
     allowed();
-    const r = root();
+    const r = actionsRoot(q);
     if (!r) return [];
-    const list = core.actions.list(r);
-    return list.actions.map((a) => apiAction(a, list));
+    return widgetActions(core.actions.list(r), q, (id) => !!core.panes.get(id) && visible(core.panes.get(id)!.workspaceId));
   };
   const win = (): AppWindow => {
     const w = core.windows.others().find((x) => x.id === scope.windowId);
@@ -271,7 +274,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       if (!c) return [];
       return [c.repo, ...worktreesOf(c.common).filter((t) => t !== c.repo)].map((top) => ({ path: top, branch: checkoutOf(top)?.branch ?? null, main: top === c.repo }));
     },
-    "actions.list": () => actions(),
+    "actions.list": (q) => actions(q),
     "notify.send": (note: ApiNotification) => {
       if (!note || typeof note.key !== "string" || !note.key || typeof note.title !== "string" || !note.title.trim()) throw invalid("notify.send: give it a key and a title ({ key, title, body })");
       const body = typeof note.body === "string" ? note.body.slice(0, 300) : "";
@@ -306,6 +309,11 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     "journal.week": (q) => reads.week(q),
     "workspaces.list": () => reads.workspaces(),
     "app.usage": () => reads.appUsage(),
+    "actions.info": (q) => {
+      allowed();
+      const r = actionsRoot(q);
+      return r ? actionsInfo(core, r) : null;
+    },
     "agents.select": (id) => {
       const a = typeof id === "string" ? core.agents.get(id) : null;
       if (!a || !(a.workspaceId === own() || level === "all")) throw invalid(`No agent ${String(id).slice(0, 60)} in this widget's reach.`);
@@ -373,7 +381,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       const cls = verb ? verbClass(verb) : null;
       if (verb && cls && !perms.events.includes(cls)) throw missing("events", cls, `${topic} (it reads ${cls} events)`);
       if (verb && API[verb].needs === "media" && !perms.media.includes("read")) throw missing("media", "read", "Seeing what's playing");
-      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null, windowId: scope.windowId, storage: { store: st.store, owner: st.owner }, media: reads.hold }, push);
+      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null, actionsRoot: (q) => actionsRoot(q as ApiActionsQuery | null), windowId: scope.windowId, storage: { store: st.store, owner: st.owner }, media: reads.hold }, push);
     },
   };
 }

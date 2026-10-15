@@ -204,7 +204,7 @@ describe("API 1.2", () => {
     expect(await call(api, "events.query", { types: ["note"] })).toEqual([expect.objectContaining({ type: "note", text: "remember the milk" })]);
 
     const before = await call(api, "actions.list");
-    expect(before.find((a) => a.name === "dev")).toEqual({ name: "dev", title: expect.any(String), risky: false, command: expect.stringContaining("dev"), kind: "dev", package: null, pinned: false, primary: expect.any(Boolean), running: false, terminalId: null, url: null, exitCode: null });
+    expect(before.find((a) => a.name === "dev")).toMatchObject({ name: "dev", title: expect.any(String), risky: false, command: expect.stringContaining("dev"), kind: "dev", package: null, pinned: false, primary: expect.any(Boolean), running: false, terminalId: null, url: null, exitCode: null });
     expect(before.filter((a) => a.primary).length).toBeLessThanOrEqual(1);
     const list = core.actions.list(A.root);
     const dev = list.actions.find((a) => a.name === "dev")!;

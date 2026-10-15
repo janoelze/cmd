@@ -62,6 +62,7 @@ const ARGS: { [V in ApiVerb]: unknown[] } = {
   "actions.stop": ["none"], "events.classes": [], "terminals.usage": [], "stats.query": [{ stat: "agents.turns" }], "journal.days": [{ count: 1 }], "media.get": [], "media.control": ["toggle"], "clipboard.write": ["hi"],
   "storage.get": ["package", "k"], "storage.set": ["package", "k", 1], "storage.delete": ["package", "k"], "storage.keys": ["package"], "storage.history": ["package", "k", 1],
   "journal.week": [], "workspaces.list": [], "agents.select": ["a-none"], "terminals.rerun": ["command:none"], "app.usage": [],
+  "actions.info": [],
 };
 
 describe("frame widgets", () => {
