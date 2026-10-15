@@ -1,13 +1,15 @@
 // Countdown, a built-in widget package (docs/56, "Built-ins and dogfooding"; the native Timer's
-// job): the time left, large, and a bar that fills as it runs; in the toolbar the presets, a
-// field to type a length ("10", "1:30", "90s", "1h"), Start / Pause / Resume and Reset. Its
-// state is the window's (cmd.state), so a reload or a restart carries on. It rings through
-// cmd.notify at the end, on time, from its own process, which runs while its window is open in
-// any workspace; one that ended while nothing ran (the Mac slept) still rings once, saying when.
-// Start or Pause, and Reset, are in the window's context menu too, as the native Timer's are.
+// job, drawn as it is): the time left, large, in a ring that empties as it runs (Dial), and in
+// the toolbar the presets and Start / Pause / Resume / Reset. Click the time to type a length
+// ("10", "1:30", "90s", "1h"). Its state is the window's (cmd.state), so a reload or a restart
+// carries on. It rings through cmd.notify at the end, on time, from its own process, which runs
+// while its window is open in any workspace; one that ended while nothing ran (the Mac slept)
+// still rings once, saying when. Start or Pause, and Reset, are in the window's context menu
+// too, as the native Timer's are. The Dial sizes itself to the window, so one layout serves
+// every size.
 
-import { useEffect, useState } from "react";
-import { Window, View, Stack, Text, Progress, WindowToolbar, ToolbarButton, ToolbarField, ToolbarSegmented, ToolbarSpacer, useNow, useStoredState, cmd } from "@cmd/widget-api";
+import { useEffect } from "react";
+import { Window, View, Dial, WindowToolbar, ToolbarButton, ToolbarSegmented, ToolbarSpacer, useEnv, useNow, useStoredState, cmd } from "@cmd/widget-api";
 
 /** What it counts from (s); running, when it ends (ms); paused, what is left (s); when it last rang (ms). */
 export type Timer = { duration: number; endsAt: number | null; left: number | null; rang: number | null };
@@ -44,14 +46,13 @@ export function durationLabel(s: number): string {
   return [h ? `${h} h` : "", m ? `${m} min` : "", sec && !h ? `${sec} s` : ""].filter(Boolean).join(" ") || "0 s";
 }
 
-const hhmm = (t: number) => {
-  const d = new Date(t);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+/** A clock time as the app writes it in its locale (env.locale): "14:25", or "02:25 PM". */
+export const timeOfDay = (t: number, locale?: string) => new Date(t).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 
 export default function Countdown() {
   const [t, setT] = useStoredState<Timer>("timer", fresh(25 * 60));
-  const [typed, setTyped] = useState("");
+  const { locale } = useEnv();
+  const hhmm = (at: number) => timeOfDay(at, locale);
   const running = t.endsAt !== null;
   const paused = !running && t.left !== null;
   const now = useNow(running ? 250 : 60_000);
@@ -65,14 +66,14 @@ export default function Countdown() {
     const endsAt = t.endsAt;
     const ring = () => {
       const late = Date.now() - endsAt > 60_000;
-      void cmd.notify.send({ key: `timer-${endsAt}`, title: `${durationLabel(t.duration)} timer · done`, body: late ? `Ended at ${hhmm(endsAt)}` : "Time's up", urgent: true });
+      void cmd.notify.send({ key: `timer-${endsAt}`, title: `${durationLabel(t.duration)} timer · done`, body: late ? `Ended at ${timeOfDay(endsAt, locale)}` : "Time's up", urgent: true });
       setT({ ...t, endsAt: null, left: null, rang: endsAt });
     };
     const wait = endsAt - Date.now();
     if (wait <= 0) return ring();
     const timer = setTimeout(ring, wait);
     return () => clearTimeout(timer);
-  }, [t, setT]);
+  }, [t, setT, locale]);
 
   const start = () => setT({ ...t, endsAt: Date.now() + (paused ? t.left! : t.duration) * 1000, left: null, rang: null });
   const pause = () => setT({ ...t, endsAt: null, left: remaining });
@@ -97,20 +98,6 @@ export default function Countdown() {
               value={String(t.duration / 60)}
               options={PRESETS.map((m) => ({ value: String(m), label: m < 60 ? `${m}m` : `${m / 60}h` }))}
               onChange={(v) => setDuration(Number(v) * 60)}
-              priority={2}
-            />
-          )}
-          {set && (
-            <ToolbarField
-              value={typed}
-              placeholder="Length: 10, 1:30, 90s"
-              icon="timer"
-              priority={1}
-              onChange={setTyped}
-              onSubmit={(v: string) => {
-                const s = parseDuration(v);
-                if (s) setDuration(s), setTyped("");
-              }}
             />
           )}
           <ToolbarSpacer />
@@ -121,13 +108,20 @@ export default function Countdown() {
             <ToolbarButton icon="play.fill" label={paused ? "Resume" : phase === "done" ? "Start Again" : "Start"} showLabel tone="accent" onClick={start} />
           )}
         </WindowToolbar>
-        <Stack pad="inset" gap={3} align="center" grow>
-          <Text size="display" mono tone={phase === "done" ? "warning" : phase === "paused" ? "dim" : undefined}>
-            {clock(remaining)}
-          </Text>
-          <Progress value={phase === "running" || phase === "paused" ? 1 - remaining / t.duration : phase === "done" ? 1 : 0} tone={phase === "done" ? "warning" : "accent"} label="Time passed" />
-          {caption && <Text tone="dim">{caption}</Text>}
-        </Stack>
+        <Dial
+          label="Time"
+          value={clock(remaining)}
+          caption={caption ?? undefined}
+          // Set: only the track; running, the ring empties; done, full in the needs tone.
+          progress={phase === "running" || phase === "paused" ? remaining / t.duration : phase === "done" ? 1 : 0}
+          tone={phase === "done" ? "needs" : phase === "paused" ? "dim" : "accent"}
+          // While it's set, a click on the time types a length; one that doesn't parse is dropped.
+          editable={set}
+          onSubmit={(text: string) => {
+            const s = parseDuration(text);
+            if (s) setDuration(s);
+          }}
+        />
       </View>
     </Window>
   );

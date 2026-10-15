@@ -215,11 +215,14 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 
 | Difference | Class | Fix |
 |---|---|---|
-| A ring (`Dial`) that empties as it runs and fills the window, the time inside sized to it (`min(15cqw, 15cqh)`); the package has display text and a `Progress` bar at the top of the body, with the room below empty | a, b | `Dial` (A6): built (widget-display) |
-| Click the time to type a length ("10", "1:30", "90s"); the package has a `ToolbarField` for it instead | a | `Dial editable` + `onSubmit` (A6): built (widget-display); then the toolbar loses the field |
-| Done in the `needs` colour; the package's is `warning` | a | `Dial tone="needs"` (A6): built (widget-display) |
-| The body is centred in the window; `Stack` can't centre on its main axis | a | `Stack justify` (A3, built (widget-size)); moot once it's a `Dial` |
+| A ring (`Dial`) that empties as it runs and fills the window, the time inside sized to it (`min(15cqw, 15cqh)`); the package has display text and a `Progress` bar at the top of the body, with the room below empty | a, b | `Dial` (A6): built (widget-display). Fixed (reports-a): the package's View holds only the `Dial`, as the native's does; the kit sizes it, so one layout serves narrow, regular and wide (no `Adapt` needed). Compared at 320×520, 560×460 and 900×560 in Light and Dark: `.cmd-dev/shots/reports/countdown/` |
+| Click the time to type a length ("10", "1:30", "90s"); the package has a `ToolbarField` for it instead | a | `Dial editable` + `onSubmit` (A6): built (widget-display); then the toolbar loses the field. Fixed (reports-a): editable while set or done, as natively; the toolbar field is gone. One difference left (e): leaving the field drops the draft (the element's rule: a widget's draft never reaches its process unasked); the native commits it |
+| Done in the `needs` colour; the package's is `warning` | a | `Dial tone="needs"` (A6): built (widget-display). Fixed (reports-a): accent running, dim paused, needs done, the ring full when done, only the track when set |
+| The body is centred in the window; `Stack` can't centre on its main axis | a | `Stack justify` (A3, built (widget-size)); moot once it's a `Dial`. Fixed (reports-a): moot, the `Dial` centres itself |
 | A title menu "Options" (Pause, Reset) the native window doesn't have | d | move them to `Window actions` (the window's context menu), no `menu`. Fixed (widget-port-fixes). |
+| Times ("ends 14:32", "done at", the late ring's "Ended at") in the app's locale, as `toLocaleTimeString` writes them; the package wrote its own 24-hour "14:32" | d | Fixed (reports-a): the same `toLocaleTimeString(env.locale, { hour, minute })` (1.3's `env.locale`). The fake host pins en-US, so stories say "02:32 PM" where the native story's fixed caption says "14:32" |
+| The context menu says Resume for a paused timer and greys out Reset when idle; the native's says Start and always offers Reset | e | kept: the toolbar's own words, and nothing to reset when idle |
+| Rings from cmd's core even with its window closed; the package rings from its own process, which runs while its window is open in any workspace (a timer that ended while it was closed rings once, late, saying when) | e | a widget has no process without a window; the late ring covers the rest. Matching would need a core-side alarm verb (`notify.schedule(at, …)`), not proposed |
 
 **Agent Activity → Agents**
 

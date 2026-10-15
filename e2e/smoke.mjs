@@ -2863,8 +2863,8 @@ await scenario("widget-commands", async () => {
   }
 });
 
-// Countdown (packages/widgets/timer): the native Timer's job as a package. Set to 3 seconds and
-// started in one workspace, it rings through cmd.notify while another workspace is shown.
+// Countdown (packages/widgets/timer): the native Timer's job as a package. Set to 3 seconds by
+// typing into its ring and started in one workspace, it rings through cmd.notify while another workspace is shown.
 await scenario("widget-timer", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
@@ -2876,8 +2876,11 @@ await scenario("widget-timer", async () => {
   const w = await call("widget.add", { ref: "pkg:timer/timer", workspaceId: ws.id });
   await tileIn(w.id);
   const tile = win.locator(`.tile[data-pane="${w.id}"]`);
-  const field = tile.getByPlaceholder("Length: 10, 1:30, 90s");
-  await field.waitFor({ timeout: 30_000 });
+  // As natively, a click on the time in the ring (the Dial, API 1.3) types a length.
+  const time = tile.getByRole("button", { name: "Time" });
+  await time.waitFor({ timeout: 30_000 });
+  await time.click();
+  const field = tile.getByRole("textbox", { name: "Time" });
   await field.fill("3s");
   await field.press("Enter");
   await until(() => tile.textContent(), (t) => t.includes("0:03"), 10_000);
