@@ -6,19 +6,12 @@
 // stops them. Nothing here imports Magic: Magic (magic/) builds packages through this library.
 
 import { parsePackageKind } from "@cmd/protocol";
-import { widgetsHome } from "@cmd/protocol/node";
 import type { CoreContext } from "../kernel/context.ts";
 import type { Feature } from "../kernel/features.ts";
 import { slice } from "../kernel/handlers.ts";
 import { frameCall, frameSource } from "./host/frame.ts";
 import { widgetRef } from "./library.ts";
 import { dropOldWidgets } from "./old.ts";
-import { WidgetPackages, builtinWidgets } from "./packages.ts";
-
-/** The service over $CMD_WIDGETS_HOME or ~/.cmd/widgets, and the built-in packages; it reads them from its startup job (a core with a state dir) on. */
-export function createPackages(core: Pick<CoreContext, "windowTypes">, o: { onChange: () => void; quiet: ReadonlySet<string> }): WidgetPackages {
-  return new WidgetPackages({ home: widgetsHome(), builtin: builtinWidgets(), types: () => core.windowTypes, onChange: o.onChange, quiet: o.quiet });
-}
 
 const handlers = (core: CoreContext) =>
   slice({

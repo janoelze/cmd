@@ -12,7 +12,7 @@
   "files over 600 lines in apps/relay": 0,
   "files over 600 lines in apps/web": 0,
   "files over 600 lines in tools/tours": 0,
-  "lines in packages/core/src/kernel/core.ts": 461,
+  "lines in packages/core/src/kernel/core.ts": 460,
   "lines in packages/core/src/actions/sources.ts": 692,
   "lines in packages/core/src/agents/tracker.ts": 937,
   "lines in packages/core/src/data/store.ts": 658,

@@ -1,4 +1,4 @@
-// The Magic agent's tools for looking around (docs/12-magic-widgets.md → Agent):
+// The Magic agent's tools for looking around (docs/56, "Magic on V3"; the agent of docs/12):
 // all read-only; `run` only runs what the policy calls read-only, under the
 // sandbox. The tools that build a package are in package/tools.ts. Every input
 // carries `why`, a short label for the trace.

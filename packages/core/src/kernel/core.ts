@@ -27,8 +27,7 @@ import { WidgetTokens } from "../data/widgets.ts";
 import type { JournalService } from "../journal/service.ts";
 import { createJournal } from "../journal/feature.ts";
 import { createWatches } from "../lib/watch.ts";
-import { createMagic } from "../magic/feature.ts";
-import type { MagicPackages } from "../magic/package/service.ts";
+import { MagicPackages } from "../magic/package/service.ts";
 import { createNotifications, type NotificationCenter } from "../notifications/center.ts";
 import { createRemote, type RemoteService } from "../remote/service.ts";
 import { registerBuiltinSources } from "../search/builtin.ts";
@@ -243,7 +242,7 @@ export class Core {
     this.library = new WidgetLibrary(ctx, { stateDir: state, socket: path.isAbsolute(opts.socketPath) ? widgetsSocketPath(opts.socketPath) : null, deno: opts.magicDeno, installDeno: opts.magicInstallDeno });
     this.previews = new PreviewBroker(opts.magicPreviewer);
     this.server.onClosed((conn) => this.previews.closed(conn));
-    this.magic = createMagic(ctx, { stateDir: state, backend: opts.magicBackend });
+    this.magic = new MagicPackages(ctx, { stateDir: state, backend: opts.magicBackend });
     this.actions = createActions(ctx);
     // What clients and the log hear about terminals and agents, after the services above took a change in.
     this.windowOps.watchShells();

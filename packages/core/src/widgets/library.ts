@@ -7,15 +7,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parsePackageKind, type WidgetEntry } from "@cmd/protocol";
-import { logger, widgetPackageData } from "@cmd/protocol/node";
+import { logger, widgetPackageData, widgetsHome } from "@cmd/protocol/node";
 import { configFields } from "./config.ts";
 import { DenoSetup, findDeno } from "./deno.ts";
 import { DEFAULT_ICON } from "./package.ts";
-import { createPackages } from "./feature.ts";
-import type { WidgetPackages } from "./packages.ts";
+import { WidgetPackages, builtinWidgets } from "./packages.ts";
 import type { CoreContext } from "../kernel/context.ts";
-import { createWidgetHost } from "./host/feature.ts";
-import type { WidgetHost } from "./host/host.ts";
+import { WidgetHost } from "./host/host.ts";
+import { DenoRuntime } from "./host/runtime.ts";
+import { sandboxMode } from "../lib/sandbox.ts";
+import { toolsOf } from "../tools/feature.ts";
 import { PackageReloader } from "./reload.ts";
 import { LIBRARY_DEBOUNCE_MS } from "./limits.ts";
 import { linkOf, recordHandEdit } from "./revisions.ts";
@@ -72,7 +73,11 @@ export class WidgetLibrary {
       install: o.installDeno ?? (o.deno === undefined ? undefined : null),
     });
     this.deno.onInstalled = () => this.host.packagesChanged();
-    this.packages = createPackages(core, {
+    // $CMD_WIDGETS_HOME or ~/.cmd/widgets, and the built-in packages; read from the widgets' startup job (widgets/feature.ts) on.
+    this.packages = new WidgetPackages({
+      home: widgetsHome(),
+      builtin: builtinWidgets(),
+      types: () => core.windowTypes,
       quiet: this.writing,
       onChange: () => {
         this.changed();
@@ -81,7 +86,10 @@ export class WidgetLibrary {
         this.host?.packagesChanged();
       },
     });
-    this.host = createWidgetHost(core, this.packages, { stateDir, socket: o.socket ?? null, deno: () => this.deno.find(), onAsk: () => this.changed() });
+    // Deno runs the processes when there is a state dir (else a test sets a runtime); acts ask through
+    // the tools' approvals and show on the board as their calls do (made on first use).
+    const runtime = stateDir ? new DenoRuntime({ deno: () => this.deno.find(), denoDir: path.join(stateDir, "runtime", "deno-cache"), sandbox: sandboxMode }) : null;
+    this.host = new WidgetHost(core, { stateDir, socket: o.socket ?? null, packages: this.packages, runtime, onAsk: () => this.changed(), acts: () => toolsOf(core) });
     this.reloader = new PackageReloader({
       paused: this.writing,
       onReload: (name) => {

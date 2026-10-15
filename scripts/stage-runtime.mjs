@@ -19,7 +19,7 @@ const copy = (from, to) => fs.cpSync(path.join(root, from), path.join(out, to), 
 // in .env (packages/core/src/kernel/dev-keys.ts). The path only, never a key.
 fs.mkdirSync(out, { recursive: true });
 fs.writeFileSync(path.join(out, ".checkout"), root + "\n");
-// widget-runtime: the Deno side of Magic widgets (cmd.ts, runner.ts), run by Deno from there.
+// widget-runtime: a package widget's process (package-main.ts), run by Deno from there (widgets/host/runtime.ts).
 for (const p of ["package.json", "src", "shell", "widget-runtime"]) copy(`packages/core/${p}`, `packages/core/${p}`);
 // @cmd/widget-api vendored for Deno (scripts/widget-api-bundle.mjs): package widgets' processes import it (widgets/host/runtime.ts).
 // Built again first when the API changed since (a pull without an install would ship the old verbs).

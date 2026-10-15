@@ -10,12 +10,6 @@ import type { Feature } from "../kernel/features.ts";
 import { IN_CORE, slice } from "../kernel/handlers.ts";
 import { sandboxAvailable } from "../lib/sandbox.ts";
 import { denoVersion } from "../widgets/deno.ts";
-import { MagicPackages, type MagicPackagesOptions } from "./package/service.ts";
-
-/** The service (`core.magic`). */
-export function createMagic(core: ConstructorParameters<typeof MagicPackages>[0], o: MagicPackagesOptions): MagicPackages {
-  return new MagicPackages(core, o);
-}
 
 /** What widgets run on: Deno (cmd's own, once downloaded), the sandbox, who renders previews. */
 async function runtime(core: CoreContext): Promise<MagicRuntime> {

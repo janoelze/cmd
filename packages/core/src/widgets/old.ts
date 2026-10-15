@@ -4,6 +4,8 @@
 // packages folder (~/.cmd/widgets, $CMD_WIDGETS_HOME) or the instance's widget-packages, and
 // closes the Magic windows that showed one: nothing runs or lists them any more. A Magic window
 // that shows no old widget (a request not yet made, a build, a command to run) stays.
+// One release only (added 2026-10-14, after 0.30.0): delete this file and its startup call
+// (widgets/feature.ts) once the release after the one that ships it is out.
 
 import fs from "node:fs";
 import path from "node:path";
