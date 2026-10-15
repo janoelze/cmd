@@ -24,7 +24,7 @@ The answer to "do we track them just in this codebase as widget packages?" is ye
 ## Rules for every port
 
 1. **The public API only.** A built-in imports `@cmd/widget-api` and nothing else from cmd: no `@cmd/protocol`, no renderer store, no RPC methods outside the API. `test/imports.test.ts` should hold this for `packages/widgets/*` (add the rule if it isn't there).
-2. **A missing verb is an API change, proposed first.** API 1 is frozen at 1.1. A verb a port needs goes into a proposed **API 1.2** list in this doc (name, signature, permission, access row, why), not into code. Ports that need none go first (wave 1); the 1.2 list is decided by Jan before anyone builds it.
+2. **A missing verb is an API change, proposed first.** API 1 is frozen at 1.1. A verb a port needs goes into a proposed **API 1.2** list in this doc (name, signature, permission, access row, why), not into code; the 1.2 verb list is decided by Jan before anyone builds it. Elements are different: the set the ports need is decided below ("Elements for the ports") and built first, as API 1.2's elements.
 3. **Judged by its own scenarios, not by matching the native view row for row** (docs/56). Write down what the widget is for, test that, and list what it does differently in the package's README and in this doc.
 4. **The native view stays beside it** until the package has been used on the board for a while (docs/56's decisions, as for Agent Activity). Deleting native views is its own step, after Jan's word, listed per widget below.
 5. **Each port is complete:** `cmd widget check` passes, tests with `@cmd/widget-api/testing` cover its states (empty, loading, error, data, many rows), a story per state renders in the Workbench in every theme, `cmd widget preview` exits 0 at every size, an e2e scenario adds it from the Library and sees it draw live data, and it uses only the 30 API elements.
@@ -52,6 +52,27 @@ Sixteen native window types have `role: "widget"`. Lines are the renderer's view
 | Jam | `jam` | 476 | files, `jam.change`, windows | **stays native for now**: it writes files and has its own core feature |
 | Operator | `operator` | 433 | the Operator's agent, approvals | **stays native**: it is part of cmd, not a widget anyone would write |
 | Diff | `diff` | 1047 | git, fs watches | **stays native**: a tool window; reconsider its `role` |
+
+## Elements for the ports
+
+The ports should draw with the same kit pieces as the native views, so a ported widget looks like the one it replaces. API 1.1 has 30 elements; the native widgets import about 30 more. Since the element spec is the one place an element is written (`packages/protocol/src/widget-elements.ts`, with `elements.ts` generated and the renderer's pass-through checked against the kit), adding one is a spec row and a story, and a renderer override only when it has behaviour of its own. Decided 2026-10-15: API 1.2 adds the window-content kit the built-ins use, not the whole kit.
+
+| Group | Elements (API 1.2) | Used by | Notes |
+|---|---|---|---|
+| Layout | `Panes`, `Pane`, `Panel`, `PanelBody`, `ListGroup` | Stats, Resources, Event Stream, Notifications, Workspace Actions | pass-through |
+| Lists | `ListRowActions`, `ListValue` | Workspace Actions, Event Stream, Notifications | `ListRowActions` holds Buttons shown on hover |
+| Content | `CodeBlock`, `Icon`, `Mark`, `Delta`, `Spinner`, `StatusLine` | most | `StatusLine` is the view's footer line; `Icon` takes SF Symbol names only |
+| Controls | `IconButton`, `LinkButton`, `TextField` | Workspace Actions, Journal, Now Playing | `TextField` gets the same local caret and debounced `onChange` as `ToolbarField` (an override) |
+| Charts | `TimeSeries`, `TimeBars`, `TimeBar`, `Ranking`, `Proportion`, `PunchCard`, `Calendar`, `Timeline`, `TimelineEntry`, `Ribbon` | Stats, Journal, Now Playing | data props only; values are numbers and strings, never functions |
+| Data | `DataGrid` | Resources | the largest: columns, sort and selection as props, rows as data; one override; virtualised rows if the kit's grid is |
+
+Not elements, on purpose:
+
+- **Overlays** (`Dialog`, `ConfirmDialog`, `Popover`, `Menu`, sheets): a widget asks the person through the API (an act's approval sheet), and menus are element props (`menu` on `ListRow`, `ToolbarMenu`). Workspace Actions' "Stop?" confirmation becomes the act's sheet.
+- **App chrome** (`WindowFrame`, the approval and chat components, settings pages, `FindBar`): the app's own, not a widget's.
+- **`Stage`** (Visualizer, YouTube): that is the frame surface (wave 3), not an element.
+
+Each new element: its spec row with docs and `since: "1.2"`, its story in every theme, its kit assignability check, the generated reference, and a line in Magic's prompt only if Magic should reach for it (charts yes, `DataGrid` yes, `StatusLine` yes). `cmd.env.has()` answers for elements as for verbs, so a 1.2 widget can tell an older cmd.
 
 ## Wave 1: no new verbs
 
@@ -86,6 +107,7 @@ For each ported widget, separately and only on Jan's word: delete its native vie
 
 - **Start:** `git -C ~/src/cmd worktree add ~/src/cmd-builtin-<wave> -b builtin-<wave> master`, `pnpm install`, `export CMD_HOME=$PWD/.cmd-dev CMD_WIDGETS_HOME=$PWD/.cmd-dev/widgets`.
 - **Learn the shape from the three done:** `packages/widgets/agents`, `commands` and `timer` are the reference for folder layout, tests, stories and README. `cmd widget new` gives the same shape.
-- **Do wave 1 completely.** Then write the 1.2 proposal and stop: report the proposal, don't build it.
+- **First the 1.2 elements** above, as their own commits (spec rows, overrides for `TextField` and `DataGrid`, stories, the generated files).
+- **Then wave 1 completely**, on those elements. Then write the 1.2 verb proposal and stop: report the proposal, don't build it.
 - **Report:** the branch's commits, each widget with its evidence (test names, `cmd widget check` and `preview` output, the e2e scenario, a screenshot per theme pair), what each does differently from the native one, and the 1.2 proposal.
-- **Don't:** delete a native view, add a verb or element, import anything from cmd but `@cmd/widget-api`, merge, push or release.
+- **Don't:** delete a native view, add a verb or an element beyond the list above, import anything from cmd but `@cmd/widget-api`, merge, push or release.
