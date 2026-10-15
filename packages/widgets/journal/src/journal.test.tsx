@@ -1,7 +1,8 @@
 // Work Log against the fake host (@cmd/widget-api/testing): the native Journal's days, read
 // only. Days newest first with their headline, hours and ribbon; entries newest first with
 // their kind, outcome, summary and counts; a bar of the ribbon rings its entry; when the newest
-// day was written; it reads again on a timer and from the title menu, never asking for a day to
+// day was written; it reads again on a timer and from Read Again on the newest day's heading (no
+// title menu, as the native Journal's Write Again), never asking for a day to
 // be written; loading, empty, refused, failed (and failed after a good read), many days, and a
 // cmd before API 1.2.
 
@@ -69,7 +70,7 @@ describe("Work Log", () => {
     expect(tree.findAll("TimelineEntry").some((e) => e.props.picked)).toBe(false);
   });
 
-  it("reads again every few minutes and from the title menu, and never asks for a day to be written", async () => {
+  it("reads again every few minutes and from Read Again on the newest day's heading, and never asks for a day to be written", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const host = createHost({ journal: [] });
     const tree = await render(<WorkLog />, host);
@@ -78,7 +79,11 @@ describe("Work Log", () => {
     vi.advanceTimersByTime(EVERY * 1000);
     await tree.idle();
     expect(tree.text()).toContain("Released v0.31");
-    await tree.choose(tree.find("Window"), "Read Again");
+    expect(tree.find("Window").props.menu).toBeUndefined();
+    // One button, on the newest day's heading.
+    expect(tree.findAll("IconButton", (b) => b.props.label === "Read Again")).toHaveLength(1);
+    expect(JSON.stringify(tree.find("Inline", (n) => n.props.justify === "between"))).toContain(`"Read Again"`);
+    await tree.press(tree.find("IconButton", (b) => b.props.label === "Read Again"));
     expect(host.requests.filter((r) => r[0] === "journal.days")).toHaveLength(3);
     expect(host.requests.every((r) => r[0] !== "journal.days" || JSON.stringify(r[1]) === JSON.stringify({ count: DAYS }))).toBe(true);
     expect(host.calls).toEqual([]);
@@ -121,7 +126,7 @@ describe("Work Log", () => {
     await tree.choose(tree.find("View"), "Try Again", "state");
     expect(tree.text()).toContain("Released v0.31");
     fail = true;
-    await tree.choose(tree.find("Window"), "Read Again");
+    await tree.press(tree.find("IconButton", (b) => b.props.label === "Read Again"));
     expect(tree.text()).toContain("Released v0.31");
     expect(tree.text()).toContain("Couldn't read the journal again");
   });

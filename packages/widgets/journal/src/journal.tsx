@@ -4,9 +4,10 @@
 // (a bar per entry in its kind's hue; a click rings the entry) and a timeline of its entries:
 // title, outcome, summary, how long and what it took. A widget never has a day written (that
 // runs the person's model): it reads what is there every few minutes, and says when the newest
-// day was written. Refused, it says what it needs; failed, it says so with Try Again.
+// day was written; Read Again is the small button on the newest day's heading, where the native
+// Journal has Write Again. Refused, it says what it needs; failed, it says so with Try Again.
 
-import { Window, View, Stack, Inline, Text, Badge, Ribbon, Timeline, TimelineEntry, StatusLine, useData, useNow, cmd, ApiCallError, type JournalDay, type JournalEntry } from "@cmd/widget-api";
+import { Window, View, Stack, Inline, Text, Badge, IconButton, Ribbon, Timeline, TimelineEntry, StatusLine, useData, useNow, cmd, ApiCallError, type JournalDay, type JournalEntry } from "@cmd/widget-api";
 import { useState } from "react";
 
 /** Days read, and how often (seconds) it looks again: days are written elsewhere, so a slow look is enough. */
@@ -123,20 +124,23 @@ function Entry({ e, picked }: { e: JournalEntry; picked: boolean }) {
   );
 }
 
-function Day({ day, now, picked, onPick }: { day: JournalDay; now: number; picked: string | null; onPick: (id: string) => void }) {
+function Day({ day, now, picked, onPick, onRead }: { day: JournalDay; now: number; picked: string | null; onPick: (id: string) => void; onRead?: { busy: boolean; run: () => void } }) {
   const r = day.entries.length ? ribbonOf(day) : null;
   const hours = day.entries.length ? `${clock(Math.min(...day.entries.map((e) => e.start)))}–${clock(Math.max(...day.entries.map((e) => e.end)))}` : null;
   return (
     <Stack gap={2}>
-      <Inline gap={2} align="baseline">
-        <Text size="lg" strong>
-          {dayName(day.date, now)}
-        </Text>
-        {hours && (
-          <Text tone="dim" size="sm">
-            {hours}
+      <Inline gap={2} align="baseline" justify="between">
+        <Inline gap={2} align="baseline">
+          <Text size="lg" strong>
+            {dayName(day.date, now)}
           </Text>
-        )}
+          {hours && (
+            <Text tone="dim" size="sm">
+              {hours}
+            </Text>
+          )}
+        </Inline>
+        {onRead && <IconButton size="sm" icon="arrow.clockwise" label="Read Again" disabled={onRead.busy} onClick={onRead.run} />}
       </Inline>
       <Text>{day.headline}</Text>
       {r && <Ribbon items={r.items} from={r.from} to={r.to} ticks={r.ticks} picked={picked} onPick={onPick} />}
@@ -173,11 +177,11 @@ export default function WorkLog() {
   const newest = days.reduce((t, d) => Math.max(t, d.writtenAt), 0);
 
   return (
-    <Window status={null} menu={[{ label: "Read Again", disabled: refreshing, run: refresh }]}>
+    <Window status={null}>
       <View inset state={state}>
         <Stack gap={6}>
           {days.map((d) => (
-            <Day key={d.date} day={d} now={now} picked={picked} onPick={(id) => setPicked((p) => (p === id ? null : id))} />
+            <Day key={d.date} day={d} now={now} picked={picked} onPick={(id) => setPicked((p) => (p === id ? null : id))} onRead={d === days[0] ? { busy: refreshing, run: refresh } : undefined} />
           ))}
         </Stack>
         {newest > 0 && <StatusLine>{error ? "Couldn't read the journal again" : written(newest, now)}</StatusLine>}
