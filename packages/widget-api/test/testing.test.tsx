@@ -209,6 +209,13 @@ describe("cmd.env.has (1.2: elements too)", () => {
     const tree = await render(probe(names), createHost({ env: { api: { major: 1, minor: 1 }, elements: undefined } }));
     expect(tree.text()).toBe("agents.start:true ListRow:true DataGrid:false TimeBars:false Nothing:false");
   });
+
+  it("answers for a prop added to an older element (1.3) by the minor, and the element", async () => {
+    const props = probe(["Dial", "Stat.trend", "Stat.children", "TimeBars.note", "ToolbarSearchField.onSubmit", "Stat.nothing"]);
+    expect((await render(props, createHost())).text()).toBe("Dial:true Stat.trend:true Stat.children:true TimeBars.note:true ToolbarSearchField.onSubmit:true Stat.nothing:false");
+    const older = createHost({ env: { api: { major: 1, minor: 2 }, elements: (await import("@cmd/protocol/widget-tree")).API_ELEMENT_NAMES.filter((n) => n !== "Dial") } });
+    expect((await render(props, older)).text()).toBe("Dial:false Stat.trend:false Stat.children:false TimeBars.note:false ToolbarSearchField.onSubmit:false Stat.nothing:false");
+  });
 });
 
 describe("API 1.2's verbs in the fake host", () => {

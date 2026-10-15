@@ -13,6 +13,8 @@ export type Send = (handler: number, event: string, value?: WireValue) => void;
 export interface Chrome {
   /** The title menu (Window menu). */
   menu: WireMenuEntry[] | null;
+  /** The title menu's button (Window menuLabel, 1.3); null: the checked entry's label. */
+  menuLabel: string | null;
   /** Entries first in the context menu (Window actions). */
   actions: WireMenuEntry[] | null;
   send: Send;

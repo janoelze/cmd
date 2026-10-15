@@ -113,7 +113,9 @@ export function reference(): string {
     for (const p of list) {
       const d = p.valueDeclaration ?? p.declarations?.[0];
       const type = d && ts.isPropertySignature(d) && d.type ? d.type.getText() : checker.typeToString(checker.getTypeOfSymbol(p));
-      out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)}${since(p) === "1.0" ? "" : ` Since ${since(p)}.`} |`);
+      // A prop added after its element (1.3) says when.
+      const later = el && since(p) !== "1.0" && since(p) !== since(el) ? ` Since ${since(p)}.` : "";
+      out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)}${later} |`);
     }
     out.push("");
   }

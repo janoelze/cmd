@@ -18,6 +18,7 @@ import { formatValue, type ApiElement, type StatUnit, type WireValue } from "@cm
 import type { ComponentType } from "react";
 import { on, press, str, useDraft, v, type Drawn } from "./draw.ts";
 import { FrameElement } from "./FrameElement.tsx";
+import { chartSummary } from "./entries-1.3-display.tsx";
 
 /** A unit prop's formatter: short, as charts' ticks and readouts are. */
 const fmt = (p: Record<string, WireValue>) => {
@@ -91,7 +92,7 @@ function timeChart({ p, ctx }: Drawn) {
     xLabel: (_: number, i: number) => labels[i] ?? "",
     longLabel: (_: number, i: number) => long[i] ?? labels[i] ?? "",
     label: str(p.label) ?? "",
-    summary: str(p.summary),
+    summary: chartSummary(p),
     height: p.fill === true ? ("fill" as const) : v<number>(p.height),
     onSelect: pick<number>(ctx, p.onSelect, "onSelect"),
   };

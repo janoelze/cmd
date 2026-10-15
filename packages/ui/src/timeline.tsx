@@ -4,6 +4,7 @@
 // --mark. The Journal widget's day is both, a ribbon picking its entries.
 
 import type { CSSProperties, ReactNode } from "react";
+import { useReveal } from "./motion.ts";
 
 export interface RibbonItem {
   id: string;
@@ -61,10 +62,11 @@ export function Timeline({ children }: { children: ReactNode }) {
   return <div className="ui-timeline">{children}</div>;
 }
 
-/** One entry: its time, a mark in its hue on the rail (`label` its tooltip), then what happened. `picked` rings the mark. */
-export function TimelineEntry({ id, time, hue, label, picked, children }: { id?: string; time: ReactNode; hue: number; label?: string; picked?: boolean; children: ReactNode }) {
+/** One entry: its time, a mark in its hue on the rail (`label` its tooltip), then what happened. `picked` rings the mark; `reveal` scrolls it into view when it becomes true. */
+export function TimelineEntry({ id, time, hue, label, picked, reveal, children }: { id?: string; time: ReactNode; hue: number; label?: string; picked?: boolean; reveal?: boolean; children: ReactNode }) {
+  const ref = useReveal<HTMLElement>(reveal);
   return (
-    <article className="ui-tl-entry" id={id} data-picked={picked || undefined} style={{ "--hue": hue } as CSSProperties}>
+    <article ref={ref} className="ui-tl-entry" id={id} data-picked={picked || undefined} style={{ "--hue": hue } as CSSProperties}>
       <div className="ui-tl-time">{time}</div>
       <div className="ui-tl-rail">
         <span className="ui-tl-mark" data-tip={label} />

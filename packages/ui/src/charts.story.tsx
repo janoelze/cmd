@@ -2,7 +2,7 @@
 // and sparklines, bars per day with the period before and an average, stacked bars, rankings,
 // shares, a year as a calendar, a week as a punch card, a distribution, budgets as meters.
 // Scrub a chart: its header shows the bucket under the cursor; arrow keys do the same.
-import { Calendar, Delta, Distribution, Meter, PunchCard, Proportion, Ranking, TimeBars, TimeSeries } from "./charts.tsx";
+import { Calendar, ChartSummary, Delta, Distribution, Meter, PunchCard, Proportion, Ranking, TimeBars, TimeSeries } from "./charts.tsx";
 import { Pane, Panes, Stat, Tiles, View } from "./frame.tsx";
 import { PlotGroup } from "./plot.tsx";
 import { Sparkline } from "./chart.tsx";
@@ -98,6 +98,13 @@ export const Bars = () => {
     </div>
   );
 };
+
+/** A stat's detail: the header a ChartSummary (the value bold, its change, a dim note), as the Stats window's detail and a widget chart's `delta` and `note` draw it. */
+export const Detail = () => (
+  <div style={{ width: 560, padding: 16 }}>
+    <TimeBars buckets={week} series={[{ key: "w", label: "Waiting on you", values: agentTime.map((v) => v / 6) }]} previous={lastWeek.map((v) => v / 6)} current={6} average format={dur} ticks="duration" xLabel={wd} longLabel={long} label="Waiting on you" height={200} summary={<ChartSummary value="6h 12m" delta={<Delta text="−8%" trend="down" good="down" />} note="median 2m, 90% under 14m" />} />
+  </div>
+);
 
 /** Lines: one gauge filled under it with last week dashed, and three series over each other with a legend. Two charts in a PlotGroup scrub together. */
 export const Lines = () => {

@@ -5,12 +5,13 @@
 // the testing tree's gestures and titles. Split from widget-tree.ts, which re-exports all
 // of it, so `@cmd/protocol/widget-tree` is still the whole wire contract. The vocabulary (enums,
 // prop types, gestures) is widget-spec.ts; each minor that adds elements has a file
-// (widget-elements-1.2.ts; 1.3's by feature, widget-elements-1.3-layout.ts), merged into API_ELEMENTS here.
+// (widget-elements-1.2.ts; 1.3's by feature, widget-elements-1.3-layout.ts and widget-elements-1.3-display.ts), merged into API_ELEMENTS here.
 
 import type { HandlerRef, WireValue } from "./widget-tree.ts";
 import { ALIGN, BREAKS, DISABLED, LIGHTS, SPACE, SYMBOL, TEXT_SIZES, TIP, TONES, TOOLBAR_ITEM, chosen, none, press, typed, type ActionOf, type ApiElementSpec, type MenuEntryOf, type OptionOf, type ViewStateOf } from "./widget-spec.ts";
 import { ELEMENTS_1_2 } from "./widget-elements-1.2.ts";
 import { ELEMENTS_1_3_LAYOUT, STACK_1_3, TEXT_1_3 } from "./widget-elements-1.3-layout.ts";
+import { ELEMENTS_1_3_DISPLAY, REVEAL_1_3, SEARCH_EVENTS_1_3, SPARKLINE_1_3, STAT_1_3, WINDOW_1_3 } from "./widget-elements-1.3-display.ts";
 
 export { SPACE, TONES, LIGHTS, TEXT_SIZES, ALIGN, BREAKS, UNITS, API_ENUMS, TOOLBAR_ITEM, isShape } from "./widget-spec.ts";
 export type { MenuEntryOf, ActionOf, ViewStateOf, OptionOf, WireMenuEntry, ApiFieldType, ApiFieldSpec, ApiShape, ApiPropType, ApiPropSpec, ApiGesture, ApiEventSpec, ApiElementSpec } from "./widget-spec.ts";
@@ -23,6 +24,7 @@ const ELEMENTS_1_0 = {
       status: { type: "string", nullable: true, doc: 'The title bar\'s status line ("2 waiting for you · 1 working"); null for none.' },
       menu: { type: "menu", doc: "The title menu (a scope switch: This Workspace / All Workspaces)." },
       actions: { type: "menu", doc: "Entries added to the window's context menu." },
+      ...WINDOW_1_3,
     },
     events: {},
     children: "elements",
@@ -84,7 +86,7 @@ const ELEMENTS_1_0 = {
       count: { type: "text", doc: 'What matched ("3 of 12").' },
       ...TOOLBAR_ITEM,
     },
-    events: { onChange: typed('The text as typed (debounced by the app); "" when cleared.') },
+    events: { onChange: typed('The text as typed (debounced by the app); "" when cleared.'), ...SEARCH_EVENTS_1_3 },
     children: "none",
   },
   ToolbarSegmented: {
@@ -180,6 +182,7 @@ const ELEMENTS_1_0 = {
       depth: { type: "number", doc: "Indent, for a row under another (a subagent)." },
       tip: TIP,
       menu: { type: "menu", doc: "Its context menu." },
+      ...REVEAL_1_3,
     },
     events: { onClick: press("Pressed (the row's main action: open, select)."), onDoubleClick: { gesture: "doubleClick", doc: "Double-clicked." } },
     children: "elements",
@@ -226,9 +229,12 @@ const ELEMENTS_1_0 = {
       unit: { type: "string", doc: 'After the value ("ms", "%").' },
       delta: { type: "text", doc: 'A change beside it ("+12%").' },
       deltaTone: { type: TONES, doc: 'The change\'s tone: "success" for better, "danger" for worse.' },
+      ...STAT_1_3,
     },
     events: { onSelect: press("Pressed (show what it counts).") },
-    children: "none",
+    children: "elements",
+    childrenDoc: "Drawn under the value, as wide as the tile: a Sparkline.",
+    childrenSince: "1.3",
   },
   Sparkline: {
     doc: "A small line of recent values.",
@@ -237,6 +243,7 @@ const ELEMENTS_1_0 = {
       height: { type: "number", doc: "In px (default 20)." },
       area: { type: "boolean", doc: "Fills under the line (default true)." },
       color: { type: ["current", "neutral"], doc: 'The accent ("current") or neutral instead of the series colour.' },
+      ...SPARKLINE_1_3,
     },
     events: {},
     children: "none",
@@ -331,7 +338,7 @@ const ELEMENTS_1_0 = {
 } as const satisfies Record<string, ApiElementSpec>;
 
 /** API 1's elements (1.0's, then each minor's): the allow-list the renderer enforces. */
-export const API_ELEMENTS = { ...ELEMENTS_1_0, ...ELEMENTS_1_2, ...ELEMENTS_1_3_LAYOUT } as const satisfies Record<string, ApiElementSpec>;
+export const API_ELEMENTS = { ...ELEMENTS_1_0, ...ELEMENTS_1_2, ...ELEMENTS_1_3_LAYOUT, ...ELEMENTS_1_3_DISPLAY } as const satisfies Record<string, ApiElementSpec>;
 
 export type ApiElement = keyof typeof API_ELEMENTS;
 export const API_ELEMENT_NAMES = Object.keys(API_ELEMENTS) as ApiElement[];

@@ -33,6 +33,17 @@ export function Delta({ text, trend, good }: { text: string; trend: "up" | "down
   );
 }
 
+/** A stat's detail as a chart's `summary`: the value bold, its change (a Delta), then dim words ("median 4m, 90% under 12m"). */
+export function ChartSummary({ value, delta, note }: { value: ReactNode; delta?: ReactNode; note?: ReactNode }) {
+  return (
+    <>
+      <b className="ui-chart-value">{value}</b>
+      {delta}
+      {note != null && note !== "" && <span>{note}</span>}
+    </>
+  );
+}
+
 function Readout({ value, label, parts }: { value: string; label: string; parts?: { label: string; value: string; color: string }[] }) {
   return (
     <>

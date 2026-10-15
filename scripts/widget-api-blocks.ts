@@ -148,9 +148,23 @@ function size(): string {
   return `a face per size is ${q("Adapt")} around ${q(`Case ${conditions}`)} (px, the most demanding first, one without conditions last as the fallback): cmd draws the first that fits the Adapt's box (a Pane's in a Pane) and switches as the window resizes, without waking the widget. ${q('Hide below="narrow"')} drops one thing from a narrow window; ${q("useSize()")} (the content's ${q("{ width, height }")} in px, or null before it is measured) is for numbers in logic (how many rows fit), never for picking a layout. ${q(`Stack grow justify={${justify}}`)} places a column in the room (centred: ${q('justify="center"')}); ${q("Text fit")} is a title as large as its column allows`;
 }
 
+/** `fmt`'s helpers (@cmd/widget-api's fmt.ts), each with what it takes: a helper added there fails here until its arguments are written. */
+function fmt(): string {
+  const { checker, exported } = apiExports();
+  const sym = exported.find((x) => x.name === "fmt");
+  if (!sym) throw new Error("@cmd/widget-api exports no fmt");
+  const args: Record<string, string> = { ago: "t, now", dur: "seconds", num: "n", bytes: "n", pct: "n", time: "t", date: "t", value: "v, unit", delta: "cur, prev, unit", hue: "name" };
+  const names = checker.getTypeOfSymbol(sym).getProperties().map((p) => p.name);
+  const say = names.map((n) => {
+    if (args[n] === undefined) throw new Error(`fmt.${n} has no arguments in scripts/widget-api-blocks.ts`);
+    return q(`fmt.${n}(${args[n]})`);
+  });
+  return `${list(say)}; ${q("fmt.dur(seconds, { coarse: true })")} in the app's words ("7 min")`;
+}
+
 /** Every block by name. */
 export function blocks(): Record<string, string> {
-  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame(), storage: storage(), size: size() };
+  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame(), storage: storage(), size: size(), fmt: fmt() };
 }
 
 /** `text` with each block filled; a block on its own lines keeps the indent of its first marker. */

@@ -271,7 +271,8 @@ export function MediaStage({ src, alt, caption }: { src: string; alt: string; ca
  * the ring fills the view as large as it fits, the value large and thin inside it,
  * a quiet caption under it ("ends 14:32"). `progress` is how much of the ring is
  * drawn (1: full). With `onEdit` the value is a button that asks to edit it; with
- * `edit` it is a field (Enter commits, Escape cancels, so does leaving it).
+ * `edit` it is a field: Enter commits, Escape cancels, and leaving it commits (the Timer)
+ * or, with `blur: "cancel"`, cancels (a widget's Dial, whose draft never reaches its process).
  */
 export function Dial({ progress, tone, value, caption, label, onEdit, edit }: {
   progress: number;
@@ -282,7 +283,7 @@ export function Dial({ progress, tone, value, caption, label, onEdit, edit }: {
   /** The value's steady name ("Time"); the value is its description. */
   label: string;
   onEdit?: () => void;
-  edit?: { text: string; onChange: (t: string) => void; onCommit: () => void; onCancel: () => void };
+  edit?: { text: string; onChange: (t: string) => void; onCommit: () => void; onCancel: () => void; blur?: "commit" | "cancel" };
 }) {
   const f = Math.max(0, Math.min(1, progress));
   const input = useRef<HTMLInputElement>(null);
@@ -305,7 +306,7 @@ export function Dial({ progress, tone, value, caption, label, onEdit, edit }: {
               value={edit.text}
               aria-label={label}
               onChange={(e) => edit.onChange(e.target.value)}
-              onBlur={edit.onCommit}
+              onBlur={edit.blur === "cancel" ? edit.onCancel : edit.onCommit}
               onKeyDown={(e) => {
                 if (e.key === "Enter") edit.onCommit();
                 if (e.key === "Escape") edit.onCancel();

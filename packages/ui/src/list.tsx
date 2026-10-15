@@ -5,7 +5,7 @@
 // a menu, a summary, actions shown on hover). Chip is the coloured project label.
 
 import { useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type MouseEvent, type ReactNode } from "react";
-import { timing, useFlip } from "./motion.ts";
+import { timing, useFlip, useReveal } from "./motion.ts";
 import { ICON, iconNode } from "./icon.tsx";
 import { StatusDot, type DotState } from "./status.tsx";
 
@@ -194,14 +194,18 @@ export interface ListRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "onCl
   tip?: string;
   /** Its identity across renders, for a list that moves its rows (useFlip). */
   flipKey?: string;
+  /** Scrolled into view (nearest edge) when it becomes true, once per change (useReveal). */
+  reveal?: boolean;
   /** The row's parts, in order: Twisty or TwistySpace, ListRowIcon, ListRowContent, ListRowEnd, ListRowActions. */
   children: ReactNode;
 }
 
 /** A row. Its height follows its content: one line, or two when ListRowContent has a detail. */
-export function ListRow({ selected, active, dim, depth, className, onClick, onDoubleClick, onContextMenu, tip, flipKey, style, children, ...rest }: ListRowProps) {
+export function ListRow({ selected, active, dim, depth, className, onClick, onDoubleClick, onContextMenu, tip, flipKey, reveal, style, children, ...rest }: ListRowProps) {
+  const ref = useReveal<HTMLDivElement>(reveal);
   return (
     <div
+      ref={ref}
       className={cls("ui-list-row", selected && "sel", active && "active", className)}
       data-key={flipKey}
       data-dim={dim || undefined}

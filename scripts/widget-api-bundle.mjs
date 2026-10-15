@@ -24,8 +24,8 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = path.join(root, "packages/widget-api");
 const require = createRequire(path.join(pkg, "package.json"));
 
-/** The protocol files bundled with the API (its `@cmd/protocol/widget-events` import). */
-const PROTOCOL_MODULES = ["packages/protocol/src/widget-events.ts"];
+/** The protocol files bundled with the API (its `@cmd/protocol/widget-events` and `@cmd/protocol/format` imports). */
+const PROTOCOL_MODULES = ["packages/protocol/src/widget-events.ts", "packages/protocol/src/format.ts"];
 
 /** The default output folder. */
 export const BUNDLE_DIR = path.join(pkg, "dist/deno");

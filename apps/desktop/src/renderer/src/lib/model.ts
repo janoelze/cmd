@@ -1,6 +1,6 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
-import { bucketOf, kindLabel, needsAttention, placeAgainst, type Agent, type AppWindow, type Attention, type Pane, type GitPlace, type PaneId, type Workspace, type WorkspaceId } from "@cmd/protocol";
+import { bucketOf, kindLabel, needsAttention, placeAgainst, projectHue, type Agent, type AppWindow, type Attention, type Pane, type GitPlace, type PaneId, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import type { DotState } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
@@ -381,12 +381,8 @@ export function byProject(list: Workspace[]): Workspace[] {
     .map((x) => x.sp);
 }
 
-/** Stable per-project hue (FNV-1a), as in the ghostty-agents fork. */
-export function projectHue(name: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 0x01000193);
-  return (h >>> 0) % 360;
-}
+/** A project's hue (protocol format.ts, which widgets' `fmt.hue` is too). */
+export { projectHue };
 
 /**
  * Names of the open windows that use one of these paths or something in them:

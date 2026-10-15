@@ -7,7 +7,7 @@
 
 import type { ApiMethods, ApiVerb, ApiEventQuery, ApiRunOptions, ApiRunResult, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { connection } from "./connection.ts";
-import { ELEMENT_SINCE } from "./elements-since.gen.ts";
+import { ELEMENT_SINCE, PROP_SINCE } from "./elements-since.gen.ts";
 import { fmt } from "./fmt.ts";
 import { useActions, useAgents, useAppUsage, useCompletion, useConfig, useEnv, useEvents, useGit, useJournal, useStat, useStorage, useTerminals, useWindows, useWorkspace, useWorkspaces } from "./hooks.ts";
 import { registerMigration, store } from "./storage.ts";
@@ -434,20 +434,23 @@ export const cmd = {
       return connection().env;
     },
     /**
-     * Whether this cmd serves a verb ("agents.start", added in 1.1) or draws an element ("DataGrid",
-     * added in 1.2): for a widget that also runs on an older cmd. @since 1.0
+     * Whether this cmd serves a verb ("agents.start", added in 1.1), draws an element ("DataGrid",
+     * added in 1.2) or takes a prop added to an older element ("Stat.trend", 1.3): for a widget
+     * that also runs on an older cmd. @since 1.0
      */
     has(name: string): boolean {
       const env = connection().env;
       if ((env.verbs as string[]).includes(name)) return true;
+      const minor = (since: string | undefined) => !!since && Number(since.split(".")[1]) <= env.api.minor;
       // A cmd before 1.2 doesn't list its elements: it draws those of its minor and before.
-      if (env.elements) return (env.elements as string[]).includes(name);
-      const since = ELEMENT_SINCE[name];
-      return !!since && Number(since.split(".")[1]) <= env.api.minor;
+      const draws = (el: string) => (env.elements ? (env.elements as string[]).includes(el) : minor(ELEMENT_SINCE[el]));
+      // A prop (event, children) added later: taken by a cmd of its minor that draws its element.
+      const prop = PROP_SINCE[name];
+      return prop ? minor(prop) && draws(name.split(".")[0]!) : draws(name);
     },
     /** Live: the hook `useEnv()`. @since 1.0 */
     use: useEnv,
   },
-  /** Formatting: `cmd.fmt.ago`, `dur`, `num`, `bytes`, `pct`, `time`, `date`. @since 1.0 */
+  /** Formatting: `cmd.fmt.ago`, `dur`, `num`, `bytes`, `pct`, `time`, `date`; 1.3 `value`, `delta`, `hue`. @since 1.0 */
   fmt,
 };

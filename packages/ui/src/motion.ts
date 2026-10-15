@@ -92,6 +92,19 @@ export const MOTION = {
   glide: { ms: GLIDE_MS, easing: GLIDE_EASING },
 } as const;
 
+/**
+ * Scrolls an element into view, to the nearest edge, when `reveal` becomes true: once per
+ * change, not on every render (the Journal's picked entry, a row opened near the bottom).
+ * Smooth, or at once with reduced motion. Put the ref on the element.
+ */
+export function useReveal<T extends HTMLElement>(reveal: boolean | undefined): RefObject<T | null> {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (reveal) ref.current?.scrollIntoView?.({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+  }, [reveal]);
+  return ref;
+}
+
 export const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Web Animations options for a named timing (none with Reduce Motion). */

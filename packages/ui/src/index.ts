@@ -15,7 +15,7 @@ export { ClearButton, NumberField, SearchField, SecretField, ShortcutField, Text
 export { FindBar, findCount, Glyph, Highlight, NO_FIND_OPTIONS, type FindBarHandle, type FindBarProps, type FindOptions, type FindResults } from "./find.tsx";
 export { Chart, Legend, Sparkline, type Series } from "./chart.tsx";
 export { Bars, Line, Plot, PlotGroup, Rule, Ticks, axisTicks, seriesColor, usePlot, useSize, type ChartSeries, type PlotProps, type PlotScales } from "./plot.tsx";
-export { Calendar, ChartHead, Delta, Distribution, Meter, PunchCard, Proportion, Ranking, TimeBars, TimeSeries, heatLevels, type RankingRow, type TimeChartProps } from "./charts.tsx";
+export { Calendar, ChartHead, ChartSummary, Delta, Distribution, Meter, PunchCard, Proportion, Ranking, TimeBars, TimeSeries, heatLevels, type RankingRow, type TimeChartProps } from "./charts.tsx";
 export { Adapt, Case, fits, pickCase, type CaseConditions } from "./adapt.tsx";
 export { Dial, Document, Filmstrip, Hide, Picture, Viewport, Inline, Measure, MediaStage, Page, Pane, Panes, Split, Stack, Stage, Stat, StatusLine, Text, Thumb, Tiles, TitleBand, View, WebStage, ViewState, type Space, type ViewStateSpec } from "./frame.tsx";
 export { formatTime, Scrubber, TimeBar, type ScrubberProps, type TimeBarProps, type TrimRange } from "./media.tsx";
@@ -28,7 +28,7 @@ export { ConfirmDialog, Dialog, DialogLayer, Menu, Popover, Presence, Toast, Toa
 export { Badge, Kbd, LiveBadge, PageDots, Progress, ProgressRing, Spinner, StatusDot, type DotState, type Tone } from "./status.tsx";
 export { installScrollbars, scrollbarScript, scrolled, scrollbarsMoved, watchScrollbars, PAGE_SCROLLBAR_CSS, SCROLLBAR_CSS, SCROLLBAR_HOLD, type ScrollbarsOptions } from "./scrollbars.ts";
 export { displayAddress, ToolbarAddressField, ToolbarButton, ToolbarField, ToolbarSearchField, ToolbarGroup, ToolbarMenu, ToolbarPath, ToolbarSegmented, ToolbarSeparator, ToolbarSpacer, ToolbarText, WindowToolbar, type ToolbarButtonProps, type ToolbarFieldProps } from "./toolbar.tsx";
-export { EASE, EASE_EXIT, glide, GLIDE_EASING, GLIDE_MS, glideNow, MOTION, tween, reducedMotion, slide, spring, timing, useFlip, usePresence, usePresentValue } from "./motion.ts";
+export { EASE, EASE_EXIT, glide, GLIDE_EASING, GLIDE_MS, glideNow, MOTION, tween, reducedMotion, slide, useReveal, spring, timing, useFlip, usePresence, usePresentValue } from "./motion.ts";
 export { ErrorBoundary, type ErrorBoundaryProps } from "./boundary.tsx";
 export { Window, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "./window.tsx";
 export { installTooltips, placeTip, useTooltip, type TipSide } from "./tooltips.tsx";

@@ -5,7 +5,7 @@
 // cmd's own model calls. Every number opens its detail: a bigger chart, split by what the
 // stat can be split by, and its ranking. Stats draws results it's given; StatsView asks the core.
 
-import { Button, Calendar, Delta, Pane, Panes, Proportion, PunchCard, Ranking, Stack, Stat, StatusLine, Sparkline, Text, Tiles, TimeBars, TimeSeries, ToolbarButton, ToolbarSegmented, ToolbarSpacer, View, WindowToolbar } from "@cmd/ui";
+import { Button, Calendar, ChartSummary, Delta, Pane, Panes, Proportion, PunchCard, Ranking, Stack, Stat, StatusLine, Sparkline, Text, Tiles, TimeBars, TimeSeries, ToolbarButton, ToolbarSegmented, ToolbarSpacer, View, WindowToolbar } from "@cmd/ui";
 import { formatDelta, formatValue, trendOf, type StatGrain, type StatResult } from "@cmd/protocol";
 import type { ReactNode } from "react";
 
@@ -205,13 +205,7 @@ export function StatDetail({ result: r, range, by, onBy, onRange, onBack, now = 
   if (!r) return <View toolbar={toolbar} state={{ kind: "loading" }} />;
   const line = r.stat.kind === "gauge" || r.stat.unit === "percent" || r.stat.kind === "distribution";
   const props = { ...bucketLabels(r, "detail"), buckets: r.buckets, series: r.series, current: currentIndex(r, now), format: short(r), ticks: ticks(r), label: r.stat.title, height: 200 } as const;
-  const summary = (
-    <>
-      <b className="ui-chart-value">{fmt(r)(r.total)}</b>
-      {delta(r)}
-      {r.quantiles && <span>median {fmt(r)(r.quantiles.p50)}, 90% under {fmt(r)(r.quantiles.p90)}</span>}
-    </>
-  );
+  const summary = <ChartSummary value={fmt(r)(r.total)} delta={delta(r)} note={r.quantiles && `median ${fmt(r)(r.quantiles.p50)}, 90% under ${fmt(r)(r.quantiles.p90)}`} />;
   return (
     <View inset toolbar={toolbar} footer={<StatusLine>{r.stat.description}</StatusLine>}>
       <Panes>

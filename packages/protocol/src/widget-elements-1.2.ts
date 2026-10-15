@@ -9,6 +9,7 @@
 // widget-elements.ts merges these into API_ELEMENTS.
 
 import { BREAKS, DISABLED, LIGHTS, SYMBOL, UNITS, pick, press, typed, type ApiElementSpec, type ApiShape } from "./widget-spec.ts";
+import { REVEAL_1_3, TIME_CHART_1_3 } from "./widget-elements-1.3-display.ts";
 
 const since = "1.2";
 const UNIT = { type: UNITS, doc: "How its values read: counts (the default), `ms` as durations, bytes, tokens, percent." } as const;
@@ -111,6 +112,7 @@ const TIME_CHART = {
   summary: { type: "string", shows: "words", doc: 'Its header ("Active 3h 12m"), replaced by the bucket under the cursor.' },
   height: { type: "number", doc: "In px (default 120)." },
   fill: { type: "boolean", doc: "As tall as its pane, instead of `height`." },
+  ...TIME_CHART_1_3,
 } as const;
 const BUCKET = pick("A bucket was clicked: its index.", "number");
 
@@ -339,6 +341,7 @@ export const ELEMENTS_1_2 = {
       hue: { type: "number", required: true, doc: "The mark's hue (0–360): its kind's or project's." },
       label: { type: "string", doc: "The mark's tooltip." },
       picked: { type: "boolean", doc: "Rings the mark (the entry picked in a Ribbon)." },
+      ...REVEAL_1_3,
     },
     events: {},
     children: "any",

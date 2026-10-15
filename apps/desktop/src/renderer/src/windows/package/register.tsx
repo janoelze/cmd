@@ -27,7 +27,7 @@ registerWindowView({
   titleMenu: (w) => {
     const c = chromeOf(w.id);
     const entries = configureEntry(w, c?.menu?.length ? menuEntries(c.menu, c.send) : []);
-    return entries.length ? { label: menuLabel(c?.menu), entries } : undefined;
+    return entries.length ? { label: c?.menuLabel ?? menuLabel(c?.menu), entries } : undefined;
   },
   menu: (w) => {
     const c = chromeOf(w.id);

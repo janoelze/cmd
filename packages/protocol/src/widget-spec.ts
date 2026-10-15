@@ -115,7 +115,7 @@ export interface ApiPropSpec {
   doc: string;
   /** What the testing tree reads as words: the element's title (`find(type, title)`), or more of its words (`text()`). */
   shows?: "title" | "words";
-  /** The minor it came in, when after its element's (1.3: Stack's `justify`). */
+  /** The minor it came in, when later than its element's (1.3: a prop added to an older element; `cmd.env.has("Stat.trend")`). */
   since?: string;
 }
 
@@ -137,6 +137,8 @@ export interface ApiEventSpec {
   nullable?: boolean;
   /** Typing into a field: not a press, so it can't start an act (the core's press model). */
   typing?: true;
+  /** The minor it came in, when later than its element's (1.3). */
+  since?: string;
 }
 
 export interface ApiElementSpec {
@@ -151,6 +153,8 @@ export interface ApiElementSpec {
   children: "none" | "text" | "elements" | "any";
   /** The children prop's JSDoc. */
   childrenDoc?: string;
+  /** The minor its children came in, when later than its own (1.3: a Stat holds a Sparkline). */
+  childrenSince?: string;
 }
 
 /** The most a "value" prop or event may hold, as JSON (bytes). */

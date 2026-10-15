@@ -1,6 +1,8 @@
 // Numbers as people read them (docs/49 "Pieces"): one formatter per stat unit, shared by the
 // CLI and the app (which hands them to the kit's charts). Durations as "3h 12m", counts and
-// tokens compact ("1.2K", "2.3M"), bytes in binary steps, deltas as "+18%" or "new".
+// tokens compact ("1.2K", "2.3M"), bytes in binary steps, deltas as "+18%" or "new". Also the
+// app's words for a duration ("7 min") and a project's hue. Widgets get the same functions
+// through @cmd/widget-api's `fmt` (`@cmd/protocol/format`), so their text matches the app's.
 
 import type { StatUnit } from "./stats.ts";
 
@@ -61,6 +63,23 @@ export function formatDelta(cur: number, prev: number, unit?: StatUnit): string 
   const p = ((cur - prev) / prev) * 100;
   if (Math.abs(p) < 0.5) return "±0%";
   return `${p > 0 ? "+" : "−"}${Math.abs(p) >= 10 ? whole.format(Math.abs(p)) : one.format(Math.abs(p))}%`;
+}
+
+/** "0.4 s", "4 s", "7 min", "1 h 5 min" (the copywriting skill's durations): the app's words for how long something took. */
+export function durationText(ms: number): string {
+  if (ms > 0 && ms < 1000) return `${(ms / 1000).toFixed(1)} s`;
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`;
+}
+
+/** Stable per-project hue (FNV-1a, as in the ghostty-agents fork): a project's colour (0–360) in every window. */
+export function projectHue(name: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 0x01000193);
+  return (h >>> 0) % 360;
 }
 
 /** Which way a delta went: up, down or flat. */

@@ -52,7 +52,7 @@ const ALLOWED: Record<string, { value: string[]; types?: string[]; modules?: str
   ui: { value: [] },
   // Runs in the widget process (Deno, sandboxed): protocol's wire types only, nothing at run time.
   // `modules`: values from these alone, protocol files with no imports (the bundle hashes them, scripts/widget-api-bundle.mjs).
-  "widget-api": { value: [], types: ["protocol"], modules: ["@cmd/protocol/widget-events"] },
+  "widget-api": { value: [], types: ["protocol"], modules: ["@cmd/protocol/widget-events", "@cmd/protocol/format"] },
   // Its tests' side (@cmd/widget-api/testing): the API's own code, and the protocol's tables (the verbs' rows, agents' lights), so a fake can't drift from the core.
   "widget-api/testing": { value: ["widget-api", "protocol"] },
   // Widget packages that ship with cmd (packages/widgets/<name>): the widget API, as any package's (and react, from npm: WIDGET_NPM).

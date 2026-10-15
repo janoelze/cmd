@@ -4,16 +4,24 @@
 // Case at three window sizes), then
 // the example widget (packages/widget-api/examples/v1/agents.tsx) running against the fake
 // host, a thousand rows, and the window's states. The title bar shows what the tree's
-// Window gives it (status line, title menu).
+// Window gives it (status line, title menu). 1.3's display pieces run in the example
+// widgets countdown.tsx and usage.tsx, each beside the native view it matches (the Timer, Stats).
 
 import { Window as KitWindow, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { TreeNode, WidgetOut, WireValue } from "@cmd/protocol";
 import { run } from "@cmd/widget-api/runtime";
 import { createHost } from "@cmd/widget-api/testing/host";
 import { agent } from "@cmd/widget-api/testing/fixtures";
 import AgentActivity from "@cmd/widget-api/examples/v1/agents.tsx";
+import Countdown from "@cmd/widget-api/examples/v1/countdown.tsx";
+import Usage from "@cmd/widget-api/examples/v1/usage.tsx";
+import type { HostData } from "@cmd/widget-api/testing/host";
+import type { StatInfo, StatResult } from "@cmd/protocol";
+import { RefWindow } from "../../reference/RefWindow.tsx";
+import { Timer } from "../timer/TimerView.tsx";
+import { StatDetail, Stats } from "../stats/Stats.tsx";
 import { SIZES, type SizeName } from "../../reference/RefWindow.tsx";
 import { useWindowStatus } from "../../lib/windowActions.ts";
 import { showContextMenu } from "../../lib/context.ts";
@@ -77,7 +85,7 @@ function Bar({ id, name }: { id: string; name: string }) {
   return (
     <WindowBar icon="puzzlepiece.extension" name={name}>
       <span className="ui-window-bar-meta">{status?.label}</span>
-      {c?.menu?.length ? <WindowBarMenu onClick={() => void showContextMenu(menuEntries(c.menu, c.send))}>{menuLabel(c.menu)}</WindowBarMenu> : null}
+      {c?.menu?.length ? <WindowBarMenu onClick={() => void showContextMenu(menuEntries(c.menu, c.send))}>{c.menuLabel ?? menuLabel(c.menu)}</WindowBarMenu> : null}
     </WindowBar>
   );
 }
@@ -91,11 +99,14 @@ const W = ({ nodes, size }: { nodes: TreeMessage[]; size?: SizeName }) => <Widge
 
 /** The widget's window: a status line and a title menu in the title bar, the content below. */
 export const Window = () => (
-  <W
-    nodes={tree(
-      e("Window", { status: "2 waiting for you · 1 working", menu: [{ label: "This Workspace", checked: true, run: h() }, { label: "All Workspaces", checked: false, run: h() }], actions: [{ label: "Refresh", run: h() }] }, e("View", { inset: true }, e("Text", {}, "The title bar says what this Window's status and menu are."))),
-    )}
-  />
+  <div style={{ display: "flex", gap: 16 }}>
+    <W
+      nodes={tree(
+        e("Window", { status: "2 waiting for you · 1 working", menu: [{ label: "This Workspace", checked: true, run: h() }, { label: "All Workspaces", checked: false, run: h() }], actions: [{ label: "Refresh", run: h() }] }, e("View", { inset: true }, e("Text", {}, "The title bar says what this Window's status and menu are."))),
+      )}
+    />
+    <W nodes={tree(e("Window", { menuLabel: "3 hidden", menu: [{ label: "Agents", checked: true, run: h() }, { label: "Commands", checked: false, run: h() }] }, e("View", { inset: true }, e("Text", {}, "The title menu's button says its menuLabel (1.3)."))))} />
+  </div>
 );
 
 /** A View with its states: the body, and an empty state with its one action. */
@@ -124,8 +135,8 @@ export const ToolbarButton = () => (
 );
 /** A text field: typed here, sent debounced. */
 export const ToolbarField = () => <W nodes={toolbar(e("ToolbarField", { value: "main", placeholder: "Branch", icon: "arrow.triangle.branch", onChange: h(), onSubmit: h() }))} />;
-/** A filter field with its count. */
-export const ToolbarSearchField = () => <W nodes={toolbar(e("ToolbarSearchField", { value: "to", placeholder: "Filter agents", count: "1 of 2", onChange: h() }))} />;
+/** A filter field with its count; Return sends `onSubmit` (1.3: run the first match). */
+export const ToolbarSearchField = () => <W nodes={toolbar(e("ToolbarSearchField", { value: "to", placeholder: "Filter agents", count: "1 of 2", onChange: h(), onSubmit: h() }))} />;
 /** A few choices side by side. */
 export const ToolbarSegmented = () => <W nodes={toolbar(e("ToolbarSegmented", { value: "day", label: "Range", options: [{ value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }], onChange: h() }))} />;
 /** A button that opens a menu. */
@@ -152,8 +163,8 @@ const listTree = () =>
 export const List = () => <W nodes={listTree()} />;
 /** A heading with a count, in the needs tone; a section folded. */
 export const ListSection = () => <W nodes={tree(e("View", {}, e("List", {}, e("ListSection", { title: "Waiting for you", count: 1, tone: "needs" }, row("Tours")), e("ListSection", { title: "Done", count: 4, open: false, onToggle: h() }, row("Docs")))))} />;
-/** Rows: selected, dim, under another, with a context menu. */
-export const ListRow = () => <W nodes={tree(e("View", {}, e("List", {}, e("ListRow", { selected: true, onClick: h() }, e("ListRowContent", { title: "Selected" })), e("ListRow", { dim: true, onClick: h() }, e("ListRowContent", { title: "Dim" })), e("ListRow", { depth: 1, tip: "Under the row above", onClick: h() }, e("ListRowContent", { title: "Nested" })))))} />;
+/** Rows: selected, dim, under another, with a context menu; the selected one `reveal`s itself (1.3: scrolled into view when it becomes true). */
+export const ListRow = () => <W nodes={tree(e("View", {}, e("List", {}, e("ListRow", { selected: true, reveal: true, onClick: h() }, e("ListRowContent", { title: "Selected" })), e("ListRow", { dim: true, onClick: h() }, e("ListRowContent", { title: "Dim" })), e("ListRow", { depth: 1, tip: "Under the row above", onClick: h() }, e("ListRowContent", { title: "Nested" })))))} />;
 /** An icon, or a status light in its place. */
 export const ListRowIcon = () => <W nodes={tree(e("View", {}, e("List", {}, ...(["needs", "working", "done", "idle", "off", "danger"] as const).map((l) => e("ListRow", {}, e("ListRowIcon", { icon: "sparkle", light: l }), e("ListRowContent", { title: l }))))))} />;
 /** A title with a place, or with a detail line. */
@@ -163,10 +174,24 @@ export const ListRowEnd = () => <W nodes={tree(e("View", {}, e("List", {}, row("
 /** Small pills of text, neutral or in a hue. */
 export const Chip = () => <W nodes={inView(e("Inline", {}, e("Chip", {}, "now"), e("Chip", { hue: 140, tip: "Branch" }, "main"), e("Chip", { hue: 20 }, "release")))} />;
 
-/** Numbers with their labels, a change, one pressable. */
-export const Stat = () => <W nodes={inView(e("Inline", { gap: 6 }, e("Stat", { label: "Waiting", value: 2, onSelect: h() }), e("Stat", { label: "p95", value: 412, unit: "ms", delta: "+12%", deltaTone: "danger" })))} />;
-/** Recent values as a line. */
-export const Sparkline = () => <W nodes={inView(e("Sparkline", { values: [3, 5, 4, 8, 6, null, 7, 9, 12, 10], height: 32 }), e("Sparkline", { values: [1, 2, 1, 3, 2, 4], color: "neutral", area: false }))} />;
+/** Numbers with their labels, a change, one pressable; (1.3) the change as a Delta by `trend` and `good`, a Sparkline inside the tile in its series' colour (Resources' CPU and memory). */
+export const Stat = () => (
+  <W
+    size="wide"
+    nodes={inView(
+      e("Inline", { gap: 6 }, e("Stat", { label: "Waiting", value: 2, onSelect: h() }), e("Stat", { label: "p95", value: 412, unit: "ms", delta: "+12%", deltaTone: "danger" })),
+      e(
+        "Tiles",
+        { min: 120, gap: 4 },
+        e("Stat", { label: "CPU", value: "38%", delta: "12%", trend: "up", good: "down" }, e("Sparkline", { values: [12, 18, 15, 30, 26, 38, 33, 41, 38], series: 0 })),
+        e("Stat", { label: "Memory", value: "1.2 GB", delta: "4%", trend: "down", good: "down" }, e("Sparkline", { values: [900, 950, 1000, 1100, 1150, 1200, 1180, 1210, 1200], series: 1 })),
+        e("Stat", { label: "Turns", value: 412, delta: "±0%", trend: "flat", good: "up" }, e("Sparkline", { values: [40, 60, 52, 70, 64, 58, 68], color: "neutral" })),
+      ),
+    )}
+  />
+);
+/** Recent values as a line; (1.3) in the chart palette's nth colour by `series`. */
+export const Sparkline = () => <W nodes={inView(e("Sparkline", { values: [3, 5, 4, 8, 6, null, 7, 9, 12, 10], height: 32 }), e("Sparkline", { values: [1, 2, 1, 3, 2, 4], color: "neutral", area: false }), ...[1, 2, 3, 4, 5].map((series) => e("Sparkline", { values: [3, 5, 4, 8, 6, 7, 9, 12, 10].map((v) => v + series), series })))} />;
 /** Words, in tones and sizes. */
 export const Text = () => <W nodes={inView(e("Text", { size: "lg", strong: true }, "A heading"), e("Text", {}, "A paragraph of plain words, wrapped as the window allows."), e("Text", { tone: "dim", size: "sm" }, "Dim, small"), e("Text", { mono: true, select: true }, "~/src/cmd"))} />;
 /** Labels in a tone. */
@@ -180,6 +205,20 @@ export const EmptyState = () => <W nodes={tree(e("View", {}, e("EmptyState", { i
 /** Notes in a tone: a warning with a dismiss, an error, a compact tip. */
 export const Callout = () => <W nodes={inView(e("Callout", { tone: "warning", title: "Token expires soon", onDismiss: h() }, e("Text", {}, "Renew it in the widget's settings.")), e("Callout", { tone: "danger", title: "HTTP 403" }), e("Callout", { tone: "accent", compact: true }, e("Text", {}, "Double-click a row to open it.")))} />;
 /** A bar: part done, indeterminate. */
+const DIALS: Record<string, WireValue>[] = [
+  { value: "17:42", progress: 0.71, caption: "ends 14:32", editable: true, onSubmit: h() },
+  { value: "9:05", progress: 0.36, tone: "dim", caption: "paused" },
+  { value: "0:00", progress: 1, tone: "needs", caption: "done at 14:32" },
+];
+/** A value across the room in a ring (1.3): running, paused (dim), done (needs); the first editable: click it, type, Return. */
+export const Dial = () => (
+  <div style={{ display: "flex", gap: 16 }}>
+    {DIALS.map((p, i) => (
+      <W key={i} size="narrow" nodes={tree(e("View", {}, e("Dial", { label: "Time", ...p })))} />
+    ))}
+  </div>
+);
+
 export const Progress = () => <W nodes={inView(e("Progress", { value: 0.4, label: "Deploying" }), e("Progress", { tone: "success", value: 1 }), e("Progress", { label: "Waiting" }))} />;
 
 // ── API 1.2: the window-content kit ────────────────────
@@ -225,8 +264,8 @@ export const TextField = () => <W nodes={inView(e("TextField", { value: "25 min"
 
 /** Lines over a week: one filled, the week before dashed. */
 export const TimeSeries = () => <W nodes={inView(e("TimeSeries", { buckets: week, series: [runs([12, 9, 4, 18, 22, 15, 19].map((x) => x * 20_000_000), "mem", "Memory")], previous: [10, 11, 6, 14, 18, 16, 12].map((x) => x * 20_000_000), labels: weekLabels, current: 6, unit: "bytes", label: "Memory", summary: "Memory · 280 MB on average", onSelect: h() }), e("TimeSeries", { buckets: week, series: [runs([1, 2, 1, 3, 2, 4, 3], "a", "Claude"), runs([0, 1, 2, 1, 1, 2, 2], "b", "Codex")], labels: weekLabels, label: "Agents at once", height: 80 }))} />;
-/** Bars over a week: today in the accent, the average, two series stacked. */
-export const TimeBars = () => <W nodes={inView(e("TimeBars", { buckets: week, series: [runs([3_600_000, 1_800_000, 0, 7_200_000, 9_000_000, 5_400_000, 6_300_000], "time", "Agent time")], previous: [3_000_000, 2_400_000, 600_000, 6_000_000, 8_000_000, 6_000_000, 4_000_000], labels: weekLabels, current: 6, unit: "ms", label: "Agent time", average: true, onSelect: h() }), e("TimeBars", { buckets: week, series: [runs([12, 9, 0, 18, 22, 15, 19], "ok", "Passed"), runs([1, 0, 0, 3, 2, 1, 4], "bad", "Failed")], labels: weekLabels, label: "Test runs", height: 80 }))} />;
+/** Bars over a week: today in the accent, the average, two series stacked; the first as a stat's detail (1.3): the value bold, its change as a Delta and a note. */
+export const TimeBars = () => <W nodes={inView(e("TimeBars", { buckets: week, series: [runs([3_600_000, 1_800_000, 0, 7_200_000, 9_000_000, 5_400_000, 6_300_000], "time", "Agent time")], previous: [3_000_000, 2_400_000, 600_000, 6_000_000, 8_000_000, 6_000_000, 4_000_000], labels: weekLabels, current: 6, unit: "ms", label: "Agent time", summary: "9h 15m", delta: { text: "+11%", trend: "up", good: "up" }, note: "median 1h 30m, 90% under 2h 30m", average: true, onSelect: h() }), e("TimeBars", { buckets: week, series: [runs([12, 9, 0, 18, 22, 15, 19], "ok", "Passed"), runs([1, 0, 0, 3, 2, 1, 4], "bad", "Failed")], labels: weekLabels, label: "Test runs", height: 80 }))} />;
 /** A track's position: playing, and one at its start. */
 export const TimeBar = () => <W nodes={inView(e("TimeBar", { duration: 214, time: 81, playing: false, onSeek: h() }), e("TimeBar", { duration: 3600, time: 0, label: "Episode" }))} />;
 /** The top few, with notes; pressable rows. */
@@ -237,10 +276,10 @@ export const Proportion = () => <W nodes={inView(e("Proportion", { parts: [{ key
 export const PunchCard = () => <W size="wide" nodes={inView(e("PunchCard", { values: Array.from({ length: 7 }, (_, r) => Array.from({ length: 24 }, (_, hr) => (hr > 8 && hr < 19 && r < 5 ? ((r * 7 + hr * 3) % 11) + 1 : hr === 22 ? 2 : 0))), rows: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], unit: "count", label: "Commands by hour" }))} />;
 /** A run of days, empty days still there. */
 export const Calendar = () => <W size="wide" nodes={inView(e("Calendar", { start: Date.UTC(2026, 6, 1), values: Array.from({ length: 105 }, (_, i) => (i % 7 > 4 ? 0 : i % 13 === 0 ? null : ((i * 37) % 9) * 600_000)), unit: "ms", label: "Agent time per day", onSelect: h() }))} />;
-const entry = (time: string, hue: number, what: string, picked = false) => e("TimelineEntry", { time, hue, label: what, picked }, e("Text", {}, what));
+const entry = (time: string, hue: number, what: string, picked = false) => e("TimelineEntry", { time, hue, label: what, picked, reveal: picked }, e("Text", {}, what));
 /** Entries down a rail. */
 export const Timeline = () => <W nodes={inView(e("Timeline", {}, entry("09:12", 210, "Started on the widget API's 1.2 elements"), entry("10:40", 140, "Tests pass; Event Stream ported", true), entry("12:05", 20, "The e2e run found a stale tree")))} />;
-/** One entry: its time, a mark in its hue, what happened; one picked. */
+/** One entry: its time, a mark in its hue, what happened; the picked one `reveal`s itself (1.3), as a ribbon's pick scrolls to it. */
 export const TimelineEntry = () => <W nodes={inView(e("Timeline", {}, entry("14:05", 280, "Merged builtin-wave1", true), entry("14:20", 50, "Released 0.31")))} />;
 const hour = 3_600_000;
 const t0 = Date.UTC(2026, 9, 15, 8);
@@ -269,19 +308,12 @@ export const DataGrid = () => (
 
 // ── the example widget, and the window's states ────────
 
-/** packages/widget-api/examples/v1/agents.tsx, running in the widget runtime against the fake host: its tree is what the view draws. */
-export const ExampleAgents = () => {
+/** A widget of the package's examples running in the widget runtime against the fake host: its tree is what the view draws. */
+function Running({ widget, data, name, size, id }: { widget: () => ReactNode; data: HostData; name: string; size?: SizeName; id: string }) {
   const [store] = useState(() => new TreeStore({ resync: () => {} }));
   const [link, setLink] = useState<WidgetLink | null>(null);
   useEffect(() => {
-    const host = createHost({
-      agents: [
-        agent({ name: "Tours", state: "waiting", statusLine: "Wants to run pnpm e2e", place: "cmd-tours" }),
-        agent({ name: "Perf", state: "working", statusLine: "Running the stress test", place: "cmd-perf" }),
-        agent({ name: "Explore", state: "working", depth: 1, parentId: "a-perf" }),
-        agent({ name: "Docs", state: "done", statusLine: "Wrote the API reference", place: "cmd" }),
-      ],
-    });
+    const host = createHost(data);
     const transport = {
       send: (m: WidgetOut) => {
         if (m.kind === "tree" || m.kind === "patch") store.apply(m);
@@ -289,12 +321,179 @@ export const ExampleAgents = () => {
       },
       listen: host.transport.listen,
     };
-    const running = run(transport, AgentActivity, { package: "agents", version: "1.0.0", widget: "agents" });
-    setLink({ interact: (handler, event, value) => host.deliver({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value }) }), resync: () => host.deliver({ kind: "resync" }), restart: () => {}, ask: () => {}, env: () => {} });
+    const running = run(transport, widget, {
+      package: id,
+      version: "1.0.0",
+      widget: id,
+    });
+    setLink({
+      interact: (handler, event, value) =>
+        host.deliver({
+          kind: "interaction",
+          handler,
+          event,
+          ...(value === undefined ? {} : { value }),
+        }),
+      resync: () => host.deliver({ kind: "resync" }),
+      restart: () => {},
+      ask: () => {},
+      env: () => {},
+    });
     return () => void running.then((r) => r.stop());
-  }, [store]);
-  return link ? <Widget store={store} link={link} name="Agent Activity" /> : null;
+  }, [store]); // eslint-disable-line react-hooks/exhaustive-deps
+  return link ? <Widget store={store} link={link} name={name} size={size} /> : null;
+}
+
+/** packages/widget-api/examples/v1/agents.tsx: Agent Activity. */
+export const ExampleAgents = () => (
+  <Running
+    id="agents"
+    name="Agent Activity"
+    widget={AgentActivity}
+    data={{
+      agents: [
+        agent({
+          name: "Tours",
+          state: "waiting",
+          statusLine: "Wants to run pnpm e2e",
+          place: "cmd-tours",
+        }),
+        agent({
+          name: "Perf",
+          state: "working",
+          statusLine: "Running the stress test",
+          place: "cmd-perf",
+        }),
+        agent({
+          name: "Explore",
+          state: "working",
+          depth: 1,
+          parentId: "a-perf",
+        }),
+        agent({
+          name: "Docs",
+          state: "done",
+          statusLine: "Wrote the API reference",
+          place: "cmd",
+        }),
+      ],
+    }}
+  />
+);
+
+// ── 1.3's display pieces, beside the native views ───────
+
+/** A countdown's states: set (25 min), paused at 17:42, done. */
+const COUNTDOWN = {
+  set: {},
+  paused: { paused: 17 * 60 + 42 },
+  done: { endsAt: 1 },
+} as const;
+
+/** packages/widget-api/examples/v1/countdown.tsx (Dial, menuLabel) beside the native Timer, set and paused: click the time to type a length. */
+export const CountdownBesideTimer = () => (
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "auto auto",
+      gap: 16,
+      justifyContent: "start",
+    }}
+  >
+    {(["set", "paused", "done"] as const).map((k) => (
+      <Fragment key={k}>
+        <RefWindow icon="timer" name="Timer" size="regular">
+          <Timer
+            phase={k === "set" ? "idle" : k}
+            duration={25 * 60}
+            remaining={k === "paused" ? 17 * 60 + 42 : k === "done" ? 0 : 25 * 60}
+            caption={k === "paused" ? "paused" : k === "done" ? "done at 01:00" : undefined}
+            onAction={() => {}}
+            onDuration={() => {}}
+          />
+        </RefWindow>
+        <Running id="countdown" name="Countdown" widget={Countdown} data={{ state: COUNTDOWN[k] }} />
+      </Fragment>
+    ))}
+  </div>
+);
+
+const DAY = 86_400_000;
+const TODAY = new Date(2026, 9, 14).getTime();
+/** A week of a stat ending today, and the week before's total. */
+function statWeek(id: string, title: string, unit: StatInfo["unit"], values: number[], before: number, good?: "up" | "down"): StatResult {
+  const buckets = values.map((_, i) => TODAY - (values.length - 1 - i) * DAY);
+  const total = values.reduce((a, b) => a + b, 0);
+  const stat: StatInfo = {
+    id,
+    title,
+    description: `${title}, made up for the story.`,
+    kind: "count",
+    unit,
+    dims: [],
+    measure: "sum",
+    class: "agents",
+    available: true,
+    ...(good ? { good } : {}),
+  };
+  return {
+    stat,
+    from: buckets[0]!,
+    to: TODAY + DAY,
+    grain: "day",
+    measure: "sum",
+    buckets,
+    series: [{ key: "total", label: title, values, total }],
+    total,
+    previous: { total: before, values: values.map((v) => Math.round(v * 0.8)) },
+    asOf: TODAY + 15 * 3_600_000,
+  };
+}
+const H = 3_600_000;
+const WEEK = {
+  time: statWeek("agents.time", "Agent time", "ms", [3.2 * H, 5 * H, 1.5 * H, 6.5 * H, 8 * H, 4.2 * H, 5.1 * H], 30 * H, "up"),
+  active: statWeek("you.active", "Active time", "ms", [2 * H, 3.5 * H, 1 * H, 4 * H, 5 * H, 3 * H, 2.5 * H], 24 * H, "up"),
+  turns: statWeek("agents.turns", "Turns", "count", [40, 62, 18, 75, 90, 51, 66], 402),
+  runs: statWeek("commands.runs", "Commands", "count", [120, 160, 40, 210, 260, 140, 180], 1110),
 };
+
+/** packages/widget-api/examples/v1/usage.tsx (Stat trend and children, chart delta and note, fmt) beside the native Stats window: the tiles, and a stat's detail. */
+export const UsageBesideStats = () => (
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "auto auto",
+      gap: 16,
+      justifyContent: "start",
+    }}
+  >
+    <RefWindow icon="chart.bar" name="Stats" size="wide">
+      <Stats range="week" data={WEEK} onRange={() => {}} onOpen={() => {}} now={WEEK.time.asOf} />
+    </RefWindow>
+    <Running
+      id="usage"
+      name="Usage"
+      size="wide"
+      widget={Usage}
+      data={{
+        stats: Object.fromEntries(Object.values(WEEK).map((r) => [r.stat.id, r])),
+      }}
+    />
+    <RefWindow icon="chart.bar" name="Stats" size="wide">
+      <StatDetail result={WEEK.time} range="week" by={null} onBy={() => {}} onRange={() => {}} onBack={() => {}} now={WEEK.time.asOf} />
+    </RefWindow>
+    <Running
+      id="usage"
+      name="Usage"
+      size="wide"
+      widget={Usage}
+      data={{
+        state: { open: "agents.time" },
+        stats: Object.fromEntries(Object.values(WEEK).map((r) => [r.stat.id, r])),
+      }}
+    />
+  </div>
+);
 
 /**
  * A thousand rows in one tree (the view's budget: drawn in under 50 ms). The tree arrives

@@ -38,15 +38,8 @@ export function goTo(id: WindowId, workspaceId: WorkspaceId | undefined): void {
   else showWorkspace(workspaceId, { select: id });
 }
 
-/** "0.4 s", "4 s", "7 min", "1 h 5 min" (the copywriting skill's durations). */
-export function durationText(ms: number): string {
-  if (ms > 0 && ms < 1000) return `${(ms / 1000).toFixed(1)} s`;
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min`;
-  return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`;
-}
+/** "4 s", "7 min" (protocol format.ts, which widgets' `fmt.dur(s, { coarse: true })` is too). */
+export { durationText } from "@cmd/protocol";
 
 /** A widget's one-line summary ("1 failed", "ends 14:30") in its title bar; null: none. */
 export function useWidgetStatus(id: WindowId, label: string | null, key?: string): void {
