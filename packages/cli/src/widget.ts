@@ -12,6 +12,7 @@ import { connect, defaultSocketPath } from "@cmd/protocol/node";
 import { checkoutToolchain, writeEnvTypes } from "@cmd/core/magic";
 import { cmdVersion, readPackage, type WidgetPackage } from "@cmd/core/widgets/package";
 import { missingPage, missingPages } from "@cmd/core/widgets/pages";
+import { shippedFiles } from "@cmd/core/widgets/shipped";
 import { HOST_SUBS, WIDGET_HOST_HELP, widgetHostCommand } from "./widget-host.ts";
 import { LINK_SUBS, WIDGET_LINK_HELP, widgetLinkCommand } from "./widget-link.ts";
 import { newPackage, NO_SANDBOX, testPackage, toolSandbox } from "./widget-new.ts";
@@ -125,7 +126,9 @@ async function coreVersion(): Promise<string | null> {
  * from its config, then TypeScript over src/ (the toolchain Magic checks with; skipped, and said,
  * where this cmd has none, or with `types: false`). engines.cmd is checked against this cmd's
  * version, else the running core's, else not at all (and it says so). A Frame's `src="….html"`
- * written in src/ that names no file of the package is a warning (a typo, or a page not built yet).
+ * written in src/ that names no file of the package is a warning (a typo, or a page not built yet),
+ * and so is, in a package that lists `files`, what wouldn't ship: a listed file that isn't there,
+ * a main or view.html left out, a relative import of a file that isn't listed (widgets/shipped.ts).
  */
 export async function checkPackage(dir: string, json: boolean, local: string | null = cmdVersion(), ask: () => Promise<string | null> = coreVersion, o: { types?: boolean } = {}): Promise<number> {
   const version = local ?? (await ask());
@@ -146,7 +149,7 @@ export async function checkPackage(dir: string, json: boolean, local: string | n
     else if (o.types !== false) process.stderr.write(dim("types not checked: this cmd has no TypeScript to check with\n"));
   }
   if (pkg) writeEnvTypes(dir, pkg);
-  const warnings = pkg ? missingPages(dir).map((m) => `${m.file}:${m.line}: ${missingPage(m.src)}`) : [];
+  const warnings = pkg ? [...missingPages(dir).map((m) => `${m.file}:${m.line}: ${missingPage(m.src)}`), ...(shippedFiles(dir)?.problems ?? [])] : [];
   if (!json) for (const w of warnings) process.stderr.write(`${dim("warning")} ${w}\n`);
   const ok = !problems.length;
   if (json) console.log(JSON.stringify(pkg && ok ? { ok: true, name: pkg.name, version: pkg.version, api: pkg.api, kinds: pkg.widgets.map((w) => w.kind), types, ...(warnings.length ? { warnings } : {}) } : { ok: false, problems }));

@@ -59,6 +59,17 @@ describe("stage-widgets", () => {
     expect(() => widgetShipFiles(fixture("noview", ["src/main.tsx"]))).toThrow(/draws in a frame, but view.html isn't in "files"/);
   });
 
+  it("fails on a shipped script's relative import that `files` doesn't list, or that isn't there", () => {
+    const main = 'import { fmt } from "./format.ts";\nimport type { T } from "./types.ts";\nexport default () => fmt(1);\n';
+    const pkg = fixture("helper", ["src/main.tsx", "view.html"], { "src/main.tsx": main, "src/format.ts": 'export * from "./units";\nexport const fmt = String;' });
+    expect(() => widgetShipFiles(pkg)).toThrow(/packages\/widgets\/helper: src\/main.tsx imports \.\/format.ts \(src\/format.ts\), which isn't in "files"/);
+    const listed = fixture("helper2", ["src/main.tsx", "src/format.ts", "view.html"], { "src/main.tsx": main, "src/format.ts": 'export * from "./units";\nexport const fmt = String;' });
+    expect(() => widgetShipFiles(listed)).toThrow(/src\/format.ts imports \.\/units, which isn't there/);
+    fs.writeFileSync(path.join(listed, "src/units.ts"), "export {};");
+    fs.writeFileSync(path.join(listed, "package.json"), JSON.stringify({ ...JSON.parse(fs.readFileSync(path.join(listed, "package.json"), "utf8")), files: ["src/main.tsx", "src/format.ts", "src/units.ts", "view.html"] }));
+    expect(widgetShipFiles(listed)).toContain("src/units.ts"); // the type-only import of types.ts is erased: not a problem
+  });
+
   it("every built-in in packages/widgets stages", () => {
     const root = path.resolve(import.meta.dirname, "../packages/widgets");
     for (const name of fs.readdirSync(root)) {
