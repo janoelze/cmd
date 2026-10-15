@@ -126,7 +126,7 @@ export function stat(q: Partial<ApiStatQuery> = {}, over: { values?: (number | n
 }
 
 /** A work day as the journal wrote it (`journal.days`): today, one entry unless given. @since 1.2 */
-export function day(over: Partial<ApiJournalDay> & { entries?: Partial<ApiJournalEntry>[] } = {}): ApiJournalDay {
+export function day(over: Partial<Omit<ApiJournalDay, "entries">> & { entries?: Partial<ApiJournalEntry>[] } = {}): ApiJournalDay {
   const date = over.date ?? new Date(new Date().setHours(0, 0, 0, 0)).getTime();
   const entries = (over.entries ?? [{}]).map((e, i): ApiJournalEntry => ({ id: `e-${date}-${i}`, kind: "feature", title: "Built the thing", summary: "What was done and why.", outcome: "merged", start: date + 9 * 3_600_000, end: date + 11 * 3_600_000, counts: { agents: 1, prompts: 3, commands: 4, commits: 2, pages: 0, files: 5 }, ...e }));
   return { date, headline: over.headline ?? "A day of work", writtenAt: over.writtenAt ?? date + 86_400_000, entries };

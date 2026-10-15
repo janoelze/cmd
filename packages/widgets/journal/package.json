@@ -1,0 +1,35 @@
+{
+  "name": "journal",
+  "version": "1.0.0",
+  "description": "What happened in this workspace, a few lines a day, as the Journal wrote it.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/journal.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "journal",
+        "title": "Work Log",
+        "icon": "book",
+        "description": "The days of this workspace as the Journal wrote them: a headline, the hours worked and what was done, newest first.",
+        "main": "src/journal.tsx",
+        "size": "m"
+      }
+    ],
+    "permissions": {
+      "workspace": ["read"],
+      "events": ["agents"]
+    }
+  }
+}

@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import http from "node:http";
+import { DatabaseSync } from "node:sqlite";
 import { _electron as electron } from "playwright";
 import { connect } from "../packages/protocol/src/node.ts";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
@@ -253,6 +254,7 @@ const SCENARIOS = {
   "widget-actions": [],
   "widget-stats": [],
   "widget-resources": [],
+  "widget-journal": [],
   "app-window": [],
 };
 const failures = [];
@@ -3112,6 +3114,57 @@ await scenario("widget-resources", async () => {
     await call("window.close", { id });
   } finally {
     for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
+    await call("workspace.close", { id: ws.id });
+    fs.rmSync(where, { recursive: true, force: true });
+  }
+});
+
+// Work Log (packages/widgets/journal): the Journal's written days as a package, read only. A day
+// needs something to have happened (a note in the workspace) and a model to write it; e2e has no
+// model, so the day is stored as the Journal would store it (journal_days in the core's
+// database), then the widget, added from the Widget Library, reads it through journal.days.
+await scenario("widget-journal", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const where = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-e2e-journal-")));
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === ws.name);
+  try {
+    await menu("view.grid");
+    const { id, source } = await addFromLibrary("Work Log", "pkg:journal/journal");
+    check(source === "Built-in · journal 1.0.0", `the Widget Library lists Work Log under Built-in (${source})`);
+    await tileIn(id);
+    const tile = win.locator(`.tile[data-pane="${id}"]`);
+    await until(() => tile.textContent(), (t) => t.includes("Nothing written yet"), 30_000);
+    await shot(win, "widget-journal-empty.png");
+
+    // Something happens in the workspace, and the Journal writes the day (stored here as it would be).
+    await call("journal.note", { text: "Ported the Journal to a widget package", workspaceId: ws.id });
+    const work = new Date(Date.now() - 4 * 3_600_000);
+    const date = new Date(work.getFullYear(), work.getMonth(), work.getDate()).getTime();
+    await until(() => call("journal.threads", { workspaceId: ws.id, date: Date.now() }), (r) => r.threads.some((t) => !t.minor), 15_000);
+    const start = Date.now() - 2 * 3_600_000;
+    const doc = { date, scope: `workspace:${ws.id}`, headline: "Ported the Journal (e2e)", writtenBy: "e2e", writtenAt: Date.now(), eventsHash: "", inputHash: "", minor: 0, entries: [{ id: "e2e-1", kind: "feature", title: "Ported the Journal to a widget package", summary: "Read through journal.days.", outcome: "merged", start, end: start + 3_600_000, repo: null, threads: [], counts: { agents: 1, prompts: 2, commands: 3, commits: 1, pages: 0, files: 4 } }] };
+    const db = new DatabaseSync(path.join(home, "cmd.sqlite"));
+    try {
+      db.exec("PRAGMA busy_timeout = 5000");
+      db.prepare("INSERT OR REPLACE INTO journal_days (scope, date, doc) VALUES (?, ?, ?)").run(doc.scope, date, JSON.stringify(doc));
+    } finally {
+      db.close();
+    }
+    const stored = await call("journal.days", { workspaceId: ws.id, count: 7, write: "never" });
+    check(stored.some((d) => d.headline === "Ported the Journal (e2e)"), `the day is stored for the workspace (${stored.map((d) => d.headline).join(", ") || "none"})`);
+    // The widget looks again from its title menu (and every 5 minutes by itself).
+    await select(id);
+    await choosing("Read Again");
+    await tile.locator(".tile-title").click({ button: "right" });
+    await unchoosing();
+    const text = await until(() => tile.textContent(), (t) => t.includes("Ported the Journal (e2e)"), 15_000).catch(() => "");
+    await shot(win, "widget-journal.png");
+    check(text.includes("Today") && text.includes("Ported the Journal to a widget package") && text.includes("Merged") && /Written at \d\d:\d\d/.test(text), `it draws the written day: headline, entry, outcome and when it was written (${JSON.stringify(text.slice(0, 160))})`);
+    await call("window.close", { id });
+  } finally {
     await call("workspace.close", { id: ws.id });
     fs.rmSync(where, { recursive: true, force: true });
   }
