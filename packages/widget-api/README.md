@@ -217,6 +217,27 @@ The reads as subscriptions: each gets the current value at once and every change
 
 `defineWidget<Config extends ConfigShape<Config> = Record<string, WireValue>>(render: (props: { config: Config; }) => ReactNode) => Widget`: Declares a widget: `render` is its view, called with this window's config (live). The module's default export is what cmd runs; a plain component works too. export default defineWidget<{ repo: string }>(({ config }) => <Text>{config.repo}</Text>);
 
+### Frames
+
+A frame widget's page (`"surface": "frame"`, its `view.html`) has a `cmd` of its own, typed by `@cmd/widget-api/frame` (`/// <reference types="@cmd/widget-api/frame" />`): every verb above under the same name, with the same permissions, limits and asks, through the core; the hooks aside. A verb that needs a press (an act, `windows.open`) works right after a click in the frame, once per click. A page has no network: its data comes through `cmd`.
+
+| Member | What |
+|---|---|
+| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. A refusal (the grant doesn't reach it) goes to `onError`, else the console. |
+| `cmd.state.get(key: string): WireValue` | A stored value, at once (null when none). |
+| `cmd.state.set(key: string, value: WireValue): Promise<null>` | Stores a value (null removes it); sent a moment later, with others set meanwhile. |
+| `cmd.state.all(): Record<string, WireValue>` | Every stored value. |
+| `cmd.state.history(key: string, value: number \| null, max?: number): Promise<number[]>` | Appends a number to a series kept under `key` and returns its last `max` (default 60) values. |
+| `cmd.config: Record<string, WireValue> & { get(): Record<string, WireValue>; }` | This window's config values (package.json's `config` fields, as the person set them; never a secret); `cmd.config.get()` too. |
+| `cmd.theme: "dark" \| "light"` | "dark" or "light". The theme's variables are on :root: `var(--text)`, `var(--accent)`, `var(--space-2)`… |
+| `cmd.env.get(): WidgetEnv` | cmd's version, the API served and its verbs, the theme, the size class and placement. |
+| `cmd.env.has(name: string): boolean` | Whether this cmd serves a verb ("agents.start"). |
+| `cmd.on(type: "config" \| "state", fn: (value: Record<string, WireValue>) => void): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
+| `cmd.on(type: "theme", fn: (value: "dark" \| "light") => void): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
+| `cmd.on<T>(type: T, fn: (value: TopicValue<T>) => void, query?: TopicQuery<T>): () => void` | `fn` when the window's `"state"`, `"config"` or `"theme"` changes, or on each change of a live topic (`"agents"`, `"events"` with `query`…, as `cmd.<topic>.subscribe`); returns what stops it. |
+| `cmd.open(target: string): Promise<{ id: string; }>` | Opens a URL, a path or a widget in a window beside this one: `cmd.windows.open`. Only right after a click in the frame. |
+| `cmd.ApiCallError: new (e: ApiError) => FrameCallError` | The class of a refused call's error. |
+
 ### Elements
 
 The app draws each with its kit; a tree can name nothing else. Handlers (`onClick`, a menu entry's `run`) are functions in the widget and ids on the wire.

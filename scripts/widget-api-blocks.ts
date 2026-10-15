@@ -2,7 +2,7 @@
 // V3"): Magic's prompt (packages/core/src/magic/prompt/prompt.md) and the CLAUDE.md that
 // `cmd widget new` writes (packages/cli/templates/widget/CLAUDE.md) teach composition and
 // judgement in words, and name the API's lists (the live hooks, the toolbar's items, the
-// permission keys with their values) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
+// permission keys with their values, a frame page's `cmd`) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
 // markers, filled from the rows the core enforces: protocol widget-verbs.ts, widget-elements.ts,
 // widget-package.ts's keys and the core's data/policy.ts. Both strip the markers where they
 // are read (magic/package/prompt.ts, cli widget-new.ts). packages/core/test/magic-prompt.test.ts
@@ -107,9 +107,18 @@ function permissionKeys(): string {
   ].join(", ");
 }
 
+/** A frame page's `cmd` (@cmd/widget-api/frame): the process's verbs by name, and its live topics. */
+function frame(): string {
+  const say = (verb: ApiVerb, args: string) => {
+    if (!(verb in API)) throw new Error(`no verb ${verb} for the frame's block`);
+    return q(`cmd.${verb}(${args})`);
+  };
+  return `every verb of the widget's by the same name and permission (${say("agents.list", "")}, ${say("git.status", "")}, ${say("net.fetch", "url")}, …), and live data as ${q("cmd.<topic>.subscribe(query, fn)")} or ${q("cmd.on(topic, fn, query)")} for ${list(API_TOPICS.map((t) => q(`"${t}"`)))}`;
+}
+
 /** Every block by name. */
 export function blocks(): Record<string, string> {
-  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys() };
+  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame() };
 }
 
 /** `text` with each block filled; a block on its own lines keeps the indent of its first marker. */

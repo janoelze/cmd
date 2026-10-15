@@ -3,9 +3,10 @@
 // ("null"), so a message is taken only from the iframe's own window; a press or right-click it
 // reports selects its window or opens its menu (embed.ts); the rest goes to the view's handler.
 //
-// What a page asks on the person's behalf (`actions`: opening a link) is checked here, on the
-// trusted side, never left to the page: it counts only right after a press in the frame (the
-// Gesture below), at most once a second, and once per press.
+// What a page asks on the person's behalf (`actions`: Jam's and the Visualizer's; a frame
+// widget's calls that need a press, `wantsPress`) is checked here, on the trusted side, never
+// left to the page: it counts only right after a press in the frame (the Gesture below), at most
+// once a second, and once per press. The core checks a widget's again (widgets/host/press.ts).
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { handleEmbedMessage } from "./embed.ts";
@@ -16,6 +17,8 @@ export type FrameMessage = { type: string } & Record<string, unknown>;
 export interface FrameOptions {
   /** Messages that act for the person, by type: run only after a press in the frame (Gesture). */
   actions?: Record<string, (m: FrameMessage) => void>;
+  /** Messages that may come with a press (a widget's act): they go to onMessage with `pressed`, true only when the Gesture gives one. */
+  wantsPress?: (m: FrameMessage) => boolean;
   /** The frame's window is the selected one: a press into a window that isn't only selects it. */
   active?: boolean;
 }
@@ -74,9 +77,10 @@ export class Gesture {
 /**
  * Host a sandboxed iframe: `onMessage` gets each message of its own page (not presses or
  * right-clicks, which select its window or open its menu, nor `actions`, which run only after a
- * press in it). Returns `post`, which sends the page a message (with transferables).
+ * press in it), with whether it spent a press (`wantsPress`). Returns `post`, which sends the
+ * page a message (with transferables).
  */
-export function useFrame(ref: RefObject<HTMLIFrameElement | null>, onMessage: (m: FrameMessage) => void, o: FrameOptions = {}): (m: unknown, transfer?: Transferable[]) => void {
+export function useFrame(ref: RefObject<HTMLIFrameElement | null>, onMessage: (m: FrameMessage, pressed: boolean) => void, o: FrameOptions = {}): (m: unknown, transfer?: Transferable[]) => void {
   const latest = useRef({ onMessage, o });
   latest.current = { onMessage, o };
   const gesture = useRef<Gesture | null>(null);
@@ -100,7 +104,7 @@ export function useFrame(ref: RefObject<HTMLIFrameElement | null>, onMessage: (m
       if (handleEmbedMessage(el, m)) return;
       const action = latest.current.o.actions?.[m.type];
       if (action) return void (gesture.current!.take() ? action(m) : console.debug(`frame: ${m.type} without a press in the frame, ignored`));
-      latest.current.onMessage(m);
+      latest.current.onMessage(m, latest.current.o.wantsPress?.(m) ? gesture.current!.take() : false);
     };
     // The focus arriving in the frame (the app's window gets `blur`, the iframe `focusin`). The
     // frame's activation reaches this page through another process: if it isn't here yet, look again.

@@ -4,7 +4,8 @@
 // API's rows (scripts/widget-api-blocks.ts) and must be current; everything else the prose
 // names must exist: each element with the props it names (`ListRowContent title place
 // detail`), each `cmd.…` verb, hook, `fmt` function, matcher, fixture, finder and hand of the
-// testing tree, each permission it shows as package.json writes it; and the prompt teaches
+// testing tree, each permission it shows as package.json writes it (a frame page's `cmd` against
+// the reference's Frames section and the process's verbs); and the prompt teaches
 // every act verb. Renaming or dropping any of them fails here, as a stale block does.
 
 import fs from "node:fs";
@@ -41,7 +42,8 @@ const methods = new Set([...tree.slice(tree.indexOf("export class RenderedTree")
 const matcherNames = new Set([...tree.slice(tree.indexOf("export const matchers")).matchAll(/^ {2}(to[A-Z]\w*)\(/gm)].map((m) => m[1]!));
 const fixtureNames = new Set(/export const fixtures = \{([^}]*)\}/.exec(src("packages/widget-api/src/testing/fixtures.ts"))![1]!.split(",").map((s) => s.trim()));
 const host = src("packages/widget-api/src/testing/host.ts");
-const frame = src("apps/desktop/src/package-frame/frame.js");
+/** The reference's section on a frame page's `cmd` (@cmd/widget-api/frame): its own members; its verbs are the process's. */
+const frameRef = ref.slice(ref.indexOf("### Frames"), ref.indexOf("### Elements"));
 /** React's own hooks, which the prose may name beside the API's. */
 const REACT = new Set(["useState", "useEffect", "useMemo", "useCallback", "useRef"]);
 /** package.json's `cmd` block, which the prose names as `cmd.widgets[]`, `cmd.permissions`. */
@@ -51,15 +53,16 @@ const MANIFEST = new Set(["api", "widgets", "permissions"]);
 function wrongNames(file: string): string[] {
   const wrong: string[] = [];
   for (const line of withoutMarkers(read(file)).split("\n")) {
-    // The frame's `cmd` (view.html's, frame.js) is another object than the widget's.
+    // The frame's `cmd` (view.html's, frame.js): the process's verbs without the hooks, and its own members.
     const inFrame = line.includes('"surface": "frame"');
     const spans = spansOf(line);
     for (const span of spans) {
       for (const m of span.matchAll(/\bcmd\.([a-z]+(?:\.[a-zA-Z]+)*)/g)) {
         const p = m[1]!;
         if (inFrame) {
-          const last = p.split(".").pop()!;
-          if (!new RegExp(`(\\b${last}\\s*[(:]|get ${last}\\()`).test(frame)) wrong.push(`\`${span}\`: the frame's cmd has no ${p}`);
+          const own = frameRef.includes(`cmd.${p}(`) || frameRef.includes(`cmd.${p}: `);
+          const verb = !/(^|\.)use$/.test(p) && !p.startsWith("fmt") && ref.includes(`cmd.${p}(`);
+          if (!own && !verb) wrong.push(`\`${span}\`: the frame's cmd has no ${p}`);
         } else if (!MANIFEST.has(p.split(".")[0]!) && !ref.includes(`cmd.${p}(`) && !ref.includes(`cmd.${p}<`) && !ref.includes(`#### \`cmd.${p}\``)) wrong.push(`\`${span}\`: no cmd.${p} in the reference`);
       }
       for (const m of span.matchAll(/\b(use[A-Z]\w*)/g)) if (!REACT.has(m[1]!) && !ref.includes(`\`${m[1]}(`) && !ref.includes(`\`${m[1]}<`)) wrong.push(`\`${span}\`: no hook ${m[1]}`);
@@ -159,7 +162,7 @@ describe("Magic's prompt", () => {
 
   it("the checks see a wrong name (the regexes match the prose)", () => {
     const tmp = path.join(fs.mkdtempSync(path.join(process.env.TMPDIR ?? "/tmp", "magic-prompt-")), "p.md");
-    fs.writeFileSync(tmp, "`cmd.agents.launch(x)`, `useAgentz()`, `fmt.agoo(t)`, `toHaveRows`, `fixtures.agents()`, `host.callz`, `events: [\"secrets\"]`, `act: [\"files\"]`\n`press(node)`, `poke(node)`");
-    expect(wrongNames(tmp).map((w) => w.split(":")[0])).toEqual(["`cmd.agents.launch(x)`", "`useAgentz()`", "`fmt.agoo(t)`", "`toHaveRows`", "`fixtures.agents()`", "`host.callz`", '`events', '`act', "`poke(node)`"]);
+    fs.writeFileSync(tmp, "`cmd.agents.launch(x)`, `useAgentz()`, `fmt.agoo(t)`, `toHaveRows`, `fixtures.agents()`, `host.callz`, `events: [\"secrets\"]`, `act: [\"files\"]`\n`press(node)`, `poke(node)`\nA `\"surface\": \"frame\"` page: `cmd.agents.list()`, `cmd.on(t, fn)`, `cmd.theme`, `cmd.agents.use()`, `cmd.frobnicate(x)`");
+    expect(wrongNames(tmp).map((w) => w.split(":")[0])).toEqual(["`cmd.agents.launch(x)`", "`useAgentz()`", "`fmt.agoo(t)`", "`toHaveRows`", "`fixtures.agents()`", "`host.callz`", '`events', '`act', "`poke(node)`", "`cmd.agents.use()`", "`cmd.frobnicate(x)`"]);
   });
 });

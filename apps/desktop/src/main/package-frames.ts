@@ -1,7 +1,9 @@
 // Frame widgets' pages (docs/56, "The frame surface, for pixels"): cmd-widget://package/<token>/,
 // one token per frame the app shows (registerPackageFrame, from the renderer's frame host,
 // lib/frames.ts), each naming a package folder. view.html is served after a prelude: the
-// theme's variables, the window's state and config, and the page's `cmd` (package-frame/frame.js);
+// theme's variables, the window's state and config, the API's verbs and topics (from the
+// protocol's registry, so the page's `cmd` has each under its name), and the page's `cmd`
+// (package-frame/frame.js);
 // every other path is a file inside the package folder, never outside it (`..`, encoded or not,
 // a dot-file, a link out of the folder: 404). The page is sandboxed in an opaque origin by its
 // iframe; the CSP here gives it no network: scripts, styles and fonts from its package, and
@@ -11,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { IpcMain } from "electron";
+import { API_TOPICS, API_VERBS, WIDGET_API, WIDGET_API_MINOR } from "@cmd/protocol";
 import runtime from "../package-frame/frame.js?raw";
 import type { PackageFrameRequest } from "../shared/ipc.ts";
 
@@ -23,6 +26,8 @@ interface Served {
 }
 
 const served = new Map<string, Served>();
+/** cmd's version, as a page's cmd.env says it (installPackageFrames). */
+let version = "0.0.0";
 /** Tokens kept at most (a frame that never says it's gone doesn't keep its folder served forever). */
 const MAX_SERVED = 200;
 
@@ -105,7 +110,8 @@ function rootRule(s: Served): string {
 const BASE = "html,body{margin:0;height:100%}body{font-family:var(--font-ui);font-size:var(--text-base);line-height:1.4;color:var(--text);background:transparent;-webkit-font-smoothing:antialiased}";
 
 function prelude(s: Served): string {
-  const first = { appearance: s.init.appearance, state: s.init.state ?? {}, config: s.init.config ?? {} };
+  const api = { verbs: API_VERBS, topics: API_TOPICS, major: WIDGET_API, minor: WIDGET_API_MINOR, version };
+  const first = { appearance: s.init.appearance, state: s.init.state ?? {}, config: s.init.config ?? {}, placement: s.init.placement === "sidebar" ? "sidebar" : "board", api };
   return `<!doctype html><html data-appearance="${s.init.appearance}"><head><meta charset="utf-8"><style>${rootRule(s)}${BASE}</style><script>window.__CMD_FRAME__=${json(first)};\n${runtime}</script></head><body>\n`;
 }
 
@@ -115,7 +121,7 @@ export function registerPackageFrame(req: PackageFrameRequest): string {
   const root = fs.realpathSync(req.dir);
   if (!fs.existsSync(path.join(root, "package.json"))) throw new Error("not a widget package");
   const appearance = req.init?.appearance === "light" ? "light" : "dark";
-  const init = { appearance, vars: req.init?.vars ?? {}, state: req.init?.state ?? {}, config: req.init?.config ?? {} } as const;
+  const init = { appearance, vars: req.init?.vars ?? {}, state: req.init?.state ?? {}, config: req.init?.config ?? {}, placement: req.init?.placement === "sidebar" ? ("sidebar" as const) : ("board" as const) } as const;
   while (served.size >= MAX_SERVED) served.delete(served.keys().next().value!);
   const token = randomUUID();
   served.set(token, { root, origins: mediaOrigins(Array.isArray(req.media) ? req.media.filter((h) => typeof h === "string") : []), init });
@@ -143,8 +149,9 @@ export async function packageFrameResponse(req: Request): Promise<Response> {
   return new Response(new Uint8Array(body), { headers: { ...headers, "content-type": TYPES[ext] ?? "application/octet-stream" } });
 }
 
-/** The renderer's calls: a frame to serve (its URL), and one no view shows any more. */
-export function installPackageFrames(ipc: IpcMain): void {
+/** The renderer's calls: a frame to serve (its URL), and one no view shows any more. `appVersion`: cmd's, for the pages' cmd.env. */
+export function installPackageFrames(ipc: IpcMain, appVersion: string): void {
+  version = appVersion;
   ipc.handle("package-frame", (_e, req: PackageFrameRequest) => registerPackageFrame(req));
   ipc.on("package-frame-release", (_e, url: unknown) => {
     const t = typeof url === "string" ? tokenOf(url) : null;

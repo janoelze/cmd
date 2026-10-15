@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts",
+    "./frame": "./src/frame.ts",
     "./runtime": "./src/runtime.ts",
     "./testing/host": "./src/testing/host.ts",
     "./testing/fixtures": "./src/testing/fixtures.ts",

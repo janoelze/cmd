@@ -3,7 +3,8 @@
 // section per `cmd` namespace with each verb's signature, @since and permission, the hooks,
 // and one section per element of API_ELEMENTS with its props. A verb's Since and Permission
 // are its row in protocol widget-verbs.ts's API (a hook's or use()'s, its topic's verb's), the
-// row the core enforces, so the page and the core can't drift; contract.test.ts holds the
+// row the core enforces, so the page and the core can't drift; frame pages' `cmd` comes from
+// src/frame.ts's FrameCmd (@cmd/widget-api/frame); contract.test.ts holds the
 // JSDoc's @since and "Needs" to the same rows. The same reference, with how to start, is the website's widgets
 // page (website/public/_lib/widget-api.html, in the site's layout by widgets/index.php).
 // packages/widget-api/test/docs.test.ts fails when either is stale.
@@ -85,6 +86,8 @@ export function reference(): string {
   for (const s of exported.filter((x) => /^use[A-Z]/.test(x.name)).sort((a, b) => a.name.localeCompare(b.name))) out.push(`| ${code(sig(s, s.name))} | ${since(s)} | ${doc(s)} |`);
   out.push("", `${code(sig(find("defineWidget")!, "defineWidget"))}: ${doc(find("defineWidget")!)}`, "");
 
+  out.push(...frames(), "");
+
   out.push("### Elements", "", "The app draws each with its kit; a tree can name nothing else. Handlers (`onClick`, a menu entry's `run`) are functions in the widget and ids on the wire.", "");
   for (const name of Object.keys(API_ELEMENTS)) {
     const el = find(name);
@@ -105,6 +108,57 @@ export function reference(): string {
   }
   out.push(END);
   return out.join("\n");
+}
+
+/**
+ * The section on frames: what a frame widget's page has (src/frame.ts's FrameCmd, the types of
+ * `@cmd/widget-api/frame`): the verbs as above, each live topic's subscribe, and the page's own.
+ */
+function frames(): string[] {
+  const entry = path.join(API, "src/frame.ts");
+  const program = ts.createProgram([entry], { module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, jsx: ts.JsxEmit.ReactJSX, allowImportingTsExtensions: true, noEmit: true, strict: true, types: ["node"] });
+  const checker = program.getTypeChecker();
+  const mod = checker.getSymbolAtLocation(program.getSourceFile(entry)!)!;
+  const frameCmd = checker.getExportsOfModule(mod).find((x) => x.name === "FrameCmd")!;
+  const doc = (x: ts.Symbol) => one(ts.displayPartsToString(x.getDocumentationComment(checker)));
+  const flags = ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.WriteArrowStyleSignature;
+  const props = checker.getDeclaredTypeOfSymbol(frameCmd).getProperties();
+  const live = props.filter((p) => checker.getTypeOfSymbol(p).getProperty("subscribe"));
+  const namespaces = new Set(Object.keys(VERBS).map((v) => v.split(".")[0]!));
+  const own = props.filter((p) => !live.includes(p) && (!namespaces.has(p.name) || p.name === "state"));
+  const sub = checker.getTypeOfSymbol(live[0]!).getProperty("subscribe")!;
+  /** `<T>(a: A, b?: B): R`, built from its parts (a function-typed parameter keeps its arrow). */
+  const call = (c: ts.Signature) => {
+    const tps = c.getTypeParameters()?.map((t) => checker.typeToString(t, undefined, flags)) ?? [];
+    const ps = c.getParameters().map((p) => {
+      const d = p.valueDeclaration;
+      const opt = !!d && ts.isParameter(d) && !!d.questionToken;
+      const t = opt ? checker.getNonNullableType(checker.getTypeOfSymbol(p)) : checker.getTypeOfSymbol(p);
+      const text = checker.typeToString(t, undefined, flags);
+      // A verb's params are the protocol's tuple: shown as the parameters they are.
+      if (d && ts.isParameter(d) && d.dotDotDotToken && /^\[.*\]$/.test(text)) return text.slice(1, -1).replace(/\?: (.*?) \| undefined(?=,|$)/g, "?: $1");
+      return `${p.name}${opt ? "?" : ""}: ${text}`;
+    });
+    return `${tps.length ? `<${tps.join(", ")}>` : ""}(${ps.join(", ")}): ${checker.typeToString(c.getReturnType(), undefined, flags)}`;
+  };
+  const out = [
+    "### Frames",
+    "",
+    "A frame widget's page (`\"surface\": \"frame\"`, its `view.html`) has a `cmd` of its own, typed by `@cmd/widget-api/frame` (`/// <reference types=\"@cmd/widget-api/frame\" />`): every verb above under the same name, with the same permissions, limits and asks, through the core; the hooks aside. A verb that needs a press (an act, `windows.open`) works right after a click in the frame, once per click. A page has no network: its data comes through `cmd`.",
+    "",
+    "| Member | What |",
+    "|---|---|",
+    `| ${code(`cmd.<${live.map((p) => p.name).join(" | ")}>.subscribe(query?, fn, onError?): () => void`)} | ${doc(sub)} |`,
+  ];
+  for (const p of own) {
+    const t = checker.getTypeOfSymbol(p);
+    const calls = t.getCallSignatures();
+    const methods = t.flags & ts.TypeFlags.Object ? t.getProperties().filter((m) => checker.getTypeOfSymbol(m).getCallSignatures().length) : [];
+    if (calls.length) for (const c of calls) out.push(`| ${code(`cmd.${p.name}${call(c)}`)} | ${one(ts.displayPartsToString(c.getDocumentationComment(checker))) || doc(p)} |`);
+    else if (!methods.length || p.name === "config") out.push(`| ${code(`cmd.${p.name}: ${checker.typeToString(t, undefined, flags)}`)} | ${doc(p)} |`);
+    else for (const m of methods) out.push(`| ${code(`cmd.${p.name}.${m.name}${call(checker.getTypeOfSymbol(m).getCallSignatures()[0]!)}`)} | ${doc(m) || doc(p)} |`);
+  }
+  return out;
 }
 
 // ── the website (website/public/widgets/, docs/56 phase 3) ─────────────
@@ -161,7 +215,7 @@ export function websitePage(ref = reference()): string {
     '<h2 id="start">Make one</h2>',
     "<pre><code>cmd widget new my-widget       # a package with a widget, its test, its story, CLAUDE.md\ncd my-widget\ncmd widget dev                 # on the board, its console here; saves reload it\nnpm test                       # or cmd widget test\ncmd widget check               # package.json, permissions, types\ncmd widget preview . --themes all --sizes all</code></pre>",
     "<p>Or ask Magic for one: it writes the same kind of package. Agents working in a package read its <code>CLAUDE.md</code> and this reference, which <code>cmd widget new</code> links at <code>node_modules/@cmd/widget-api/README.md</code>.</p>",
-    `<p class="api-toc">${["cmd", ...namespaces, "Hooks", "Elements"].map((n) => `<a href="#${slug(n === "cmd" ? "`cmd`" : n)}"><code>${esc(n)}</code></a>`).join(" · ")}</p>`,
+    `<p class="api-toc">${["cmd", ...namespaces, "Hooks", "Frames", "Elements"].map((n) => `<a href="#${slug(n === "cmd" ? "`cmd`" : n)}"><code>${esc(n)}</code></a>`).join(" · ")}</p>`,
     referenceHtml(ref.replace(/^## Reference$/m, "")),
     "",
   ].join("\n");

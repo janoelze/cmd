@@ -77,5 +77,5 @@ export type MacDevice = "camera" | "microphone";
 export interface PackageFrameRequest {
   dir: string;
   media: string[];
-  init: { appearance: "dark" | "light"; vars: Record<string, string>; state: Record<string, unknown>; config: Record<string, unknown> };
+  init: { appearance: "dark" | "light"; vars: Record<string, string>; state: Record<string, unknown>; config: Record<string, unknown>; placement?: "board" | "sidebar" };
 }
