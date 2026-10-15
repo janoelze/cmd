@@ -419,6 +419,30 @@ importers:
         specifier: ^19.3.0
         version: 19.3.0
 
+  packages/widgets/resources:
+    devDependencies:
+      '@cmd/widget-api':
+        specifier: workspace:*
+        version: link:../../widget-api
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+
+  packages/widgets/stats:
+    devDependencies:
+      '@cmd/widget-api':
+        specifier: workspace:*
+        version: link:../../widget-api
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+
   packages/widgets/timer:
     devDependencies:
       '@cmd/widget-api':

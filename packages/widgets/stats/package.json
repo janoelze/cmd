@@ -1,0 +1,32 @@
+{
+  "name": "stats",
+  "version": "1.0.0",
+  "description": "How you and your agents used cmd: agent time, turns, commands, tokens, when you work.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/stats.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "stats",
+        "title": "Usage Stats",
+        "icon": "chart.bar.xaxis",
+        "description": "How you and your agents worked in this workspace, or in all of them: agent time, how turns ended, the commands you run, tokens, when you work. A number opens its chart.",
+        "main": "src/stats.tsx",
+        "size": "l"
+      }
+    ],
+    "permissions": { "workspace": ["read", "all"], "events": ["agents", "ai"] }
+  }
+}
