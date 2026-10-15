@@ -12,7 +12,8 @@
 //   cmd.agents.subscribe((list) => draw(list));
 //   button.onclick = () => cmd.windows.open("https://example.com/");
 
-import type { API_TOPIC, ApiError, ApiMethods, ApiTopic, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { API_TOPIC, ApiError, ApiMethods, ApiStorageQuery, ApiTopic, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { Store } from "./storage.ts";
 import type { cmd as ProcessCmd } from "./cmd.ts";
 
 type Process = typeof ProcessCmd;
@@ -27,7 +28,7 @@ export interface FrameCallError extends Error {
 /** What a live topic sends: the value of the read it is the live form of (`agents`: what `cmd.agents.list()` returns). */
 export type TopicValue<T extends ApiTopic> = ApiMethods[(typeof API_TOPIC)[T]["verb"]]["result"];
 /** What a live topic takes: its read's query (`{ scope: "all" }`, or an event query). */
-export type TopicQuery<T extends ApiTopic> = NonNullable<ApiMethods[(typeof API_TOPIC)[T]["verb"]]["params"][0]>;
+export type TopicQuery<T extends ApiTopic> = T extends "storage" ? ApiStorageQuery : NonNullable<ApiMethods[(typeof API_TOPIC)[T]["verb"]]["params"][0]>;
 
 /** A namespace's live topic, as a page subscribes to it. */
 export interface Live<T extends ApiTopic> {
@@ -45,9 +46,18 @@ export interface Live<T extends ApiTopic> {
 /** What a frame's `cmd` leaves out of a namespace, or holds differently: the hooks, and the process's own subscribe. */
 type Omitted = "fmt" | "config" | "env" | "state" | "run";
 
+/** One scope of a page's storage: the process's Store, and its keys live. @since 1.3 */
+export interface FrameStore extends Store {
+  /** Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. @since 1.3 */
+  subscribe(key: string, fn: (value: WireValue | null) => void, onError?: (e: FrameCallError) => void): () => void;
+}
+
+/** A page's `cmd.storage`: the process's (but `migrate`, which its process registers), each scope's keys live. @since 1.3 */
+export type FrameStorage = Omit<Process["storage"], "use" | "migrate" | "window" | "workspace" | "package"> & Live<"storage"> & { window: FrameStore; workspace: FrameStore; package: FrameStore };
+
 /** The namespaces of verbs: the process's, without the hooks, each live one with `subscribe`. */
 export type FrameNamespaces = {
-  [N in keyof Process as N extends Omitted ? never : N]: Omit<Process[N], "use" | "subscribe"> & (N extends ApiTopic ? Live<N> : unknown);
+  [N in keyof Process as N extends Omitted ? never : N]: N extends "storage" ? FrameStorage : Omit<Process[N], "use" | "subscribe"> & (N extends ApiTopic ? Live<N> : unknown);
 };
 
 /** Live topics that aren't a namespace of verbs (1.2's `terminalUsage`, the live `cmd.terminals.usage`): `cmd.terminalUsage.subscribe(fn)`. */

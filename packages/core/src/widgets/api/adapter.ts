@@ -4,12 +4,14 @@
 // widget notices.
 // A widget sees its own window's workspace unless granted `workspace: ["all"]`; a terminal's
 // screen comes back clipped and marked untrusted; events go through data/policy.ts's widget row.
-// Live topics (subscribe) are topics.ts's, over the same reads; 1.2's reads are reads.ts's.
+// Live topics (subscribe) are topics.ts's, over the same reads; 1.2's reads are reads.ts's;
+// 1.3's storage, with 1.0's `state.*` (its window scope), is storage.ts's.
 // A verb that needs a press (windows.open, media.control, clipboard.write; the acts in act.ts)
 // takes the one it came after, and one marked `local` is never for a paired device's press.
 
 import path from "node:path";
-import { API, API_VERBS, isActVerb, localOnly, mediaUse, needsPress, parsePackageKind, topicVerb, verbClass, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { DatabaseSync } from "node:sqlite";
+import { API, API_VERBS, isActVerb, localOnly, mediaUse, needsPress, parsePackageKind, topicVerb, verbClass, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiStorageMigrate, type ApiStorageQuery, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { PolicyError } from "../../data/policy.ts";
 import { widgetRead, type WidgetIdentity } from "../../data/widgets.ts";
@@ -26,6 +28,8 @@ import { brokeredFetch } from "./net.ts";
 import { subscribeTopic } from "./topics.ts";
 import { widgetActs, type ActDeps, type Press } from "./act.ts";
 import { widgetRunner, type RunScope } from "./run.ts";
+import { windowStorage } from "./storage.ts";
+import { WidgetStorage } from "../storage.ts";
 
 export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call" | "resources" | "stats" | "journal">;
 
@@ -52,6 +56,8 @@ export interface WidgetScope {
   secret(key: string): string | null;
   aiUsage: AiUsage;
   fetchImpl?: typeof fetch;
+  /** Its package's storage (widgets/storage.ts): whose rows (the package, or "link:<name>") and package.json's `cmd.storage.version`; none (tests): a store in memory. */
+  storage?: { store: WidgetStorage; owner: string; declared: number };
 }
 
 /** One widget process's API: what its calls and subscriptions reach. */
@@ -62,7 +68,11 @@ export interface WidgetApi {
   call(verb: string, params: WireValue[], press?: Press): Promise<WireValue>;
   /** A live topic: `push` at once with the current value, then on each change; returns what stops it. */
   subscribe(topic: string, query: unknown, push: (data: WireValue) => void): () => void;
-  /** The process is gone: its acts waiting for the person are a no, its session's yeses go. */
+  /** At the start of the process (before ready): the storage migration this window runs now, or null (host.ts). */
+  migrateStart(): Promise<ApiStorageMigrate | null>;
+  /** The migration ended (the process's `migrated`): kept, or dropped; the error when keeping it failed. */
+  migrateEnd(ok: boolean): string | null;
+  /** The process is gone: its acts waiting for the person are a no, its session's yeses go, a migration it ran is dropped. */
   dispose(): void;
 }
 
@@ -148,7 +158,6 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     if (!w) throw failed("This widget's window is gone.");
     return w;
   };
-  const kv = () => ({ ...((win().state.kv as Record<string, WireValue> | undefined) ?? {}) });
   const acts = widgetActs(core, {
     windowId: scope.windowId,
     workspaceId: own,
@@ -160,6 +169,8 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
   });
   const run = widgetRunner({ permissions: perms, root: () => core.workspaces.get(own())?.root ?? null, exec: scope.exec });
   const reads = widgetReads(core, { own, level, perms, media: scope.media });
+  const st = scope.storage ?? { store: new WidgetStorage(new DatabaseSync(":memory:")), owner: scope.pkg.name, declared: 1 };
+  const storage = windowStorage(core, { windowId: scope.windowId, own, owner: st.owner, declared: st.declared, storage: st.store });
 
   /** The press a verb that needs one came after (not the acts: act.ts takes theirs): right before it, from this Mac when `local`; taken, one verb per press. */
   const pressed = (v: ApiVerb, press: Press) => {
@@ -262,28 +273,8 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       core.notifications.widget({ windowId: scope.windowId, title, body, urgent: note.urgent !== false, muted: !!win().state.muted });
       return null;
     },
-    "state.get": (key) => kv()[String(key)] ?? null,
-    "state.set": (key, value) => {
-      if (typeof key !== "string" || !key || key.length > 200) throw invalid("state.set: the key should be a short string");
-      const next = kv();
-      if (value === null || value === undefined) delete next[key];
-      else next[key] = value;
-      if (JSON.stringify(next).length > 256 * 1024) throw failed("This widget's stored state is full (256 KB).");
-      core.windows.update(scope.windowId, { state: { kv: next } });
-      return null;
-    },
-    "state.history": (key, value, max) => {
-      if (typeof key !== "string" || !key || key.length > 200) throw invalid("state.history: the key should be a short string");
-      const keep = Math.max(1, Math.min(Math.floor(Number(max) || 60), 1000));
-      const all = { ...((win().state.series as Record<string, number[]> | undefined) ?? {}) };
-      const list = [...(all[key] ?? [])];
-      if (typeof value === "number" && Number.isFinite(value)) {
-        list.push(value);
-        all[key] = list.slice(-1000);
-        core.windows.update(scope.windowId, { state: { series: all } });
-      }
-      return list.slice(-keep);
-    },
+    // 1.0's state.* and 1.3's storage.* (storage.ts).
+    ...storage.verbs,
     "net.fetch": (url, init) => {
       limits.net.take("net.fetch");
       return brokeredFetch(url, init, { net: perms.net, fields: scope.widget.config, secret: scope.secret, fetchImpl: scope.fetchImpl });
@@ -311,7 +302,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
   };
 
   /** A topic's read: its verb, the row already checked (topics.ts). */
-  const read = (verb: ApiVerb, q: unknown): unknown => (VERBS[verb as keyof Verbs] as (q: unknown) => unknown)(q);
+  const read = (verb: ApiVerb, q: unknown): unknown => (verb === "storage.get" ? storage.read(q as ApiStorageQuery) : (VERBS[verb as keyof Verbs] as (q: unknown) => unknown)(q));
 
   return {
     verbs: [...API_VERBS],
@@ -332,14 +323,17 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       const fn = VERBS[v] as (...p: WireValue[]) => unknown;
       return ((await fn(...p)) ?? null) as WireValue;
     },
+    migrateStart: () => storage.migrateStart(),
+    migrateEnd: (ok) => storage.migrateEnd(ok),
     dispose() {
       acts.dispose();
       reads.dispose();
+      storage.dispose();
     },
     subscribe(topic, query, push) {
       const verb = topicVerb(topic);
       if (verb && API[verb].needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
-      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null }, push);
+      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null, windowId: scope.windowId, storage: { store: st.store, owner: st.owner } }, push);
     },
   };
 }

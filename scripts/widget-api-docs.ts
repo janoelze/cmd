@@ -79,6 +79,13 @@ export function reference(): string {
     }
     for (const m of checker.getTypeOfSymbol(ns).getProperties()) {
       const verb = `${ns.name}.${m.name}`;
+      // An object of methods (cmd.storage.window, a Store): each method, under its whole name.
+      const mt = checker.getTypeOfSymbol(m);
+      if (!mt.getCallSignatures().length && mt.getProperties().some((x) => checker.getTypeOfSymbol(x).getCallSignatures().length)) {
+        out.push(`| ${code(`cmd.${verb}`)} | ${since(m)} | none | ${doc(m)} |`);
+        for (const x of mt.getProperties()) out.push(`| ${code(sig(x, `cmd.${verb}.${x.name}`))} | ${since(x)} | none | ${doc(x)} |`);
+        continue;
+      }
       const own = rowOf(verb);
       const row = own ?? (m.name === "use" || m.name === "subscribe" ? rowOf(topicVerb(ns.name) ?? `${ns.name}.complete`) : undefined);
       out.push(`| ${code(sig(m, `cmd.${verb}`))} | ${own?.since ?? since(m)} | ${ns.name === "fmt" ? "none" : permission(row, ns.name)} | ${doc(m)} |`);
@@ -167,6 +174,12 @@ function frames(): string[] {
     "|---|---|",
     `| ${code(`cmd.<${live.map((p) => p.name).join(" | ")}>.subscribe(query?, fn, onError?): () => void`)} | ${doc(sub)} |`,
   ];
+  // A live namespace's scopes with keys of their own (cmd.storage.window): their subscribe.
+  for (const p of live)
+    for (const q of checker.getTypeOfSymbol(p).getProperties()) {
+      const s = checker.getTypeOfSymbol(q).getProperty("subscribe");
+      if (s) out.push(`| ${code(`cmd.${p.name}.${q.name}.subscribe${call(checker.getTypeOfSymbol(s).getCallSignatures()[0]!)}`)} | ${doc(s)} |`);
+    }
   for (const p of own) {
     const t = checker.getTypeOfSymbol(p);
     const calls = t.getCallSignatures();

@@ -5,7 +5,7 @@
 // useCompletion asks the person's AI (`cmd.ai.complete`) once per request.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { mergeEvents } from "@cmd/protocol/widget-events";
 import { connection, type ApiCallError } from "./connection.ts";
 
@@ -163,6 +163,45 @@ export function useStoredState<T extends WireValue>(key: string, initial: T): [T
     },
     [c, key, init],
   );
+  return [value, set];
+}
+
+/**
+ * A stored value, live, like useState: `useStorage("package", "notes", [])`. `scope` is
+ * `"window"` (this window; `useStoredState` keeps the same values), `"workspace"` (this package
+ * in the window's workspace) or `"package"` (this package everywhere). A set here reaches every
+ * other open window of the package that uses the same scope and key at once. `initial` until the
+ * stored value arrives (a window's own is there on the first render) and while none is stored.
+ * @since 1.3
+ */
+export function useStorage<T extends WireValue>(scope: ApiStorageScope, key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
+  const c = connection();
+  const init = useRef(initial).current;
+  const first = (): T => (scope === "window" && c.state.has(key) ? (c.state.get(key) as T) : init);
+  const [value, setValue] = useState<T>(first);
+  const current = useRef(value);
+  current.current = value;
+  const [refused, setRefused] = useState<ApiCallError | null>(null);
+  const lastKey = useRef(`${scope}\n${key}`);
+  useEffect(() => {
+    // Another key starts from what is known of it, not from the last key's value.
+    if (lastKey.current !== `${scope}\n${key}`) setValue(first());
+    lastKey.current = `${scope}\n${key}`;
+    setRefused(null);
+    return c.subscribe("storage", { scope, key }, (data) => setValue(data === null ? init : (data as T)), setRefused);
+  }, [c, scope, key]);
+  const set = useCallback(
+    (next: T | ((prev: T) => T)) => {
+      const v = typeof next === "function" ? (next as (p: T) => T)(current.current) : next;
+      current.current = v;
+      setValue(v);
+      if (scope === "window") c.setState(key, v);
+      // A refusal (a full scope, a value too big) is the widget's log line; the value stays here until the next.
+      void c.call("storage.set", [scope, key, v]).catch((e: ApiCallError) => console.error(`useStorage("${scope}", "${key}"): ${e.message}`));
+    },
+    [c, scope, key],
+  );
+  if (refused) throw refused;
   return [value, set];
 }
 

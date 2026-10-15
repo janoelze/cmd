@@ -1,6 +1,6 @@
 // The widget process's entry (docs/56, "The runtime"): given a transport to the core and
 // the widget module's default export, it says hello, waits for `ready` (env, config, the
-// window's stored state), renders, and from then on routes `interaction`s to handlers,
+// window's stored state), runs the storage migration it asks for (1.3), renders, and from then on routes `interaction`s to handlers,
 // `event`s to subscriptions and `resync` to a full tree. It knows nothing of sockets or
 // Deno: the host process (item C) hands it a Transport over the widgets socket, tests an
 // in-memory one.
@@ -9,6 +9,7 @@ import { createElement, isValidElement, type ComponentType, type ReactNode } fro
 import { WIDGET_API, WIDGET_API_MINOR } from "./version.ts";
 import { Connection, setConnection, type Transport } from "./connection.ts";
 import { TreeRoot } from "./reconciler.ts";
+import { migrationFailed, runMigration } from "./storage.ts";
 
 /** Who is running: package.json's name and version, and the widget's id in `cmd.widgets[]`. */
 export interface WidgetInfo {
@@ -47,7 +48,10 @@ export async function run(transport: Transport, widget: WidgetModule, opts: RunO
   conn.send({ kind: "hello", api: WIDGET_API, minor: WIDGET_API_MINOR, package: opts.package, version: opts.version, widget: opts.widget });
   await conn.ready;
   const restore = opts.captureConsole ? captureConsole(conn) : null;
-  const root = mount(conn, widget);
+  setConnection(conn);
+  // A migration due runs before anything renders (and reads storage); one that throws shows why instead of the widget.
+  const failed = conn.migrate ? await runMigration(conn, conn.migrate) : null;
+  const root = mount(conn, failed === null ? widget : createElement(Failed, { message: migrationFailed(failed) }));
   return {
     connection: conn,
     root,
@@ -58,6 +62,11 @@ export async function run(transport: Transport, widget: WidgetModule, opts: RunO
       setConnection(null);
     },
   };
+}
+
+/** What the window shows when the migration threw: the reconciler's boundary draws the error. */
+function Failed({ message }: { message: string }): ReactNode {
+  throw new Error(message);
 }
 
 const LEVELS = { debug: "debug", log: "info", info: "info", warn: "warn", error: "error" } as const;

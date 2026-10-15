@@ -2,7 +2,9 @@
 // (docs/56), those made with Magic among them; clients get it again when it changes, once per
 // burst. It owns what runs them: the packages (packages.ts), their processes (host/), hot reload
 // (reload.ts, which also keeps a hand edit of a package Magic made as a version: revisions.ts),
-// and Deno (deno.ts).
+// Deno (deno.ts), and packages' storage (storage.ts): a package's goes when it is uninstalled
+// (deleted from the Library, or gone from the packages folder for STORAGE_PURGE_MS: an update
+// or a Restore that puts it back in time keeps it), a workspace's when the workspace is deleted.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -18,7 +20,9 @@ import { DenoRuntime } from "./host/runtime.ts";
 import { sandboxMode } from "../lib/sandbox.ts";
 import { toolsOf } from "../tools/feature.ts";
 import { PackageReloader } from "./reload.ts";
-import { LIBRARY_DEBOUNCE_MS } from "./limits.ts";
+import { LIBRARY_DEBOUNCE_MS, STORAGE_PURGE_MS } from "./limits.ts";
+import { WidgetStorage } from "./storage.ts";
+import type { WidgetPackage } from "./package.ts";
 import { linkOf, recordHandEdit } from "./revisions.ts";
 
 const log = logger("widgets");
@@ -30,6 +34,13 @@ export function widgetRef(ref: string): { kind: string } {
   if (!m) throw new Error(`not a widget: ${ref}`);
   return { kind: m[1]! };
 }
+
+/**
+ * Whose storage a package's is: its name, or "link:<name>" for one linked from a folder of its
+ * own (`cmd widget link`, `cmd widget dev`), so a dev copy never reads or writes the data of the
+ * package of that name installed before it, and its own goes when it is unlinked.
+ */
+export const storageOwner = (pkg: Pick<WidgetPackage, "name" | "dir">): string => (linkOf(pkg.dir) ? `link:${pkg.name}` : pkg.name);
 
 /** Where package widgets' processes find the instance's grants and the widgets socket, and Deno. */
 export interface LibraryOptions {
@@ -62,6 +73,10 @@ export class WidgetLibrary {
   readonly stateDir: string | null;
   /** Deno: found, or downloaded when the person says so (magic.installRuntime). */
   readonly deno: DenoSetup;
+  /** Packages' storage (API 1.3), in the core's SQLite file. */
+  readonly storage: WidgetStorage;
+  /** Owners gone from the packages folder, purged when still gone after STORAGE_PURGE_MS. */
+  #purges = new Map<string, NodeJS.Timeout>();
 
   constructor(core: CoreContext, o: LibraryOptions = {}) {
     this.#core = core;
@@ -73,6 +88,7 @@ export class WidgetLibrary {
       install: o.installDeno ?? (o.deno === undefined ? undefined : null),
     });
     this.deno.onInstalled = () => this.host.packagesChanged();
+    this.storage = new WidgetStorage(core.store.db);
     // $CMD_WIDGETS_HOME or ~/.cmd/widgets, and the built-in packages; read from the widgets' startup job (widgets/feature.ts) on.
     this.packages = new WidgetPackages({
       home: widgetsHome(),
@@ -84,12 +100,13 @@ export class WidgetLibrary {
         this.reloader?.sync(this.packages.list());
         for (const e of this.packages.list()) this.#handEdit(e.folder);
         this.host?.packagesChanged();
+        this.#gone();
       },
     });
     // Deno runs the processes when there is a state dir (else a test sets a runtime); acts ask through
     // the tools' approvals and show on the board as their calls do (made on first use).
     const runtime = stateDir ? new DenoRuntime({ deno: () => this.deno.find(), denoDir: path.join(stateDir, "runtime", "deno-cache"), sandbox: sandboxMode }) : null;
-    this.host = new WidgetHost(core, { stateDir, socket: o.socket ?? null, packages: this.packages, runtime, onAsk: () => this.changed(), acts: () => toolsOf(core) });
+    this.host = new WidgetHost(core, { stateDir, socket: o.socket ?? null, packages: this.packages, runtime, onAsk: () => this.changed(), acts: () => toolsOf(core), storage: { store: this.storage, owner: storageOwner } });
     this.reloader = new PackageReloader({
       paused: this.writing,
       onReload: (name) => {
@@ -97,6 +114,7 @@ export class WidgetLibrary {
         this.host.reload(name);
       },
     });
+    core.workspaces.on("removed", (id: string) => this.storage.purgeWorkspace(id));
     // Developer widgets come and go from the library with their setting.
     core.settings.bind(["widgets.developer"], () => this.changed());
   }
@@ -152,12 +170,49 @@ export class WidgetLibrary {
     for (const w of this.#core.windows.others()) if (parsePackageKind(w.kind)?.name === name) this.#core.windows.close(w.id);
     fs.rmSync(entry.dir, { recursive: true, force: true });
     if (this.stateDir) fs.rmSync(widgetPackageData(this.stateDir, name), { recursive: true, force: true });
+    this.storage.purgeOwner(storageOwner(entry.pkg));
     this.packages.scan();
     this.changed();
   }
 
+  /** Owners that may keep their storage: every package listed, by name and as a link (one that doesn't read, or Magic writes, either way). */
+  #present(): Set<string> {
+    const names = new Set<string>(this.writing);
+    const owners = new Set<string>();
+    for (const e of this.packages.list()) {
+      if (e.ok) owners.add(storageOwner(e.pkg));
+      else names.add(e.folder);
+    }
+    for (const n of names) owners.add(n).add(`link:${n}`);
+    return owners;
+  }
+
+  /** Storage of owners gone from the packages folder goes once they have stayed gone (an uninstall); none while the folder can't be read. */
+  #gone(): void {
+    if (this.packages.home && !fs.existsSync(this.packages.home)) return;
+    const present = this.#present();
+    for (const owner of this.storage.owners()) {
+      if (present.has(owner) || this.#purges.has(owner)) continue;
+      const t = setTimeout(() => {
+        this.#purges.delete(owner);
+        if (this.#present().has(owner)) return;
+        log.info(`widget package ${owner} is uninstalled: its storage goes`);
+        this.storage.purgeOwner(owner);
+      }, STORAGE_PURGE_MS);
+      t.unref?.();
+      this.#purges.set(owner, t);
+    }
+  }
+
+  /** At startup: storage of workspaces deleted while it wasn't looking goes. */
+  sweepStorage(): void {
+    for (const id of this.storage.workspaces()) if (!this.#core.workspaces.get(id)) this.storage.purgeWorkspace(id);
+    this.#gone();
+  }
+
   dispose(): void {
     if (this.#timer) clearTimeout(this.#timer);
+    for (const t of this.#purges.values()) clearTimeout(t);
     this.reloader.close();
   }
 }

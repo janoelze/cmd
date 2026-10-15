@@ -61,7 +61,7 @@ describe.skipIf(noDeno)("the Deno bundle", () => {
         timeout: SYSTEM_TIMEOUT,
       });
       const sent = JSON.parse(stdout.trim().split("\n").at(-1)!) as { kind: string; [k: string]: unknown }[];
-      expect(sent[0]).toEqual({ kind: "hello", api: 1, minor: 2, package: "demo", version: "1.0.0", widget: "agents" });
+      expect(sent[0]).toEqual({ kind: "hello", api: 1, minor: 3, package: "demo", version: "1.0.0", widget: "agents" });
       expect(sent.map((m) => m.kind)).toEqual(["hello", "tree", "subscribe", "patch"]);
       expect(JSON.stringify(sent[1])).toContain("0 agents");
       expect(sent[3]).toMatchObject({ kind: "patch", rev: 2, ops: [{ op: "text", text: "2 agents" }] });

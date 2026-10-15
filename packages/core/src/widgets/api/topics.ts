@@ -4,7 +4,8 @@
 // change (bursts coalesced), and sends it only when it differs from the last one sent: one
 // message per change. Each topic is the live form of one read (protocol widget-verbs.ts's
 // API_TOPIC names its verb); TOPICS below says what it listens to. `events` sends only the
-// events that are new, within data/policy.ts.
+// events that are new, within data/policy.ts. `storage` (1.3) is one key of one scope: a set
+// in any window of the package (widgets/storage.ts's `changed`), or this window's state.
 
 import { API_TOPIC, mergeEvents, topicVerb, type ApiEvent, type ApiEventQuery, type ApiTopic, type ApiVerb, type DataEvent, type WidgetPermissions, type WireValue } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
@@ -15,6 +16,7 @@ import { WatchService } from "../../lib/watch.ts";
 import { logger } from "@cmd/protocol/node";
 import { ApiRefusal } from "./access.ts";
 import { apiEvent } from "./model.ts";
+import type { StorageChange, WidgetStorage } from "../storage.ts";
 
 const log = logger("widgets");
 
@@ -33,6 +35,9 @@ export interface TopicScope {
   root: () => string | null;
   /** The adapter's read of a verb (adapter.ts), checking the grant as the verb does. */
   read(verb: ApiVerb, query: unknown): unknown;
+  /** The subscribing window, and its package's storage (the `storage` topic). */
+  windowId?: string;
+  storage?: { store: WidgetStorage; owner: string };
 }
 
 type Off = () => void;
@@ -74,6 +79,15 @@ const TOPICS: { [T in Exclude<ApiTopic, "events">]: { listen: Listen; coalesceMs
   actions: { listen: (core, _s, changed) => [on(core.actions, "changed", changed)] },
   // 1.2: a sample is a pane's update (panes.ts setUsage, only when it moved noticeably).
   terminalUsage: { listen: (core, _s, changed) => [on(core.panes, "updated", changed), on(core.panes, "removed", changed)] },
+  // 1.3: a set of the key in any window of the package (the shared scopes), or this window's state (its own scope, and the workspace it is in).
+  storage: {
+    listen: (core, s, changed) => {
+      const q = (s.query ?? {}) as { scope?: string; key?: string };
+      const mine = s.storage ? (c: StorageChange) => c.owner === s.storage!.owner && c.scope === q.scope && c.key === q.key && (c.scope === "package" || c.id === s.own()) && changed() : null;
+      const own = (w: { id: string }) => w.id === s.windowId && changed();
+      return [on(core.windows, "updated", own), ...(mine && s.storage ? [on(s.storage.store, "changed", mine)] : [])];
+    },
+  },
   git: {
     coalesceMs: GIT_COALESCE_MS,
     // Staging, committing, switching: the repository's index and HEAD.

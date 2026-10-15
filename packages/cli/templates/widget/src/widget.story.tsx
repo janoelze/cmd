@@ -20,6 +20,9 @@ const busy = [
 /** Three busy terminals first, then two at a prompt; "3 running" in the title bar. */
 export const Busy: HostData = { terminals: busy };
 
+/** "pnpm test" pinned (in another window, or another workspace): it comes first. */
+export const Pinned: HostData = { terminals: busy, storage: { package: { pinned: ["pnpm test --watch"] } } };
+
 /** In a narrow window, as in a sidebar. */
 export const Narrow: HostData & { size: "narrow" } = { terminals: busy, size: "narrow" };
 

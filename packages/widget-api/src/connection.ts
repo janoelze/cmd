@@ -4,7 +4,7 @@
 // keeps what the core pushes (env, config, the window's stored state) for the hooks.
 // The `cmd` object and the hooks reach it through `connection()`: one widget per process.
 
-import type { ApiError, ApiTopic, ApiVerb, TopicQuery, WidgetEnv, WidgetIn, WidgetOut, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiError, ApiStorageMigrate, ApiTopic, ApiVerb, TopicQuery, WidgetEnv, WidgetIn, WidgetOut, WireValue } from "@cmd/protocol/widget-tree";
 
 /** How a process talks to the core: send a message, hear messages. Item C's socket, or testing's pair. */
 export interface Transport {
@@ -33,6 +33,8 @@ export class Connection {
   config: Record<string, WireValue> = {};
   /** The window's stored state as last known here (sets apply locally at once). */
   readonly state = new Map<string, WireValue>();
+  /** 1.3: the storage migration `ready` asked this process to run first, or null. */
+  migrate: ApiStorageMigrate | null = null;
   /** The handlers of the tree, by id (the reconciler fills it). */
   readonly handlers = new Map<number, (value?: unknown) => unknown>();
   /** Called on `resync` (the reconciler sends the whole tree again). */
@@ -89,9 +91,10 @@ export class Connection {
     return () => this.watchers.delete(fn);
   }
 
-  /** Sets a stored value here at once (the core is told by the caller). */
+  /** Sets a stored value here at once, null deletes it (the core is told by the caller). */
   setState(key: string, value: WireValue): void {
-    this.state.set(key, value);
+    if (value === null) this.state.delete(key);
+    else this.state.set(key, value);
     this.changed();
   }
 
@@ -112,6 +115,7 @@ export class Connection {
         this.env = m.env;
         this.config = m.config;
         for (const [k, v] of Object.entries(m.state)) this.state.set(k, v);
+        this.migrate = m.migrate ?? null;
         this.readyResolve();
         this.changed();
         return;

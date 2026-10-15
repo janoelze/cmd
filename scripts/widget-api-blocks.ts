@@ -2,7 +2,7 @@
 // V3"): Magic's prompt (packages/core/src/magic/prompt/prompt.md) and the CLAUDE.md that
 // `cmd widget new` writes (packages/cli/templates/widget/CLAUDE.md) teach composition and
 // judgement in words, and name the API's lists (the live hooks, the toolbar's items, the
-// permission keys with their values, a frame page's `cmd`) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
+// permission keys with their values, a frame page's `cmd`, storage's scopes and quotas) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
 // markers, filled from the rows the core enforces: protocol widget-verbs.ts, widget-elements.ts,
 // widget-package.ts's keys and the core's data/policy.ts. Both strip the markers where they
 // are read (magic/package/prompt.ts, cli widget-new.ts). packages/core/test/magic-prompt.test.ts
@@ -18,6 +18,7 @@ import { PERMISSION_KEYS } from "../packages/protocol/src/widget-package.ts";
 import { DATA_CLASSES, type DataClass } from "../packages/protocol/src/events.ts";
 import { POLICY, declarable } from "../packages/core/src/data/policy.ts";
 import { apiExports } from "./widget-api-docs.ts";
+import { STORAGE_LIMITS } from "../packages/core/src/widgets/limits.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 /** The files with blocks. */
@@ -28,10 +29,10 @@ const list = (xs: string[], and = "and") => (xs.length < 2 ? xs.join("") : `${xs
 const verbsNeeding = (need: ApiNeed) => (Object.keys(API) as ApiVerb[]).filter((v) => API[v].needs === need);
 const namespaces = (verbs: string[]) => [...new Set(verbs.map((v) => v.split(".")[0]!))];
 
-/** The live hooks, one per topic, with the keys of their query: `useAgents({ scope })`. */
+/** The live hooks of cmd's world, one per topic, with the keys of their query: `useAgents({ scope })`. Storage's (useStorage) is the storage block's. */
 function liveHooks(): { name: string; keys: string[] }[] {
   const { checker, exported } = apiExports();
-  return API_TOPICS.map((t) => {
+  return API_TOPICS.filter((t) => t !== "storage").map((t) => {
     const name = `use${t[0]!.toUpperCase()}${t.slice(1)}`;
     const hook = exported.find((s) => s.name === name);
     if (!hook) throw new Error(`@cmd/widget-api has no ${name} for the topic "${t}"`);
@@ -118,9 +119,17 @@ function frame(): string {
   return `every verb the widget has, by the same name and with the same permissions (${say("agents.list", "")}, ${say("git.status", "")}, ${say("net.fetch", "url")}, …), and live data as ${q("cmd.<topic>.subscribe(query, fn)")} or ${q("cmd.on(topic, fn, query)")} for ${list(API_TOPICS.map((t) => q(`"${t}"`)))}`;
 }
 
+/** Storage (1.3): the scopes, what each holds, the hook and the quotas (core widgets/limits.ts). */
+function storage(): string {
+  const size = (n: number) => (n >= 1024 * 1024 ? `${n / 1024 / 1024} MB` : `${n / 1024} KB`);
+  const verbs = (Object.keys(API) as ApiVerb[]).filter((v) => v.startsWith("storage.")).map((v) => v.split(".")[1]!);
+  const args: Record<string, string> = { get: "key", set: "key, value", delete: "key", keys: "prefix", history: "key, value, max" };
+  return `${q("cmd.storage.window")} (this window, ${size(STORAGE_LIMITS.window)}; ${q("cmd.state")} and ${q("useStoredState")} are the same data), ${q("cmd.storage.workspace")} (this widget in the window's workspace, ${size(STORAGE_LIMITS.workspace)}) and ${q("cmd.storage.package")} (this widget everywhere, ${size(STORAGE_LIMITS.package)}), each with ${list(verbs.map((v) => q(`${v}(${args[v] ?? ""})`)))}; live in every window at once with ${q("useStorage(scope, key, initial)")}; a value at most ${size(STORAGE_LIMITS.value)}, a key at most ${STORAGE_LIMITS.key} characters`;
+}
+
 /** Every block by name. */
 export function blocks(): Record<string, string> {
-  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame() };
+  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame(), storage: storage() };
 }
 
 /** `text` with each block filled; a block on its own lines keeps the indent of its first marker. */

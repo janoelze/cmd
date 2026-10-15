@@ -62,6 +62,7 @@ export const widgetsFeature = {
       if (core.library.stateDir) dropOldWidgets(core.library.stateDir, core);
       core.library.packages.start();
       core.library.host.start();
+      core.library.sweepStorage();
     },
   },
   dispose: (core: CoreContext) => {

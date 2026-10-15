@@ -18,7 +18,7 @@ import type { Permission } from "./tools.ts";
  * - "act": `act: ["<namespace>"]` or `act: ["<namespace>.<verb>"]` (1.1).
  * - "run": `run: [<program>]`, decided per program (1.1).
  * - "media": `media: ["read"]` for a read, `media: ["control"]` for an act (1.2): what the Mac plays.
- * - null: nothing (its own state, its own notifications, selecting a window).
+ * - null: nothing (its own state and storage, its own notifications, selecting a window).
  */
 export type ApiNeed = "workspace" | "events" | "net" | "ai" | "act" | "run" | "media" | null;
 
@@ -38,7 +38,7 @@ export type ApiVerbSpec =
   | { since: ApiMinor; mode: "confirm"; needs: "act"; ask: Permission; typed?: true | "person" };
 
 /** A minor of API 1. */
-export type ApiMinor = "1.0" | "1.1" | "1.2";
+export type ApiMinor = "1.0" | "1.1" | "1.2" | "1.3";
 
 /** Every verb of the API, in the order cmd.env.verbs lists them. */
 export const API = {
@@ -83,6 +83,12 @@ export const API = {
   "media.get": { since: "1.2", mode: "read", needs: "media" }, // media: ["read"]
   "media.control": { since: "1.2", mode: "act", needs: "media", press: true, local: true }, // media: ["control"], right after a press on this Mac
   "clipboard.write": { since: "1.2", mode: "act", needs: null, press: true, local: true }, // text, right after a press on this Mac
+  // 1.3: the package's own storage (widgets/storage.ts), in the scope it names: no permission.
+  "storage.get": { since: "1.3", mode: "read", needs: null },
+  "storage.set": { since: "1.3", mode: "act", needs: null },
+  "storage.delete": { since: "1.3", mode: "act", needs: null },
+  "storage.keys": { since: "1.3", mode: "read", needs: null },
+  "storage.history": { since: "1.3", mode: "act", needs: null },
 } as const satisfies Record<string, ApiVerbSpec>;
 
 export type ApiVerb = keyof typeof API;
@@ -130,6 +136,7 @@ export const API_TOPIC = {
   git: { verb: "git.status" },
   actions: { verb: "actions.list" },
   terminalUsage: { verb: "terminals.usage" }, // 1.2: useTerminalUsage
+  storage: { verb: "storage.get" }, // 1.3: useStorage, one key of one scope ({ scope, key })
 } as const satisfies Record<string, { verb: ApiVerb }>;
 
 export type ApiTopic = keyof typeof API_TOPIC;

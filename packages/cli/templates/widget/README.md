@@ -1,6 +1,6 @@
 # __TITLE__
 
-A widget for [cmd](https://github.com/janoelze/cmd): the terminals of this workspace, the busy ones first.
+A widget for [cmd](https://github.com/janoelze/cmd): the terminals of this workspace, the busy ones first. Pin a command from a row's menu and it comes first in every window of the widget.
 
 ## Develop
 
@@ -16,3 +16,5 @@ Saves reload the widget on the board. `src/__ID__.tsx` is the widget, `src/__ID_
 ## What it asks for
 
 - `workspace: ["read"]`: the terminals of the workspace it's in.
+
+Pinned commands are kept by cmd for the widget (`cmd.storage.package`), which needs no permission.

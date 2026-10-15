@@ -61,6 +61,8 @@ export interface WidgetPackage {
   permissions: WidgetPermissions;
   /** Experimental API it uses ("pages"). */
   experimental: string[];
+  /** cmd.storage (API 1.3): the schema version of what it stores (1 when not given); a newer one runs its migration once (docs/56, "Storage"). */
+  storage?: { version: number };
   /** Its folder (a link in the packages folder stays a link here). */
   dir: string;
   /** Ships with cmd (packages.ts's built-in root): granted what it declares. */
@@ -268,6 +270,12 @@ export function parsePackage(json: unknown, dir: string, o: ParseOptions = {}): 
 
   const perms = permissions(c.permissions, errors, home);
   const experimental = list(c.experimental, "cmd.experimental", errors);
+  let storage: { version: number } | undefined;
+  if (c.storage !== undefined) {
+    const v = isObj(c.storage) ? c.storage.version : undefined;
+    if (!isObj(c.storage) || (v !== undefined && (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 1_000_000))) errors.push(`cmd.storage: should be { "version": <a whole number from 1> }, the version of what the widget stores`);
+    else if (v !== undefined) storage = { version: v as number };
+  }
 
   const widgets: PackageWidget[] = [];
   if (!Array.isArray(c.widgets) || !c.widgets.length) errors.push(`cmd.widgets: should list at least one widget, like [{ "id": "main", "title": "…", "main": "src/main.tsx" }]`);
@@ -303,7 +311,7 @@ export function parsePackage(json: unknown, dir: string, o: ParseOptions = {}): 
 
   if (errors.length) return { ok: false, errors };
   const magic = markOf(json);
-  return { ok: true, pkg: { name: name as string, version: version as string, ...(description ? { description } : {}), ...(engines ? { engines } : {}), api: api as number, widgets, permissions: perms, experimental, dir, ...(magic ? { magic } : {}) } };
+  return { ok: true, pkg: { name: name as string, version: version as string, ...(description ? { description } : {}), ...(engines ? { engines } : {}), api: api as number, widgets, permissions: perms, experimental, ...(storage ? { storage } : {}), dir, ...(magic ? { magic } : {}) } };
 }
 
 /** A package.json's mark of a package made with Magic (cmd.magic), or null. */

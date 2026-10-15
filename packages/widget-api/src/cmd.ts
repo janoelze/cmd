@@ -9,7 +9,8 @@ import type { ApiMethods, ApiVerb, ApiEventQuery, ApiRunOptions, ApiRunResult, W
 import { connection } from "./connection.ts";
 import { ELEMENT_SINCE } from "./elements-since.gen.ts";
 import { fmt } from "./fmt.ts";
-import { useActions, useAgents, useCompletion, useConfig, useEnv, useEvents, useGit, useTerminals, useWindows, useWorkspace } from "./hooks.ts";
+import { useActions, useAgents, useCompletion, useConfig, useEnv, useEvents, useGit, useStorage, useTerminals, useWindows, useWorkspace } from "./hooks.ts";
+import { registerMigration, store } from "./storage.ts";
 
 type Verbs = { [V in ApiVerb]: (...args: ApiMethods[V]["params"]) => Promise<ApiMethods[V]["result"]> };
 
@@ -62,6 +63,17 @@ const VERBS: Verbs = {
   "media.get": verb("media.get"),
   "media.control": verb("media.control"),
   "clipboard.write": verb("clipboard.write"),
+  "storage.get": verb("storage.get"),
+  "storage.set": (scope, key, value) => {
+    if (scope === "window") connection().setState(key, value ?? null);
+    return verb("storage.set")(scope, key, value ?? null);
+  },
+  "storage.delete": (scope, key) => {
+    if (scope === "window") connection().setState(key, null);
+    return verb("storage.delete")(scope, key);
+  },
+  "storage.keys": verb("storage.keys"),
+  "storage.history": verb("storage.history"),
 };
 
 /** cmd.run: a function (`cmd.run("gh", ["run", "list"])`) that is also the namespace of its one verb (`cmd.run.exec`). */
@@ -312,7 +324,45 @@ export const cmd = {
     /** Live: the hook `useConfig()`. @since 1.0 */
     use: useConfig,
   },
-  /** Small values kept by the core for this window, across reloads and restarts. @since 1.0 */
+  /**
+   * JSON values kept by cmd across reloads, restarts and updates, in three scopes: `window` (this
+   * window, 256 KB; the same data as `cmd.state`), `workspace` (this package in the window's
+   * workspace, shared by its windows there, 10 MB) and `package` (this package in every window and
+   * workspace, 10 MB). Each value is at most 1 MB, each key 1 to 200 characters. A package sees
+   * only its own; uninstalling it deletes its data, an update keeps it, deleting a workspace
+   * deletes that workspace's. Needs no permission. Live: the hook `useStorage(scope, key, initial)`.
+   * @since 1.3
+   */
+  storage: {
+    /** This window's values: what `cmd.state` keeps, gone with the window. @since 1.3 */
+    window: store("window"),
+    /** This package's values in the window's workspace, shared by its windows there. @since 1.3 */
+    workspace: store("workspace"),
+    /** This package's values everywhere: every window, every workspace (a notes widget's notes). @since 1.3 */
+    package: store("package"),
+    /**
+     * Registers the migration that reshapes stored data when package.json's `cmd.storage.version`
+     * goes up: `cmd.storage.migrate(async (from, to) => { … })`, at the top of the widget's module.
+     * It runs once per new version, in the first window to start, before any window of the package
+     * reads storage, with `cmd.storage` as usual (its window's and workspace's scopes are that
+     * window's). If it throws, nothing it wrote is kept, the version stays, and the window says why.
+     * @since 1.3
+     */
+    migrate: registerMigration,
+    /** A value of a scope: `cmd.storage.get("package", key)` is `cmd.storage.package.get(key)`. @since 1.3 */
+    get: VERBS["storage.get"],
+    /** Keeps a value in a scope; null deletes it. @since 1.3 */
+    set: VERBS["storage.set"],
+    /** Deletes a value of a scope. @since 1.3 */
+    delete: VERBS["storage.delete"],
+    /** A scope's keys, sorted, those starting with `prefix` only. @since 1.3 */
+    keys: VERBS["storage.keys"],
+    /** Appends a number to a scope's series under `key` and returns its last `max` values. @since 1.3 */
+    history: VERBS["storage.history"],
+    /** Live: the hook `useStorage(scope, key, initial)`. @since 1.3 */
+    use: useStorage,
+  },
+  /** Small values kept by the core for this window, across reloads and restarts: `cmd.storage.window` under its first name. @since 1.0 */
   state: {
     /** A stored value (undefined → null). @since 1.0 */
     get: VERBS["state.get"],

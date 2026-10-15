@@ -31,7 +31,7 @@ export default function Agents() {
 
 ## Reference
 
-API 1, minor 2. Everything here is in API 1 for good; what came after 1.0 says `@since 1.x`, and a widget that also runs on an older cmd checks `cmd.env.has(name)` first (a verb or an element).
+API 1, minor 3. Everything here is in API 1 for good; what came after 1.0 says `@since 1.x`, and a widget that also runs on an older cmd checks `cmd.env.has(name)` first (a verb or an element).
 
 ### `cmd`
 
@@ -197,9 +197,41 @@ This window's config (package.json's `config` fields, as the person set them).
 | `cmd.config.get<T extends Record<string, WireValue> = Record<string, WireValue>>() => T` | 1.0 | none | The values now. |
 | `cmd.config.use<T extends ConfigShape<T> = Record<string, WireValue>>() => T` | 1.0 | none | Live: the hook `useConfig()`. |
 
+#### `cmd.storage`
+
+JSON values kept by cmd across reloads, restarts and updates, in three scopes: `window` (this window, 256 KB; the same data as `cmd.state`), `workspace` (this package in the window's workspace, shared by its windows there, 10 MB) and `package` (this package in every window and workspace, 10 MB). Each value is at most 1 MB, each key 1 to 200 characters. A package sees only its own; uninstalling it deletes its data, an update keeps it, deleting a workspace deletes that workspace's. Needs no permission. Live: the hook `useStorage(scope, key, initial)`.
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.storage.window` | 1.3 | none | This window's values: what `cmd.state` keeps, gone with the window. |
+| `cmd.storage.window.get<T extends WireValue = WireValue>(key: string): Promise<T \| null>` | 1.3 | none | The value under `key`, or null. |
+| `cmd.storage.window.set(key: string, value: WireValue \| undefined): Promise<void>` | 1.3 | none | Keeps `value` under `key`; null or undefined deletes it. |
+| `cmd.storage.window.delete(key: string): Promise<void>` | 1.3 | none | Deletes the value under `key`. |
+| `cmd.storage.window.keys(prefix?: string \| undefined): Promise<string[]>` | 1.3 | none | The keys with a value, sorted; only those starting with `prefix` when given (`"note:"`). |
+| `cmd.storage.window.history(key: string, value?: number \| null \| undefined, max?: number \| undefined): Promise<number[]>` | 1.3 | none | Appends a number to a series kept under `key` (no number: just reads it) and returns its last `max` (default 60, at most 1000) values: a sparkline's history. |
+| `cmd.storage.workspace` | 1.3 | none | This package's values in the window's workspace, shared by its windows there. |
+| `cmd.storage.workspace.get<T extends WireValue = WireValue>(key: string): Promise<T \| null>` | 1.3 | none | The value under `key`, or null. |
+| `cmd.storage.workspace.set(key: string, value: WireValue \| undefined): Promise<void>` | 1.3 | none | Keeps `value` under `key`; null or undefined deletes it. |
+| `cmd.storage.workspace.delete(key: string): Promise<void>` | 1.3 | none | Deletes the value under `key`. |
+| `cmd.storage.workspace.keys(prefix?: string \| undefined): Promise<string[]>` | 1.3 | none | The keys with a value, sorted; only those starting with `prefix` when given (`"note:"`). |
+| `cmd.storage.workspace.history(key: string, value?: number \| null \| undefined, max?: number \| undefined): Promise<number[]>` | 1.3 | none | Appends a number to a series kept under `key` (no number: just reads it) and returns its last `max` (default 60, at most 1000) values: a sparkline's history. |
+| `cmd.storage.package` | 1.3 | none | This package's values everywhere: every window, every workspace (a notes widget's notes). |
+| `cmd.storage.package.get<T extends WireValue = WireValue>(key: string): Promise<T \| null>` | 1.3 | none | The value under `key`, or null. |
+| `cmd.storage.package.set(key: string, value: WireValue \| undefined): Promise<void>` | 1.3 | none | Keeps `value` under `key`; null or undefined deletes it. |
+| `cmd.storage.package.delete(key: string): Promise<void>` | 1.3 | none | Deletes the value under `key`. |
+| `cmd.storage.package.keys(prefix?: string \| undefined): Promise<string[]>` | 1.3 | none | The keys with a value, sorted; only those starting with `prefix` when given (`"note:"`). |
+| `cmd.storage.package.history(key: string, value?: number \| null \| undefined, max?: number \| undefined): Promise<number[]>` | 1.3 | none | Appends a number to a series kept under `key` (no number: just reads it) and returns its last `max` (default 60, at most 1000) values: a sparkline's history. |
+| `cmd.storage.migrate(fn: Migration): void` | 1.3 | none | Registers the migration that reshapes stored data when package.json's `cmd.storage.version` goes up: `cmd.storage.migrate(async (from, to) => { … })`, at the top of the widget's module. It runs once per new version, in the first window to start, before any window of the package reads storage, with `cmd.storage` as usual (its window's and workspace's scopes are that window's). If it throws, nothing it wrote is kept, the version stays, and the window says why. |
+| `cmd.storage.get(scope: ApiStorageScope, key: string): Promise<WireValue>` | 1.3 | none | A value of a scope: `cmd.storage.get("package", key)` is `cmd.storage.package.get(key)`. |
+| `cmd.storage.set(scope: ApiStorageScope, key: string, value: WireValue \| undefined): Promise<null>` | 1.3 | none, acts | Keeps a value in a scope; null deletes it. |
+| `cmd.storage.delete(scope: ApiStorageScope, key: string): Promise<null>` | 1.3 | none, acts | Deletes a value of a scope. |
+| `cmd.storage.keys(scope: ApiStorageScope, prefix?: string \| undefined): Promise<string[]>` | 1.3 | none | A scope's keys, sorted, those starting with `prefix` only. |
+| `cmd.storage.history(scope: ApiStorageScope, key: string, value?: number \| null \| undefined, max?: number \| undefined): Promise<number[]>` | 1.3 | none, acts | Appends a number to a scope's series under `key` and returns its last `max` values. |
+| `cmd.storage.use<T extends WireValue>(scope: ApiStorageScope, key: string, initial: T): [T, (next: T \| ((prev: T) => T)) => void]` | 1.3 | none | Live: the hook `useStorage(scope, key, initial)`. |
+
 #### `cmd.state`
 
-Small values kept by the core for this window, across reloads and restarts.
+Small values kept by the core for this window, across reloads and restarts: `cmd.storage.window` under its first name.
 
 | Verb | Since | Permission | What |
 |---|---|---|---|
@@ -246,6 +278,7 @@ The reads as subscriptions: each gets the current value at once and every change
 | `useEvents(query?: ApiEventQuery): ApiEvent[]` | 1.0 | Events from the log matching `query`, newest last: the query's result first, then each new one as it happens; at most `query.limit` (default 200) are kept. An event recorded again (a command as it ends: the same `key`, since 1.1) replaces the one before. Needs `events: [<class>]` for each class of events it reads. `{ scope: "all" }` reads every workspace's, with `workspace: ["all"]` (live since cmd of 2026-10-15; an older cmd refuses it, and `cmd.events.query` reads them). |
 | `useGit(): ApiGitStatus \| null` | 1.0 | The workspace's git status (branch, ahead/behind, changed files), live; null outside a repository. |
 | `useNow(every?: number): number` | 1.0 | The time now, re-rendering every `every` ms (default 1000): for ages that move. |
+| `useStorage<T extends WireValue>(scope: ApiStorageScope, key: string, initial: T): [T, (next: T \| ((prev: T) => T)) => void]` | 1.3 | A stored value, live, like useState: `useStorage("package", "notes", [])`. `scope` is `"window"` (this window; `useStoredState` keeps the same values), `"workspace"` (this package in the window's workspace) or `"package"` (this package everywhere). A set here reaches every other open window of the package that uses the same scope and key at once. `initial` until the stored value arrives (a window's own is there on the first render) and while none is stored. |
 | `useStoredState<T extends WireValue>(key: string, initial: T): [T, (next: T \| ((prev: T) => T)) => void]` | 1.0 | A value kept by the core for this window across reloads and restarts, like useState. The first render already has the stored value. |
 | `useTerminals(query?: ApiScopeQuery): ApiTerminal[]` | 1.0 | The terminals of this workspace (or all), live. |
 | `useTerminalUsage(query?: ApiUsageQuery): ApiTerminalUsage[]` | 1.2 | What each terminal of this workspace (or all, with `{ scope: "all" }` and `workspace: ["all"]`) uses, live: CPU, memory and processes of its process tree, a new sample every few seconds when it moved. Empty until the first arrives. Needs `workspace: ["read"]`. |
@@ -260,7 +293,10 @@ A frame widget's page (`"surface": "frame"`, its `view.html`) has a `cmd` of its
 
 | Member | What |
 |---|---|
-| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions \| terminalUsage>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
+| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions \| storage \| terminalUsage>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
+| `cmd.storage.window.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
+| `cmd.storage.workspace.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
+| `cmd.storage.package.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
 | `cmd.state.get(key: string): WireValue` | A stored value, at once (null when none). |
 | `cmd.state.set(key: string, value: WireValue): Promise<null>` | Stores a value (null removes it); sent a moment later, with others set meanwhile. |
 | `cmd.state.all(): Record<string, WireValue>` | Every stored value. |

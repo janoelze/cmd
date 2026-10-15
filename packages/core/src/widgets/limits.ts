@@ -46,3 +46,12 @@ export const STORY_STATES = 6;
 export const PREVIEW_STATES = 3;
 /** Screenshots the agent gets from one preview. */
 export const AGENT_SHOTS = 4;
+
+// ── storage (storage.ts, api/storage.ts; docs/56 "Storage") ──
+
+/** What a package may keep, checked at each set (bytes of keys and JSON values): a window's (cmd.state's, unchanged since 1.0), each workspace's, the package's own; one value; one key (characters). */
+export const STORAGE_LIMITS = { window: 256 * 1024, workspace: 10 * 1024 * 1024, package: 10 * 1024 * 1024, value: 1024 * 1024, key: 200 } as const;
+/** Numbers a series (`history`) keeps per key. */
+export const SERIES_MAX = 1000;
+/** A package gone from the packages folder this long is uninstalled: its package and workspace data go (ms). A package back within it (an update, a Restore) keeps its data. */
+export const STORAGE_PURGE_MS = 60_000;

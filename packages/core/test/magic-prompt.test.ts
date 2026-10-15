@@ -63,7 +63,7 @@ function wrongNames(file: string): string[] {
           const own = frameRef.includes(`cmd.${p}(`) || frameRef.includes(`cmd.${p}: `);
           const verb = !/(^|\.)use$/.test(p) && !p.startsWith("fmt") && ref.includes(`cmd.${p}(`);
           if (!own && !verb) wrong.push(`\`${span}\`: the frame's cmd has no ${p}`);
-        } else if (!MANIFEST.has(p.split(".")[0]!) && !ref.includes(`cmd.${p}(`) && !ref.includes(`cmd.${p}<`) && !ref.includes(`#### \`cmd.${p}\``)) wrong.push(`\`${span}\`: no cmd.${p} in the reference`);
+        } else if (!MANIFEST.has(p.split(".")[0]!) && !ref.includes(`cmd.${p}(`) && !ref.includes(`cmd.${p}<`) && !ref.includes(`#### \`cmd.${p}\``) && !ref.includes(`| \`cmd.${p}\` |`)) wrong.push(`\`${span}\`: no cmd.${p} in the reference`);
       }
       for (const m of span.matchAll(/\b(use[A-Z]\w*)/g)) if (!REACT.has(m[1]!) && !ref.includes(`\`${m[1]}(`) && !ref.includes(`\`${m[1]}<`)) wrong.push(`\`${span}\`: no hook ${m[1]}`);
       for (const m of span.matchAll(/(?<![.\w])fmt\.(\w+)/g)) if (!ref.includes(`cmd.fmt.${m[1]}(`)) wrong.push(`\`${span}\`: no fmt.${m[1]}`);

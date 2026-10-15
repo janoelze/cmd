@@ -28,6 +28,8 @@ import type {
   ApiMethods,
   ApiRunResult,
   ApiScopeQuery,
+  ApiStorageQuery,
+  ApiStorageScope,
   ApiTerminal,
   ApiTopic,
   ApiVerb,
@@ -90,6 +92,23 @@ export interface HostData {
   journal?: ApiJournalDay[];
   /** What `cmd.media.get` gives: what plays, or null (the default). @since 1.2 */
   playing?: ApiNowPlaying | null;
+  /**
+   * What `cmd.storage` holds at start, by scope (`window` is `state` too), and the migration due:
+   * with `from` below `to` the widget's registered migration runs before it renders
+   * (`host.migrated` says how it went). `host.set({ storage })` is another window's set: it reaches
+   * `useStorage` at once.
+   * @since 1.3
+   */
+  storage?: StorageFixture;
+}
+
+/** A fake storage: values by scope, and a migration due when `from` < `to`. @since 1.3 */
+export interface StorageFixture {
+  window?: Record<string, WireValue>;
+  workspace?: Record<string, WireValue>;
+  package?: Record<string, WireValue>;
+  from?: number;
+  to?: number;
 }
 
 /** A fake program run: exit code 0 and nothing on stderr unless given. @since 1.1 */
@@ -111,7 +130,7 @@ export interface FetchFixture {
 export type AiFixture = ({ text: string } | { object: WireValue }) & { usage?: { input: number; output: number } };
 
 /** What `host.calls` records: the acts (not done) but the widget's own state, and what reaches outside (fetches, completions, programs; served from fixtures). */
-const records = (v: ApiVerb): boolean => (API[v].mode !== "read" && !v.startsWith("state.")) || API[v].needs === "net" || API[v].needs === "ai" || API[v].needs === "run";
+const records = (v: ApiVerb): boolean => (API[v].mode !== "read" && !v.startsWith("state.") && !v.startsWith("storage.")) || API[v].needs === "net" || API[v].needs === "ai" || API[v].needs === "run";
 /** The acts that ask the person (1.1): `approve` answers them. */
 const asks = (v: ApiVerb): boolean => API[v].mode === "confirm";
 
@@ -139,6 +158,10 @@ export interface FakeHost {
   deliver(msg: WidgetIn): void;
   /** Messages not yet delivered either way (render waits for none). */
   readonly inFlight: number;
+  /** 1.3: what the migration said (`migrated`), or null when none ran. */
+  readonly migrated: { ok: boolean; message?: string } | null;
+  /** 1.3: what `cmd.storage` holds now, by scope (`window` is the window's state). */
+  storage(scope: ApiStorageScope): Record<string, WireValue>;
 }
 
 const inScope = (q: ApiScopeQuery | null | undefined, wsId: string, item: { workspaceId: string | null }) => q?.scope === "all" || item.workspaceId === wsId;
@@ -152,8 +175,12 @@ function matches(q: ApiEventQuery | null | undefined, e: ApiEvent, wsId: string)
 /** Makes a fake core serving `data`. @since 1.0 */
 export function createHost(data: HostData = {}): FakeHost {
   const d: HostData = { ...data };
-  const state = new Map<string, WireValue>(Object.entries(data.state ?? {}));
+  const state = new Map<string, WireValue>(Object.entries({ ...data.state, ...data.storage?.window }));
+  const shared = { workspace: new Map(Object.entries(data.storage?.workspace ?? {})), package: new Map(Object.entries(data.storage?.package ?? {})) };
+  /** A scope's values: the window's are `state`. */
+  const kv = (scope: unknown): Map<string, WireValue> => (scope === "workspace" || scope === "package" ? shared[scope] : state);
   const histories = new Map<string, number[]>();
+  let migrated: { ok: boolean; message?: string } | null = null;
   const subs = new Map<number, { topic: ApiTopic; query: unknown }>();
   const calls: [string, ...unknown[]][] = [];
   const requests: [string, ...unknown[]][] = [];
@@ -177,7 +204,10 @@ export function createHost(data: HostData = {}): FakeHost {
   };
 
   /** A topic's data: what its verb answers. */
-  const topicData = (topic: ApiTopic, query: unknown): WireValue => SERVE[API_TOPIC[topic].verb]([query ?? null] as never) as WireValue;
+  const topicData = (topic: ApiTopic, query: unknown): WireValue => {
+    if (topic === "storage") return SERVE["storage.get"]([(query as ApiStorageQuery | null)?.scope, (query as ApiStorageQuery | null)?.key] as never) as WireValue;
+    return SERVE[API_TOPIC[topic].verb]([query ?? null] as never) as WireValue;
+  };
 
   const fetchOf = async (url: string, init: ApiFetchInit): Promise<ApiFetchResponse> => {
     const f = typeof d.fetch === "function" ? await d.fetch(url, init) : d.fetch?.[url];
@@ -237,11 +267,7 @@ export function createHost(data: HostData = {}): FakeHost {
     "notify.send": done,
     "state.get": ([key]) => state.get(String(key)) ?? null,
     "state.set": ([key, value]) => (state.set(String(key), value as WireValue), null),
-    "state.history": ([key, value, max]) => {
-      const h = [...(histories.get(String(key)) ?? []), ...(typeof value === "number" ? [value] : [])].slice(-(max ?? 60));
-      histories.set(String(key), h);
-      return h;
-    },
+    "state.history": ([key, value, max]) => history(`window\n${String(key)}`, value, max),
     "net.fetch": ([url, init]) => fetchOf(String(url), init ?? {}),
     "ai.complete": ([req]) => aiOf(req as ApiCompletionRequest),
     "agents.start": () => {
@@ -275,7 +301,27 @@ export function createHost(data: HostData = {}): FakeHost {
     "media.get": () => d.playing ?? null,
     "media.control": done,
     "clipboard.write": done,
+    // 1.3
+    "storage.get": ([scope, key]) => kv(scope).get(String(key)) ?? null,
+    "storage.set": ([scope, key, value]) => (store(scope, String(key), value ?? null), null),
+    "storage.delete": ([scope, key]) => (store(scope, String(key), null), null),
+    "storage.keys": ([scope, prefix]) => [...kv(scope).keys()].filter((k) => k.startsWith(prefix ?? "")).sort(),
+    "storage.history": ([scope, key, value, max]) => history(`${String(scope ?? "window")}\n${String(key)}`, value, max),
   };
+  function history(at: string, value: unknown, max: unknown): number[] {
+    const all = [...(histories.get(at) ?? []), ...(typeof value === "number" ? [value] : [])].slice(-1000);
+    histories.set(at, all);
+    return all.slice(-(Number(max) || 60));
+  }
+  /** A set (or a delete, null), and the live `storage` subscriptions of its key told. */
+  function store(scope: unknown, key: string, value: WireValue | null): void {
+    if (value === null) kv(scope).delete(key);
+    else kv(scope).set(key, value);
+    for (const [id, s] of subs) {
+      const q = s.query as ApiStorageQuery | null;
+      if (s.topic === "storage" && q?.scope === scope && q?.key === key) deliver({ kind: "event", sub: id, data: value });
+    }
+  }
   const serve = (method: string, p: unknown[]): unknown => {
     if (!Object.hasOwn(SERVE, method)) throw Object.assign(new Error(`This cmd doesn't serve ${method}.`), { code: "unknown" });
     return (SERVE[method as ApiVerb] as (p: unknown[]) => unknown)(p);
@@ -285,7 +331,13 @@ export function createHost(data: HostData = {}): FakeHost {
     messages.push(m);
     switch (m.kind) {
       case "hello":
-        deliver({ kind: "ready", env: env(), config: d.config ?? {}, state: Object.fromEntries(state) });
+        {
+          const { from = 1, to = 1 } = d.storage ?? {};
+          deliver({ kind: "ready", env: env(), config: d.config ?? {}, state: Object.fromEntries(state), ...(from < to ? { migrate: { from, to } } : {}) });
+        }
+        return;
+      case "migrated":
+        migrated = { ok: m.ok, ...(m.message ? { message: m.message } : {}) };
         return;
       case "call": {
         requests.push([m.method, ...m.params]);
@@ -326,10 +378,12 @@ export function createHost(data: HostData = {}): FakeHost {
     subscriptions: () => [...subs].map(([id, s]) => ({ id, ...s })),
     set(next) {
       Object.assign(d, next);
+      // Another window's sets: each value (null deletes) reaches this one's useStorage.
+      for (const scope of ["window", "workspace", "package"] as const) for (const [k, v] of Object.entries(next.storage?.[scope] ?? {})) store(scope, k, v);
       if (next.config) deliver({ kind: "config", config: next.config });
       if (next.env) deliver({ kind: "env", env: env() });
       // A topic's data is under its name; events come through emit().
-      const changed = new Set(API_TOPICS.filter((t) => t !== "events" && t in next));
+      const changed = new Set(API_TOPICS.filter((t) => t !== "events" && t !== "storage" && t in next));
       if (next.workspace) for (const t of ["agents", "terminals", "windows"] as const) changed.add(t);
       for (const [id, s] of subs) if (changed.has(s.topic)) deliver({ kind: "event", sub: id, data: topicData(s.topic, s.query) });
     },
@@ -355,6 +409,10 @@ export function createHost(data: HostData = {}): FakeHost {
       },
     },
     deliver,
+    get migrated() {
+      return migrated;
+    },
+    storage: (scope) => Object.fromEntries(kv(scope)),
     get inFlight() {
       return inFlight + pending;
     },

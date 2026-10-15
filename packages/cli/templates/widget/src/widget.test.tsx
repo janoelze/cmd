@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
-import Terminals, { visible } from "./widget.tsx";
+import Terminals, { togglePin, visible } from "./widget.tsx";
 
 const { pane } = fixtures;
 const terminals = [pane({ title: "zsh" }), pane({ title: "dev server", command: "pnpm dev", cwd: "/Users/me/src/api" }), pane({ title: "tests", command: "pnpm test" })];
@@ -53,5 +53,18 @@ describe("__TITLE__", () => {
 
   it("sorts and filters as a plain function", () => {
     expect(visible(terminals, "", "busy").map((t) => t.title)).toEqual(["dev server", "tests"]);
+    expect(visible(terminals, "", "busy", ["pnpm test"]).map((t) => t.title)).toEqual(["tests", "dev server"]);
+    expect(togglePin(togglePin([], "pnpm dev"), "pnpm dev")).toEqual([]);
+  });
+
+  it("pins a command for the whole widget, and shows a pin set in another window", async () => {
+    const host = createHost({ terminals });
+    const tree = await render(<Terminals />, host);
+    await tree.choose(tree.rows()[1]!, "Pin Command"); // "tests", after "dev server"
+    expect(tree.rows()[0]).toHaveTitle("tests");
+    expect(host.storage("package")).toEqual({ pinned: ["pnpm test"] });
+    host.set({ storage: { package: { pinned: ["pnpm dev"] } } }); // another window's pin
+    await tree.idle();
+    expect(tree.rows()[0]).toHaveTitle("dev server");
   });
 });

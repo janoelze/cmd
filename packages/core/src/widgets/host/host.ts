@@ -13,6 +13,8 @@
 // waiting for a grant is asked once, not per window (asking(), widget.ask: the grants sheet).
 // The window's API (api/adapter.ts) is made at its start with a grant, before hello, so a frame's
 // page (frame.ts) uses the process's adapter, Deno or not; it ends with the process or the window.
+// Ready waits for the package's storage (1.3): a migration due runs in the first window to start,
+// which gets `migrate` and answers `migrated` (one that throws stops it); the others wait.
 
 import { API_ELEMENT_NAMES, WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
@@ -25,14 +27,13 @@ import { cmdVersion, type PackageWidget, type WidgetPackage } from "../package.t
 import type { WidgetPackages } from "../packages.ts";
 import { PackageConfig } from "../config.ts";
 import { HostConnection, type ConnectionTimes } from "./connection.ts";
-import type { ExitInfo, RuntimeProcess, WidgetRuntime } from "./runtime.ts";
-import { LogLimit } from "./log-limit.ts";
-import { WindowPress } from "./press.ts";
+import type { ExitInfo, WidgetRuntime } from "./runtime.ts";
 import { HOST_TIMES, WIDGET_MEMORY_MB } from "../limits.ts";
 import { loadError, realDir } from "./load-error.ts";
 import type { ActDeps } from "../api/act.ts";
-import { TreeState } from "./tree.ts";
+import { newInstance, type Instance } from "./instance.ts";
 import { WidgetFrames } from "./frame.ts";
+import type { WidgetStorage } from "../storage.ts";
 
 const log = logger("widgets");
 
@@ -62,36 +63,8 @@ export interface HostOptions {
   onAsk?: () => void;
   /** The tools' approvals and board marks, which widgets' acts ask and show through (none: acts are refused). */
   acts?: () => ActDeps | null;
-}
-
-interface Instance {
-  windowId: WindowId;
-  kind: string;
-  pkg: WidgetPackage | null;
-  widget: PackageWidget | null;
-  status: WidgetHostStatus;
-  tree: TreeState;
-  proc: RuntimeProcess | null;
-  token: string | null;
-  conn: HostConnection | null;
-  /** The window's API, from its start with a grant (frames use it before hello, and without a process). */
-  adapter: WidgetApi | null;
-  /** The process said hello: the wire is open. */
-  hello: boolean;
-  subs: Map<number, () => void>;
-  crashes: number[];
-  /** Why we're stopping it ourselves (null: an exit is a crash). */
-  stopping: string | null;
-  timers: { stop?: NodeJS.Timeout; restart?: NodeJS.Timeout; hello?: NodeJS.Timeout };
-  env: Pick<WidgetEnv, "theme" | "size" | "placement">;
-  config: string;
-  /** The person's last press (press.ts). */
-  press: WindowPress;
-  permissions: WidgetPermissions | null;
-  /** The widget's error before it said hello (its main didn't import): an exit then is a load failure, not a crash. */
-  loadError: string | null;
-  /** Its console as `widget.log`, about 50 lines a second at most (log-limit.ts). */
-  logs: LogLimit;
+  /** Packages' storage (widgets/storage.ts) and whose rows a package's are (library.ts storageOwner); none: each window's in memory. */
+  storage?: { store: WidgetStorage; owner: (pkg: WidgetPackage) => string };
 }
 
 export class WidgetHost {
@@ -296,29 +269,7 @@ export class WidgetHost {
   // ── lifecycle ──────────────────────────────────────────
 
   #open(w: AppWindow): void {
-    const inst: Instance = {
-      windowId: w.id,
-      kind: w.kind,
-      pkg: null,
-      widget: null,
-      status: { kind: "status", state: "starting" },
-      tree: new TreeState(),
-      proc: null,
-      token: null,
-      conn: null,
-      adapter: null,
-      hello: false,
-      subs: new Map(),
-      crashes: [],
-      stopping: null,
-      timers: {},
-      env: { theme: this.#core.settings.settings["theme.appearance"] === "light" ? "light" : "dark", size: "regular", placement: "board" },
-      config: "",
-      press: new WindowPress(`${w.kind} ${w.id}`),
-      permissions: null,
-      loadError: null,
-      logs: new LogLimit((l) => this.#core.broadcast({ type: "widget.log", windowId: w.id, ...l })),
-    };
+    const inst = newInstance(w, this.#core.settings.settings["theme.appearance"] === "light" ? "light" : "dark", (l) => this.#core.broadcast({ type: "widget.log", windowId: w.id, ...l }));
     this.#all.set(w.id, inst);
     this.#launch(inst);
   }
@@ -386,6 +337,8 @@ export class WidgetHost {
     switch (m.kind) {
       case "hello":
         return this.#hello(inst, m);
+      case "migrated":
+        return this.#migrated(inst, m);
       case "tree":
         if (!Array.isArray(m.nodes) || typeof m.rev !== "number") return;
         inst.tree.setTree(m);
@@ -428,12 +381,26 @@ export class WidgetHost {
     if (inst.timers.hello) clearTimeout(inst.timers.hello);
     inst.loadError = null; // it loaded: an error before hello didn't stop it, and a later exit is a crash
     inst.hello = true;
-    const w = this.#core.windows.others().find((x) => x.id === inst.windowId);
-    const config = this.#config(inst, w);
-    inst.config = JSON.stringify(config);
-    inst.conn!.send({ kind: "ready", env: this.#env(inst), config, state: ((w?.state.kv as Record<string, WireValue> | undefined) ?? {}) });
-    log.info(`widget ${pkg.name} started (api ${m.api})`, { widget: inst.widget!.id, window: inst.windowId, version: pkg.version });
-    this.#status(inst, { kind: "status", state: "running" });
+    const conn = inst.conn;
+    void inst.adapter.migrateStart().then((migrate) => {
+      if (inst.conn !== conn || !conn) return; // it stopped while another window migrated
+      const w = this.#core.windows.others().find((x) => x.id === inst.windowId);
+      const config = this.#config(inst, w);
+      inst.config = JSON.stringify(config);
+      conn.send({ kind: "ready", env: this.#env(inst), config, state: (w?.state.kv as Record<string, WireValue> | undefined) ?? {}, ...(migrate ? { migrate } : {}) });
+      log.info(`widget ${pkg.name} started (api ${m.api})`, { widget: inst.widget!.id, window: inst.windowId, version: pkg.version, ...(migrate ? { migrate } : {}) });
+      this.#status(inst, { kind: "status", state: "running" });
+    });
+  }
+
+  /** The process's migration ended: kept, or it threw (or keeping it failed) and the window stops, its data as it was. */
+  #migrated(inst: Instance, m: Extract<WidgetOut, { kind: "migrated" }>): void {
+    const error = inst.adapter?.migrateEnd(m.ok === true) ?? null;
+    if (m.ok === true && !error) return;
+    const detail = `${String(m.message ?? error ?? "").slice(0, 500) || "The migration failed."} Its stored data is as it was.`;
+    log.warn(`widget ${inst.pkg?.name}: migrating its storage failed: ${detail}`);
+    this.#stop(inst, null);
+    this.#status(inst, { kind: "status", state: "stopped", reason: "couldn't update its stored data", detail });
   }
 
   async #call(inst: Instance, id: number, method: string, params: WireValue[]): Promise<void> {
@@ -546,7 +513,9 @@ export class WidgetHost {
   #api(inst: Instance, pkg: WidgetPackage, widget: PackageWidget, permissions: WidgetPermissions): WidgetApi {
     const workspaceId = () => this.#core.windows.others().find((w) => w.id === inst.windowId)?.workspaceId ?? "";
     const host = this; // tests set fetchImpl late
-    return widgetApi(this.#core, { windowId: inst.windowId, workspaceId, pkg, widget, permissions, press: inst.press, acts: () => this.#o.acts?.() ?? null, secret: (key) => this.config.secrets(pkg.name).get(widget.id)[key] ?? null, aiUsage: this.#aiUsage, get fetchImpl() { return host.fetchImpl; } });
+    const st = this.#o.storage;
+    const storage = st ? { store: st.store, owner: st.owner(pkg), declared: pkg.storage?.version ?? 1 } : undefined;
+    return widgetApi(this.#core, { windowId: inst.windowId, workspaceId, pkg, widget, permissions, press: inst.press, acts: () => this.#o.acts?.() ?? null, secret: (key) => this.config.secrets(pkg.name).get(widget.id)[key] ?? null, aiUsage: this.#aiUsage, storage, get fetchImpl() { return host.fetchImpl; } });
   }
 
   /** A Frame page the tree names that isn't in the package: one line in the widget's log. */

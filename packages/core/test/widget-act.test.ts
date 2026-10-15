@@ -375,7 +375,7 @@ describe("acting widgets (API 1.1)", () => {
   it("serves a process built for 1.0 unchanged", async () => {
     const t = await setup({ pkgs: [{ permissions: { workspace: ["read"] } }] });
     // The fake process says hello with minor 0 (fake-widget-runtime.ts); its reads work and it is told what 1.2 serves.
-    expect(t.proc.got("ready")[0]!.env).toMatchObject({ api: { major: 1, minor: 2 }, verbs: expect.arrayContaining(["agents.list", "agents.start", "run.exec"]) });
+    expect(t.proc.got("ready")[0]!.env).toMatchObject({ api: { major: 1, minor: 3 }, verbs: expect.arrayContaining(["agents.list", "agents.start", "run.exec"]) });
     expect(await t.ok("workspace.get")).toMatchObject({ id: t.ws.id });
     expect(await t.ok("state.set", "k", 1)).toBeNull();
   });
@@ -383,7 +383,7 @@ describe("acting widgets (API 1.1)", () => {
   it("serves a process built for 1.1 unchanged, and tells it the elements this cmd draws", async () => {
     const t = await setup({ minor: 1, pkgs: [{ permissions: { workspace: ["read"], act: ["terminals.open"] } }] });
     const env = t.proc.got("ready")[0]!.env;
-    expect(env).toMatchObject({ api: { major: 1, minor: 2 }, verbs: expect.arrayContaining(["terminals.open", "run.exec"]) });
+    expect(env).toMatchObject({ api: { major: 1, minor: 3 }, verbs: expect.arrayContaining(["terminals.open", "run.exec"]) });
     expect(env.elements).toEqual(expect.arrayContaining(["Button", "ListRow", "DataGrid", "TimeBars", "StatusLine"]));
     // It's told of 1.2's verbs too (cmd.env.has), and needs none of them.
     expect(env.verbs).toEqual(expect.arrayContaining(["actions.stop", "terminals.usage", "clipboard.write"]));

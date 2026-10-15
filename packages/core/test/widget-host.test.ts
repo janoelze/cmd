@@ -55,7 +55,7 @@ describe("the widget host", () => {
     const ready = await rt.procs[0]!.next("ready");
     expect(ready.config).toEqual({ repo: "cmd" }); // the default; the secret field never
     // The fake process says it was built for 1.0 (minor 0): a 1.0 package runs unchanged on a 1.2 core, told what it serves.
-    expect(ready.env).toMatchObject({ api: { major: 1, minor: 2 }, size: "regular", placement: "board" });
+    expect(ready.env).toMatchObject({ api: { major: 1, minor: 3 }, size: "regular", placement: "board" });
     expect(ready.env.verbs).toContain("agents.list");
     expect(ready.env.verbs).toContain("agents.start");
     expect(trees(a.id).map((m) => m.kind === "status" && m.state)).toEqual(["starting", "running"]);

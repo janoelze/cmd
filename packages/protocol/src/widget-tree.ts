@@ -14,13 +14,14 @@
 import type { ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
+import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, WidgetMigrated } from "./widget-tree-1.3.ts";
 
 // ── versions ────────────────────────────────────────────
 
 /** The API major this file describes. */
 export const WIDGET_API = 1;
-/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`; 1.2 the window-content elements and the built-ins' verbs (docs/57). */
-export const WIDGET_API_MINOR = 2;
+/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`; 1.2 the window-content elements and the built-ins' verbs (docs/57); 1.3 storage in three scopes (`cmd.storage`). */
+export const WIDGET_API_MINOR = 3;
 
 // ── the tree ────────────────────────────────────────────
 
@@ -154,7 +155,8 @@ export interface WidgetError {
   componentStack: string | null;
 }
 
-export type WidgetOut = WidgetHello | WidgetTree | WidgetPatch | WidgetCall | WidgetSubscribe | WidgetUnsubscribe | WidgetLog | WidgetError;
+/** 1.3: `migrated` answers a `ready` with `migrate` (widget-tree-1.3.ts). */
+export type WidgetOut = WidgetHello | WidgetTree | WidgetPatch | WidgetCall | WidgetSubscribe | WidgetUnsubscribe | WidgetLog | WidgetError | WidgetMigrated;
 
 /** The answer to hello: what the process renders with before anything else. */
 export interface WidgetReady {
@@ -164,6 +166,8 @@ export interface WidgetReady {
   config: Record<string, WireValue>;
   /** This window's stored state (`cmd.state`, `useStoredState`), so the first render has it. */
   state: Record<string, WireValue>;
+  /** 1.3: the package's stored data is older than package.json's `cmd.storage.version`: run the migration, then say `migrated`, before anything reads storage. */
+  migrate?: ApiStorageMigrate;
 }
 
 /** A call's answer. A refused call (no permission, a verb this core lacks) is `ok: false` and the process lives on. */
@@ -274,6 +278,12 @@ export interface ApiMethods {
   "media.get": { params: []; result: ApiNowPlaying | null };
   "media.control": { params: [command: ApiMediaCommand | null, opts?: { seek?: number }]; result: null };
   "clipboard.write": { params: [text: string]; result: null };
+  // 1.3 (widget-tree-1.3.ts): the scope names where; the core knows which window, workspace and package.
+  "storage.get": { params: [scope: ApiStorageScope, key: string]; result: WireValue };
+  "storage.set": { params: [scope: ApiStorageScope, key: string, value: WireValue | undefined]; result: null };
+  "storage.delete": { params: [scope: ApiStorageScope, key: string]; result: null };
+  "storage.keys": { params: [scope: ApiStorageScope, prefix?: string]; result: string[] };
+  "storage.history": { params: [scope: ApiStorageScope, key: string, value?: number | null, max?: number]; result: number[] };
 }
 
 /** ApiMethods has exactly the verbs of API_VERBS (tsc fails here otherwise). */
@@ -289,6 +299,7 @@ export interface TopicQuery {
   git: null;
   actions: null;
   terminalUsage: ApiUsageQuery;
+  storage: ApiStorageQuery;
 }
 export interface TopicData {
   workspace: ApiWorkspace;
@@ -300,6 +311,8 @@ export interface TopicData {
   git: ApiGitStatus | null;
   actions: ApiAction[];
   terminalUsage: ApiTerminalUsage[];
+  /** The key's value now, or null. */
+  storage: WireValue;
 }
 
 // ── the data, in the product's words ────────────────────
@@ -563,3 +576,4 @@ export type ApiTone = "neutral" | "accent" | "success" | "warning" | "danger";
 export * from "./widget-elements.ts";
 export * from "./widget-verbs.ts";
 export * from "./widget-tree-1.2.ts";
+export * from "./widget-tree-1.3.ts";

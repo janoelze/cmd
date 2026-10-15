@@ -6,7 +6,7 @@
 // as it does for the widget's process. The verbs and topics come in __CMD_FRAME__ from the
 // protocol's registry (API_VERBS, API_TOPICS), so the page's `cmd` has every verb the core
 // serves under its own name (cmd.agents.list(), cmd.net.fetch(), cmd.run("gh", …)), nothing
-// written here per verb. Its window's state, config and theme come with the first bytes and
+// written here per verb (but storage's scopes, 1.3). Its window's state, config and theme come with the first bytes and
 // again as they change. A Frame element's page (API 1.2) also has the element's `data` and
 // sends values to the widget's process with `cmd.post(value)` (its onMessage).
 //
@@ -97,6 +97,17 @@
   }
   // Each live topic: cmd.agents.subscribe(fn) or (query, fn), as cmd.events.subscribe is in a widget's process.
   for (const topic of topics) (cmd[topic] ??= {}).subscribe = (query, fn, onError) => (typeof query === "function" ? subscribe(topic, null, query, fn) : subscribe(topic, query, fn, onError));
+  // 1.3: cmd.storage.window, .workspace and .package, each the storage verbs in its scope, its keys live.
+  if (cmd.storage?.get)
+    for (const scope of ["window", "workspace", "package"])
+      cmd.storage[scope] = {
+        get: (key) => call("storage.get", [scope, key]),
+        set: (key, value) => call("storage.set", [scope, key, value ?? null]).then(() => {}),
+        delete: (key) => call("storage.delete", [scope, key]).then(() => {}),
+        keys: (prefix) => call("storage.keys", prefix === undefined ? [scope] : [scope, prefix]),
+        history: (key, value, max) => call("storage.history", max === undefined ? [scope, key, value ?? null] : [scope, key, value ?? null, max]),
+        subscribe: (key, fn, onError) => subscribe("storage", { scope, key: String(key) }, fn, onError),
+      };
   // cmd.run is a function too: cmd.run("gh", ["run", "list"]).
   if (cmd.run?.exec) cmd.run = Object.assign((program, args, opts) => cmd.run.exec(program, args, opts), cmd.run);
 
