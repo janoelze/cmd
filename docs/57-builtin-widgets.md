@@ -1,6 +1,6 @@
 # Built-in widgets as packages
 
-**Status:** partly built: a brief for porting cmd's native widgets to widget packages (docs/56) and shipping them as cmd's standard set. Agents, Recent Commands and Countdown are ported; API 1.2's elements are built, and wave 1 (Event Log, Run Scripts) is ported on them; API 1.2's verbs were decided by Jan (2026-10-15) and are built, and wave 1 uses them; wave 2 is ported; wave 3 (frames) was tried and both stay native, each with a 1.3 candidate.
+**Status:** partly built: a brief for porting cmd's native widgets to widget packages (docs/56) and shipping them as cmd's standard set. Agents, Recent Commands and Countdown are ported; API 1.2's elements are built, and wave 1 (Event Log, Run Scripts) is ported on them; API 1.2's verbs were decided by Jan (2026-10-15) and are built, and wave 1 uses them; wave 2 is ported; wave 3 (frames) was tried and both stay native, each with a 1.3 candidate. A parity audit (2026-10-15) compared each port with its native view and proposes API 1.3 to close the gaps, with a build plan in parallel branches.
 
 Date: 2026-10-15. Read first: [56-widgets-v3.md](56-widgets-v3.md) (the package format, the API, "Built-ins and dogfooding", the decisions table, and the as-built notes of phases 1–4), [16-widgets.md](16-widgets.md) (the Widget Library), [40-window-design.md](40-window-design.md) and the `window-design` skill.
 
@@ -147,7 +147,7 @@ Wave 1 on 1.2: Run Scripts (`actions` 1.1.0, `act: ["actions.run", "actions.stop
 
 ## 1.3 candidates
 
-What the wave 2 ports wanted and the API doesn't have. None is built; each port works around it or leaves the feature out, as said.
+What the wave 2 ports wanted and the API doesn't have. None is built; each port works around it or leaves the feature out, as said. The parity audit below folds each into its 1.3 list or rejects it.
 
 | Candidate | Wanted by | Today |
 |---|---|---|
@@ -190,6 +190,228 @@ The Visualizer and YouTube as `"surface": "frame"` packages on the one frame hos
 | `cmd.net.fetch("https://www.youtube.com/oembed…")` | 200 | YouTube: the title is possible |
 
 So a **Visualizer** package would draw its presets moving to silence (or to a stream of its own, as the radio example plays one): not its job, which is moving to what the person hears. A **YouTube** package could show a video's thumbnail and title and open it on YouTube after a press, but never play it in the window. Neither is ported; neither sandbox nor CSP was changed; the native views stay as they are. What each would need is a 1.3 candidate above (an audio-levels feed into frames; a player element the app draws). The e2e `widget-frame` scenario now checks the sandbox keeps those out (no microphone, no system audio, no web page in a frame), so loosening it is a decision, not an accident.
+
+## Parity audit (2026-10-15)
+
+Jan wants the ports to match the native views, not just do their job, and the API to give a widget what that takes. Every pair was compared in its code (what the native reads and draws, how it responds to its size, its interactions) and side by side in the UI Workbench, at the same states and sizes, in Light and Dark: `.cmd-dev/shots/parity/<widget>/{native,package}-<variant>-{light,dark}.png` in the `widget-parity` worktree (246 shots; each `Sizes` shot is the 320×520, 560×460 and 900×560 windows `cmd widget preview` uses). Commands, Event Stream and Notifications have no native story, so those three were compared from their code only.
+
+Each difference has a class: **(a)** an element or element prop is missing, **(b)** layout or size awareness, **(c)** a verb, a live topic or a data field is missing, **(d)** a port bug that today's API can fix, **(e)** intentional, with the reason it would be wrong for a widget to match. "Fix" names the 1.3 addition (numbered as in the list below) or the change to the port.
+
+### Per widget
+
+**Now Playing → Media Controls**
+
+| Difference | Class | Fix |
+|---|---|---|
+| No cover: a music note stands in, though `ApiNowPlaying.artwork` carries it | a | `Picture` (A5), with its `icon` placeholder for the native "no cover" box in the track's colour |
+| Three layouts by size: short (< 280 px tall) puts a 44 px thumbnail in front of the title with the player at the bottom; medium lets the cover fill the room above the track; large (≥ 340×440) is an iPod column (cover at 80% of the width up to 360 px, centred title, controls spread with `--space-6`). The package has one layout, a stack at the top, empty below | b | `Adapt`/`Case` (A1) for the three layouts; `Picture size="fill"` (A5) for "the cover takes what's left" |
+| The title grows with the column (`clamp(--text-lg, column / chars, 0.8 × --text-display)`) | b | `Text fit` (A3) |
+| Controls: spread across the width when small, centred with a wide gap when large; the package centres three `lg` IconButtons always | b | inside each `Case`: `Inline justify="between"`, or centred |
+| A change of track or a pause from elsewhere shows at once natively, up to 2 s late here | c | `media` topic, `useMedia()` (C1) |
+| A footer "Playing in Spotify" the native doesn't have | d | drop it, or keep it as the one deliberate addition; the native says the app nowhere |
+| The `Sizes` story draws every box at the same size class (the fake host's `env.size` is "regular"), so the narrow box shows the title-bar status it would hide | d | tooling: the fake host's `Sizes` passes each box its own `env` (A2) |
+
+**Timer → Countdown**
+
+| Difference | Class | Fix |
+|---|---|---|
+| A ring (`Dial`) that empties as it runs and fills the window, the time inside sized to it (`min(15cqw, 15cqh)`); the package has display text and a `Progress` bar at the top of the body, with the room below empty | a, b | `Dial` (A6) |
+| Click the time to type a length ("10", "1:30", "90s"); the package has a `ToolbarField` for it instead | a | `Dial editable` + `onSubmit` (A6); then the toolbar loses the field |
+| Done in the `needs` colour; the package's is `warning` | a | `Dial tone="needs"` (A6) |
+| The body is centred in the window; `Stack` can't centre on its main axis | a | `Stack justify` (A3); moot once it's a `Dial` |
+| A title menu "Options" (Pause, Reset) the native window doesn't have | d | move them to `Window actions` (the window's context menu), no `menu` |
+
+**Agent Activity → Agents**
+
+| Difference | Class | Fix |
+|---|---|---|
+| One ranked list (waiting, working, finished-unseen, the rest) with no headings; the package has three headed sections and loses the "unseen" rank | d | one `List` sorted by the same rank (`bucket` is there: "needs", "unseen", "rest") |
+| A row's end is two dim lines, where it works over how long ago, right-aligned; the package puts the place after the title and the age in a `Chip` | d | `ListRowEnd` > `Stack align="end" gap={0}` > two `Text size="xs" tone="dim"` |
+| The place's tooltip (the full folder or worktree) | d | `ListRow tip={agent.cwd}` |
+| With All Workspaces the place says which workspace | c | `workspaces` topic (C6) |
+| A click marks the clicked agent seen (a subagent too); the package selects the host's window, which marks only the host | c | `agents.select(id)` (C9) |
+| Empty: a "New Claude Session" button | c | `agents.start` without a prompt (C10) |
+
+**Commands → Recent Commands** (ported on 1.1 and not moved to 1.2)
+
+| Difference | Class | Fix |
+|---|---|---|
+| A list to the window's edges (`Panel`/`PanelBody`); the package's sits in an inset `View` | d | `Panel` > `PanelBody` (1.2) |
+| Run Again on hover (`ListRowActions`) | d | `ListRowActions` > `IconButton` (1.2) |
+| Run Again types the command into its own terminal and runs it, when that terminal is open and at a prompt; the package opens a new terminal with it typed, not run | c | `terminals.rerun(key)` (C11) |
+| Copy Command and New Terminal Here in a row's menu | d | `cmd.clipboard.write` (1.2) and `cmd.terminals.open({ cwd })` |
+| The place chip is the project's hue with the worktree or branch (`whereOf`); the package's is a neutral chip with the branch | a | `fmt.hue(name)` (A11), the app's `projectHue`; the place from the event's `git` |
+| The age is a `ListValue`; the package's is a `Chip` | d | `ListValue` |
+| All Workspaces adds the workspace's name to the detail | c | `workspaces` topic (C6) |
+| The README has no "How it differs" section | d | write it |
+
+**Event Stream → Event Log**
+
+| Difference | Class | Fix |
+|---|---|---|
+| Edge-to-edge `Panel` | d | `Panel` > `WindowToolbar` + `PanelBody` |
+| The classes are in the title menu, whose button says "All Events" or "3 hidden"; the package's title menu says "This Workspace" and the classes are a toolbar `Show` menu | a | `Window menuLabel` (A7); then classes and scope share the title menu as natively |
+| A chip says the class's title ("Agents") in `projectHue(class)`; the package's says the class id in its own hash's hue | d, a | `titleOf(fam)`; `fmt.hue` (A11) |
+| "recorded again ×n" in the detail | d | count the events per key before `newestFirst` drops them |
+| Events of no workspace (the data layer's own) are shown | e | a widget reads its workspace's, or every workspace's with `workspace: ["all"]`, never what belongs to none: matching would hand any widget with an events grant cmd's own records |
+
+**Notifications → Notification Log**
+
+| Difference | Class | Fix |
+|---|---|---|
+| Edge-to-edge `Panel` | d | `Panel` > `PanelBody` |
+| A click goes to the window a notification is about (a widget's), and its menu says Show Window | c | `ApiEvent.windowId` (C8) |
+| Notifications about nothing in particular (the CLI's) show in every workspace | e | the same rule as Event Log: no workspace, no widget |
+| A terminal moved since counts for the workspace it is in now, not the one it was sent in | e | the log's `workspaceId` is what was recorded; rewriting it per read would make two readers disagree |
+| Clear clears the app's list for every workspace; the package's Clear is its window's own | e | decided for 1.2 (no `notify.clear`). With `cmd.storage` (the other 1.3 branch) its "cleared at" can move to the `package` scope, which clears every Notification Log at once, the closest a widget can come to the native without a verb |
+
+**Resources → Terminal Usage**
+
+| Difference | Class | Fix |
+|---|---|---|
+| The sparkline is inside the stat's tile, in the chart palette (CPU series 0, memory series 1, green); the package's sits under the tile in accent and neutral | a | `Stat` children and `Sparkline series` (A8) |
+| A terminal's name and icon are the sidebar's (an agent's name and its kind's icon: "Codex · sqlite viewer", ✦); the package's are the terminal's title and a generic `sparkles` | d | `useAgents` by `agentId`: `agent.name`, `agent.icon` |
+| Other workspaces' terminals say the workspace's name; the package's say their folder | c | `workspaces` topic (C6) |
+| A "cmd" pane: the app and the background process | c | `app.usage` (C12) |
+| A Task Manager link in the footer | c | `app.open("taskManager")` (C13), Jan to decide |
+| The package's header sorts; the native is always busiest first | e | an improvement, kept: the default without a sort is the native order |
+
+**Stats → Usage Stats**
+
+| Difference | Class | Fix |
+|---|---|---|
+| A tile's change is the kit's `Delta` (▲ 22%, green or red by the stat's `good`, dim when flat); the package's is "+100%" text in a tone | a | `Stat trend` + `good` (A8) |
+| The sparkline is inside the tile, as wide as it | a | `Stat` children (A8) |
+| The "cmd" pane (core memory, stalls, the log's size) | d | `stats.query` can read them today: `events: ["system"]` (a declarable class) and `workspace: ["all"]` for a stat with no workspace; add both grants and the pane |
+| In This Workspace the native page still shows your active time and when you work (they have no workspace) | d | query `you.active` with `scope: "all"` beside the workspace's stats (the package already holds `workspace: ["all"]`) |
+| A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | a chart's `delta` and `note` (A9); `quantiles` (C3) |
+| Counted again when the core says a stat it shows changed; the package follows `command` and `agent.stop` events and a minute's timer | c | `stats` topic, `useStat(query)` (C2) |
+| A detail ranks by the stat's "many" dimension ("By command"); `ApiStatInfo.dims` doesn't say which | c | `dims[].many` and `kind` (C3) |
+| "Updated" is when cmd counted (`asOf`); the package's is when it asked | c | `asOf` (C3) |
+| The package keeps its own copy of the Stats window's formatters | a | `fmt.value`, `fmt.delta` (A11) |
+
+**Journal → Work Log**
+
+| Difference | Class | Fix |
+|---|---|---|
+| Writes the days that are stale when it opens ("Writing up what happened…"), Write Again on today's heading, and an empty state that sets up AI | c | `journal.write` (C5) and `app.open("settings:ai")` (C13), both Jan's call; without them the package stays a reader that points at the Journal |
+| "This week" above the days: the week's headline and threads | c | `journal.week()` (C4) |
+| All Workspaces, with a project chip per entry when there is more than one | c | `journal.days({ scope: "all" })` and `ApiJournalEntry.project` (a folder's name, never a path) (C4); `fmt.hue` (A11) |
+| Reads again when something it reads is recorded, and at the day's turn; the package every 5 minutes | c | `journal` topic, `useJournal()` (C4) |
+| A picked bar in the ribbon scrolls its entry into view | a | `reveal` on `TimelineEntry` (A10) |
+| The title menu says the scope; the package's says "Options" (Read Again) | d | Read Again as the native's small `IconButton` on Today's heading; the title menu becomes the scope once C4 exists |
+
+**Workspace Actions → Run Scripts**
+
+| Difference | Class | Fix |
+|---|---|---|
+| The title menu's button names the folder (and the worktree's branch); its menu follows the selected terminal's checkout, lists the repository's worktrees with what runs in each, or uses the workspace's folder | a, c | `Window menuLabel` (A7); `useActions({ root })` for a worktree of the workspace's repository (C14), the worktrees from `cmd.git.worktrees` |
+| Sections fold (a click on the heading), packages and More start folded, kept per window | d | `ListSection open` + `onToggle`, the keys in `useStoredState` |
+| From Your History ("12× in this folder", a clock icon), Suggested (from the README), and More (hidden ones) | c | `ApiAction.source`, `hidden`, `history`, and `include` (C14) |
+| A recipe that needs arguments is typed into a new terminal ("Type in Terminal", a text cursor icon) | c | `ApiAction.args`; `actions.run` types it (C14) |
+| Run in New Terminal | c | `actions.run(name, { fresh })` (C14) |
+| A risky action asks with the window's own sheet; the package lists it dimmed under "Run From a Terminal" and can't run it | c | `actions.run` of a risky action asks every time, never kept, instead of refusing (C14), Jan to decide |
+| Stop stops at once | e | acts from a widget follow the person's levels; at a level that allows stopping, a built-in stops without a sheet too |
+| Pin to Top | e | `actions.pin` was declined for 1.2 (Jan); revisit only with the rest of C14 |
+| Describe with AI and Open Dev Servers in a Browser (app settings) in the menu | e | a widget never changes cmd's settings: it would be the one door from a package into every window's behaviour |
+| The tooltip: command → script, the file and line it comes from, "Asks before it runs"; Open <file> in the menu | c | `ApiAction.script`, `source` (C14); `windows.open` of the file |
+| "in <branch>": the same action running in another worktree, a link to its terminal | c | `ApiAction.elsewhere` (C14) |
+| A callout for a source file that can't be read; "Describing actions…" with a spinner, or "Set up AI" in the footer | c | `useActionsInfo()` (C14); `app.open("settings:ai")` (C13) |
+| The footer names the branch and folder when they aren't the workspace's | c | `useActionsInfo()` (C14) |
+| How long a run took comes from the command events of its terminal (wrong when two runs share it) | c | `ApiAction.startedAt`, `endedAt` (C14) |
+| Enter in the filter runs the first match | a | `ToolbarSearchField onSubmit` (A7) |
+| Durations read "4 min" (the app's `durationText`); `fmt.dur` says "4m 3s" | a | `fmt.dur(s, { coarse: true })` (A11) |
+| The main action's icon is its kind's; the package's is `play.fill` | d | `kindOf(main).icon` |
+
+**Counts by class**
+
+| Widget | a | b | c | d | e |
+|---|---|---|---|---|---|
+| Media Controls | 1 | 3 | 1 | 2 | 0 |
+| Countdown | 4 | 1 | 0 | 1 | 0 |
+| Agents | 0 | 0 | 3 | 3 | 0 |
+| Recent Commands | 1 | 0 | 2 | 5 | 0 |
+| Event Log | 2 | 0 | 0 | 3 | 1 |
+| Notification Log | 0 | 0 | 1 | 1 | 3 |
+| Terminal Usage | 1 | 0 | 3 | 1 | 1 |
+| Usage Stats | 4 | 0 | 4 | 2 | 0 |
+| Work Log | 1 | 0 | 4 | 1 | 0 |
+| Run Scripts | 3 | 0 | 10 | 2 | 3 |
+| **All** | **17** | **4** | **28** | **21** | **8** |
+
+(A row with two classes counts in both.) So most of the gap is data (c) and port work that needs nothing new (d); the elements missing are few but visible (a cover, a ring, a delta, a sparkline in a tile), and size awareness (b) is what makes Now Playing and Timer look like ports.
+
+### 1.3 additions
+
+General primitives first; one-off elements only where the native view is a kit piece with behaviour of its own (`Dial`). Elements go in `widget-elements-1.3.ts` (`since: "1.3"`), verbs and topics in `widget-verbs.ts`, their data in `widget-tree-1.3.ts`. Everything is optional within API 1: a 1.2 package runs unchanged, and `cmd.env.has()` answers for each.
+
+**A. Elements and size** (A1–A11)
+
+1. **`Adapt` and `Case`**: a layout that switches by the room it has, decided in the renderer.
+   ```ts
+   Adapt: { doc: "Draws the first Case that fits its own box: a layout per size, switched without the widget's process.", since, props: {}, events: {}, children: "elements", childrenDoc: "Cases, the most demanding first; one without conditions is the fallback." },
+   Case: { doc: "One layout of an Adapt, drawn while its box meets every condition given.", since, props: {
+     minWidth: { type: "number", doc: "In px." }, maxWidth: { type: "number", doc: "In px." },
+     minHeight: { type: "number", doc: "In px." }, maxHeight: { type: "number", doc: "In px." } }, events: {}, children: "elements", childrenDoc: "The layout." },
+   ```
+   Why in the renderer and not `useEnv`: a switch the process makes round-trips (the renderer measures, tells the core, the process re-renders, the patch comes back), so a resize shows the wrong layout for frames and wakes the process on every class change. The cases are in the tree; the renderer measures the `Adapt` (a `ResizeObserver`, as `useSizeClass` does) and mounts one. Its box, not the window's: an `Adapt` in a `Pane` adapts to the pane. Cost: the tree carries every case (small); a field's draft inside a case is lost when the case changes (said in the doc). Security: none. Kit: a new `Adapt` in `@cmd/ui` (`frame.tsx` neighbours), which the native Now Playing can use too, replacing its container queries. Used by: Media Controls; any widget with a small and a large face.
+2. **`env.box` and `useSize()`**: `WidgetEnv.box: { width: number; height: number }` (the window content's px, rounded to 8, sent at most every 200 ms while resizing) and `size` unchanged; `useSize()` returns the box. For logic that needs numbers (how many rows fit, a chart's bucket count), not for layouts (that's `Adapt`). The fake host sends each `Sizes` box its own `env` (`size` and `box`), so stories show what a window of that size gets. Cost: none (the renderer already measures). Used by: Media Controls' title-bar status (hidden when short), Usage Stats (heat chart choice in a narrow window).
+3. **`Stack justify` and `Text fit`**: `justify: { type: ["start", "center", "end", "between"], doc: "Where the children sit along the column (with grow: centred in the window)." }`; `Text fit: { type: "boolean", doc: "Grows with its container's width, one line, from its size up to display: a title that fills a column." }` (the native title's clamp, in the kit's `Text`). Used by: Media Controls, Countdown.
+4. ~~More size classes~~: rejected. Classes are a coarse guess at what a layout needs; `Adapt` takes the numbers the layout actually breaks at (Now Playing's 280, 340×440), and `Hide below` stays for the simple case.
+5. **`Picture`**: an image from the widget's data or a host it is granted.
+   ```ts
+   Picture: { doc: "An image: a cover, a thumbnail, a logo. From a data: URL, or an https URL of a host in the package's net grant, which cmd fetches; never loaded by the page.", since, props: {
+     src: { type: "string", nullable: true, doc: "data:image/png|jpeg|webp|gif;base64,… (at most 512 KB), or https://<a granted host>/…; null shows the placeholder." },
+     alt: { type: "string", required: true, shows: "title", doc: "What it shows, in words (its accessible name; what stands in on a paired device that draws none)." },
+     fit: { type: ["cover", "contain"], doc: "Fills its box, cropped (default), or fits inside it." },
+     ratio: { type: [1, 1.333, 1.5, 1.778], doc: "Width over height (default 1: square)." },
+     size: { type: [24, 32, 44, 64, 96, 128, "fill"], doc: "Its width in px, or \"fill\": as large as the room left allows (a cover above a player)." },
+     radius: { type: ["sm", "md", "none"], doc: "Its corners (default md)." },
+     icon: { type: "string", doc: "An SF Symbol on the placeholder box (no src, loading, or failed): the box in the chart track colour." } },
+     events: { onClick: press("Pressed.") }, children: "none" },
+   ```
+   How the host draws it without a leak: the renderer never gets a remote URL. The app page's CSP allows `img-src https:` (the browser windows' favicons), so an `<img src>` from a widget would load with the app session's cookies and tell a host when the window redraws: a tracking pixel. Instead the sanitiser keeps only `data:image/(png|jpeg|webp|gif)` (no SVG: it can carry script and external references) and `https:` URLs; for an `https:` src the core fetches it the way `net.fetch` does (the host checked against the grant per URL, no cookies, no Referer, cmd's user agent, counted against the widget's net budget), checks the type by its magic bytes, refuses more than 2 MB or a side over 4096 px, and hands the renderer a `data:` URL. Fetched pictures are cached by URL for an hour (32 MB, least recently used), so a widget that redraws can't make one beacon per redraw, and one that adds a nonce per URL spends its fetch budget. A paired device gets the same `data:` URL in the tree and fetches nothing. Cost: the granted host learns the widget asked, which `net.fetch` already allows; memory, capped at 4 MB of pictures per tree. Kit: `Picture` (frame.tsx) gains `fit`, `ratio`, `fill` and the placeholder, from Now Playing's `np-art`/`np-nocover` CSS, so the native view draws through it too. Used by: Media Controls (the artwork); YouTube's thumbnail when a player exists (docs/57 above); any widget with a logo or avatar.
+6. **`Dial`**: the kit's `Dial` as an element. Props `value` (text, required), `progress` (0–1), `tone` (`["accent", "needs", "dim"]`), `caption`, `label` (required), `editable` (boolean); events `onSubmit` (`submit`: the typed text; Escape or leaving cancels, the draft stays in the renderer as `TextField`'s does). An override, for the draft. Used by: Countdown; a pomodoro, a quota, any "one value across the room".
+7. **`Window menuLabel`** (`string`: the title menu's button, default the checked entry or "Options") and **`ToolbarSearchField onSubmit`** (`submit`, Return with the text). Used by: Event Log ("3 hidden"), Run Scripts (the folder · branch), Work Log; Run Scripts' Enter.
+8. **`Stat` children, `trend`, `good`; `Sparkline series`**: `Stat` takes elements (a `Sparkline`, drawn inside the tile as wide as it), and `trend: ["up", "down", "flat"]` with `good: ["up", "down"]` draws `delta` as the kit's `Delta` (the 1.0 `deltaTone` stays for text). `Sparkline series: { type: [0, 1, 2, 3, 4, 5, 6, 7], doc: "Draws in the chart palette's nth colour (a stat's own colour)." }`. Folds in the 1.3 candidate "Stat with children". Used by: Usage Stats, Terminal Usage.
+9. **A chart header's `delta` and `note`** on `TimeSeries` and `TimeBars`: `delta` a record `{ text, trend, good? }` drawn as a `Delta` after the summary, `note` a dim string after it ("median 4m, 90% under 12m"). Used by: Usage Stats' detail.
+10. **`reveal`** on `ListRow` and `TimelineEntry`: `{ type: "boolean", doc: "Scrolled into view (nearest edge) when it becomes true." }` (the renderer's `scrollIntoView`, once per change). Used by: Work Log's ribbon; Event Log opening a row near the bottom.
+11. **`fmt` additions** (`@cmd/widget-api`, no wire change): `fmt.value(v, unit)` and `fmt.delta(cur, prev, unit)` (protocol `formatValue`/`formatDelta`, as the charts write them), `fmt.hue(name)` (the app's `projectHue`, so a project's chip has the colour it has in every window), `fmt.dur(s, { coarse: true })` (the app's `durationText`: "4 min"). Folds in the `fmt.value`/`fmt.delta` candidate. Used by: Usage Stats, Recent Commands, Event Log, Work Log, Run Scripts.
+
+**C. Data: topics, verbs and fields** (C1–C15)
+
+1. **`media` topic**, `useMedia()`: `media.get` live, pushed on the core's `nowPlaying.changed`; holds the Now Playing stream while subscribed (`holdNowPlaying`), `media: ["read"]`. The artwork rides only when it changes (the topic's value is diffed like any other; an unchanged `data:` string isn't re-sent). Folds in the candidate. Used by: Media Controls.
+2. **`stats` topic**, `useStat(query)`: `stats.query` live, again 1.5 s after a `stats.changed` that names its stat, and once a minute for a stat counted in time. Same permission as the verb. Folds in the candidate. Used by: Usage Stats.
+3. **`ApiStatResult` and `ApiStatInfo`**: `quantiles?: { p50: number; p90: number }` (with `quantiles: true` in the query), `asOf: number`; `ApiStatInfo.kind` (`"count" | "gauge" | "distribution" | "rate"`, what chart a detail draws) and `dims[].many`. Data within API 1. Folds in the quantiles candidate. Used by: Usage Stats.
+4. **Journal**: `journal` topic (`useJournal({ count, scope })`, pushed when a day is written); `journal.days({ scope: "all" })` with `workspace: ["all"]`; `journal.week({ scope }): ApiJournalWeek | null` (`{ headline, themes: { title, summary }[] }`, read only, written by the Journal); `ApiJournalEntry.project: string | null` (a folder's name, never a path). Folds in the live-journal and week candidates; **rejects** `journal.days({ before })`: the native view doesn't page either, so no port needs it. Used by: Work Log.
+5. **`journal.write({ date })`**, for Jan to decide: an act right after a press (and once when the widget opens, for stale days, as the native does), `ai: ["journal"]` (a new value: the grants sheet says "Write your journal with your AI model"), never from a paired device. It writes what the native Journal writes with the person's model. 1.2 said a widget never has a day written; that keeps a model run out of any package's hands, and the grant is the answer to it: only a widget that declares and is granted it can. Without it Work Log stays a reader.
+6. **`workspaces` topic**, `useWorkspaces()` / `workspaces.list(): { id, name }[]`, `workspace: ["all"]`: names only, no folders. Folds in the candidate. Used by: Agents, Recent Commands, Terminal Usage.
+7. ~~`ApiAgent.workspaceName`~~: rejected in favour of C6 (one list, not a name copied into every record).
+8. **`ApiEvent.windowId`**: the window an event is about. Data within API 1. Folds in the candidate. Used by: Notification Log.
+9. **`agents.select(id)`**: an act like `windows.select` (no permission, within the widget's scope): shows the agent's terminal (a subagent's host's), in its workspace, and marks that agent seen. Used by: Agents.
+10. **`agents.start` without `prompt`**: an interactive session in the workspace's folder; the sheet says "Start a Claude session?". Used by: Agents' empty state.
+11. **`terminals.rerun(key)`**: confirm, ask "type", `typed: "person"` (a built-in follows the levels; a person's package asks every time). The text is the command cmd's log recorded under `key` in that terminal, not the widget's, so the widget can't type its own words; refused when the terminal is gone or not at a prompt ("isn't at a prompt"). Used by: Recent Commands.
+12. **`app.usage()`** and topic `appUsage`: `{ app: { cpu, memory }, background: { cpu, memory } }`, `events: ["system"]` (the class that already holds cmd's own health). Used by: Terminal Usage's "cmd" pane.
+13. **`app.open(place)`**, for Jan to decide: an act right after a press, local only, no permission, `place` one of `"taskManager" | "settings:ai" | "settings:actions"` (a closed list cmd owns, so a widget opens nothing else). 1.2 decided a widget never opens the app's own windows; these three are the only places the ports link to, and each is a link the native view shows.
+14. **Actions**: `ApiAction` gains `script`, `args` (it needs arguments: `actions.run` types it into a new terminal), `hidden`, `source: { kind: "file" | "history" | "readme"; file: string | null; line: number | null }` (a path relative to the root), `history: { runs: number } | null`, `startedAt`, `endedAt`, `elsewhere: { branch: string | null; terminalId: string; url: string | null }[]`; `useActions({ root, include: ["history", "suggested"] })` where `root` must be a worktree of the workspace's repository (`git.worktrees`); `useActionsInfo({ root })` → `{ root, branch, linked, describing, errors: { file, error }[] }`; `actions.run(name, { fresh, root })`; and a risky action **asks every time** (its sheet names it and shows its command, never kept) instead of being refused, for Jan to decide. Used by: Run Scripts.
+15. Unchanged from docs/57's wave 3: the audio-levels feed and the YouTube player element are not needed by these ten and stay candidates for Visualizer and YouTube.
+
+### Build plan
+
+First, one small commit on master that the branches fork from, so none of them bumps the version or creates the shared files: `ApiMinor` "1.3", `WIDGET_API_MINOR = 3`, empty `widget-elements-1.3.ts` and `widget-tree-1.3.ts` merged into `API_ELEMENTS` and the d.ts. Each branch then appends its rows; the registries (`ELEMENTS_1_3`, `API`, `API_TOPIC`, `ApiMethods`) are append-only, and a rebase keeps both sides' rows. Regenerate `elements.gen.ts` and `elements-since.gen.ts` after each rebase.
+
+| Branch | Builds | Files it owns | Re-ports after it |
+|---|---|---|---|
+| `widget-size` | A1 `Adapt`/`Case`, A2 `env.box`/`useSize` and the fake host's per-box env, A3 `Stack justify`/`Text fit` | kit `adapt.tsx` (new), `Stack` and `Text` in kit `frame.tsx`; renderer `windows/package/PackageView.tsx` (`useSizeClass` → box), a new `entries-1.3-layout.tsx`; widget-api `hooks.ts` (`useSize`), `testing/host.ts` | Countdown's layout (with `widget-display`), Media Controls (with `widget-picture`) |
+| `widget-picture` | A5 `Picture`, C1 `media` topic | kit `picture.tsx` (new, the native Now Playing's cover CSS moves there); core `widgets/api/picture.ts` (fetch, checks, cache), the tree sanitiser's src rule; renderer `entries-1.3-picture.tsx`; `media` row and its read | Media Controls (after `widget-size` too): three `Case`s, the cover, `useMedia` |
+| `widget-display` | A6 `Dial`, A7 `menuLabel`/`onSubmit`, A8 `Stat`/`Sparkline series`, A9 chart `delta`/`note`, A10 `reveal`, A11 `fmt` | renderer `entries-1.3-display.tsx`, `chrome.ts` (`menuLabel`); kit `Stat` (`frame.tsx`, its own function), `Dial` unchanged; widget-api `fmt.ts` | Countdown (`Dial`), Event Log (`menuLabel`, `fmt.hue`), Terminal Usage (`Stat`, `series`), Usage Stats (`Stat`, chart `delta`, `fmt`), Recent Commands (`fmt.hue`) |
+| `widget-data` | C2 stats topic, C3 stat fields, C4 journal topic/week/scope/project, C6 workspaces, C8 `windowId`, C9 `agents.select`, C10 interactive `agents.start`, C11 `terminals.rerun`, C12 `app.usage` | core `widgets/api/reads.ts`, `model.ts` (agents, events), `act.ts` (the two acts), `stats/`' result shape; `widget-tree-1.3.ts` types | Agents, Recent Commands, Notification Log, Terminal Usage, Usage Stats (with `widget-display`), Work Log (with `widget-display`) |
+| `widget-actions` | C14 | core `widgets/api/model.ts` `apiAction` only, `actions/`' list options, `act.ts`'s `actions.run` branch | Run Scripts (with `widget-display`) |
+| `widget-port-fixes` | every (d) above, on today's 1.2 | `packages/widgets/*` only | none: it is the first pass; the re-ports above build on it |
+
+`widget-data` and `widget-actions` both touch `act.ts` and `model.ts`, in different functions; if that proves noisy, run them one after the other. Jan decides C5 (`journal.write`), C13 (`app.open`) and C14's risky asks before `widget-data` and `widget-actions` start; each is a row that can be left out without changing the others. `widget-port-fixes` can start now and in parallel with all of them.
+
+Re-ports, each in its own branch once its last dependency is merged: **Media Controls** (size, picture), **Countdown** (size, display), **Usage Stats** (display, data), **Work Log** (display, data, and C5 if approved), **Terminal Usage** (display, data), **Agents** (data), **Recent Commands** (display, data), **Notification Log** (data; `cmd.storage` for a shared Clear when it lands), **Event Log** (display), **Run Scripts** (display, actions). `cmd.storage` (built in `cmd-widget-storage`) also gives Event Log's hidden classes a `package` scope (one preference for every Event Log) and leaves Countdown, Agents and Run Scripts' folds in the window's scope, where they are now.
 
 ## After the ports: retiring native views
 
