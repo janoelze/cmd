@@ -115,6 +115,8 @@ export interface ApiPropSpec {
   doc: string;
   /** What the testing tree reads as words: the element's title (`find(type, title)`), or more of its words (`text()`). */
   shows?: "title" | "words";
+  /** The minor it came in, when after its element's (1.3: Stack's `justify`). */
+  since?: string;
 }
 
 /**

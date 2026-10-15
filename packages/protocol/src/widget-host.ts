@@ -27,7 +27,7 @@ export interface WidgetHostMethods {
   /** Send this window's status and whole tree again as widget.tree events: a view opened late, or a rev skipped. */
   "widget.resync": { params: { windowId: WindowId }; result: null };
   /** Where a package widget's window is drawn (theme, size class, placement); the process gets it as `env`. */
-  "widget.env": { params: { windowId: WindowId } & Pick<WidgetEnv, "theme" | "size" | "placement">; result: null };
+  "widget.env": { params: { windowId: WindowId } & Pick<WidgetEnv, "theme" | "size" | "placement" | "box">; result: null };
   /** Start a stopped package widget's process again (Restart, after "Stopped · crashed"). */
   "widget.restart": { params: { windowId: WindowId }; result: null };
   /** Grant a package what it asks (`permissions` omitted: everything it declares); its waiting windows start. */

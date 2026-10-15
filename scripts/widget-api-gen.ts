@@ -111,7 +111,7 @@ function element(name: string, spec: ApiElementSpec): string[] {
   else {
     out.push(`${head} {`);
     for (const [k, p] of own) {
-      out.push(jsdoc(p.doc, "  "));
+      out.push(jsdoc(p.since ? `${p.doc} @since ${p.since}` : p.doc, "  "));
       out.push(`  ${k}${p.required ? "" : "?"}: ${tsType(p.type)}${p.nullable ? " | null" : ""};`);
     }
     for (const [k, e] of Object.entries(spec.events) as [string, ApiEventSpec][]) {

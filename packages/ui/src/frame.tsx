@@ -22,10 +22,10 @@ const sp = (s: Pad | undefined) => (s === undefined ? undefined : s === 0 ? "0" 
 
 type Align = "start" | "center" | "end" | "stretch" | "baseline";
 
-/** Children in a column, `gap` apart. */
-export function Stack({ gap = 2, pad, padY, align, grow, children }: { gap?: Space; pad?: Pad; /** Top and bottom instead of `pad` there: a band tighter than its sides (a pane's header on the inset, a step above and below). */ padY?: Space; align?: Align; grow?: boolean; children: ReactNode }) {
+/** Children in a column, `gap` apart; `justify` places them along it (with `grow`, `center` is the middle of the room). */
+export function Stack({ gap = 2, pad, padY, align, justify, grow, children }: { gap?: Space; pad?: Pad; /** Top and bottom instead of `pad` there: a band tighter than its sides (a pane's header on the inset, a step above and below). */ padY?: Space; align?: Align; justify?: "start" | "center" | "end" | "between"; grow?: boolean; children: ReactNode }) {
   return (
-    <div className="ui-stack" data-align={align} data-grow={grow || undefined} data-pad={pad ? pad : undefined} style={{ gap: sp(gap), padding: sp(pad), ...(padY !== undefined && { paddingBlock: sp(padY) }) }}>
+    <div className="ui-stack" data-align={align} data-justify={justify} data-grow={grow || undefined} data-pad={pad ? pad : undefined} style={{ gap: sp(gap), padding: sp(pad), ...(padY !== undefined && { paddingBlock: sp(padY) }) }}>
       {children}
     </div>
   );
@@ -367,13 +367,27 @@ export function Filmstrip({ items, selected, onSelect }: { items: readonly { key
   );
 }
 
-/** Text in one of the kit's roles: `dim` for secondary, `mono` for values and IDs, `strong` for a name; `truncate` cuts one line with an ellipsis; `balance` wraps a short paragraph into lines of about one length (an intro under a title). */
-export function Text({ tone, size, mono, strong, truncate, select, balance, children }: { tone?: "dim" | Tone; size?: TextSize; mono?: boolean; strong?: boolean; truncate?: boolean; /** A value to read and copy (a path, a hash): selectable, a long one breaks anywhere. */ select?: boolean; balance?: boolean; children: ReactNode }) {
-  return (
-    <span className="ui-text" data-tone={tone} data-size={size} data-mono={mono || undefined} data-strong={strong || undefined} data-truncate={truncate || undefined} data-select={select || undefined} data-balance={balance || undefined}>
+/** Text in one of the kit's roles: `dim` for secondary, `mono` for values and IDs, `strong` for a name; `truncate` cuts one line with an ellipsis; `balance` wraps a short paragraph into lines of about one length (an intro under a title); `fit` grows one line with its container's width, from `size` up to the display size (a title that fills a column). */
+export function Text({ tone, size, mono, strong, truncate, select, balance, fit, children }: { tone?: "dim" | Tone; size?: TextSize; mono?: boolean; strong?: boolean; truncate?: boolean; /** A value to read and copy (a path, a hash): selectable, a long one breaks anywhere. */ select?: boolean; balance?: boolean; /** One line as large as its container's width allows, from `size` (default md) up to display. */ fit?: boolean; children: ReactNode }) {
+  const text = (
+    <span className="ui-text" data-tone={tone} data-size={size} data-mono={mono || undefined} data-strong={strong || undefined} data-truncate={truncate || undefined} data-select={select || undefined} data-balance={balance || undefined} data-fit={fit || undefined}>
       {children}
     </span>
   );
+  if (!fit) return text;
+  // The container its width is read from (container units), sized by its parent; --chars is how long the line is.
+  return (
+    <span className="ui-text-fit" style={{ "--chars": Math.max(8, textLength(children)), "--fit-from": `var(--text-${size ?? "md"})` } as CSSProperties}>
+      {text}
+    </span>
+  );
+}
+
+/** How many characters a Text's children read as (its words, joined). */
+function textLength(children: ReactNode): number {
+  if (typeof children === "string" || typeof children === "number") return String(children).length;
+  if (Array.isArray(children)) return children.reduce((n: number, c: ReactNode) => n + textLength(c), 0);
+  return 0;
 }
 
 /**

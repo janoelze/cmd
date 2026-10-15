@@ -5,13 +5,13 @@
 // until it is idle, one at a time (the runtime holds one connection per process), and the
 // tree it sent is drawn by the package view in a window at a reference size, with the title
 // bar its Window fills; `Sizes` draws the first state at every reference size (narrow,
-// regular, wide). The config the widget gets is its fields' defaults under the state's, as
+// regular, wide), each run with that window's env (its size class and box, 1.3). The config the widget gets is its fields' defaults under the state's, as
 // the core gives it. A still: the widget stops once its tree is taken. The packages are
 // cmd's own (packages/widgets) and the person's (~/.cmd/widgets, linked ones too: catalog/).
 
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { Window as Frame, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
-import { configValues, type WidgetOut } from "@cmd/protocol";
+import { configValues, sizeEnv, type WidgetOut } from "@cmd/protocol";
 import { run, type WidgetModule } from "@cmd/widget-api/runtime";
 import { createHost, type HostData } from "@cmd/widget-api/testing/host";
 import { AllSizes, SIZES, type SizeName } from "../reference/RefWindow.tsx";
@@ -78,14 +78,16 @@ function Variant({ widget, data, pkg, id: widgetId, name, icon, size }: { widget
   const [store] = useState(() => new TreeStore({ resync: () => {} }));
   useEffect(() => {
     let live = true;
-    const { size: _size, ...host } = data;
+    const { size: own, ...host } = data;
+    // The env a window of that size gets (1.3: its size class and box): the Sizes window's own over the state's, a state's own size under it.
+    host.env = size ? { ...host.env, ...sizeEnv(size) } : { ...sizeEnv(own ?? "regular"), ...host.env };
     // Config as the core gives it: the fields' defaults under what the state sets.
     const fields = pkg.cmd?.widgets?.find((w) => w.id === widgetId)?.config ?? [];
     void still(widget, { ...host, config: configValues(fields, host.config) as HostData["config"] }, { package: pkg.name, version: pkg.version, widget: widgetId }).then((messages) => {
       if (live) for (const m of messages) if (m.kind === "tree" || m.kind === "patch") store.apply(m);
     });
     return () => void (live = false);
-  }, [widget, data, pkg, widgetId, store]);
+  }, [widget, data, pkg, widgetId, store, size]);
   const [width, height] = SIZES[size ?? data.size ?? "regular"];
   return (
     <Frame selected style={{ width, height, position: "relative", flex: "none" }}>

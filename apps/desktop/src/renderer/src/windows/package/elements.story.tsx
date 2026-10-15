@@ -1,6 +1,7 @@
 // Every element of the widget API (docs/56, API 1; 1.2's from docs/57) drawn by the package view, from a fixed
 // tree as a widget's process would send it: one variant per element of API_ELEMENTS (Frame's
-// page inline, frame-chart.html, as a live window would serve its package's), then
+// page inline, frame-chart.html, as a live window would serve its package's; 1.3's Adapt and
+// Case at three window sizes), then
 // the example widget (packages/widget-api/examples/v1/agents.tsx) running against the fake
 // host, a thousand rows, and the window's states. The title bar shows what the tree's
 // Window gives it (status line, title menu).
@@ -47,7 +48,7 @@ let windows = 0;
 const quiet: WidgetLink = { interact: () => {}, resync: () => {}, restart: () => {}, ask: () => {}, env: () => {} };
 
 /** A widget's window at a reference size, with the title bar its Window fills. */
-function Widget({ messages, size = "regular", name = "Example", link = quiet, store: given, frames }: { messages?: TreeMessage[]; size?: SizeName; name?: string; link?: WidgetLink; store?: TreeStore; frames?: Frames }) {
+function Widget({ messages, size = "regular", name = "Example", link = quiet, store: given, frames }: { messages?: TreeMessage[]; size?: SizeName | readonly [number, number]; name?: string; link?: WidgetLink; store?: TreeStore; frames?: Frames }) {
   const id = useMemo(() => `story-widget-${++windows}`, []);
   const store = useMemo(() => {
     if (given) return given;
@@ -55,7 +56,7 @@ function Widget({ messages, size = "regular", name = "Example", link = quiet, st
     for (const m of messages ?? []) s.apply(m);
     return s;
   }, [given, messages]);
-  const [width, height] = SIZES[size];
+  const [width, height] = typeof size === "string" ? SIZES[size] : size;
   return (
     <KitWindow selected style={{ width, height, position: "relative", flex: "none" }}>
       <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -373,3 +374,35 @@ export const Frame = () => (
     <Widget messages={frameTree([3, 5, 2, 8, 13, 9, 4, 6, 11, 7])} name="Runs" size="narrow" />
   </div>
 );
+
+// ── 1.3: layout by size ─────────────────────────────────
+
+const controls = () => e("Inline", { gap: 2 }, e("IconButton", { icon: "backward.fill", label: "Previous", onClick: h() }), e("IconButton", { icon: "pause.fill", label: "Pause", size: "lg", onClick: h() }), e("IconButton", { icon: "forward.fill", label: "Next", onClick: h() }));
+const track = (title: Record<string, WireValue>) => e("Stack", { gap: 0.5 }, e("Text", { strong: true, truncate: true, ...title }, "Windowlicker"), e("Text", { tone: "dim", truncate: true }, "Aphex Twin"));
+/** A player's three faces: short (a line, the controls at the bottom), large (a centred column, its title fit to it) and the fallback. */
+const faces = () =>
+  tree(
+    e(
+      "View",
+      { scroll: false },
+      e(
+        "Adapt",
+        {},
+        e("Case", { maxHeight: 280 }, e("Stack", { pad: "inset", gap: 3, grow: true, justify: "between" }, track({}), controls())),
+        e("Case", { minWidth: 340, minHeight: 440 }, e("Stack", { pad: "inset", gap: 4, grow: true, align: "center", justify: "center" }, e("Text", { strong: true, fit: true, size: "lg" }, "Windowlicker"), e("Text", { tone: "dim" }, "Aphex Twin"), controls())),
+        e("Case", {}, e("Stack", { pad: "inset", gap: 3, grow: true, justify: "end" }, track({ size: "xl" }), controls())),
+      ),
+    ),
+  );
+
+/** One tree at three window sizes, each its own face, picked here from the Adapt's measured box: short (420×240), the fallback (320×400), large (420×520). */
+export const Adapt = () => (
+  <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+    {([[420, 240], [320, 400], [420, 520]] as const).map((s) => (
+      <Widget key={s.join("x")} messages={faces()} size={s} name="Player" />
+    ))}
+  </div>
+);
+
+/** A Case outside an Adapt is just its children; inside one, see Adapt. */
+export const Case = () => <W nodes={inView(e("Case", { minWidth: 400 }, e("Text", {}, "A Case's layout.")))} />;

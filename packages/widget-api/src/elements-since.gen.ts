@@ -61,4 +61,6 @@ export const ELEMENT_SINCE: Record<string, string> = {
   Ribbon: "1.2",
   DataGrid: "1.2",
   Frame: "1.2",
+  Adapt: "1.3",
+  Case: "1.3",
 };

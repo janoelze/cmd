@@ -29,7 +29,7 @@ export interface Instance {
   /** Why we're stopping it ourselves (null: an exit is a crash). */
   stopping: string | null;
   timers: { stop?: NodeJS.Timeout; restart?: NodeJS.Timeout; hello?: NodeJS.Timeout };
-  env: Pick<WidgetEnv, "theme" | "size" | "placement">;
+  env: Pick<WidgetEnv, "theme" | "size" | "placement" | "box">;
   config: string;
   /** The person's last press (press.ts). */
   press: WindowPress;
@@ -58,7 +58,7 @@ export function newInstance(w: AppWindow, theme: "light" | "dark", log: Construc
     crashes: [],
     stopping: null,
     timers: {},
-    env: { theme, size: "regular", placement: "board" },
+    env: { theme, size: "regular", box: null, placement: "board" },
     config: "",
     press: new WindowPress(`${w.kind} ${w.id}`),
     permissions: null,

@@ -113,7 +113,7 @@ export function reference(): string {
     for (const p of list) {
       const d = p.valueDeclaration ?? p.declarations?.[0];
       const type = d && ts.isPropertySignature(d) && d.type ? d.type.getText() : checker.typeToString(checker.getTypeOfSymbol(p));
-      out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)} |`);
+      out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)}${since(p) === "1.0" ? "" : ` Since ${since(p)}.`} |`);
     }
     out.push("");
   }
@@ -126,7 +126,7 @@ export function reference(): string {
     for (const p of checker.getDeclaredTypeOfSymbol(s).getProperties()) {
       const d = p.valueDeclaration ?? p.declarations?.[0];
       const type = d && ts.isPropertySignature(d) && d.type ? d.type.getText() : checker.typeToString(checker.getTypeOfSymbol(p));
-      out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)} |`);
+      out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)}${since(p) === "1.0" ? "" : ` Since ${since(p)}.`} |`);
     }
     out.push("");
   }

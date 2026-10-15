@@ -6,13 +6,13 @@
 // Configure…); a stopped process with a tree drawn before keeps it, under a banner
 // saying why (a save that didn't load: its error) with Restart;
 // an error boundary so a tree that can't be drawn shows a Callout and not a broken
-// board, and `widget.env` whenever the window's theme, size class or placement changes.
+// board, and `widget.env` whenever the window's theme, size class, box (1.3) or placement changes.
 // A frame widget (`"surface": "frame"`) draws its page instead of a tree (PackageFrame.tsx); a
 // tree's Frame elements draw pages of the package in it (FrameElement.tsx, FramesContext).
 
 import { Button, Callout, Stack, View, type ViewStateSpec } from "@cmd/ui";
 import { Component, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import type { TreeNode, WindowId } from "@cmd/protocol";
+import { BOX_EVERY_MS, roundBox, sizeClassOf, type ApiBox, type TreeNode, type WindowId } from "@cmd/protocol";
 import { useStoreValue } from "../../lib/store.ts";
 import { PlacementContext, windowChromeChanged, type WindowViewProps } from "../registry.ts";
 import { configurable, configure, needsSetup } from "./ConfigSheet.tsx";
@@ -64,10 +64,10 @@ export function PackageWidget({ windowId, store, link, setup = null, frame = nul
   const reload = useRestarts(snap.status);
   const live = frames?.(reload) ?? null;
   const ctx = useMemo<DrawContext>(() => ({ windowId, send: (h, e, v) => link.interact(h, e, v) }), [windowId, link]);
-  const [probe, size] = useSizeClass();
+  const [probe, size, box] = useContentBox();
   const theme = useAppearance();
   const placement = useContext(PlacementContext);
-  useEffect(() => link.env({ theme, size, placement }), [link, theme, size, placement]);
+  useEffect(() => link.env({ theme, size, box, placement }), [link, theme, size, box, placement]);
 
   const cover = frame ? frameCover(snap, link, setup) : coverOf(snap, link, setup);
   if (frame && !cover)
@@ -173,24 +173,45 @@ class TreeBoundary extends Component<{ rev: number; children: ReactNode }, { err
   }
 }
 
-/** The window's size class, as the kit's breakpoints have it (narrow < 360px, regular < 600px, wide): measured on the window's content. */
-function useSizeClass(): [(el: HTMLElement | null) => void, WidgetPlace["size"]] {
+/**
+ * The window's content as the widget gets it: its size class, as the kit's breakpoints have it
+ * (narrow < 360px, regular < 600px, wide), and (1.3) its box in px, each side rounded to
+ * BOX_STEP and sent at most every BOX_EVERY_MS while it resizes (the last one always). The
+ * widget's layouts by size don't wait for it: an Adapt switches in the renderer.
+ */
+function useContentBox(): [(el: HTMLElement | null) => void, WidgetPlace["size"], ApiBox | null] {
   const [size, setSize] = useState<WidgetPlace["size"]>("regular");
+  const [box, setBox] = useState<ApiBox | null>(null);
   const observer = useRef<ResizeObserver | null>(null);
+  const throttle = useRef<{ last: number; timer: ReturnType<typeof setTimeout> | undefined; next: ApiBox | null }>({ last: -Infinity, timer: undefined, next: null });
+  useEffect(() => () => clearTimeout(throttle.current.timer), []);
   const probe = (el: HTMLElement | null) => {
     observer.current?.disconnect();
     observer.current = null;
-    const box = el?.parentElement;
-    if (!box || typeof ResizeObserver === "undefined") return;
+    const parent = el?.parentElement;
+    if (!parent || typeof ResizeObserver === "undefined") return;
+    const send = () => {
+      const t = throttle.current;
+      t.timer = undefined;
+      t.last = Date.now();
+      setBox((b) => (t.next && (b?.width !== t.next.width || b?.height !== t.next.height) ? t.next : b));
+    };
     const measure = () => {
-      const w = box.clientWidth;
-      if (w > 0) setSize(w < 360 ? "narrow" : w < 600 ? "regular" : "wide");
+      const w = parent.clientWidth;
+      if (w <= 0) return;
+      setSize(sizeClassOf(w));
+      const t = throttle.current;
+      t.next = roundBox({ width: w, height: parent.clientHeight });
+      if (t.timer !== undefined) return;
+      const wait = t.last + BOX_EVERY_MS - Date.now();
+      if (wait <= 0) send();
+      else t.timer = setTimeout(send, wait);
     };
     observer.current = new ResizeObserver(measure);
-    observer.current.observe(box);
+    observer.current.observe(parent);
     measure();
   };
-  return [probe, size];
+  return [probe, size, box];
 }
 
 /** The app's appearance (applyTheme sets it on the root). */

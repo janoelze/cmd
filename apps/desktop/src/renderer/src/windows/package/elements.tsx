@@ -6,11 +6,13 @@
 // renaming a kit component changes a line here, not a widget. KIT is typed against the
 // spec (KitProps), so a kit component that stops taking an element's props, or an enum
 // value, fails tsc; an element added to API_ELEMENTS without a line in either fails too.
-// API 1.2's elements that translate are entries-1.2.tsx's (ENTRIES_1_2), each with its reason.
+// API 1.2's elements that translate are entries-1.2.tsx's (ENTRIES_1_2), each with its reason;
+// 1.3's by feature (entries-1.3-layout.tsx: Adapt).
 
 import {
   Badge,
   Button,
+  Case,
   CodeBlock,
   Delta,
   Icon,
@@ -65,6 +67,7 @@ import { setWindowStatus } from "../../lib/windowActions.ts";
 import { menuEntries, setChrome } from "./chrome.ts";
 import { on, press, str, useDraft, v, type DrawContext, type Drawn } from "./draw.ts";
 import { ENTRIES_1_2, type Translated12 } from "./entries-1.2.tsx";
+import { ENTRIES_1_3_LAYOUT, type Translated13Layout } from "./entries-1.3-layout.tsx";
 
 export type { DrawContext, Drawn } from "./draw.ts";
 
@@ -189,7 +192,7 @@ type KitEvent<S> = S extends { gesture: "pick" } ? (value: Exclude<EventValueOf<
 export type KitProps<E extends ApiElement> = SpecPropsOf<E> & { [K in keyof ApiElementOf<E>["events"] & string]?: KitEvent<ApiElementOf<E>["events"][K]> } & (ApiElementOf<E>["children"] extends "none" ? unknown : { children: ReactNode });
 
 /** The elements that translate (ENTRIES, ENTRIES_1_2); every other one is its kit component (KIT). */
-type Translated = "Window" | "View" | "ToolbarField" | "ToolbarSearchField" | "ToolbarSegmented" | "ToolbarMenu" | "ListRow" | "EmptyState" | Translated12;
+type Translated = "Window" | "View" | "ToolbarField" | "ToolbarSearchField" | "ToolbarSegmented" | "ToolbarMenu" | "ListRow" | "EmptyState" | Translated12 | Translated13Layout;
 
 /**
  * The elements the kit component of the same name draws from the spec's props as they are.
@@ -238,6 +241,8 @@ const KIT = {
   Timeline,
   TimelineEntry,
   Ribbon,
+  // 1.3
+  Case,
 } satisfies { [E in Exclude<ApiElement, Translated>]: (props: KitProps<E>) => ReactNode };
 
 /** What a required prop the sanitiser dropped is drawn as. */
@@ -267,7 +272,7 @@ function passThrough(name: keyof typeof KIT): ComponentType<Drawn> {
 }
 
 /** The elements that translate: the title bar, the view's toolbar and states, the toolbar's fields (a draft kept here), menus and actions. */
-const ENTRIES: { readonly [K in Exclude<Translated, Translated12>]: ComponentType<Drawn> } = {
+const ENTRIES: { readonly [K in Exclude<Translated, Translated12 | Translated13Layout>]: ComponentType<Drawn> } = {
   Window: WindowEntry,
   View: ViewEntry,
   ToolbarField: Field,
@@ -316,4 +321,5 @@ export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
   ...(Object.fromEntries(Object.keys(KIT).map((k) => [k, passThrough(k as keyof typeof KIT)])) as { [K in keyof typeof KIT]: ComponentType<Drawn> }),
   ...ENTRIES,
   ...ENTRIES_1_2,
+  ...ENTRIES_1_3_LAYOUT,
 };

@@ -19,7 +19,7 @@ export { fmt } from "./fmt.ts";
 export { ApiCallError } from "./connection.ts";
 export type { Store, StorageScope, Migration, MigrationStep } from "./storage.ts";
 export { useStat, useJournal, useWorkspaces, useAppUsage, type LiveEvent } from "./hooks.ts";
-export { useWorkspace, useAgents, useTerminals, useTerminalUsage, useWindows, useEvents, useGit, useActions, useConfig, useEnv, type WidgetConfig, type ConfigValues, type ConfigShape, useData, useStoredState, useStorage, type Widen, type Stored, type StoredValue, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
+export { useWorkspace, useAgents, useTerminals, useTerminalUsage, useWindows, useEvents, useGit, useActions, useConfig, useEnv, useSize, type WidgetConfig, type ConfigValues, type ConfigShape, useData, useStoredState, useStorage, type Widen, type Stored, type StoredValue, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
 export { WIDGET_API, WIDGET_API_MINOR } from "./version.ts";
 export type {
   ApiAgent as Agent,
@@ -66,6 +66,7 @@ export type {
   ApiProcessUse as ProcessUse,
   ApiRerun as Rerun,
   WidgetEnv as Env,
+  ApiBox as Box,
   ApiVerb as Verb,
 } from "@cmd/protocol/widget-tree";
 

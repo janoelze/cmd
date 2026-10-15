@@ -8,6 +8,9 @@
 .ui-stack[data-align="start"] { align-items: flex-start; }
 .ui-stack[data-align="center"] { align-items: center; }
 .ui-stack[data-align="end"] { align-items: flex-end; }
+.ui-stack[data-justify="center"] { justify-content: center; }
+.ui-stack[data-justify="end"] { justify-content: flex-end; }
+.ui-stack[data-justify="between"] { justify-content: space-between; }
 .ui-inline[data-align="start"] { align-items: flex-start; }
 .ui-inline[data-align="center"] { align-items: center; }
 .ui-inline[data-align="end"] { align-items: flex-end; }
@@ -18,6 +21,9 @@
 .ui-inline > * { min-width: 0; }
 .ui-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(var(--tile-min), 100%), 1fr)); }
 .ui-hide { display: contents; }
+/* Adapt (adapt.tsx) fills the room it is given, so its box is the room and not its case's content; the case drawn is its children. */
+.ui-adapt { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.ui-adapt-case { display: contents; }
 @container (width < 360px) { .ui-hide[data-below="narrow"] { display: none; } }
 @container (width < 600px) { .ui-hide[data-below="regular"] { display: none; } }
 @container (width >= 360px) { .ui-hide[data-above="narrow"] { display: none; } }
@@ -158,6 +164,11 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
 .ui-text[data-mono] { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ui-text[data-strong] { font-weight: 600; }
 .ui-text[data-select] { user-select: text; overflow-wrap: anywhere; }
+/* Text fit: one line as large as the column allows (the line's length is --chars), from its size up to display. */
+.ui-text-fit { display: block; align-self: stretch; width: 100%; min-width: 0; container-type: inline-size; }
+.ui-stack[data-align="center"] > .ui-text-fit { text-align: center; }
+.ui-stack[data-align="end"] > .ui-text-fit { text-align: end; }
+.ui-text[data-fit] { display: block; font-size: clamp(var(--fit-from), calc(100cqi / (var(--chars) * 0.6)), var(--text-display)); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Text on its own line in a Stack is a paragraph: room between its lines, wrapped evenly. */
 .ui-stack > .ui-text:not([data-truncate]) { display: block; line-height: 1.45; text-wrap: pretty; }
 .ui-text[data-balance], .ui-stack > .ui-text[data-balance] { text-wrap: balance; }

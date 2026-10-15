@@ -5,11 +5,12 @@
 // the testing tree's gestures and titles. Split from widget-tree.ts, which re-exports all
 // of it, so `@cmd/protocol/widget-tree` is still the whole wire contract. The vocabulary (enums,
 // prop types, gestures) is widget-spec.ts; each minor that adds elements has a file
-// (widget-elements-1.2.ts), merged into API_ELEMENTS here.
+// (widget-elements-1.2.ts; 1.3's by feature, widget-elements-1.3-layout.ts), merged into API_ELEMENTS here.
 
 import type { HandlerRef, WireValue } from "./widget-tree.ts";
 import { ALIGN, BREAKS, DISABLED, LIGHTS, SPACE, SYMBOL, TEXT_SIZES, TIP, TONES, TOOLBAR_ITEM, chosen, none, press, typed, type ActionOf, type ApiElementSpec, type MenuEntryOf, type OptionOf, type ViewStateOf } from "./widget-spec.ts";
 import { ELEMENTS_1_2 } from "./widget-elements-1.2.ts";
+import { ELEMENTS_1_3_LAYOUT, STACK_1_3, TEXT_1_3 } from "./widget-elements-1.3-layout.ts";
 
 export { SPACE, TONES, LIGHTS, TEXT_SIZES, ALIGN, BREAKS, UNITS, API_ENUMS, TOOLBAR_ITEM, isShape } from "./widget-spec.ts";
 export type { MenuEntryOf, ActionOf, ViewStateOf, OptionOf, WireMenuEntry, ApiFieldType, ApiFieldSpec, ApiShape, ApiPropType, ApiPropSpec, ApiGesture, ApiEventSpec, ApiElementSpec } from "./widget-spec.ts";
@@ -119,6 +120,7 @@ const ELEMENTS_1_0 = {
       padY: { type: SPACE, doc: "Top and bottom padding instead of `pad`'s there." },
       align: { type: ALIGN, doc: "How children line up across the column." },
       grow: { type: "boolean", doc: "Takes the room left." },
+      ...STACK_1_3,
     },
     events: {},
     children: "elements",
@@ -249,6 +251,7 @@ const ELEMENTS_1_0 = {
       truncate: { type: "boolean", doc: "One line, cut with an ellipsis." },
       select: { type: "boolean", doc: "Selectable, for a value to copy." },
       balance: { type: "boolean", doc: "Balanced line breaks (a heading)." },
+      ...TEXT_1_3,
     },
     events: {},
     children: "text",
@@ -328,7 +331,7 @@ const ELEMENTS_1_0 = {
 } as const satisfies Record<string, ApiElementSpec>;
 
 /** API 1's elements (1.0's, then each minor's): the allow-list the renderer enforces. */
-export const API_ELEMENTS = { ...ELEMENTS_1_0, ...ELEMENTS_1_2 } as const satisfies Record<string, ApiElementSpec>;
+export const API_ELEMENTS = { ...ELEMENTS_1_0, ...ELEMENTS_1_2, ...ELEMENTS_1_3_LAYOUT } as const satisfies Record<string, ApiElementSpec>;
 
 export type ApiElement = keyof typeof API_ELEMENTS;
 export const API_ELEMENT_NAMES = Object.keys(API_ELEMENTS) as ApiElement[];
@@ -385,3 +388,4 @@ export type EventsOf<E extends ApiElement> = keyof ApiElementOf<E>["events"] & s
 export type EventValueOf<S> = S extends { value: infer V } ? WireTypeOf<V> | (S extends { nullable: true } ? null : never) : S extends { gesture: "change" | "submit" } ? string : undefined;
 
 export * from "./widget-values.ts";
+export { BOX_STEP, BOX_EVERY_MS, WINDOW_BAR_H, roundBox, sizeClassOf, sizeEnv, type ApiBox } from "./widget-elements-1.3-layout.ts";

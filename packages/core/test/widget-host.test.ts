@@ -155,7 +155,7 @@ describe("the widget host", () => {
     expect(trees(w.id).filter((m) => m.kind === "patch")).toHaveLength(1);
   });
 
-  it("forwards the window's interactions and env to the process", async () => {
+  it("forwards the window's interactions and env (its box rounded) to the process", async () => {
     const { core, rt, open, isStatus, trees } = await setup();
     const w = await open();
     await until(isStatus(w.id, "running"), "running");
@@ -164,7 +164,12 @@ describe("the widget host", () => {
     core.handlers["widget.interact"]({ windowId: w.id, handler: 7, event: "onClick" });
     expect(await rt.last.next("interaction")).toEqual({ kind: "interaction", handler: 7, event: "onClick" });
     core.handlers["widget.env"]({ windowId: w.id, theme: "light", size: "narrow", placement: "sidebar" });
-    expect((await rt.last.next("env")).env).toMatchObject({ theme: "light", size: "narrow", placement: "sidebar" });
+    expect((await rt.last.next("env")).env).toMatchObject({ theme: "light", size: "narrow", box: null, placement: "sidebar" });
+    // 1.3: the content's box, rounded down to 8 as the widget gets it; a renderer that sends none keeps the last.
+    core.handlers["widget.env"]({ windowId: w.id, theme: "light", size: "narrow", box: { width: 317, height: 203.5 }, placement: "sidebar" });
+    expect((await rt.last.next("env", (m) => m.env.box !== null)).env).toMatchObject({ size: "narrow", box: { width: 312, height: 200 } });
+    core.handlers["widget.env"]({ windowId: w.id, theme: "dark", size: "narrow", placement: "sidebar" });
+    expect((await rt.last.next("env", (m) => m.env.theme === "dark")).env).toMatchObject({ theme: "dark", box: { width: 312, height: 200 } });
   });
 
   it("pushes config changes, never a secret", async () => {

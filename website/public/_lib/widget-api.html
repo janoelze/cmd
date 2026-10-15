@@ -210,6 +210,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>useGit(): ApiGitStatus | null</code></td><td>1.0</td><td>The workspace's git status (branch, ahead/behind, changed files), live; null outside a repository.</td></tr>
 <tr><td><code>useJournal(query?: ApiJournalQuery): ApiJournalDay[]</code></td><td>1.3</td><td>The journal's written days, live: what <code>cmd.journal.days(query)</code> answers, again when the Journal writes a day of it. Empty until they arrive. <code>{ scope: &quot;all&quot; }</code> reads the journal of everything on this Mac (with <code>workspace: [&quot;all&quot;]</code>). Needs <code>workspace: [&quot;read&quot;]</code> and <code>events: [&quot;agents&quot;]</code>.</td></tr>
 <tr><td><code>useNow(every?: number): number</code></td><td>1.0</td><td>The time now, re-rendering every <code>every</code> ms (default 1000): for ages that move.</td></tr>
+<tr><td><code>useSize(): ApiBox | null</code></td><td>1.3</td><td>The window content's size in px, live: each side rounded down to 8, at most every 200 ms while the window resizes; null until cmd has measured it (and on a cmd before 1.3). For logic that needs numbers: how many rows fit, how many buckets a chart gets. A layout per size is an <code>Adapt</code> (cmd switches it without waking the widget); dropping one thing from a narrow window is <code>Hide below</code>.</td></tr>
 <tr><td><code>useStat(query: ApiStatQuery): ApiStatResult | null</code></td><td>1.3</td><td>A stat, live: what <code>cmd.stats.query(query)</code> answers, counted again soon after cmd records something for it (and each minute for time spent, which grows without events). null until it arrives. Needs <code>events: [&lt;class&gt;]</code> for the class the stat is counted from.</td></tr>
 <tr><td><code>useStorage&lt;T extends WireValue = never, I extends WireValue = never&gt;(scope: ApiStorageScope, key: string, initial: [T] extends [never] ? I : NoInfer&lt;T&gt;): Stored&lt;StoredValue&lt;T, I&gt;&gt;</code></td><td>1.3</td><td>A stored value, live, like useState: <code>useStorage(&quot;package&quot;, &quot;notes&quot;, [])</code>. <code>scope</code> is <code>&quot;window&quot;</code> (this window; <code>useStoredState</code> keeps the same values), <code>&quot;workspace&quot;</code> (this package in the window's workspace) or <code>&quot;package&quot;</code> (this package everywhere). A set here reaches every other open window of the package that uses the same scope and key at once. <code>initial</code> until the stored value arrives (a window's own is there on the first render) and while none is stored.</td></tr>
 <tr><td><code>useStoredState&lt;T extends WireValue = never, I extends WireValue = never&gt;(key: string, initial: [T] extends [never] ? I : NoInfer&lt;T&gt;): Stored&lt;StoredValue&lt;T, I&gt;&gt;</code></td><td>1.0</td><td>A value kept by the core for this window across reloads and restarts, like useState. The first render already has the stored value.</td></tr>
@@ -343,6 +344,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>padY</code></td><td><code>Space</code></td><td>Top and bottom padding instead of <code>pad</code>'s there.</td></tr>
 <tr><td><code>align</code></td><td><code>Align</code></td><td>How children line up across the column.</td></tr>
 <tr><td><code>grow</code></td><td><code>boolean</code></td><td>Takes the room left.</td></tr>
+<tr><td><code>justify</code></td><td><code>&quot;start&quot; | &quot;center&quot; | &quot;end&quot; | &quot;between&quot;</code></td><td>Where the children sit along the column: with <code>grow</code>, <code>center</code> puts them in the middle of the window, <code>between</code> the first at the top and the last at the bottom. Since 1.3.</td></tr>
 <tr><td><code>children</code></td><td><code>ReactNode</code></td><td>What it stacks.</td></tr>
 </tbody></table></div>
 <h4 id="inline"><code>Inline</code></h4>
@@ -452,6 +454,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>truncate</code></td><td><code>boolean</code></td><td>One line, cut with an ellipsis.</td></tr>
 <tr><td><code>select</code></td><td><code>boolean</code></td><td>Selectable, for a value to copy.</td></tr>
 <tr><td><code>balance</code></td><td><code>boolean</code></td><td>Balanced line breaks (a heading).</td></tr>
+<tr><td><code>fit</code></td><td><code>boolean</code></td><td>Grows with its container's width, on one line, from its size up to the display size: a title that fills a column (a track's name, a countdown). Since 1.3.</td></tr>
 <tr><td><code>children</code></td><td><code>ReactNode</code></td><td>The words.</td></tr>
 </tbody></table></div>
 <h4 id="badge"><code>Badge</code></h4>
@@ -750,6 +753,20 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>height</code></td><td><code>number</code></td><td>Its height in pixels; without one it fills the space it is given.</td></tr>
 <tr><td><code>data</code></td><td><code>WireValue | null</code></td><td>Data for the page, as plain values (256 KB at most): <code>cmd.data</code> there, and <code>cmd.on(&quot;data&quot;, fn)</code> on each change.</td></tr>
 <tr><td><code>onMessage</code></td><td><code>(value: WireValue) =&gt; void</code></td><td>The page sent a value (<code>cmd.post(value)</code>). Not a press: it can't start an act.</td></tr>
+</tbody></table></div>
+<h4 id="adapt"><code>Adapt</code></h4>
+<p>A layout per size: draws the first Case its own box fits (its width and height in px, a Pane's when it sits in one), switched by cmd as the window resizes, without a round-trip to the widget. For a widget with a small and a large face; <code>Hide below</code> is enough to drop one thing from a narrow window, and <code>useSize()</code> is for numbers in logic (how many rows fit). Only the Case drawn is mounted: a field's draft in it is lost when the case changes. Give it room to measure: directly in a View, a Pane or a growing Stack; a height condition needs a box whose height isn't its content's. Since 1.3.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>Cases, the most demanding first; a Case without conditions last, as the fallback (without one, nothing is drawn while none fits).</td></tr>
+</tbody></table></div>
+<h4 id="case"><code>Case</code></h4>
+<p>One layout of an Adapt, drawn while the Adapt's box meets every condition given (each in px, inclusive); a Case without conditions always fits. Outside an Adapt it draws its children. Since 1.3.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>minWidth</code></td><td><code>number</code></td><td>Drawn from this width up.</td></tr>
+<tr><td><code>maxWidth</code></td><td><code>number</code></td><td>Drawn up to this width.</td></tr>
+<tr><td><code>minHeight</code></td><td><code>number</code></td><td>Drawn from this height up.</td></tr>
+<tr><td><code>maxHeight</code></td><td><code>number</code></td><td>Drawn up to this height.</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>The layout.</td></tr>
 </tbody></table></div>
 <h3 id="records">Records</h3>
 <p>What the charts' and DataGrid's props hold: plain values, a field each.</p>

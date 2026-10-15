@@ -302,6 +302,11 @@ export interface StackProps {
   align?: Align;
   /** Takes the room left. */
   grow?: boolean;
+  /**
+   * Where the children sit along the column: with `grow`, `center` puts them in the middle of the window, `between` the first at the top and the last at the bottom.
+   * @since 1.3
+   */
+  justify?: "start" | "center" | "end" | "between";
   /** What it stacks. */
   children?: ReactNode;
 }
@@ -494,6 +499,11 @@ export interface TextProps {
   select?: boolean;
   /** Balanced line breaks (a heading). */
   balance?: boolean;
+  /**
+   * Grows with its container's width, on one line, from its size up to the display size: a title that fills a column (a track's name, a countdown).
+   * @since 1.3
+   */
+  fit?: boolean;
   /** The words. */
   children?: ReactNode;
 }
@@ -1056,6 +1066,38 @@ export interface FrameProps {
  */
 export const Frame = el<FrameProps>("Frame");
 
+/** Adapt's props. @since 1.3 */
+export interface AdaptProps {
+  /**
+   * Cases, the most demanding first; a Case without conditions last, as the fallback (without one, nothing is drawn while none fits).
+   */
+  children?: ReactNode;
+}
+/**
+ * A layout per size: draws the first Case its own box fits (its width and height in px, a Pane's when it sits in one), switched by cmd as the window resizes, without a round-trip to the widget. For a widget with a small and a large face; `Hide below` is enough to drop one thing from a narrow window, and `useSize()` is for numbers in logic (how many rows fit). Only the Case drawn is mounted: a field's draft in it is lost when the case changes. Give it room to measure: directly in a View, a Pane or a growing Stack; a height condition needs a box whose height isn't its content's.
+ * @since 1.3
+ */
+export const Adapt = el<AdaptProps>("Adapt");
+
+/** Case's props. @since 1.3 */
+export interface CaseProps {
+  /** Drawn from this width up. */
+  minWidth?: number;
+  /** Drawn up to this width. */
+  maxWidth?: number;
+  /** Drawn from this height up. */
+  minHeight?: number;
+  /** Drawn up to this height. */
+  maxHeight?: number;
+  /** The layout. */
+  children?: ReactNode;
+}
+/**
+ * One layout of an Adapt, drawn while the Adapt's box meets every condition given (each in px, inclusive); a Case without conditions always fits. Outside an Adapt it draws its children.
+ * @since 1.3
+ */
+export const Case = el<CaseProps>("Case");
+
 /** Each element's props type, by name (tests hold them to the protocol's allow-list). */
 export interface ElementProps {
   Window: WindowProps;
@@ -1116,4 +1158,6 @@ export interface ElementProps {
   Ribbon: RibbonProps;
   DataGrid: DataGridProps;
   Frame: FrameProps;
+  Adapt: AdaptProps;
+  Case: CaseProps;
 }

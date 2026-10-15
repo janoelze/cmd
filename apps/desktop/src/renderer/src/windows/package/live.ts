@@ -2,7 +2,7 @@
 // its view is mounted, fed by the core's `widget.tree` events, and the link back to the
 // widget's process over the core's widget.* methods.
 
-import type { CoreEvent, WindowId, WireValue } from "@cmd/protocol";
+import type { ApiBox, CoreEvent, WindowId, WireValue } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { TreeStore } from "./tree.ts";
 
@@ -10,6 +10,8 @@ import { TreeStore } from "./tree.ts";
 export interface WidgetPlace {
   theme: "dark" | "light";
   size: "narrow" | "regular" | "wide";
+  /** 1.3: the window content's box in px, rounded and throttled (PackageView's useContentBox); null until measured. */
+  box: ApiBox | null;
   placement: "board" | "sidebar";
 }
 

@@ -303,6 +303,7 @@ The reads as subscriptions: each gets the current value at once and every change
 | `useGit(): ApiGitStatus \| null` | 1.0 | The workspace's git status (branch, ahead/behind, changed files), live; null outside a repository. |
 | `useJournal(query?: ApiJournalQuery): ApiJournalDay[]` | 1.3 | The journal's written days, live: what `cmd.journal.days(query)` answers, again when the Journal writes a day of it. Empty until they arrive. `{ scope: "all" }` reads the journal of everything on this Mac (with `workspace: ["all"]`). Needs `workspace: ["read"]` and `events: ["agents"]`. |
 | `useNow(every?: number): number` | 1.0 | The time now, re-rendering every `every` ms (default 1000): for ages that move. |
+| `useSize(): ApiBox \| null` | 1.3 | The window content's size in px, live: each side rounded down to 8, at most every 200 ms while the window resizes; null until cmd has measured it (and on a cmd before 1.3). For logic that needs numbers: how many rows fit, how many buckets a chart gets. A layout per size is an `Adapt` (cmd switches it without waking the widget); dropping one thing from a narrow window is `Hide below`. |
 | `useStat(query: ApiStatQuery): ApiStatResult \| null` | 1.3 | A stat, live: what `cmd.stats.query(query)` answers, counted again soon after cmd records something for it (and each minute for time spent, which grows without events). null until it arrives. Needs `events: [<class>]` for the class the stat is counted from. |
 | `useStorage<T extends WireValue = never, I extends WireValue = never>(scope: ApiStorageScope, key: string, initial: [T] extends [never] ? I : NoInfer<T>): Stored<StoredValue<T, I>>` | 1.3 | A stored value, live, like useState: `useStorage("package", "notes", [])`. `scope` is `"window"` (this window; `useStoredState` keeps the same values), `"workspace"` (this package in the window's workspace) or `"package"` (this package everywhere). A set here reaches every other open window of the package that uses the same scope and key at once. `initial` until the stored value arrives (a window's own is there on the first render) and while none is stored. |
 | `useStoredState<T extends WireValue = never, I extends WireValue = never>(key: string, initial: [T] extends [never] ? I : NoInfer<T>): Stored<StoredValue<T, I>>` | 1.0 | A value kept by the core for this window across reloads and restarts, like useState. The first render already has the stored value. |
@@ -475,6 +476,7 @@ Children in a column, `gap` apart.
 | `padY` | `Space` | Top and bottom padding instead of `pad`'s there. |
 | `align` | `Align` | How children line up across the column. |
 | `grow` | `boolean` | Takes the room left. |
+| `justify` | `"start" \| "center" \| "end" \| "between"` | Where the children sit along the column: with `grow`, `center` puts them in the middle of the window, `between` the first at the top and the last at the bottom. Since 1.3. |
 | `children` | `ReactNode` | What it stacks. |
 
 #### `Inline`
@@ -623,6 +625,7 @@ Words.
 | `truncate` | `boolean` | One line, cut with an ellipsis. |
 | `select` | `boolean` | Selectable, for a value to copy. |
 | `balance` | `boolean` | Balanced line breaks (a heading). |
+| `fit` | `boolean` | Grows with its container's width, on one line, from its size up to the display size: a title that fills a column (a track's name, a countdown). Since 1.3. |
 | `children` | `ReactNode` | The words. |
 
 #### `Badge`
@@ -1023,6 +1026,26 @@ Pixels of the widget's own inside its window: a page of the package (an .html fi
 | `height` | `number` | Its height in pixels; without one it fills the space it is given. |
 | `data` | `WireValue \| null` | Data for the page, as plain values (256 KB at most): `cmd.data` there, and `cmd.on("data", fn)` on each change. |
 | `onMessage` | `(value: WireValue) => void` | The page sent a value (`cmd.post(value)`). Not a press: it can't start an act. |
+
+#### `Adapt`
+
+A layout per size: draws the first Case its own box fits (its width and height in px, a Pane's when it sits in one), switched by cmd as the window resizes, without a round-trip to the widget. For a widget with a small and a large face; `Hide below` is enough to drop one thing from a narrow window, and `useSize()` is for numbers in logic (how many rows fit). Only the Case drawn is mounted: a field's draft in it is lost when the case changes. Give it room to measure: directly in a View, a Pane or a growing Stack; a height condition needs a box whose height isn't its content's. Since 1.3.
+
+| Prop | Type | What |
+|---|---|---|
+| `children` | `ReactNode` | Cases, the most demanding first; a Case without conditions last, as the fallback (without one, nothing is drawn while none fits). |
+
+#### `Case`
+
+One layout of an Adapt, drawn while the Adapt's box meets every condition given (each in px, inclusive); a Case without conditions always fits. Outside an Adapt it draws its children. Since 1.3.
+
+| Prop | Type | What |
+|---|---|---|
+| `minWidth` | `number` | Drawn from this width up. |
+| `maxWidth` | `number` | Drawn up to this width. |
+| `minHeight` | `number` | Drawn from this height up. |
+| `maxHeight` | `number` | Drawn up to this height. |
+| `children` | `ReactNode` | The layout. |
 
 ### Records
 

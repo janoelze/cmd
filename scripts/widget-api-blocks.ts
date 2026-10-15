@@ -2,7 +2,7 @@
 // V3"): Magic's prompt (packages/core/src/magic/prompt/prompt.md) and the CLAUDE.md that
 // `cmd widget new` writes (packages/cli/templates/widget/CLAUDE.md) teach composition and
 // judgement in words, and name the API's lists (the live hooks, the toolbar's items, the
-// permission keys with their values, a frame page's `cmd`, storage's scopes and quotas) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
+// permission keys with their values, a frame page's `cmd`, storage's scopes and quotas, layout by size) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
 // markers, filled from the rows the core enforces: protocol widget-verbs.ts, widget-elements.ts,
 // widget-package.ts's keys and the core's data/policy.ts. Both strip the markers where they
 // are read (magic/package/prompt.ts, cli widget-new.ts). packages/core/test/magic-prompt.test.ts
@@ -140,9 +140,17 @@ function storage(): string {
   return `${q("cmd.storage.window")} (this window, ${size(STORAGE_LIMITS.window)}; ${q("cmd.state")} and ${q("useStoredState")} are the same data), ${q("cmd.storage.workspace")} (this widget in the window's workspace, ${size(STORAGE_LIMITS.workspace)}) and ${q("cmd.storage.package")} (this widget everywhere, ${size(STORAGE_LIMITS.package)}), each with ${list(verbs.map((v) => q(`${v}(${args[v] ?? ""})`)))}; live in every window at once with ${q("useStorage(scope, key, initial)")}; a value at most ${size(STORAGE_LIMITS.value)}, a key at most ${STORAGE_LIMITS.key} characters`;
 }
 
+/** Layout by size (1.3): Adapt and its Case conditions, Hide for one thing, useSize for numbers, Stack justify and Text fit. */
+function size(): string {
+  if (!apiExports().exported.some((s) => s.name === "useSize")) throw new Error("@cmd/widget-api has no useSize for the size block");
+  const conditions = Object.keys(API_ELEMENTS.Case.props).join(" ");
+  const justify = API_ELEMENTS.Stack.props.justify.type.map((j) => `"${j}"`).join(" | ");
+  return `a face per size is ${q("Adapt")} around ${q(`Case ${conditions}`)} (px, the most demanding first, one without conditions last as the fallback): cmd draws the first that fits the Adapt's box (a Pane's in a Pane) and switches as the window resizes, without waking the widget. ${q('Hide below="narrow"')} drops one thing from a narrow window; ${q("useSize()")} (the content's ${q("{ width, height }")} in px, or null before it is measured) is for numbers in logic (how many rows fit), never for picking a layout. ${q(`Stack grow justify={${justify}}`)} places a column in the room (centred: ${q('justify="center"')}); ${q("Text fit")} is a title as large as its column allows`;
+}
+
 /** Every block by name. */
 export function blocks(): Record<string, string> {
-  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame(), storage: storage() };
+  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame(), storage: storage(), size: size() };
 }
 
 /** `text` with each block filled; a block on its own lines keeps the indent of its first marker. */

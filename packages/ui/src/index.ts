@@ -16,6 +16,7 @@ export { FindBar, findCount, Glyph, Highlight, NO_FIND_OPTIONS, type FindBarHand
 export { Chart, Legend, Sparkline, type Series } from "./chart.tsx";
 export { Bars, Line, Plot, PlotGroup, Rule, Ticks, axisTicks, seriesColor, usePlot, useSize, type ChartSeries, type PlotProps, type PlotScales } from "./plot.tsx";
 export { Calendar, ChartHead, Delta, Distribution, Meter, PunchCard, Proportion, Ranking, TimeBars, TimeSeries, heatLevels, type RankingRow, type TimeChartProps } from "./charts.tsx";
+export { Adapt, Case, fits, pickCase, type CaseConditions } from "./adapt.tsx";
 export { Dial, Document, Filmstrip, Hide, Picture, Viewport, Inline, Measure, MediaStage, Page, Pane, Panes, Split, Stack, Stage, Stat, StatusLine, Text, Thumb, Tiles, TitleBand, View, WebStage, ViewState, type Space, type ViewStateSpec } from "./frame.tsx";
 export { formatTime, Scrubber, TimeBar, type ScrubberProps, type TimeBarProps, type TrimRange } from "./media.tsx";
 export { Ribbon, Timeline, TimelineEntry, type RibbonItem } from "./timeline.tsx";

@@ -7,7 +7,7 @@
 // protocol's API row (widget-verbs.ts). It runs in Node under a test runner, never in the
 // widget process, so it may take the protocol's values.
 
-import { API, API_ELEMENT_NAMES, API_TOPIC, API_TOPICS } from "@cmd/protocol/widget-tree";
+import { API, API_ELEMENT_NAMES, API_TOPIC, API_TOPICS, roundBox, sizeEnv } from "@cmd/protocol/widget-tree";
 import type {
   ApiAction,
   ApiAgent,
@@ -71,6 +71,11 @@ export interface HostData {
   diff?: string;
   worktrees?: ApiGitWorktree[];
   actions?: ApiAction[];
+  /**
+   * Where the widget runs: theme, size class, placement, and (1.3) the content's `box`, which
+   * follows the size class's reference window unless given (`sizeEnv("narrow")` is a narrow
+   * window's whole env; `box: null` is a window not measured yet). `host.set({ env })` is a resize.
+   */
   env?: Partial<WidgetEnv>;
   /** Verbs refused as a grant without them would be, with the permission they need (`'net: ["api.github.com"]'`); a live hook over one (`useEvents` for `events.query`) is refused too. */
   deny?: Partial<Record<ApiVerb, string>>;
@@ -202,7 +207,12 @@ export function createHost(data: HostData = {}): FakeHost {
 
   const ws = (): ApiWorkspace => fixtureWorkspace(d.workspace);
   let started = 0;
-  const env = (): WidgetEnv => ({ version: "0.32.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: Object.keys(verbs) as ApiVerb[], elements: [...API_ELEMENT_NAMES], theme: "dark", size: "regular", placement: "board", ...d.env });
+  // The window's box (1.3) follows its size class's reference window unless given, rounded as the core rounds it.
+  const env = (): WidgetEnv => {
+    const size = d.env?.size ?? "regular";
+    const box = d.env && "box" in d.env ? roundBox(d.env.box) : sizeEnv(size).box;
+    return { version: "0.32.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: Object.keys(verbs) as ApiVerb[], elements: [...API_ELEMENT_NAMES], theme: "dark", placement: "board", ...d.env, size, box };
+  };
 
   const deliver = (msg: WidgetIn) => {
     inFlight++;

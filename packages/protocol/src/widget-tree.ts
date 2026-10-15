@@ -11,7 +11,7 @@
 //   process → core: hello, tree, patch, call, subscribe, unsubscribe, log, error
 //   core → process: ready, result, event, interaction, config, env, resync
 
-import type { ApiElement } from "./widget-elements.ts";
+import type { ApiBox, ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
 import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, WidgetMigrated } from "./widget-tree-1.3.ts";
@@ -232,6 +232,12 @@ export interface WidgetEnv {
   theme: "dark" | "light";
   /** The window's size class. */
   size: "narrow" | "regular" | "wide";
+  /**
+   * 1.3: the window content's size in px (each side rounded down to 8; at most every 200 ms while it
+   * resizes), for logic that needs numbers (how many rows fit). Null until cmd has measured the
+   * window; a cmd before 1.3 sends none. A layout per size is an `Adapt`, not this.
+   */
+  box?: ApiBox | null;
   placement: "board" | "sidebar";
 }
 

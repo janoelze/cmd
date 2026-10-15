@@ -18,7 +18,7 @@
 // them, the process answers `migrated` for each (one that throws stops it); others wait. A window
 // moved to a workspace whose data is older starts again, to migrate it.
 
-import { API_ELEMENT_NAMES, WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
+import { API_ELEMENT_NAMES, WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, roundBox, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../../kernel/context.ts";
 import { ApiRefusal } from "../api/access.ts";
@@ -163,11 +163,13 @@ export class WidgetHost {
     inst.conn.send({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value: value as WireValue }) });
   }
 
-  setEnv(windowId: WindowId, env: Pick<WidgetEnv, "theme" | "size" | "placement">): void {
+  setEnv(windowId: WindowId, env: Pick<WidgetEnv, "theme" | "size" | "placement" | "box">): void {
     const inst = this.#must(windowId);
     const next = {
       theme: env.theme === "light" ? ("light" as const) : ("dark" as const),
       size: env.size === "narrow" || env.size === "wide" ? env.size : ("regular" as const),
+      // 1.3: the content's box, rounded as the widget gets it (an older renderer sends none: the last one stays).
+      box: roundBox(env.box) ?? inst.env.box ?? null,
       placement: env.placement === "sidebar" ? ("sidebar" as const) : ("board" as const),
     };
     if (JSON.stringify(next) === JSON.stringify(inst.env)) return;

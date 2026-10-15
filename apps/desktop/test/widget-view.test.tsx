@@ -134,7 +134,7 @@ describe("the package view", () => {
     const l = link();
     await draw(store, l);
     expect(el.textContent).toContain("Starting…");
-    expect(l.env).toHaveBeenCalledWith({ theme: "dark", size: "regular", placement: "board" });
+    expect(l.env).toHaveBeenCalledWith({ theme: "dark", size: "regular", box: null, placement: "board" });
     await act(async () => store.apply({ kind: "status", state: "waiting-grant" }));
     expect(el.textContent).toContain("Waiting for permission");
     await act(async () => [...el.querySelectorAll("button")].find((b) => b.textContent === "Allow…")!.click());

@@ -5,7 +5,7 @@
 // useCompletion asks the person's AI (`cmd.ai.complete`) once per request.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ApiAppUsage, ApiJournalDay, ApiJournalQuery, ApiStatQuery, ApiStatResult, ApiWorkspaceName, ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiBox, ApiAppUsage, ApiJournalDay, ApiJournalQuery, ApiStatQuery, ApiStatResult, ApiWorkspaceName, ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { mergeEvents } from "@cmd/protocol/widget-events";
 import { connection, type ApiCallError } from "./connection.ts";
 
@@ -206,6 +206,18 @@ export function useConfig<T extends ConfigShape<T> = ConfigValues>(): T {
  */
 export function useEnv(): WidgetEnv {
   return usePushed(() => connection().env);
+}
+
+/**
+ * The window content's size in px, live: each side rounded down to 8, at most every 200 ms while
+ * the window resizes; null until cmd has measured it (and on a cmd before 1.3). For logic that
+ * needs numbers: how many rows fit, how many buckets a chart gets. A layout per size is an
+ * `Adapt` (cmd switches it without waking the widget); dropping one thing from a narrow window
+ * is `Hide below`.
+ * @since 1.3
+ */
+export function useSize(): ApiBox | null {
+  return usePushed(() => connection().env.box ?? null);
 }
 
 /**

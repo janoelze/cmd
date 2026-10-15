@@ -20,6 +20,8 @@ export { createHost, type FakeHost, type HostData, type FetchFixture, type AiFix
 export { fixtures, WORKSPACE_ID } from "./testing/fixtures.ts";
 /** A window's config as the core gives it: the fields' defaults under the values set, never a secret (for a harness that reads package.json). */
 export { configValues } from "@cmd/protocol";
+/** A reference window's env (1.3): `sizeEnv("narrow")` is `{ size, box }` of the narrow one (320×520), for `createHost({ env: sizeEnv("narrow") })`, as the Workbench's Sizes and `cmd widget preview --sizes` draw it. */
+export { sizeEnv } from "@cmd/protocol/widget-tree";
 export { RenderedTree, matchers, textOf, titleOf, type Node, type Element, type WidgetMatchers } from "./testing/tree.ts";
 
 expect.extend(matchers);
