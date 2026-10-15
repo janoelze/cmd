@@ -204,7 +204,8 @@ export function windowStorage(core: Pick<CoreContext, "windows">, s: StorageScop
 
   return {
     verbs,
-    read: (q) => verbs["storage.get"](q?.scope, q?.key),
+    // Checked at once, so a subscription to a scope or key that can't be is refused, not silent.
+    read: (q) => verbs["storage.get"](scopeOf("storage", q?.scope), keyOf("storage", q?.key)),
     async migrateStart() {
       const m = await storage.lock(owner, s.declared, s.windowId);
       if (m && disposed) storage.unlock(owner, s.windowId);

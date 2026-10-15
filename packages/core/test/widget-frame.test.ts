@@ -187,7 +187,7 @@ describe("frame widgets", () => {
     expect(await sub(bare.id, 2, "agents")).toMatchObject({ ok: false, error: { code: "permission", permission: 'workspace: ["read"]' } });
     expect(await sub(w.id, 3, "agents", { scope: "all" })).toMatchObject({ ok: false, error: { code: "permission", permission: 'workspace: ["all"]' } });
     expect(await sub(w.id, 4, "pages")).toMatchObject({ ok: false, error: { code: "unknown" } });
-    for (const t of API_TOPICS.filter((t) => t !== "events")) expect((await sub(w.id, 10, t)).ok, t).toBe(true);
+    for (const t of API_TOPICS.filter((t) => t !== "events")) expect((await sub(w.id, 10, t, t === "storage" ? { scope: "package", key: "k" } : undefined)).ok, t).toBe(true);
     expect(core.library.host.frames.count()).toBe(1); // one sub id, each replaced
 
     // The frame goes: every one of its subscriptions with it.

@@ -28,7 +28,7 @@ describe("cmd.storage", () => {
 
 describe("useStorage", () => {
   function Count() {
-    const [n, setN] = useStorage("package", "count", 0);
+    const [n, setN] = useStorage<number>("package", "count", 0);
     return (
       <View>
         <Text>{`count ${n}`}</Text>
