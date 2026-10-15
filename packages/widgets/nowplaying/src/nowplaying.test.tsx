@@ -6,7 +6,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, createHost, fixtures, type FakeHost } from "@cmd/widget-api/testing";
-import MediaControls, { EVERY, appName, clock, position } from "./nowplaying.tsx";
+import MediaControls, { EVERY, clock, position } from "./nowplaying.tsx";
 
 const { playing } = fixtures;
 const track = (over: Parameters<typeof playing>[0] = {}) => playing({ app: "com.spotify.client", title: "Teardrop", artist: "Massive Attack", album: "Mezzanine", duration: 330, elapsed: 75, at: Date.now(), ...over });
@@ -32,7 +32,9 @@ describe("Media Controls", () => {
     expect(tree.text()).toMatch(/1:1[5-6]/);
     expect(tree.text()).toMatch(/−4:1[4-5]/);
     expect(tree.find("Window").props.status).toBe("Teardrop · Massive Attack");
-    expect(tree.text()).toContain("Playing in Spotify");
+    // No footer naming the app, as the native view.
+    expect(tree.findAll("StatusLine")).toHaveLength(0);
+    expect(tree.text()).not.toContain("Spotify");
     expect(tree.findAll("IconButton").map((b) => b.props.label)).toEqual(["Previous", "Pause", "Next"]);
   });
 
@@ -58,7 +60,6 @@ describe("Media Controls", () => {
     await tree.idle();
     expect(tree.find("TimeBar").props).toMatchObject({ playing: false, time: 80 });
     expect(tree.findAll("IconButton").map((b) => b.props.label)).toContain("Play");
-    expect(tree.text()).toContain("Paused in Spotify");
     host.set({ playing: track({ title: "Angel", elapsed: 0 }) });
     vi.advanceTimersByTime(EVERY * 1000);
     await tree.idle();
@@ -135,7 +136,5 @@ describe("Media Controls", () => {
     expect(position({ ...n, elapsed: null })).toBeNull();
     expect(clock(187)).toBe("3:07");
     expect(clock(3729)).toBe("1:02:09");
-    expect(appName("com.spotify.client")).toBe("Spotify");
-    expect(appName("org.videolan.vlc")).toBe("Vlc");
   });
 });

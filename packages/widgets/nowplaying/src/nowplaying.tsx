@@ -4,7 +4,7 @@
 // control and each seek is one press, one `cmd.media.control`. The API has no live topic for
 // it, so it asks every 2 seconds (the core holds the Mac's stream open and answers from it);
 // between answers the scrubber moves on by itself. Nothing playing, refused, or failed: a
-// state that says so.
+// state that says so. No footer, as natively; a control that didn't go through says why in one.
 
 import { Window, View, Stack, Inline, Text, Icon, IconButton, TimeBar, StatusLine, useData, useNow, useEnv, cmd, ApiCallError, type NowPlaying, type MediaCommand } from "@cmd/widget-api";
 import { useMemo, useState } from "react";
@@ -29,14 +29,6 @@ export function clock(s: number): string {
 }
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
-/** The app's name from its bundle id, for the footer: "com.spotify.client" → "Spotify". */
-export function appName(bundle: string): string {
-  const known: Record<string, string> = { "com.apple.Music": "Music", "com.spotify.client": "Spotify", "com.apple.Safari": "Safari", "com.google.Chrome": "Chrome", "com.apple.podcasts": "Podcasts", "com.apple.TV": "TV" };
-  if (known[bundle]) return known[bundle];
-  const last = bundle.split(".").filter((p) => !["com", "org", "app", "client", "desktop", "mac"].includes(p.toLowerCase())).pop() ?? bundle;
-  return last.charAt(0).toUpperCase() + last.slice(1);
-}
 
 function Player({ np, refresh }: { np: NowPlaying; refresh: () => void }) {
   const [failed, setFailed] = useState<string | null>(null);
@@ -85,7 +77,7 @@ function Player({ np, refresh }: { np: NowPlaying; refresh: () => void }) {
           </Inline>
         </Stack>
       </Stack>
-      <StatusLine>{failed ?? `${np.playing ? "Playing" : "Paused"} in ${appName(np.app)}`}</StatusLine>
+      {failed && <StatusLine>{failed}</StatusLine>}
     </View>
   );
 }

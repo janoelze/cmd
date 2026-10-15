@@ -1,6 +1,6 @@
 {
   "name": "nowplaying",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "What the Mac is playing, with play, pause, skips and a scrubber.",
   "private": true,
   "license": "AGPL-3.0-only",
