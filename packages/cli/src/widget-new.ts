@@ -11,7 +11,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { linkDevModules, sandboxAvailable, sandboxMode, writeEnvTypes, type SandboxMode } from "@cmd/core/magic";
+import { linkDevModules, sandboxAvailable, sandboxMode, withoutMarkers, writeEnvTypes, type SandboxMode } from "@cmd/core/magic";
 import { cmdVersion, PACKAGE_NAME, readPackage, type WidgetPackage } from "@cmd/core/widgets/package";
 import { dim, green, red } from "./magic.ts";
 import { tilde } from "./tilde.ts";
@@ -64,8 +64,9 @@ export function prepare(dir: string): { linked: string[] | null; env: boolean } 
 /** The template's files, named and filled in for `name`. */
 export function templateFiles(name: string, year = new Date().getFullYear(), version = cmdVersion() ?? "0.30.0"): Record<string, string> {
   const id = idOf(name);
+  // CLAUDE.md's generated lists keep their text, not the markers `pnpm widget-api:docs` fills them by.
   const fill = (s: string) =>
-    s
+    withoutMarkers(s)
       .replaceAll("__NAME__", name)
       .replaceAll("__TITLE__", titleOf(name))
       .replaceAll("__ID__", id)

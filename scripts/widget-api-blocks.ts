@@ -1,0 +1,136 @@
+// The lists in the prose agents read about the widget API, generated (docs/56, "Magic on
+// V3"): Magic's prompt (packages/core/src/magic/prompt/prompt.md) and the CLAUDE.md that
+// `cmd widget new` writes (packages/cli/templates/widget/CLAUDE.md) teach composition and
+// judgement in words, and name the API's lists (the live hooks, the toolbar's items, the
+// permission keys with their values) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
+// markers, filled from the rows the core enforces: protocol widget-verbs.ts, widget-elements.ts,
+// widget-package.ts's keys and the core's data/policy.ts. Both strip the markers where they
+// are read (magic/package/prompt.ts, cli widget-new.ts). packages/core/test/magic-prompt.test.ts
+// fails when a block is stale, and checks the names the prose around them uses.
+//
+//   node scripts/widget-api-blocks.ts           write the blocks (pnpm widget-api:docs runs it)
+//   node scripts/widget-api-blocks.ts --check   exit 1 when one is stale
+
+import fs from "node:fs";
+import path from "node:path";
+import { API, API_ACT_VERBS, API_AI_USES, API_ELEMENTS, API_TOPICS, type ApiNeed, type ApiVerb } from "../packages/protocol/src/widget-tree.ts";
+import { PERMISSION_KEYS } from "../packages/protocol/src/widget-package.ts";
+import { DATA_CLASSES, type DataClass } from "../packages/protocol/src/events.ts";
+import { POLICY, declarable } from "../packages/core/src/data/policy.ts";
+import { apiExports } from "./widget-api-docs.ts";
+
+const root = path.resolve(import.meta.dirname, "..");
+/** The files with blocks. */
+export const BLOCK_FILES = [path.join(root, "packages/core/src/magic/prompt/prompt.md"), path.join(root, "packages/cli/templates/widget/CLAUDE.md")];
+
+const q = (s: string) => `\`${s}\``;
+const list = (xs: string[], and = "and") => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} ${and} ${xs.at(-1)}`);
+const verbsNeeding = (need: ApiNeed) => (Object.keys(API) as ApiVerb[]).filter((v) => API[v].needs === need);
+const namespaces = (verbs: string[]) => [...new Set(verbs.map((v) => v.split(".")[0]!))];
+
+/** The live hooks, one per topic, with the keys of their query: `useAgents({ scope })`. */
+function hooks(): string {
+  const { checker, exported } = apiExports();
+  return API_TOPICS.map((t) => {
+    const name = `use${t[0]!.toUpperCase()}${t.slice(1)}`;
+    const hook = exported.find((s) => s.name === name);
+    if (!hook) throw new Error(`@cmd/widget-api has no ${name} for the topic "${t}"`);
+    const param = checker.getTypeOfSymbol(hook).getCallSignatures()[0]?.parameters[0];
+    const keys = param ? checker.getNonNullableType(checker.getTypeOfSymbol(param)).getProperties().map((p) => p.name) : [];
+    return q(`${name}(${keys.length ? `{ ${keys.join(", ")} }` : ""})`);
+  }).join(", ");
+}
+
+/** The toolbar's items: the elements named Toolbar…, in the spec's order. */
+const toolbar = () =>
+  Object.keys(API_ELEMENTS)
+    .filter((e) => e.startsWith("Toolbar"))
+    .map(q)
+    .join(", ");
+
+/** The event classes a widget names (`events`), and the ones it reads without. */
+function eventClasses() {
+  const rules = POLICY.widget;
+  return { free: declarable("widget").filter((c) => rules[c] === "allow"), named: declarable("widget").filter((c) => rules[c] !== "allow") };
+}
+
+/** A class with what it holds, when its name doesn't say: `"ai"` (model calls). */
+function gloss(c: DataClass): string {
+  const title = DATA_CLASSES[c].title.replace(/^The /, "the ");
+  const words = /^the /.test(title) ? title : title.toLowerCase();
+  return words === c || words === `${c}s` ? q(`"${c}"`) : `${q(`"${c}"`)} (${words})`;
+}
+
+/** One verb alone, as `act` may name it. */
+const ONE_ACT = API_ACT_VERBS.includes("terminals.open") ? "terminals.open" : API_ACT_VERBS[0]!;
+
+/** The act values: each namespace with its verbs' names, and one verb alone. */
+function acts(): string {
+  const byNs = namespaces(API_ACT_VERBS).map((ns) => `${q(`"${ns}"`)} (${API_ACT_VERBS.filter((v) => v.startsWith(`${ns}.`)).map((v) => v.split(".")[1]).join(", ")})`);
+  return `${byNs.join(", ")}, or one verb alone (${q(`"${ONE_ACT}"`)})`;
+}
+
+/** What each permission key is for, in Magic's words: a key added to PERMISSION_KEYS fails tsc here until it is described. */
+function permissionLines(): string[] {
+  const ev = eventClasses();
+  const ws = namespaces(verbsNeeding("workspace")).map((n) => q(`cmd.${n}`));
+  const lines: Record<(typeof PERMISSION_KEYS)[number], string> = {
+    net: `hosts ${list(verbsNeeding("net").map((v) => q(`cmd.${v}`)))} may reach (${q('"api.open-meteo.com"')}); no ${q("*")}.`,
+    workspace: `${q('["read"]')} to see this workspace's agents, terminals, windows, git status and Actions (${list(ws)}, and their hooks); ${q('["read", "all"]')} for every workspace's.`,
+    events: `classes of cmd's event log beyond ${list(ev.free)}, which need none: ${ev.named.map(gloss).join(", ")}.`,
+    ai: `${q(JSON.stringify(API_AI_USES))} to use the person's AI (it counts against their usage: only when the request is about it).`,
+    run: `the programs ${q("cmd.run")} runs, by name (${q('["ps"]')}, ${q('["gh"]')}); never a shell or an interpreter (sh, node, python).`,
+    read: `full paths of folders ${q("cmd.run")} may run in besides the workspace's (${q('["~/Notes"]')}); never the home folder itself or anything private.`,
+    act: `what it may ask to do, a namespace or one verb: ${acts()}. Only what a button in the widget does.`,
+  };
+  const order = ["net", "workspace", "events", "ai", "run", "read", "act"] as const satisfies readonly (typeof PERMISSION_KEYS)[number][];
+  const free = verbsNeeding(null);
+  const whole = namespaces(free).filter((ns) => (Object.keys(API) as string[]).filter((v) => v.startsWith(`${ns}.`)).every((v) => free.includes(v as ApiVerb)));
+  const none = [...whole.map((ns) => q(`cmd.${ns}`)), ...free.filter((v) => !whole.includes(v.split(".")[0]!)).map((v) => q(`cmd.${v}`))];
+  return [...order.map((k) => `- ${q(k)}: ${lines[k]}`), `- ${list(none)} need no permission.`];
+}
+
+/** The keys as package.json writes them, on one line (CLAUDE.md). */
+function permissionKeys(): string {
+  const ev = eventClasses();
+  const ns = namespaces(API_ACT_VERBS);
+  return [
+    q("net: [<host>]"),
+    q("run: [<program>]"),
+    q("read: [<folder>]"),
+    `${q('workspace: ["read"]')} (${q('["read", "all"]')} for every workspace)`,
+    `${q("events: [<class>]")} (${ev.named.map((c) => `"${c}"`).join(", ")}; ${list(ev.free)} need none)`,
+    `${q("act: [<namespace>]")} (${ns.map((c) => `"${c}"`).join(", ")}, or one verb like "${ONE_ACT}")`,
+    q(`ai: ${JSON.stringify(API_AI_USES)}`),
+  ].join(", ");
+}
+
+/** Every block by name. */
+export function blocks(): Record<string, string> {
+  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys() };
+}
+
+/** `text` with each block filled; a block on its own lines keeps the indent of its first marker. */
+export function withBlocks(text: string, all = blocks()): string {
+  return text.replace(/([ \t]*)<!-- gen:([\w-]+) -->([\s\S]*?)<!-- \/gen:\2 -->/g, (_, indent: string, name: string, body: string) => {
+    const b = all[name];
+    if (b === undefined) throw new Error(`no block "${name}" (scripts/widget-api-blocks.ts)`);
+    const lines = body.startsWith("\n");
+    const filled = lines ? `\n${b.split("\n").map((l) => indent + l).join("\n")}\n${indent}` : b;
+    return `${indent}<!-- gen:${name} -->${filled}<!-- /gen:${name} -->`;
+  });
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const all = blocks();
+  let stale = false;
+  for (const file of BLOCK_FILES) {
+    const now = fs.readFileSync(file, "utf8");
+    const next = withBlocks(now, all);
+    const rel = path.relative(root, file);
+    if (now === next) console.log(`${rel} is up to date`);
+    else if (process.argv.includes("--check")) (console.error(`${rel} is stale: pnpm widget-api:docs`), (stale = true));
+    else (fs.writeFileSync(file, next), console.log(`wrote ${rel}`));
+  }
+  if (stale) process.exit(1);
+}

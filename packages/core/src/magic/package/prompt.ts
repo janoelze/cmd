@@ -1,4 +1,5 @@
-// The Magic system prompt for widget packages (docs/56, "Magic on V3"): prompt/prompt.md,
+// The Magic system prompt for widget packages (docs/56, "Magic on V3"): prompt/prompt.md
+// (its lists generated from the API's rows by scripts/widget-api-blocks.ts, markers stripped),
 // then the API reference as @cmd/widget-api's README has it (generated from the d.ts by
 // `pnpm widget-api:docs`, read here at build time so the agent reads the same contract a
 // developer does, never a copy), then the examples in prompt/examples/<n>-<name>/ (request.md,
@@ -111,9 +112,12 @@ function example(dir: string): string {
   return `<example>\n${request}\n\n${body}\n</example>`;
 }
 
+/** Text without the markers of its generated blocks (scripts/widget-api-blocks.ts): a marker on a line of its own goes with its line. */
+export const withoutMarkers = (text: string): string => text.replace(/^[ \t]*<!-- \/?gen:[\w-]+ -->\n/gm, "").replace(/<!-- \/?gen:[\w-]+ -->/g, "");
+
 /** The system prompt; `file` replaces prompt.md (prompt variants for evals). */
 export function buildPackageSystem(file?: string): string {
-  const main = fs.readFileSync(file ?? path.join(PROMPT_DIR, "prompt.md"), "utf8").trim();
+  const main = withoutMarkers(fs.readFileSync(file ?? path.join(PROMPT_DIR, "prompt.md"), "utf8")).trim();
   const types = apiTypes();
   const data = types ? `\n\n## The data\n\nWhat the reads return, as declared. @cmd/widget-api exports them without the \`Api\` prefix (\`Agent\`, \`Terminal\`, \`WindowInfo\` for ApiWindow, \`Workspace\`, \`Event\`, \`GitStatus\`, \`FetchResponse\`, \`Env\` for WidgetEnv); \`Light\` and \`Tone\` are exported as they are.\n\n\`\`\`ts\n${types}\n\`\`\`` : "";
   return `${main}\n\n# The API: @cmd/widget-api\n\nThe whole contract a widget is written against, generated from its types (everything here is in API 1 for good).\n\n${apiReference()}${data}\n\n# Examples\n\nFinished widgets (check, test and preview passed for each), and two builds that ended without a package.\n\n${examples().map(example).join("\n\n")}\n`;

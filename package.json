@@ -39,7 +39,7 @@
     "discord": "node scripts/discord.mjs",
     "shots": "pnpm build && node scripts/readme-shots/screenshots.mjs",
     "widget-api:gen": "node scripts/widget-api-gen.ts",
-    "widget-api:docs": "node scripts/widget-api-gen.ts && node scripts/widget-api-docs.ts"
+    "widget-api:docs": "node scripts/widget-api-gen.ts && node scripts/widget-api-docs.ts && node scripts/widget-api-blocks.ts"
   },
   "devDependencies": {
     "@strudel/core": "1.2.6",

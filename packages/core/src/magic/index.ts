@@ -11,7 +11,7 @@ export { drawTrees, judge, type DrawnTree } from "./package/preview.ts";
 export { checkoutToolchain, linkDevModules, REPO, type Toolchain, type TreeVariant } from "./package/toolchain.ts";
 export { envTypes, writeEnvTypes, ENV_TYPES_FILE } from "../widgets/env-types.ts";
 export { LIBRARY_WAIT_MS, RELOAD_DEBOUNCE_MS } from "../widgets/limits.ts";
-export { buildPackageSystem, buildPackageRequest, promptHash, examples, exampleFiles, PROMPT_DIR, type Workspace } from "./package/prompt.ts";
+export { buildPackageSystem, buildPackageRequest, promptHash, withoutMarkers, examples, exampleFiles, PROMPT_DIR, type Workspace } from "./package/prompt.ts";
 export { scriptedBackend, type Script, type ScriptTurn } from "./package/scripted.ts";
 export { slugOf, wantsText } from "./package/service.ts";
 export { PACKAGE_TOOL_SPECS } from "./package/tools.ts";
