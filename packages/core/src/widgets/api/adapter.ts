@@ -1,12 +1,13 @@
-// The widget API, major 1 (docs/56, "The host API"): the one core file that knows both sides.
-// Each verb of protocol widget-tree.ts in terms of the core's services, its row in access.ts
-// checked first; when the internals move, this file moves with them and no widget notices.
+// The widget API (docs/56, "The host API"): the one core file that knows both sides. Each verb
+// of protocol widget-verbs.ts in terms of the core's services, what its API row needs checked
+// first; the acts are act.ts's. When the internals move, this file moves with them and no
+// widget notices.
 // A widget sees its own window's workspace unless granted `workspace: ["all"]`; a terminal's
 // screen comes back clipped and marked untrusted; events go through data/policy.ts's widget row.
 // Live topics (subscribe) are topics.ts's, over the same reads.
 
 import path from "node:path";
-import { API_VERBS, parsePackageKind, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiScopeQuery, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { API, API_VERBS, isActVerb, parsePackageKind, topicVerb, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { PolicyError } from "../../data/policy.ts";
 import { widgetRead, type WidgetIdentity } from "../../data/widgets.ts";
@@ -14,12 +15,12 @@ import { checkoutOf, worktreesOf } from "../../lib/checkout.ts";
 import { gitDiff, gitStatus } from "../../lib/git.ts";
 import { stripAnsi } from "../../terminals/commands.ts";
 import type { PackageWidget, WidgetPackage } from "../package.ts";
-import { API_ACCESS, TOPIC_ACCESS, ApiRefusal, RateLimit, failed, invalid, missing, workspaceScope } from "./access.ts";
+import { ApiRefusal, RateLimit, failed, invalid, missing, workspaceScope } from "./access.ts";
 import { widgetComplete, type AiUsage } from "./ai.ts";
 import { apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
 import { brokeredFetch } from "./net.ts";
 import { subscribeTopic } from "./topics.ts";
-import { isAct, widgetActs, type ActDeps } from "./act.ts";
+import { widgetActs, type ActDeps } from "./act.ts";
 import { widgetRunner, type RunScope } from "./run.ts";
 
 export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call">;
@@ -49,7 +50,8 @@ export interface WidgetScope {
   fetchImpl?: typeof fetch;
 }
 
-export interface ApiAdapter {
+/** One widget process's API: what its calls and subscriptions reach. */
+export interface WidgetApi {
   /** The verbs it serves (`cmd.env.has`). */
   readonly verbs: ApiVerb[];
   /** A verb; throws ApiRefusal for a refused or failed one. */
@@ -67,9 +69,10 @@ const DIFF_MAX = 256 * 1024;
 const WAIT_MAX_MS = 60_000;
 const FILES_MAX = 500;
 
-type Verbs = { [V in ApiVerb]: (...p: ApiMethods[V]["params"]) => ApiMethods[V]["result"] | Promise<ApiMethods[V]["result"]> };
+/** Every verb but the acts, which act.ts plans. */
+type Verbs = { [V in Exclude<ApiVerb, ApiActVerb>]: (...p: ApiMethods[V]["params"]) => ApiMethods[V]["result"] | Promise<ApiMethods[V]["result"]> };
 
-export function apiV1(core: AdapterCore, scope: WidgetScope): ApiAdapter {
+export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
   const perms = scope.permissions;
   const level = workspaceScope(perms);
   const limits = { net: new RateLimit(60), ai: new RateLimit(10), notify: new RateLimit(10) };
@@ -277,43 +280,38 @@ export function apiV1(core: AdapterCore, scope: WidgetScope): ApiAdapter {
       return brokeredFetch(url, init, { net: perms.net, fields: scope.widget.config, secret: scope.secret, fetchImpl: scope.fetchImpl });
     },
     "ai.complete": (req) => {
-      if (!perms.ai.includes("complete")) throw missing("ai", "complete", "Using cmd's AI");
       limits.ai.take("ai.complete");
       return widgetComplete(req, { name: scope.pkg.name, budget: () => Number(core.settings.settings["widgets.aiBudget"]) || 0, ai: core.ai }, scope.aiUsage);
     },
-    // 1.1: the acts ask the person (act.ts); cmd.run runs read-only commands through the core (run.ts).
-    "agents.start": (req) => acts.call("agents.start", [req as unknown as WireValue]) as never,
-    "agents.send": (id, text) => acts.call("agents.send", [id, text]) as never,
-    "agents.stop": (id) => acts.call("agents.stop", [id]) as never,
-    "terminals.type": (id, text, opts) => acts.call("terminals.type", [id, text, (opts ?? null) as WireValue]) as never,
-    "terminals.open": (req) => acts.call("terminals.open", [(req ?? null) as unknown as WireValue]) as never,
-    "actions.run": (name) => acts.call("actions.run", [name]) as never,
-    "windows.close": (id) => acts.call("windows.close", [id]) as never,
+    // 1.1: cmd.run runs read-only commands through the core (run.ts).
     "run.exec": (program, args, opts) => run(program, args, opts) as never,
   };
 
-  const reads = { agents, terminals, windows, events, git, actions, workspace: () => VERBS["workspace.get"]() };
+  /** A topic's read: its verb, the row already checked (topics.ts). */
+  const read = (verb: ApiVerb, q: unknown): unknown => (VERBS[verb as keyof Verbs] as (q: unknown) => unknown)(q);
 
   return {
     verbs: [...API_VERBS],
     async call(verb, params) {
       if (!(API_VERBS as readonly string[]).includes(verb)) throw new ApiRefusal({ code: "unknown", message: `This cmd doesn't serve ${String(verb).slice(0, 60)}.` });
       const v = verb as ApiVerb;
+      const p = Array.isArray(params) ? params : [];
       // The row first: what the verb needs at all; net hosts, event classes and "all" are checked per call.
-      const row = API_ACCESS[v];
-      if (row.needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
-      if (row.needs === "ai" && !perms.ai.includes("complete")) throw missing("ai", "complete", "Using cmd's AI");
-      // A confirm row is an act: act.ts checks its grant, the press, its scope, and asks.
-      if (row.mode === "confirm" && !isAct(v)) throw new ApiRefusal({ code: "unknown", message: `${v} asks the person first, which this cmd can't do for widgets yet.` });
+      const needs = API[v].needs;
+      if (needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
+      if (needs === "ai" && !perms.ai.includes(v.split(".")[1]!)) throw missing("ai", v.split(".")[1]!, "Using cmd's AI");
+      // An act: act.ts checks its grant, the press, its scope, and asks.
+      if (isActVerb(v)) return acts.call(v, p);
       const fn = VERBS[v] as (...p: WireValue[]) => unknown;
-      return ((await fn(...(Array.isArray(params) ? params : []))) ?? null) as WireValue;
+      return ((await fn(...p)) ?? null) as WireValue;
     },
     dispose() {
       acts.dispose();
     },
     subscribe(topic, query, push) {
-      if (TOPIC_ACCESS[topic as ApiTopic]?.needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
-      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, reads, perms, root: () => core.workspaces.get(own())?.root ?? null }, push);
+      const verb = topicVerb(topic);
+      if (verb && API[verb].needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
+      return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null }, push);
     },
   };
 }

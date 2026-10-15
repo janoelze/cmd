@@ -348,6 +348,9 @@ importers:
 
   packages/widget-api:
     dependencies:
+      '@cmd/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       react:
         specifier: ^19.3.0
         version: 19.3.0
@@ -355,9 +358,6 @@ importers:
         specifier: 0.34.0
         version: 0.34.0(react@19.3.0)
     devDependencies:
-      '@cmd/protocol':
-        specifier: workspace:*
-        version: link:../protocol
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0

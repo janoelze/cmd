@@ -120,7 +120,7 @@ Workspace Actions (docs/36).
 
 #### `cmd.notify`
 
-Notifications. Needs `notify`.
+Notifications. They need no permission.
 
 | Verb | Since | Permission | What |
 |---|---|---|---|

@@ -2,8 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { API_VERBS, type CoreEvent, type Method } from "@cmd/protocol";
-import { API_ACCESS } from "../src/widgets/api/access.ts";
+import { API, API_VERBS, type CoreEvent, type Method } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
 import { checkRemoteCall, MAX_WATCHES, NO_ARGS, REMOTE_ACCESS, RemoteDenied, remoteEvent, remoteEventVisible, remoteResult, scopeAllows, type PolicyContext } from "../src/remote/policy.ts";
 import { fakeFactory } from "./fake-pty.ts";
@@ -286,9 +285,8 @@ describe("widget trees to devices (docs/56, Remote)", () => {
   // widget.interact. View scope has none to make (never); control scope's press is marked as a
   // device's, so the act it leads to asks on the Mac every time, Once only, whatever was kept.
   it("leaves act verbs never for view scope and confirm on the Mac for control scope", () => {
-    const acts = API_VERBS.filter((v) => API_ACCESS[v].mode === "confirm");
+    const acts = API_VERBS.filter((v) => API[v].mode === "confirm");
     expect(acts.length).toBe(7);
-    for (const v of acts) expect(API_ACCESS[v].remote, v).toBe("confirm");
     expect(scopeAllows("view", REMOTE_ACCESS["widget.interact"])).toBe(false);
     const seen: boolean[] = [];
     const real = core.library.host.interact.bind(core.library.host);

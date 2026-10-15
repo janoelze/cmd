@@ -1,9 +1,10 @@
 // `pnpm widget-api:docs`: the reference section of packages/widget-api/README.md, generated
 // from the API's own d.ts with the TypeScript compiler (docs/56, "The API reference"): one
 // section per `cmd` namespace with each verb's signature, @since and permission, the hooks,
-// and one section per element of API_ELEMENTS with its props. The permission is the core's
-// own row (widgets/api/access.ts's API_ACCESS and TOPIC_ACCESS), so the page and what the
-// core enforces can't drift. The same reference, with how to start, is the website's widgets
+// and one section per element of API_ELEMENTS with its props. A verb's Since and Permission
+// are its row in protocol widget-verbs.ts's API (a hook's or use()'s, its topic's verb's), the
+// row the core enforces, so the page and the core can't drift; contract.test.ts holds the
+// JSDoc's @since and "Needs" to the same rows. The same reference, with how to start, is the website's widgets
 // page (website/public/_lib/widget-api.html, in the site's layout by widgets/index.php).
 // packages/widget-api/test/docs.test.ts fails when either is stale.
 //
@@ -13,8 +14,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import { API_ELEMENTS, WIDGET_API, WIDGET_API_MINOR } from "../packages/protocol/src/widget-tree.ts";
-import { API_ACCESS, TOPIC_ACCESS, type AccessRow } from "../packages/core/src/widgets/api/access.ts";
+import { API as VERBS, API_ELEMENTS, WIDGET_API, WIDGET_API_MINOR, topicVerb, type ApiVerbSpec } from "../packages/protocol/src/widget-tree.ts";
+
+/** A verb's row by its name ("agents.list"), or undefined. */
+const rowOf = (verb: string): ApiVerbSpec | undefined => (VERBS as Record<string, ApiVerbSpec>)[verb];
 
 const root = path.resolve(import.meta.dirname, "..");
 const API = path.join(root, "packages/widget-api");
@@ -36,7 +39,7 @@ const one = (s: string) => s.replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|").tri
 const code = (s: string) => "`" + s.replace(/\s+/g, " ").replace(/\|/g, "\\|") + "`";
 
 /** What a row needs, as package.json's cmd.permissions writes it (`ns`: the verb's namespace, for an act). */
-function permission(row: AccessRow | undefined, ns = ""): string {
+function permission(row: ApiVerbSpec | undefined, ns = ""): string {
   if (!row) return "none";
   const need = ({ workspace: '`workspace: ["read"]`', events: "`events: [<class>]`", net: "`net: [<host>]`", ai: '`ai: ["complete"]`', act: `\`act: ["${ns}"]\``, run: "`run: [<program>]`" } as Record<string, string>)[row.needs ?? ""] ?? "none";
   return row.mode === "read" ? need : `${need}, ${row.mode === "act" ? "acts" : "asks"}`;
@@ -66,12 +69,14 @@ export function reference(): string {
     if (call) {
       const text = checker.signatureToString(call, undefined, ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.WriteArrowStyleSignature).replace(/^\((.*?)\) => /, "($1): ");
       const tag = call.getJsDocTags().find((t) => t.name === "since");
-      out.push(`| ${code(`cmd.${ns.name}${text}`)} | ${ts.displayPartsToString(tag?.text ?? []).trim() || "1.0"} | ${permission((API_ACCESS as Record<string, AccessRow>)[`${ns.name}.exec`])} | ${one(ts.displayPartsToString(call.getDocumentationComment(checker)))} |`);
+      const row = rowOf(`${ns.name}.exec`);
+      out.push(`| ${code(`cmd.${ns.name}${text}`)} | ${row?.since ?? (ts.displayPartsToString(tag?.text ?? []).trim() || "1.0")} | ${permission(row)} | ${one(ts.displayPartsToString(call.getDocumentationComment(checker)))} |`);
     }
     for (const m of checker.getTypeOfSymbol(ns).getProperties()) {
       const verb = `${ns.name}.${m.name}`;
-      const row = (API_ACCESS as Record<string, AccessRow>)[verb] ?? (m.name === "use" || m.name === "subscribe" ? (TOPIC_ACCESS as Record<string, AccessRow>)[ns.name] ?? (API_ACCESS as Record<string, AccessRow>)[`${ns.name}.complete`] : undefined);
-      out.push(`| ${code(sig(m, `cmd.${verb}`))} | ${since(m)} | ${ns.name === "fmt" ? "none" : permission(row, ns.name)} | ${doc(m)} |`);
+      const own = rowOf(verb);
+      const row = own ?? (m.name === "use" || m.name === "subscribe" ? rowOf(topicVerb(ns.name) ?? `${ns.name}.complete`) : undefined);
+      out.push(`| ${code(sig(m, `cmd.${verb}`))} | ${own?.since ?? since(m)} | ${ns.name === "fmt" ? "none" : permission(row, ns.name)} | ${doc(m)} |`);
     }
     out.push("");
   }

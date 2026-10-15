@@ -5,13 +5,14 @@
 // `result`s and `event`s and forwards what the person does in the window as `interaction`s.
 //
 // Everything here is the promise to widget authors: within API 1 it only grows (new
-// verbs, elements, optional props, message fields). The core's adapter (widgets/api/v1.ts)
+// verbs, elements, optional props, message fields). The core's adapter (widgets/api/adapter.ts)
 // and the renderer's element table (windows/package/elements.tsx) are typed against it.
 //
 //   process → core: hello, tree, patch, call, subscribe, unsubscribe, log, error
 //   core → process: ready, result, event, interaction, config, env, resync
 
 import type { ApiElement } from "./widget-elements.ts";
+import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 
 // ── versions ────────────────────────────────────────────
 
@@ -228,78 +229,6 @@ export interface WidgetEnv {
 
 // ── the verbs ───────────────────────────────────────────
 
-/** Every verb of API 1 that crosses the wire. The core's capability table (widgets/api/access.ts) has a row for each. */
-export const API_VERBS = [
-  "workspace.get",
-  "workspace.windows",
-  "workspace.selected",
-  "agents.list",
-  "agents.get",
-  "terminals.list",
-  "terminals.read",
-  "terminals.waitFor",
-  "windows.list",
-  "windows.open",
-  "windows.select",
-  "events.query",
-  "events.stats",
-  "git.status",
-  "git.diff",
-  "git.worktrees",
-  "actions.list",
-  "notify.send",
-  "state.get",
-  "state.set",
-  "state.history",
-  "net.fetch",
-  "ai.complete",
-  // 1.1: acting (each asks the person, docs/55) and running a program through the core.
-  "agents.start",
-  "agents.send",
-  "agents.stop",
-  "terminals.type",
-  "terminals.open",
-  "actions.run",
-  "windows.close",
-  "run.exec",
-] as const;
-export type ApiVerb = (typeof API_VERBS)[number];
-
-/** The API minor each verb came in: a widget that may run on an older cmd checks `cmd.env.has(verb)` before one newer than 1.0. */
-export const API_SINCE: { [V in ApiVerb]: "1.0" | "1.1" } = {
-  "workspace.get": "1.0",
-  "workspace.windows": "1.0",
-  "workspace.selected": "1.0",
-  "agents.list": "1.0",
-  "agents.get": "1.0",
-  "terminals.list": "1.0",
-  "terminals.read": "1.0",
-  "terminals.waitFor": "1.0",
-  "windows.list": "1.0",
-  "windows.open": "1.0",
-  "windows.select": "1.0",
-  "events.query": "1.0",
-  "events.stats": "1.0",
-  "git.status": "1.0",
-  "git.diff": "1.0",
-  "git.worktrees": "1.0",
-  "actions.list": "1.0",
-  "notify.send": "1.0",
-  "state.get": "1.0",
-  "state.set": "1.0",
-  "state.history": "1.0",
-  "net.fetch": "1.0",
-  "ai.complete": "1.0",
-  "agents.start": "1.1",
-  "agents.send": "1.1",
-  "agents.stop": "1.1",
-  "terminals.type": "1.1",
-  "terminals.open": "1.1",
-  "actions.run": "1.1",
-  "windows.close": "1.1",
-  "run.exec": "1.1",
-};
-
 /** What each verb takes (its arguments, in order) and returns. */
 export interface ApiMethods {
   "workspace.get": { params: []; result: ApiWorkspace };
@@ -337,10 +266,6 @@ export interface ApiMethods {
 
 /** ApiMethods has exactly the verbs of API_VERBS (tsc fails here otherwise). */
 export const API_METHODS_MATCH_VERBS: [Exclude<ApiVerb, keyof ApiMethods>, Exclude<keyof ApiMethods, ApiVerb>] extends [never, never] ? true : false = true;
-
-/** Live topics: what the hooks and `use()`s subscribe to. */
-export const API_TOPICS = ["workspace", "agents", "terminals", "windows", "events", "git", "actions"] as const;
-export type ApiTopic = (typeof API_TOPICS)[number];
 
 /** A topic's query, and the data of its events. */
 export interface TopicQuery {
@@ -421,6 +346,16 @@ export interface ApiAgent {
   /** The agent it was started by (a subagent's host), and how deep under it. */
   parentId: string | null;
   depth: number;
+}
+
+/** SF Symbols per agent kind (ApiAgent.icon): the core's and the fake host's fixtures. */
+const AGENT_ICON: Record<string, string> = { claude: "sparkle", codex: "chevron.left.forwardslash.chevron.right" };
+export const agentIcon = (kind: string): string => AGENT_ICON[kind] ?? "terminal";
+
+/** An agent's light (ApiAgent.light): its bucket when it needs the person or wasn't seen, else its state's. */
+export function agentLight(state: ApiAgentState, bucket: ApiAgent["bucket"]): ApiLight {
+  if (bucket !== "rest") return bucket;
+  return ({ starting: "working", working: "working", done: "done", failed: "danger", exited: "off", idle: "idle", waiting: "idle" } as const)[state];
 }
 
 export interface ApiTerminal {
@@ -586,3 +521,4 @@ export interface ApiNotification {
 export type ApiTone = "neutral" | "accent" | "success" | "warning" | "danger";
 
 export * from "./widget-elements.ts";
+export * from "./widget-verbs.ts";

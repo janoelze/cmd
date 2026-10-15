@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PERMISSION_KEYS, SUPPORTED_API, noPermissions, packageKind, type MagicMark, type WidgetPermissions } from "@cmd/protocol";
+import { API_ACT_NAMESPACES, API_AI_USES, PERMISSION_KEYS, WIDGET_API, noPermissions, packageKind, type MagicMark, type WidgetPermissions } from "@cmd/protocol";
 import { POLICY, declarable } from "../data/policy.ts";
 import { ESCAPES } from "../lib/policy.ts";
 import { expandPath, magicDenyPaths, privateMatcher } from "../lib/paths-deny.ts";
@@ -77,8 +77,9 @@ const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const NAME = /^[a-z0-9][a-z0-9._-]{0,213}$/;
 const WIDGET_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ICON = /^[a-z0-9]+(\.[a-z0-9]+)*$/;
-const ACT = ["agents", "terminals", "windows", "actions"];
-const AI = ["complete"];
+/** What `act` and `ai` may name: protocol widget-verbs.ts's acts and ai verbs. */
+const ACT: readonly string[] = API_ACT_NAMESPACES;
+const AI: readonly string[] = API_AI_USES;
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const q = (v: unknown) => JSON.stringify(v);
@@ -259,9 +260,9 @@ export function parsePackage(json: unknown, dir: string, o: ParseOptions = {}): 
     return { ok: false, errors };
   }
   const api = c.api;
-  if (api === undefined) errors.push(`cmd.api: missing; add "api": ${SUPPORTED_API.max}, the widget API major it's written for`);
-  else if (typeof api !== "number" || !Number.isInteger(api)) errors.push(`cmd.api: ${q(api)} should be a whole number, like ${SUPPORTED_API.max}`);
-  else if (api < SUPPORTED_API.min || api > SUPPORTED_API.max) errors.push(`cmd.api: ${api} isn't a widget API this cmd runs (${SUPPORTED_API.min === SUPPORTED_API.max ? SUPPORTED_API.min : `${SUPPORTED_API.min}–${SUPPORTED_API.max}`})${api > SUPPORTED_API.max ? "; it needs a newer cmd" : ""}`);
+  if (api === undefined) errors.push(`cmd.api: missing; add "api": ${WIDGET_API}, the widget API major it's written for`);
+  else if (typeof api !== "number" || !Number.isInteger(api)) errors.push(`cmd.api: ${q(api)} should be a whole number, like ${WIDGET_API}`);
+  else if (api !== WIDGET_API) errors.push(`cmd.api: ${api} isn't a widget API this cmd runs (${WIDGET_API})${api > WIDGET_API ? "; it needs a newer cmd" : ""}`);
 
   const perms = permissions(c.permissions, errors, home);
   const experimental = list(c.experimental, "cmd.experimental", errors);

@@ -2,7 +2,8 @@
 // product's words. Each verb is a `call` to the core, which checks the widget's grant
 // (widgets/api/access.ts) and answers; a refused verb rejects with an ApiCallError that
 // names the permission, and the widget runs on. VERBS below has one entry per verb of
-// the protocol's API_VERBS: a verb missing here fails tsc.
+// the protocol's API_VERBS: a verb missing here fails tsc. The JSDoc's @since and "Needs"
+// are the verb's API row (protocol widget-verbs.ts): test/contract.test.ts holds them to it.
 
 import type { ApiMethods, ApiVerb, ApiEventQuery, ApiRunOptions, ApiRunResult, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { connection } from "./connection.ts";
@@ -199,7 +200,7 @@ export const cmd = {
     /** Live: the hook `useActions()`. @since 1.0 */
     use: useActions,
   },
-  /** Notifications. Needs `notify`. @since 1.0 */
+  /** Notifications. They need no permission. @since 1.0 */
   notify: {
     /** Sends a notification through cmd's notification center; one per `key` (a new one replaces it), muted with the window. @since 1.0 */
     send: VERBS["notify.send"],

@@ -3,6 +3,8 @@
 // each act, in this order:
 //
 //   1. needs its grant (`act: ["agents"]` or `act: ["agents.start"]`, access.ts's mayAct);
+//      which verbs act, what they ask under and which carry typed text is protocol
+//      widget-verbs.ts's API row: the plans below are typed by it;
 //   2. comes right after the person pressed something in the widget, and takes that press (one
 //      act per press: a widget can't act on its own, nor many times on one click);
 //   3. names only things in the widget's own workspace, never its own window, by ids the core
@@ -17,7 +19,7 @@
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { kindLabel, permissionOf, type Agent, type ApiAgentStart, type ApiTerminalOpen, type ApiVerb, type AppWindow, type ToolActivity, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { API, actTyped, kindLabel, permissionOf, type Agent, type ApiActVerb, type ApiAgentStart, type ApiTerminalOpen, type AppWindow, type Permission, type ToolActivity, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../../kernel/context.ts";
 import { isDeniedPath, remotePrivatePaths } from "../../lib/paths-deny.ts";
@@ -36,10 +38,6 @@ export const ACT_AFTER_PRESS_MS = 5000;
 const ASK_MS = 15 * 60_000;
 const TEXT_MAX = 20_000;
 const LINE_MAX = 2000;
-
-export type ActVerb = "agents.start" | "agents.send" | "agents.stop" | "terminals.type" | "terminals.open" | "actions.run" | "windows.close";
-export const ACT_VERBS: readonly ActVerb[] = ["agents.start", "agents.send", "agents.stop", "terminals.type", "terminals.open", "actions.run", "windows.close"];
-export const isAct = (v: string): v is ActVerb => (ACT_VERBS as readonly string[]).includes(v);
 
 export type ActCore = Pick<CoreContext, "agents" | "panes" | "windows" | "workspaces" | "actions" | "data" | "call" | "opened">;
 
@@ -67,18 +65,16 @@ export interface ActScope {
   deps: () => ActDeps | null;
 }
 
-/** One act, worked out before anything is asked: what to ask, where it acts, and doing it. */
+/** One act, worked out before anything is asked: what to ask (under the verb's `ask` unless it says), where it acts, and doing it. */
 interface Plan {
-  approval: Approval;
-  /** Typed text: always asks, never kept. */
-  typed?: boolean;
+  approval: Omit<Approval, "permission"> & { permission?: Permission };
   /** The window it acts on (for the mark), when known before it runs. */
   target: string | null;
   run(): Promise<{ value: WireValue; target?: string | null }>;
 }
 
 /** One widget process's acts: the queue, the windows it opened, what waits for the person. */
-export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb, params: WireValue[]): Promise<WireValue>; dispose(): void } {
+export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActVerb, params: WireValue[]): Promise<WireValue>; dispose(): void } {
   const rate = new RateLimit(20);
   const opened = new Set<string>();
   const waiting = new Set<string>();
@@ -142,7 +138,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
   };
   const windowName = (w: AppWindow) => (w.kind === "terminal" ? terminalName(w.id) : `the window “${w.title}”`);
 
-  const plans: { [V in ActVerb]: (p: WireValue[]) => Plan } = {
+  const plans: { [V in ApiActVerb]: (p: WireValue[]) => Plan } = {
     "agents.start": ([req]) => {
       const r = (req && typeof req === "object" ? req : {}) as unknown as ApiAgentStart;
       const kind = r.kind === undefined ? "claude" : r.kind;
@@ -151,10 +147,9 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       const cwd = folder(r.cwd);
       const where = path.relative(own().root || os.homedir(), cwd);
       return {
-        approval: { permission: "agents", title: `Start ${kindLabel(kind)} on a task${where ? ` in ${where}` : ""}`, exact: prompt },
         // The prompt is the whole act (agents often run with their permissions skipped): typed text, asked every
-        // time and never kept, for a person's package; a built-in one follows the levels.
-        typed: !scope.pkg.builtin,
+        // time and never kept, for a person's package; a built-in one follows the levels (the row's typed: "person").
+        approval: { title: `Start ${kindLabel(kind)} on a task${where ? ` in ${where}` : ""}`, exact: prompt },
         target: null,
         async run() {
           const a = await core.call("agent.spawn", { kind, prompt, workspaceId: own().id, cwd, parentId: null });
@@ -167,8 +162,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       const a = ownAgent(id);
       const t = text(msg, "agents.send's message");
       return {
-        approval: { permission: "type", title: `Send a message to ${agentName(a)}`, exact: t },
-        typed: true,
+        approval: { title: `Send a message to ${agentName(a)}`, exact: t },
         target: a.paneId ?? null,
         run: async () => (await core.call("agent.send", { agentId: a.id, text: t, submit: true }), { value: null }),
       };
@@ -176,7 +170,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
     "agents.stop": ([id]) => {
       const a = ownAgent(id);
       return {
-        approval: { permission: "stop", title: `Stop ${agentName(a)}`, exact: a.cwd },
+        approval: { title: `Stop ${agentName(a)}`, exact: a.cwd },
         target: a.paneId ?? null,
         run: async () => (await core.call("agent.kill", { agentId: a.id }), { value: null }),
       };
@@ -187,8 +181,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       const submit = !!(opts && typeof opts === "object" && (opts as { submit?: unknown }).submit === true);
       if (!p.agentId) refuseTyped(t);
       return {
-        approval: { permission: "type", title: `Type in ${terminalName(p.id)}`, exact: submit ? `${t}  ⏎` : t },
-        typed: true,
+        approval: { title: `Type in ${terminalName(p.id)}`, exact: submit ? `${t}  ⏎` : t },
         target: p.id,
         run: async () => (await core.call("pane.write", { paneId: p.id, data: t + (submit ? "\r" : "") }), { value: null }),
       };
@@ -200,7 +193,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       if (command) refuseTyped(command);
       const where = path.relative(own().root || os.homedir(), cwd);
       return {
-        approval: { permission: "show", title: command ? `Open a terminal${where ? ` in ${where}` : ""} with a command typed, not run` : `Open a terminal${where ? ` in ${where}` : ""}`, ...(command ? { exact: command } : {}) },
+        approval: { title: command ? `Open a terminal${where ? ` in ${where}` : ""} with a command typed, not run` : `Open a terminal${where ? ` in ${where}` : ""}`, ...(command ? { exact: command } : {}) },
         target: null,
         async run() {
           // Typed at its first prompt by the shell integration (print -z), as a restored terminal's command is: never run.
@@ -221,7 +214,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       if (!a) throw invalid(`No action “${name.slice(0, 60)}” in this workspace.`);
       if (a.risky) throw new ApiRefusal({ code: "denied", message: `“${a.name}” is risky (it deploys, publishes or drops something): run it from Workspace Actions.` });
       return {
-        approval: { permission: "run", title: `Run “${a.name}”`, exact: a.command },
+        approval: { title: `Run “${a.name}”`, exact: a.command },
         target: null,
         async run() {
           const r = await core.call("actions.run", { root: list.root, actionId: a.id, workspaceId: ws.id, restart: false, confirmed: false });
@@ -232,16 +225,16 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
     },
     "windows.close": ([id]) => {
       const w = ownWindow(id);
-      // Closing what it opened is tidying up; anything else may end someone's work.
+      // Closing what it opened is tidying up ("show"); anything else may end someone's work (the row's "stop").
       return {
-        approval: { permission: opened.has(w.id) ? "show" : "stop", title: `Close ${windowName(w)}` },
+        approval: { ...(opened.has(w.id) ? { permission: "show" as const } : {}), title: `Close ${windowName(w)}` },
         target: w.id,
         run: async () => (await core.call("window.close", { id: w.id }), { value: null }),
       };
     },
   };
 
-  async function exec(verb: ActVerb, plan: Plan, remote: boolean): Promise<WireValue> {
+  async function exec(verb: ApiActVerb, plan: Plan, remote: boolean): Promise<WireValue> {
     const deps = scope.deps();
     if (!deps) throw failed("This cmd can't ask the person here, so widgets can't act.");
     const id = randomUUID();
@@ -249,7 +242,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
     const ws = own();
     const who = { name: scope.pkg.name, version: scope.pkg.version, title: scope.widget.title, icon: scope.widget.icon };
     const shown: ToolActivity = { id, workspaceId: ws.id, caller: scope.widget.title, callerKind: "widget", callerWindowId: scope.windowId, tool: verb, why: plan.approval.title, acts: true, target: plan.target, state: "running" };
-    const a = plan.approval;
+    const a: Approval = { permission: API[verb].ask, ...plan.approval };
     let target = plan.target;
     let answer: { allow: boolean; reason?: string; scope?: string } | null = null;
     let kept: string | null = null;
@@ -257,7 +250,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       deps.show({ ...shown, target, state });
       core.data.record({ id: `tool:${id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", workspaceId: ws.id, windowId: target, text: a.title, data: { caller: scope.widget.title, widget: `${scope.pkg.name} ${scope.pkg.version}`, tool: verb, acts: true, state, permission: a.permission, site: null, ask: a.title, exact: answer ? (a.exact ?? null) : null, allowed: answer ? answer.allow : null, scope: answer?.scope ?? null, reason: answer?.reason ?? null, remembered: kept, remote, ms: Date.now() - t0, error: error ?? null } });
     };
-    const d = deps.approvals.decideWidget(session, ws.id, a, { pkg: scope.pkg.name, builtin: !!scope.pkg.builtin, typed: !!plan.typed, remote });
+    const d = deps.approvals.decideWidget(session, ws.id, a, { pkg: scope.pkg.name, builtin: !!scope.pkg.builtin, typed: actTyped(verb, !!scope.pkg.builtin), remote });
     if ("refuse" in d) {
       end("denied");
       throw new ApiRefusal({ code: "denied", message: d.refuse });
@@ -294,7 +287,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
     async call(verb, params) {
       if (disposed) throw failed("This widget is stopping.");
       const ns = verb.split(".")[0]!;
-      if (!mayAct(scope.permissions, verb)) throw missing("act", ns, `${permissionOf(planPermission(verb))?.title ?? "Acting"} (${verb})`);
+      if (!mayAct(scope.permissions, verb)) throw missing("act", ns, `${permissionOf(API[verb].ask)?.title ?? "Acting"} (${verb})`);
       // One act per press, right after it: a widget can't act by itself, nor many times on one click.
       const at = scope.press.at();
       if (Date.now() - at > ACT_AFTER_PRESS_MS) throw invalid(`${verb} works right after the person presses something in the widget.`);
@@ -316,9 +309,4 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ActVerb
       log.debug(`widget ${scope.pkg.name}: acts ended`, { window: scope.windowId });
     },
   };
-}
-
-/** The kind of act a verb is, for a refusal's words (windows.close is "stop" unless it opened the window). */
-function planPermission(verb: ApiVerb) {
-  return ({ "agents.start": "agents", "agents.send": "type", "agents.stop": "stop", "terminals.type": "type", "terminals.open": "show", "actions.run": "run", "windows.close": "stop" } as const)[verb as ActVerb] ?? "show";
 }

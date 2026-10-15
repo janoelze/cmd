@@ -1,13 +1,14 @@
 // @cmd/widget-api against the protocol's API 1: every verb of API_VERBS is in the `cmd`
-// object (by type and at run time, sending its own name), every element of API_ELEMENTS
+// object (by type and at run time, sending its own name, which the fake host serves), its
+// JSDoc's @since and "Needs" are its API row's, every element of API_ELEMENTS
 // is exported with exactly the spec's props and events, the versions agree, and every
 // export, verb and prop has JSDoc (the README reference is generated from it).
 
 import ts from "typescript";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { API_ELEMENTS, API_VERBS, WIDGET_API, WIDGET_API_MINOR, type ApiElement, type ApiMethods, type ApiVerb } from "@cmd/protocol/widget-tree";
+import { API, API_ELEMENTS, API_VERBS, WIDGET_API, WIDGET_API_MINOR, type ApiElement, type ApiMethods, type ApiVerb } from "@cmd/protocol/widget-tree";
 import * as api from "@cmd/widget-api";
-import { createHost, render } from "@cmd/widget-api/testing";
+import { createHost, fixtures, render } from "@cmd/widget-api/testing";
 import { verbs } from "../src/cmd.ts";
 import type { ElementProps } from "../src/elements.ts";
 import { apiExports } from "../../../scripts/widget-api-docs.ts";
@@ -32,14 +33,14 @@ describe("verbs", () => {
     expectTypeOf<EveryVerbTyped>().toEqualTypeOf<{ [V in ApiVerb]: true }>();
   });
 
-  it("every verb is cmd.<namespace>.<name> and sends a call with its own name", async () => {
-    const host = createHost();
+  it("every verb is cmd.<namespace>.<name>, sends a call with its own name, and the fake host serves it", async () => {
+    const host = createHost({ terminals: [fixtures.pane({ id: "x" })], actions: [{ name: "x", title: "x", risky: false }], fetch: () => ({}), ai: { text: "" }, run: () => ({}) });
     await render(() => null, host);
     for (const v of API_VERBS) {
       const [ns, name] = v.split(".") as [keyof Cmd, string];
       const fn = (api.cmd[ns] as Record<string, unknown>)[name];
       expect(typeof fn, v).toBe("function");
-      await (fn as (...a: unknown[]) => Promise<unknown>)("x", 1).catch(() => {});
+      await expect((fn as (...a: unknown[]) => Promise<unknown>)("x", 1), v).resolves.not.toThrow();
     }
     expect(host.requests.map((r) => r[0])).toEqual([...API_VERBS]);
   });
@@ -85,6 +86,29 @@ describe("docs", () => {
       for (const m of checker.getTypeOfSymbol(ns).getProperties()) if (!doc(m) || !m.getJsDocTags(checker).some((t) => t.name === "since")) missing.push(`${ns.name}.${m.name}`);
     }
     expect(missing).toEqual([]);
+  });
+
+  // The JSDoc a widget's author reads in an editor says what the row says (drift: notify said "Needs `notify`", a permission that never was).
+  it("every verb's @since is its API row's, and every \"Needs\" names its row's permission", () => {
+    const cmd = exported.find((s) => s.name === "cmd")!;
+    const since = (tags: ts.JSDocTagInfo[]) => ts.displayPartsToString(tags.find((t) => t.name === "since")?.text ?? []).trim();
+    /** The permission keys a doc says it needs: "Needs `act: [\"agents\"]`" → act. */
+    const needs = (text: string) => [...text.matchAll(/Needs `(\w+)/g)].map((m) => m[1]);
+    const wrong: string[] = [];
+    for (const ns of checker.getTypeOfSymbol(cmd).getProperties()) {
+      const verbs = API_VERBS.filter((v) => v.startsWith(`${ns.name}.`));
+      // A namespace's "Needs" is what one of its verbs needs.
+      for (const n of needs(doc(ns))) if (!verbs.some((v) => API[v].needs === n)) wrong.push(`cmd.${ns.name}: Needs \`${n}\``);
+      const call = checker.getTypeOfSymbol(ns).getCallSignatures()[0];
+      if (call && (API as Record<string, { since: string }>)[`${ns.name}.exec`] && since(call.getJsDocTags()) !== API[`${ns.name}.exec` as ApiVerb].since) wrong.push(`cmd.${ns.name}(): @since`);
+      for (const m of checker.getTypeOfSymbol(ns).getProperties()) {
+        const v = `${ns.name}.${m.name}` as ApiVerb;
+        if (!API_VERBS.includes(v)) continue;
+        if (since(m.getJsDocTags(checker)) !== API[v].since) wrong.push(`cmd.${v}: @since ${since(m.getJsDocTags(checker))}, its row ${API[v].since}`);
+        for (const n of needs(doc(m))) if (n !== API[v].needs) wrong.push(`cmd.${v}: Needs \`${n}\`, its row ${API[v].needs}`);
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 
   it("every prop of every element has JSDoc", () => {

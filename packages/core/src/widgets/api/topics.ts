@@ -2,16 +2,17 @@
 // widget never polls. A subscription listens to the services its topic is about only while it
 // lives (no subscribe, no listener), reads the topic's value at once and again after each
 // change (bursts coalesced), and sends it only when it differs from the last one sent: one
-// message per change. `events` sends only the events that are new, within data/policy.ts.
+// message per change. Each topic is the live form of one read (protocol widget-verbs.ts's
+// API_TOPIC names its verb); TOPICS below says what it listens to. `events` sends only the
+// events that are new, within data/policy.ts.
 
-import type { ApiEvent, ApiTopic, DataEvent, WidgetPermissions, WireValue } from "@cmd/protocol";
+import { API_TOPIC, topicVerb, type ApiEvent, type ApiEventQuery, type ApiTopic, type ApiVerb, type DataEvent, type WidgetPermissions, type WireValue } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { matchesQuery } from "../../data/match.ts";
 import { clampRows, clampQuery, type Reader } from "../../data/policy.ts";
 import { checkoutOf } from "../../lib/checkout.ts";
 import { WatchService } from "../../lib/watch.ts";
 import { logger } from "@cmd/protocol/node";
-import { API_TOPICS, type ApiEventQuery } from "@cmd/protocol";
 import { ApiRefusal, invalid } from "./access.ts";
 import { apiEvent } from "./model.ts";
 
@@ -30,16 +31,8 @@ export interface TopicScope {
   own: () => string;
   perms: WidgetPermissions;
   root: () => string | null;
-  /** The adapter's reads (v1.ts), each checking the grant as its verb does. */
-  reads: {
-    agents(q: unknown): unknown;
-    terminals(q: unknown): unknown;
-    windows(q: unknown): unknown;
-    events(q: ApiEventQuery): ApiEvent[];
-    git(): Promise<unknown>;
-    actions(): unknown;
-    workspace(): unknown;
-  };
+  /** The adapter's read of a verb (adapter.ts), checking the grant as the verb does. */
+  read(verb: ApiVerb, query: unknown): unknown;
 }
 
 type Off = () => void;
@@ -67,27 +60,41 @@ function on(em: Emitter, event: string, fn: (...a: never[]) => void): Off {
   };
 }
 
+/** What a topic listens to, calling `changed` on each change; what it returns stops it. */
+type Listen = (core: TopicCore, s: TopicScope, changed: () => void) => Off[];
+
+/** Each topic but events (subscribeEvents): what it listens to while subscribed, and how long a burst is gathered. */
+const TOPICS: { [T in Exclude<ApiTopic, "events">]: { listen: Listen; coalesceMs?: number } } = {
+  workspace: { listen: (core, _s, changed) => [on(core.workspaces, "updated", changed)] },
+  agents: { listen: (core, _s, changed) => [on(core.agents, "updated", changed), on(core.agents, "removed", changed)] },
+  terminals: { listen: (core, _s, changed) => [on(core.panes, "updated", changed), on(core.panes, "removed", changed)] },
+  windows: {
+    listen: (core, _s, changed) => [on(core.windows, "updated", changed), on(core.windows, "removed", changed), on(core.panes, "updated", changed), on(core.panes, "removed", changed), on(core.workspaces, "updated", changed)],
+  },
+  actions: { listen: (core, _s, changed) => [on(core.actions, "changed", changed)] },
+  git: {
+    coalesceMs: GIT_COALESCE_MS,
+    // Staging, committing, switching: the repository's index and HEAD.
+    listen: (_core, s, changed) => {
+      const dir = s.root() ? checkoutOf(s.root()!)?.gitDir : null;
+      if (!dir) return [];
+      const w = new WatchService();
+      w.on("changed", changed);
+      w.watch(`${dir}/index`);
+      w.watch(`${dir}/HEAD`);
+      return [() => w.close()];
+    },
+  },
+};
+
 /** Subscribe; throws ApiRefusal when the grant doesn't reach the topic (checked by its first read). */
 export function subscribeTopic(core: TopicCore, s: TopicScope, push: (data: WireValue) => void): Off {
-  if (!(API_TOPICS as readonly string[]).includes(s.topic)) throw new ApiRefusal({ code: "unknown", message: `This cmd has no live ${String(s.topic).slice(0, 40)}.` });
+  const verb = topicVerb(s.topic);
+  if (!verb) throw new ApiRefusal({ code: "unknown", message: `This cmd has no live ${String(s.topic).slice(0, 40)}.` });
   if (s.topic === "events") return subscribeEvents(core, s, push);
+  const topic = TOPICS[s.topic];
   const q = s.query && typeof s.query === "object" ? s.query : {};
-  const read = (): unknown => {
-    switch (s.topic) {
-      case "agents":
-        return s.reads.agents(q);
-      case "terminals":
-        return s.reads.terminals(q);
-      case "windows":
-        return s.reads.windows(q);
-      case "actions":
-        return s.reads.actions();
-      case "workspace":
-        return s.reads.workspace();
-      default:
-        return s.reads.git();
-    }
-  };
+  const read = (): unknown => s.read(verb, q);
   // The first read checks the grant: a refusal throws before anything listens.
   const first = read();
   let last = "";
@@ -109,40 +116,11 @@ export function subscribeTopic(core: TopicCore, s: TopicScope, push: (data: Wire
           void settle(read());
         } catch {}
       },
-      s.topic === "git" ? GIT_COALESCE_MS : TOPIC_COALESCE_MS,
+      topic.coalesceMs ?? TOPIC_COALESCE_MS,
     );
     timer.unref?.();
   };
-  const offs: Off[] = [];
-  switch (s.topic) {
-    case "agents":
-      offs.push(on(core.agents, "updated", changed), on(core.agents, "removed", changed));
-      break;
-    case "terminals":
-      offs.push(on(core.panes, "updated", changed), on(core.panes, "removed", changed));
-      break;
-    case "windows":
-      offs.push(on(core.windows, "updated", changed), on(core.windows, "removed", changed), on(core.panes, "updated", changed), on(core.panes, "removed", changed), on(core.workspaces, "updated", changed));
-      break;
-    case "workspace":
-      offs.push(on(core.workspaces, "updated", changed));
-      break;
-    case "actions":
-      offs.push(on(core.actions, "changed", changed));
-      break;
-    case "git": {
-      // Staging, committing, switching: the repository's index and HEAD.
-      const dir = s.root() ? checkoutOf(s.root()!)?.gitDir : null;
-      if (dir) {
-        const w = new WatchService();
-        w.on("changed", changed);
-        w.watch(`${dir}/index`);
-        w.watch(`${dir}/HEAD`);
-        offs.push(() => w.close());
-      }
-      break;
-    }
-  }
+  const offs = topic.listen(core, s, changed);
   void settle(first);
   return () => {
     closed = true;
@@ -155,7 +133,7 @@ export function subscribeTopic(core: TopicCore, s: TopicScope, push: (data: Wire
 function subscribeEvents(core: TopicCore, s: TopicScope, push: (data: WireValue) => void): Off {
   const q = (s.query && typeof s.query === "object" ? s.query : {}) as ApiEventQuery;
   if (q.scope === "all") throw invalid("A live events query reads this workspace; use events.query with scope \"all\" for every workspace.");
-  const first = s.reads.events(q); // checks the grant, names what's missing
+  const first = s.read(API_TOPIC.events.verb, q) as ApiEvent[]; // checks the grant, names what's missing
   const reader: Reader = { kind: "widget", workspaceId: s.own(), declared: s.perms.events };
   const clamped = clampQuery(reader, { ...(Array.isArray(q.types) ? { types: q.types } : {}) }, { fallback: 200, max: 1000 });
   let pending: DataEvent[] = [];

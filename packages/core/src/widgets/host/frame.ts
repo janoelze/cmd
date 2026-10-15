@@ -11,7 +11,7 @@ import { FRAME_VERBS, type WindowId, type WireValue } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { invalid } from "../api/access.ts";
 import { AiUsage } from "../api/ai.ts";
-import { apiV1 } from "../api/v1.ts";
+import { widgetApi } from "../api/adapter.ts";
 import { effective, needsGrant } from "../grants.ts";
 import type { PackageWidget, WidgetPackage } from "../package.ts";
 
@@ -46,7 +46,7 @@ export async function frameCall(core: FrameCore, windowId: WindowId, verb: strin
   const args = (Array.isArray(params) ? params : []) as WireValue[];
   if (verb === "windows.open" && !(typeof args[0] === "string" && /^https?:\/\//i.test(args[0]))) throw invalid("A frame opens http(s) links only.");
   const at = pressed ? Date.now() : 0;
-  const adapter = apiV1(core, {
+  const adapter = widgetApi(core, {
     windowId,
     workspaceId: () => core.windows.others().find((w) => w.id === windowId)?.workspaceId ?? "",
     pkg: f.pkg,

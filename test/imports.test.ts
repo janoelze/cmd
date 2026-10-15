@@ -21,6 +21,8 @@ const PARTS: [string, string][] = [
   ["packages/core/", "core"],
   ["packages/cli/", "cli"],
   ["packages/ui/", "ui"],
+  // The fake host and fixtures (and testing.ts over them): run in Node under a test runner, never in the widget process.
+  ["packages/widget-api/src/testing", "widget-api/testing"],
   ["packages/widget-api/", "widget-api"],
   ["packages/widgets/", "widgets"],
   ["apps/desktop/src/main/", "desktop/main"],
@@ -52,6 +54,8 @@ const ALLOWED: Record<string, { value: string[]; types?: string[] }> = {
   ui: { value: [] },
   // Runs in the widget process (Deno, sandboxed): protocol's wire types only, nothing at run time.
   "widget-api": { value: [], types: ["protocol"] },
+  // Its tests' side (@cmd/widget-api/testing): the API's own code, and the protocol's tables (the verbs' rows, agents' lights), so a fake can't drift from the core.
+  "widget-api/testing": { value: ["widget-api", "protocol"] },
   // Widget packages that ship with cmd (packages/widgets/<name>): the widget API, as any package's (and react, from npm: WIDGET_NPM).
   widgets: { value: ["widget-api"] },
   core: { value: ["protocol", "remote-crypto", "node:"] },

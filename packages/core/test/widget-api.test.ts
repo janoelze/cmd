@@ -11,12 +11,12 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from "vitest";
-import { API_SINCE, API_VERBS, noPermissions, type ApiMethods, type ApiVerb, type AppNotification, type CoreEvent, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { API, API_VERBS, noPermissions, type ApiMethods, type ApiVerb, type AppNotification, type CoreEvent, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
 import { AiNotConfigured } from "../src/ai/service.ts";
 import { ApiRefusal } from "../src/widgets/api/access.ts";
 import { AiUsage } from "../src/widgets/api/ai.ts";
-import { apiV1, type ApiAdapter } from "../src/widgets/api/v1.ts";
+import { widgetApi, type WidgetApi } from "../src/widgets/api/adapter.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { tmp, until, writePackage } from "./fake-widget-runtime.ts";
 
@@ -35,15 +35,15 @@ const called = new Set<ApiVerb>();
 
 const ALL: WidgetPermissions = { ...noPermissions(), workspace: ["read", "all"], events: ["agents"], ai: ["complete"], net: [] };
 
-function adapter(permissions: WidgetPermissions): ApiAdapter {
+function adapter(permissions: WidgetPermissions): WidgetApi {
   const pkg = core.library.packages.forKind("pkg:demo/main")!;
   // The services as a feature gets them (kernel/context.ts), with `opened` counting nothing.
   const ctx = { agents: core.agents, panes: core.panes, windows: core.windows, windowTypes: core.windowTypes, workspaces: core.workspaces, data: core.data, actions: core.actions, notifications: core.notifications, ai: core.ai, settings: core.settings, broadcast: (e: CoreEvent) => core.server.broadcast(e), opened: <W>(w: W) => w, call: core.call.bind(core) as never };
-  return apiV1(ctx, { windowId, workspaceId: () => A.id, pkg, widget: pkg.widgets[0]!, permissions, pressedAt: () => pressed, secret: () => null, aiUsage: new AiUsage(null) });
+  return widgetApi(ctx, { windowId, workspaceId: () => A.id, pkg, widget: pkg.widgets[0]!, permissions, pressedAt: () => pressed, secret: () => null, aiUsage: new AiUsage(null) });
 }
 
 /** A verb, typed as the d.ts types it. */
-async function call<V extends ApiVerb>(api: ApiAdapter, verb: V, ...params: ApiMethods[V]["params"]): Promise<ApiMethods[V]["result"]> {
+async function call<V extends ApiVerb>(api: WidgetApi, verb: V, ...params: ApiMethods[V]["params"]): Promise<ApiMethods[V]["result"]> {
   called.add(verb);
   return (await api.call(verb, params as WireValue[])) as ApiMethods[V]["result"];
 }
@@ -180,7 +180,7 @@ describe("API 1", () => {
     }
 
     // The verbs of 1.0 here; widget-act.test.ts calls those 1.1 added.
-    expect([...called].sort()).toEqual(API_VERBS.filter((v) => API_SINCE[v] === "1.0").sort());
+    expect([...called].sort()).toEqual(API_VERBS.filter((v) => API[v].since === "1.0").sort());
   });
 
   it("refuses each namespace without its permission, naming it, and serves the next call", async () => {

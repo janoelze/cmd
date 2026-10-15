@@ -20,11 +20,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@cmd/protocol": "workspace:*",
     "react": "^19.3.0",
     "react-reconciler": "0.34.0"
   },
   "devDependencies": {
-    "@cmd/protocol": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-reconciler": "^0.34.0",
     "vitest": "^5.0.3",

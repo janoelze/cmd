@@ -2,7 +2,7 @@
 // one line per permission for the grants sheet (GrantSheet.tsx), with an icon, and "New" on what
 // a grant it has doesn't cover (a version asking for more); and where the package comes from.
 
-import type { WidgetEntry, WidgetPermissions } from "@cmd/protocol";
+import type { ApiActNamespace, WidgetEntry, WidgetPermissions } from "@cmd/protocol";
 
 export interface PermissionLine {
   /** SF Symbol name. */
@@ -12,8 +12,8 @@ export interface PermissionLine {
   added: boolean;
 }
 
-/** What acting on each part of cmd asks, in words. */
-const ACT: Record<string, string> = {
+/** What acting on each part of cmd asks, in words: one per namespace of the API's acts (tsc names one missing). */
+const ACT: Record<ApiActNamespace, string> = {
   actions: "Run Workspace Actions, asking first",
   agents: "Start, message and stop agents, asking first",
   terminals: "Open and type in terminals, asking first",
@@ -36,7 +36,7 @@ export function permissionLines(declared: WidgetPermissions, granted: WidgetPerm
     const ns = a.split(".")[0]!;
     acts.set(ns, [...(acts.get(ns) ?? []), a]);
   }
-  for (const [ns, values] of acts) out.push({ icon: "bolt", label: ACT[ns] ?? `Use ${ns}, asking first`, added: isNew("act", ...values) });
+  for (const [ns, values] of acts) out.push({ icon: "bolt", label: (ACT as Record<string, string>)[ns] ?? `Use ${ns}, asking first`, added: isNew("act", ...values) });
   if (declared.ai.length) out.push({ icon: "sparkles", label: "Use your AI, counts against your usage", added: isNew("ai", ...declared.ai) });
   return out;
 }

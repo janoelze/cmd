@@ -10,9 +10,8 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { API_SINCE, API_VERBS, type ApiError, type AppWindow, type CoreEvent, type ToolActivity, type WireValue } from "@cmd/protocol";
+import { API, API_ACT_VERBS, API_VERBS, type ApiError, type AppWindow, type CoreEvent, type ToolActivity, type WireValue } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
-import { API_ACCESS } from "../src/widgets/api/access.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { FakeWidgetRuntime, tmp, until, writePackage, type FakePackage, type FakeProcess } from "./fake-widget-runtime.ts";
 
@@ -191,11 +190,12 @@ describe("acting widgets (API 1.1)", () => {
     const tidy = await t.act("windows.close", [mine.value.id]);
     expect(tidy.ask.approval?.permission).toBe("show");
 
-    // Every act verb has a confirm row (access.ts), and each was asked for above.
-    const acts = API_VERBS.filter((v) => API_ACCESS[v].mode === "confirm");
+    // Every act verb has a confirm row (protocol widget-verbs.ts), and each was asked for above.
+    const acts = API_VERBS.filter((v) => API[v].mode === "confirm");
     expect(acts.sort()).toEqual(["actions.run", "agents.send", "agents.start", "agents.stop", "terminals.open", "terminals.type", "windows.close"]);
     expect(new Set(t.acting.filter((a) => a.state === "waiting").map((a) => a.tool))).toEqual(new Set(acts));
-    expect(acts.every((v) => API_SINCE[v] === "1.1")).toBe(true);
+    expect(acts.every((v) => API[v].since === "1.1")).toBe(true);
+    expect([...API_ACT_VERBS].sort()).toEqual(acts);
   });
 
   it("marks the window acted on with the widget's name while the act runs, and logs it", async () => {
@@ -292,7 +292,7 @@ describe("acting widgets (API 1.1)", () => {
     expect(ask.approval?.scopes).toEqual(["once"]);
     await t.answer(true);
     expect((await r).ok).toBe(true);
-    expect(API_VERBS.filter((v) => API_ACCESS[v].mode === "confirm").every((v) => API_ACCESS[v].remote === "confirm")).toBe(true);
+    expect(API_ACT_VERBS.every((v) => API[v].mode === "confirm")).toBe(true);
   });
 
   it("tells the widget the person's reason, and says no to a waiting act when the widget stops", async () => {

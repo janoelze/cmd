@@ -1,9 +1,6 @@
-// Widget packages (docs/56-widgets-v3.md, "A widget is a package"): the API majors this
-// cmd serves, what a package may ask for, and how its windows are named. The parser is
-// the core's (widgets/package.ts); this is what clients share with it.
-
-/** The widget API majors this cmd runs (`cmd.api` in a package.json). */
-export const SUPPORTED_API = { min: 1, max: 1 } as const;
+// Widget packages (docs/56-widgets-v3.md, "A widget is a package"): what a package may ask
+// for, and how its windows are named. The parser is the core's (widgets/package.ts); this is
+// what clients share with it. The API major a package is written for is WIDGET_API.
 
 /** What a package asks for (`cmd.permissions`), and what a person granted (grants.json). */
 export interface WidgetPermissions {

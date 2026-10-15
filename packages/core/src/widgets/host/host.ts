@@ -2,7 +2,7 @@
 // per window of a package widget ("pkg:<package>/<widget>"), started when the window opens
 // (with declared ∩ granted; a package asking for more than its grant waits, nothing started)
 // and stopped a minute after the window closes. Its connection carries the widget wire: hello
-// picks the API adapter for its major (api/v1.ts), the tree and patches go to the window as
+// checks its API major and starts the API (api/adapter.ts), the tree and patches go to the window as
 // widget.tree events (the last whole tree kept, so a window drawn later gets it), and the
 // window's interactions come back. Lifecycle is a contract: a loop stuck for 20 s or a heap
 // over the limit stops it with the reason; a crash restarts it, three in five minutes stop it
@@ -12,12 +12,12 @@
 // restarts its windows once. The window sees each state as a widget.tree status. A package
 // waiting for a grant is asked once, not per window (asking(), widget.ask: the grants sheet).
 
-import { SUPPORTED_API, WIDGET_API, WIDGET_API_MINOR, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
+import { WIDGET_API, WIDGET_API_MINOR, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../../kernel/context.ts";
 import { ApiRefusal } from "../api/access.ts";
 import { AiUsage } from "../api/ai.ts";
-import { apiV1, type ApiAdapter } from "../api/v1.ts";
+import { widgetApi, type WidgetApi } from "../api/adapter.ts";
 import { effective, needsGrant, readGrants, writeGrants, type Grants } from "../grants.ts";
 import { cmdVersion, type PackageWidget, type WidgetPackage } from "../package.ts";
 import type { WidgetPackages } from "../packages.ts";
@@ -72,7 +72,7 @@ interface Instance {
   proc: RuntimeProcess | null;
   token: string | null;
   conn: HostConnection | null;
-  adapter: ApiAdapter | null;
+  adapter: WidgetApi | null;
   subs: Map<number, () => void>;
   crashes: number[];
   /** Why we're stopping it ourselves (null: an exit is a crash). */
@@ -412,11 +412,11 @@ export class WidgetHost {
   #hello(inst: Instance, m: Extract<WidgetOut, { kind: "hello" }>): void {
     if (inst.adapter) return;
     const pkg = inst.pkg!;
-    if (typeof m.api !== "number" || m.api < SUPPORTED_API.min || m.api > SUPPORTED_API.max) return this.#kill(inst, `made for ${m.api > SUPPORTED_API.max ? "a newer" : "an older"} cmd`);
+    if (typeof m.api !== "number" || m.api !== WIDGET_API) return this.#kill(inst, `made for ${m.api > WIDGET_API ? "a newer" : "an older"} cmd`);
     if (m.package !== pkg.name || m.widget !== inst.widget!.id) return this.#kill(inst, "said it was another widget");
     if (inst.timers.hello) clearTimeout(inst.timers.hello);
     inst.loadError = null; // it loaded: an error before hello didn't stop it, and a later exit is a crash
-    inst.adapter = apiV1(this.#core, {
+    inst.adapter = widgetApi(this.#core, {
       windowId: inst.windowId,
       workspaceId: () => this.#core.windows.others().find((w) => w.id === inst.windowId)?.workspaceId ?? "",
       pkg,

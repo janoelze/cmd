@@ -2,8 +2,12 @@
 // serves the reads from the data it was given, pushes topic data to subscriptions (and
 // again on `host.set()`), and records acts in `host.calls` as `[verb, ...args]` instead
 // of doing them. It speaks the real wire messages over an in-memory transport, so a test
-// runs the same code a widget process does, with no socket, Deno or app.
+// runs the same code a widget process does, with no socket, Deno or app. SERVE has one entry
+// per verb (tsc names one missing); which verbs ask the person and which read a topic is the
+// protocol's API row (widget-verbs.ts). It runs in Node under a test runner, never in the
+// widget process, so it may take the protocol's values.
 
+import { API, API_TOPIC, API_TOPICS } from "@cmd/protocol/widget-tree";
 import type {
   ApiAction,
   ApiAgent,
@@ -15,6 +19,7 @@ import type {
   ApiEventQuery,
   ApiGitStatus,
   ApiGitWorktree,
+  ApiMethods,
   ApiRunResult,
   ApiScopeQuery,
   ApiTerminal,
@@ -89,10 +94,14 @@ export interface FetchFixture {
 /** A fake completion: text or an object; usage 0 unless given. @since 1.0 */
 export type AiFixture = ({ text: string } | { object: WireValue }) & { usage?: { input: number; output: number } };
 
-/** What `host.calls` records: the acts (not done), and what reaches outside (fetches, completions, programs; served from fixtures). */
-const ACTS = new Set<string>(["windows.open", "windows.select", "notify.send", "net.fetch", "ai.complete", "agents.start", "agents.send", "agents.stop", "terminals.type", "terminals.open", "actions.run", "windows.close", "run.exec"]);
+/** What `host.calls` records: the acts (not done) but the widget's own state, and what reaches outside (fetches, completions, programs; served from fixtures). */
+const records = (v: ApiVerb): boolean => (API[v].mode !== "read" && !v.startsWith("state.")) || API[v].needs === "net" || API[v].needs === "ai" || API[v].needs === "run";
 /** The acts that ask the person (1.1): `approve` answers them. */
-const ASKS = new Set<string>(["agents.start", "agents.send", "agents.stop", "terminals.type", "terminals.open", "actions.run", "windows.close"]);
+const asks = (v: ApiVerb): boolean => API[v].mode === "confirm";
+
+/** Every topic's data is in HostData under the topic's name (tsc fails here otherwise). */
+const TOPICS_IN_HOST_DATA: ApiTopic extends keyof HostData ? true : never = true;
+void TOPICS_IN_HOST_DATA;
 
 /** A fake core. @since 1.0 */
 export interface FakeHost {
@@ -151,19 +160,8 @@ export function createHost(data: HostData = {}): FakeHost {
     });
   };
 
-  const topicData = (topic: ApiTopic, query: unknown): WireValue => {
-    const id = ws().id;
-    const q = query as ApiScopeQuery | null;
-    const v: unknown =
-      topic === "workspace" ? ws()
-      : topic === "agents" ? (d.agents ?? []).filter((a) => inScope(q, id, a))
-      : topic === "terminals" ? (d.terminals ?? []).filter((t) => inScope(q, id, t)).map(({ screen: _, ...t }) => t)
-      : topic === "windows" ? (d.windows ?? []).filter((w) => inScope(q, id, w))
-      : topic === "events" ? (d.events ?? []).filter((e) => matches(query as ApiEventQuery, e, id)).slice(-((query as ApiEventQuery | null)?.limit ?? 200))
-      : topic === "git" ? (d.git ?? null)
-      : (d.actions ?? []);
-    return v as WireValue;
-  };
+  /** A topic's data: what its verb answers. */
+  const topicData = (topic: ApiTopic, query: unknown): WireValue => SERVE[API_TOPIC[topic].verb]([query ?? null] as never) as WireValue;
 
   const fetchOf = async (url: string, init: ApiFetchInit): Promise<ApiFetchResponse> => {
     const f = typeof d.fetch === "function" ? await d.fetch(url, init) : d.fetch?.[url];
@@ -183,73 +181,73 @@ export function createHost(data: HostData = {}): FakeHost {
     return { code: f.code === undefined ? 0 : f.code, stdout: f.stdout ?? "", stderr: f.stderr ?? "", timedOut: !!f.timedOut, clipped: false };
   };
 
+  const id = () => ws().id;
+  const terminal = (tid: unknown) => (d.terminals ?? []).find((t) => t.id === tid);
+  const done = () => null;
+  /** Each verb, as the fake answers it (arguments as the process sent them). */
+  const SERVE: { [V in ApiVerb]: (p: Partial<ApiMethods[V]["params"]>) => unknown } = {
+    "workspace.get": () => ws(),
+    "workspace.windows": () => (d.windows ?? []).filter((w) => w.workspaceId === id()),
+    "workspace.selected": () => (d.windows ?? []).find((w) => w.workspaceId === id() && w.selected) ?? null,
+    "agents.list": ([q]) => (d.agents ?? []).filter((a) => inScope(q, id(), a)),
+    "agents.get": ([aid]) => (d.agents ?? []).find((a) => a.id === aid) ?? null,
+    "terminals.list": ([q]) => (d.terminals ?? []).filter((t) => inScope(q, id(), t)).map(({ screen: _, ...t }) => t),
+    "terminals.read": ([tid, opts]) => {
+      const t = terminal(tid);
+      if (!t) throw new Error(`No terminal ${String(tid)}`);
+      const lines = (t.screen ?? "").split("\n");
+      const want = opts?.lines ?? lines.length;
+      return { text: lines.slice(-want).join("\n"), clipped: want < lines.length, untrusted: true };
+    },
+    "terminals.waitFor": ([tid, pattern]) => {
+      const re = new RegExp(String(pattern));
+      const line = (terminal(tid)?.screen ?? "").split("\n").find((l) => re.test(l)) ?? null;
+      return { matched: line !== null, line };
+    },
+    "windows.list": ([q]) => (d.windows ?? []).filter((w) => inScope(q, id(), w)),
+    "windows.open": () => ({ id: `w-opened-${++opened}` }),
+    "windows.select": done,
+    "events.query": ([q]) => (d.events ?? []).filter((e) => matches(q, e, id())).slice(-(q?.limit ?? 200)),
+    "events.stats": ([q]) => {
+      const list = (d.events ?? []).filter((e) => matches(q, e, id()));
+      const byType: Record<string, number> = {};
+      for (const e of list) byType[e.type] = (byType[e.type] ?? 0) + 1;
+      return { total: list.length, byType };
+    },
+    "git.status": () => d.git ?? null,
+    "git.diff": () => ({ text: d.diff ?? "", clipped: false }),
+    "git.worktrees": () => d.worktrees ?? [],
+    "actions.list": () => d.actions ?? [],
+    "notify.send": done,
+    "state.get": ([key]) => state.get(String(key)) ?? null,
+    "state.set": ([key, value]) => (state.set(String(key), value as WireValue), null),
+    "state.history": ([key, value, max]) => {
+      const h = [...(histories.get(String(key)) ?? []), ...(typeof value === "number" ? [value] : [])].slice(-(max ?? 60));
+      histories.set(String(key), h);
+      return h;
+    },
+    "net.fetch": ([url, init]) => fetchOf(String(url), init ?? {}),
+    "ai.complete": ([req]) => aiOf(req as ApiCompletionRequest),
+    "agents.start": () => {
+      const n = ++started;
+      return { id: `a-started-${n}`, terminalId: `t-started-${n}`, windowId: `t-started-${n}` };
+    },
+    "agents.send": done,
+    "agents.stop": done,
+    "terminals.type": done,
+    "terminals.open": () => ({ id: `w-opened-${++opened}` }),
+    "actions.run": ([name]) => {
+      const a = (d.actions ?? []).find((x) => x.name === name);
+      if (!a) throw new Error(`No action ${String(name)}`);
+      if (a.risky) throw new Error(`“${a.name}” is risky: run it from Workspace Actions.`);
+      return { terminalId: `t-action-${a.name}`, started: true };
+    },
+    "windows.close": done,
+    "run.exec": ([program, args]) => runOf(String(program), Array.isArray(args) ? args.map(String) : []),
+  };
   const serve = (method: string, p: unknown[]): unknown => {
-    const id = ws().id;
-    const terminal = () => (d.terminals ?? []).find((t) => t.id === p[0]);
-    switch (method) {
-      case "workspace.get": return ws();
-      case "workspace.windows": return (d.windows ?? []).filter((w) => w.workspaceId === id);
-      case "workspace.selected": return (d.windows ?? []).find((w) => w.workspaceId === id && w.selected) ?? null;
-      case "agents.list": return (d.agents ?? []).filter((a) => inScope(p[0] as ApiScopeQuery, id, a));
-      case "agents.get": return (d.agents ?? []).find((a) => a.id === p[0]) ?? null;
-      case "terminals.list": return topicData("terminals", p[0] ?? null);
-      case "terminals.read": {
-        const t = terminal();
-        if (!t) throw new Error(`No terminal ${String(p[0])}`);
-        const lines = (t.screen ?? "").split("\n");
-        const want = (p[1] as { lines?: number } | undefined)?.lines ?? lines.length;
-        return { text: lines.slice(-want).join("\n"), clipped: want < lines.length, untrusted: true };
-      }
-      case "terminals.waitFor": {
-        const re = new RegExp(String(p[1]));
-        const line = (terminal()?.screen ?? "").split("\n").find((l) => re.test(l)) ?? null;
-        return { matched: line !== null, line };
-      }
-      case "windows.list": return topicData("windows", p[0] ?? null);
-      case "windows.open": return { id: `w-opened-${++opened}` };
-      case "windows.select": return null;
-      case "events.query": return topicData("events", p[0] ?? null);
-      case "events.stats": {
-        const list = (d.events ?? []).filter((e) => matches(p[0] as ApiEventQuery, e, id));
-        const byType: Record<string, number> = {};
-        for (const e of list) byType[e.type] = (byType[e.type] ?? 0) + 1;
-        return { total: list.length, byType };
-      }
-      case "git.status": return d.git ?? null;
-      case "git.diff": return { text: d.diff ?? "", clipped: false };
-      case "git.worktrees": return d.worktrees ?? [];
-      case "actions.list": return d.actions ?? [];
-      case "notify.send": return null;
-      case "state.get": return state.get(String(p[0])) ?? null;
-      case "state.set": state.set(String(p[0]), p[1] as WireValue); return null;
-      case "state.history": {
-        const key = String(p[0]);
-        const max = (p[2] as number | undefined) ?? 60;
-        const h = [...(histories.get(key) ?? []), ...(typeof p[1] === "number" ? [p[1]] : [])].slice(-max);
-        histories.set(key, h);
-        return h;
-      }
-      case "net.fetch": return fetchOf(String(p[0]), (p[1] ?? {}) as ApiFetchInit);
-      case "ai.complete": return aiOf(p[0] as ApiCompletionRequest);
-      case "agents.start": {
-        const n = ++started;
-        return { id: `a-started-${n}`, terminalId: `t-started-${n}`, windowId: `t-started-${n}` };
-      }
-      case "agents.send":
-      case "agents.stop":
-      case "terminals.type":
-      case "windows.close":
-        return null;
-      case "terminals.open": return { id: `w-opened-${++opened}` };
-      case "actions.run": {
-        const a = (d.actions ?? []).find((x) => x.name === p[0]);
-        if (!a) throw new Error(`No action ${String(p[0])}`);
-        if (a.risky) throw new Error(`“${a.name}” is risky: run it from Workspace Actions.`);
-        return { terminalId: `t-action-${a.name}`, started: true };
-      }
-      case "run.exec": return runOf(String(p[0]), Array.isArray(p[1]) ? p[1].map(String) : []);
-    }
-    throw Object.assign(new Error(`This cmd doesn't serve ${method}.`), { code: "unknown" });
+    if (!Object.hasOwn(SERVE, method)) throw Object.assign(new Error(`This cmd doesn't serve ${method}.`), { code: "unknown" });
+    return (SERVE[method as ApiVerb] as (p: unknown[]) => unknown)(p);
   };
 
   const receive = (m: WidgetOut) => {
@@ -263,8 +261,8 @@ export function createHost(data: HostData = {}): FakeHost {
         const denied = d.deny?.[m.method];
         if (denied) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "permission", permission: denied, message: `Add "${denied}" to the widget's permissions to use ${m.method}.` } });
         const approve = typeof d.approve === "function" ? d.approve(m.method, m.params) : d.approve !== false;
-        if (ASKS.has(m.method) && !approve) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "denied", message: "The person said no." } });
-        if (ACTS.has(m.method)) calls.push([m.method, ...m.params]);
+        if (Object.hasOwn(API, m.method) && asks(m.method) && !approve) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "denied", message: "The person said no." } });
+        if (Object.hasOwn(API, m.method) && records(m.method)) calls.push([m.method, ...m.params]);
         const fail = (e: unknown) => {
           const code = (e as { code?: string }).code === "unknown" ? "unknown" : "failed";
           deliver({ kind: "result", id: m.id, ok: false, error: { code, message: (e as Error).message } });
@@ -286,8 +284,6 @@ export function createHost(data: HostData = {}): FakeHost {
     }
   };
 
-  const TOPIC_OF: Partial<Record<keyof HostData, ApiTopic>> = { workspace: "workspace", agents: "agents", terminals: "terminals", windows: "windows", git: "git", actions: "actions" };
-
   return {
     calls,
     requests,
@@ -297,7 +293,8 @@ export function createHost(data: HostData = {}): FakeHost {
       Object.assign(d, next);
       if (next.config) deliver({ kind: "config", config: next.config });
       if (next.env) deliver({ kind: "env", env: env() });
-      const changed = new Set(Object.keys(next).map((k) => TOPIC_OF[k as keyof HostData]).filter(Boolean));
+      // A topic's data is under its name; events come through emit().
+      const changed = new Set(API_TOPICS.filter((t) => t !== "events" && t in next));
       if (next.workspace) for (const t of ["agents", "terminals", "windows"] as const) changed.add(t);
       for (const [id, s] of subs) if (changed.has(s.topic)) deliver({ kind: "event", sub: id, data: topicData(s.topic, s.query) });
     },

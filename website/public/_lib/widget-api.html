@@ -74,7 +74,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>cmd.actions.use(): ApiAction[]</code></td><td>1.0</td><td><code>workspace: [&quot;read&quot;]</code></td><td>Live: the hook <code>useActions()</code>.</td></tr>
 </tbody></table></div>
 <h4 id="cmd-notify"><code>cmd.notify</code></h4>
-<p>Notifications. Needs <code>notify</code>.</p>
+<p>Notifications. They need no permission.</p>
 <div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
 <tr><td><code>cmd.notify.send(note: ApiNotification): Promise&lt;null&gt;</code></td><td>1.0</td><td>none, acts</td><td>Sends a notification through cmd's notification center; one per <code>key</code> (a new one replaces it), muted with the window.</td></tr>
 </tbody></table></div>

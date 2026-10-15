@@ -2,16 +2,15 @@
 // whole API objects from a few fields, with ids derived from the name (agent "Tours" is
 // a-tours in window w-tours, terminal t-tours) so a test can name what it expects.
 
-import type { ApiAgent, ApiAgentState, ApiEvent, ApiLight, ApiTerminal, ApiWindow, ApiWorkspace } from "@cmd/protocol/widget-tree";
+import { agentIcon, agentLight, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiTerminal, type ApiWindow, type ApiWorkspace } from "@cmd/protocol/widget-tree";
 
 /** The workspace fixtures live in unless told otherwise. */
 export const WORKSPACE_ID = "ws-1";
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
 
+/** Where an agent in each state sorts, as the core has it when the person hasn't looked yet. Its light and icon are the protocol's, as the core's are. */
 const BUCKET: Record<ApiAgentState, ApiAgent["bucket"]> = { starting: "rest", working: "rest", idle: "rest", waiting: "needs", done: "unseen", exited: "rest", failed: "rest" };
-const LIGHT: Record<ApiAgentState, ApiLight> = { starting: "working", working: "working", idle: "idle", waiting: "needs", done: "unseen", exited: "off", failed: "danger" };
-const ICON: Record<string, string> = { claude: "sparkle", codex: "terminal" };
 
 /** A workspace. @since 1.0 */
 export function workspace(over: Partial<ApiWorkspace> = {}): ApiWorkspace {
@@ -31,8 +30,8 @@ export function agent(over: Partial<ApiAgent> = {}): ApiAgent {
     state,
     stateSince: Date.now() - 60_000,
     bucket: BUCKET[state],
-    light: LIGHT[state],
-    icon: ICON[kind] ?? "terminal",
+    light: agentLight(state, BUCKET[state]),
+    icon: agentIcon(kind),
     statusLine: null,
     place: "main",
     cwd: "/Users/me/src/app",
