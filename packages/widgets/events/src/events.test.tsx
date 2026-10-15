@@ -1,14 +1,16 @@
-// Event Log against the fake host (@cmd/widget-api/testing): the native Event Stream's job. Rows
-// newest first with their plain values; an event recorded again replaces its row, moves up and
-// says how often; the list edge to edge (a Panel) and a chip naming the class;
-// the filter and the Show menu, with their no-results states; a click opens the event whole;
+// Event Log against the fake host (@cmd/widget-api/testing): the native Event Stream's job, drawn
+// as it is. Rows newest first with their type and plain values; an event recorded again replaces
+// its row, moves up and says how often (useEvents' `again`); the list edge to edge (a Panel), a
+// chip naming the class in its name's hue (fmt.hue); the filter, and the log's classes in the
+// title menu ("All Events", "1 hidden"), kept for every Event Log (package storage), with the
+// native's no-results line; a click opens the event whole; the row's menu in the native's order;
 // Pause holds the rows and counts what waits, Clear starts over; every workspace's from the
-// title menu, live; the empty state; many rows, the newest drawn. API 1.2: a row's title is the
-// log's line, the Show menu the log's classes (families on an older cmd), Copy Event and Copy ID.
+// title menu, live; the empty state; many rows, the newest drawn; times in the app's locale.
 
 import { describe, expect, it, vi } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
-import EventLog, { SHOW, classOf, details, familyOf } from "./events.tsx";
+import { fmt } from "@cmd/widget-api";
+import EventLog, { SHOW, classOf, details } from "./events.tsx";
 
 const { event, command, pane } = fixtures;
 const titles = (rows: { props: Record<string, unknown> }[]) => rows.map((r) => JSON.stringify(r).match(/"title":"([^"]+)"/)?.[1]);
@@ -49,6 +51,13 @@ describe("Event Log", () => {
     expect(tree.findAll("View")).toHaveLength(0);
     expect(tree.find("Panel").children.map((c) => (c as { type: string }).type)).toEqual(["WindowToolbar", "PanelBody"]);
     expect(tree.findAll("Chip").map((c) => JSON.stringify(c.children))).toEqual([expect.stringContaining("Git"), expect.stringContaining("Command output")]);
+    expect(tree.findAll("Chip").map((c) => c.props.hue)).toEqual([fmt.hue("git"), fmt.hue("output")]);
+  });
+
+  it("writes each event's time of day, to the second, in the app's locale", async () => {
+    const at = new Date(2026, 9, 16, 14, 5, 9).getTime();
+    const tree = await render(<EventLog />, createHost({ env: { locale: "de-DE" }, events: [event({ type: "note", at })] }));
+    expect(tree.find("ListValue")).toHaveProperty("children", [expect.objectContaining({ text: "14:05:09" })]);
   });
 
   it("titles a row with the log's line for the event, its type beside", async () => {
@@ -57,33 +66,39 @@ describe("Event Log", () => {
     expect(JSON.stringify(tree.rows()[0])).toContain('"detail":"git.commit"');
   });
 
-  it("filters by any word in an event, and hides the log's classes from the Show menu", async () => {
+  it("filters by any word in an event, and hides the log's classes from the title menu for every Event Log", async () => {
     const host = createHost({ events: [command({ command: "pnpm test", exitCode: 1 }), event({ type: "git.commit", data: { subject: "Release" } }), event({ type: "git.push", data: { branch: "main" } })] });
     const tree = await render(<EventLog />, host);
     await tree.change(tree.find("ToolbarSearchField"), "release");
     expect(titles(tree.rows())).toEqual(["git.commit"]);
     expect(tree.find("ToolbarSearchField").props.count).toBe("1");
     await tree.change(tree.find("ToolbarSearchField"), "nothing-like-it");
-    expect(tree).toShowState("noResults", "Nothing matches");
-    await tree.choose(tree.find("View"), "Clear Filter", "state");
-    expect(tree.rows()).toHaveLength(3);
-    const show = tree.find("ToolbarMenu");
-    expect((show.props.menu as { label?: string }[]).map((m) => m.label)).toEqual(["Command output", "Git", undefined, "Show All"]);
-    await tree.choose(show, "Git");
+    expect(tree).toShowState("empty", "Nothing matches");
+    expect(tree.find("EmptyState").props.text).toBe("Change the filter, or show the classes you hid.");
+    await tree.change(tree.find("ToolbarSearchField"), "");
+    const win = () => tree.find("Window");
+    expect(win().props.menuLabel).toBe("All Events");
+    // Every class cmd lists, in its order, after the scope, Pause and Clear: as the native title menu.
+    expect((win().props.menu as { label?: string }[]).map((m) => m.label)).toEqual(["This Workspace", "All Workspaces", undefined, "Pause", "Clear", undefined, "Agent events", "Command output", "Your actions", "Git", "Notes and notifications", "Show All"]);
+    const labels = (l: unknown) => (l as { label?: string }[]).map((m) => m.label);
+    expect(labels(win().props.actions)).toEqual(labels(win().props.menu));
+    await tree.choose(win(), "Git");
     expect(titles(tree.rows())).toEqual(["command"]);
-    expect(tree.find("ToolbarMenu").props.label).toBe("1 hidden");
-    expect(host.requests).toContainEqual(["state.set", "hiddenClasses", ["git"]]);
-    await tree.choose(tree.find("ToolbarMenu"), "Command output");
-    expect(tree).toShowState("noResults", "Nothing matches");
-    await tree.choose(tree.find("View"), "Show All", "state");
+    expect(win().props.menuLabel).toBe("1 hidden");
+    expect(host.storage("package")).toEqual({ hiddenClasses: ["git"] });
+    await tree.choose(win(), "Command output");
+    expect(tree).toShowState("empty", "Nothing matches");
+    await tree.choose(win(), "Show All");
     expect(tree.rows()).toHaveLength(3);
   });
 
-  it("hides the families of types on a cmd before 1.2, which has no classes to name", async () => {
-    const older = createHost({ env: { api: { major: 1, minor: 1 }, verbs: ["events.query"], elements: undefined }, events: [command({ command: "ls", exitCode: 0 }), event({ type: "git.push" })] });
-    const tree = await render(<EventLog />, older);
-    expect((tree.find("ToolbarMenu").props.menu as { label?: string }[]).map((m) => m.label)).toEqual(["command", "git", undefined, "Show All"]);
-    expect(older.requests.some((r) => r[0] === "events.classes")).toBe(false);
+  it("starts with the classes another Event Log hid, and follows when it changes them", async () => {
+    const host = createHost({ storage: { package: { hiddenClasses: ["output"] } }, events: [command({ command: "ls", exitCode: 0 }), event({ type: "git.push" })] });
+    const tree = await render(<EventLog />, host);
+    expect(titles(tree.rows())).toEqual(["git.push"]);
+    host.set({ storage: { package: { hiddenClasses: [] } } });
+    await tree.idle();
+    expect(tree.rows()).toHaveLength(2);
   });
 
   it("copies an event, or its ID, from the row's menu", async () => {
@@ -94,6 +109,7 @@ describe("Event Log", () => {
     expect(host.calls[0]).toEqual(["clipboard.write", "note:1"]);
     expect(host.calls[1]![0]).toBe("clipboard.write");
     expect(JSON.parse(host.calls[1]![1] as string)).toMatchObject({ type: "note", key: "note:1", data: { text: "hi" } });
+    expect((tree.rows()[0]!.props.menu as { label?: string }[]).map((m) => m.label)).toEqual(["Copy Event", "Copy ID", undefined, "Only note"]);
   });
 
   it("opens an event whole under its row, and goes to its terminal from the row's menu", async () => {
@@ -107,7 +123,7 @@ describe("Event Log", () => {
     expect(tree.findAll("CodeBlock")).toHaveLength(0);
     await tree.choose(tree.rows()[1]!, "Show Terminal");
     expect(host.calls).toEqual([["windows.select", "t-zsh"]]);
-    expect((tree.rows()[0]!.props.menu as { label: string; disabled?: boolean }[]).find((m) => m.label === "Show Terminal")?.disabled).toBe(true);
+    expect((tree.rows()[0]!.props.menu as { label?: string }[]).some((m) => m.label === "Show Terminal")).toBe(false);
     await tree.choose(tree.rows()[0]!, "Only note");
     expect(tree.find("ToolbarSearchField").props.value).toBe("note");
   });
@@ -165,11 +181,9 @@ describe("Event Log", () => {
     expect(tree.rows()[0]).toHaveTitle("kind4.x");
   });
 
-  it("names kinds and values without knowing any type", () => {
-    expect(familyOf("agent.stop")).toBe("agent");
-    expect(familyOf("note")).toBe("note");
+  it("names classes and values without knowing any type", () => {
     const classes = fixtures.classes();
     expect(["agent.stop", "command", "agent.output", "notification", "git.push", "data.prune"].map((t) => classOf(t, classes))).toEqual(["agents", "output", "output", "notes", "git", "system"]);
-    expect(details(event({ type: "x", at: 0, until: 90_000, data: { a: "b", n: null, o: {} } }))).toEqual(["a b", "lasted 2 min"]);
+    expect(details(event({ type: "x", at: 0, until: 90_000, data: { a: "b", n: null, o: {} } }))).toEqual(["x", "a b", "lasted 2 min"]);
   });
 });

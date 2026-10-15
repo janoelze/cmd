@@ -1,5 +1,6 @@
 // Event Log's states for the UI Workbench (`pnpm workbench widgets/events`): the widget against
-// the fake host, one variant per state, each the host's data.
+// the fake host, one variant per state, each the host's data. To compare with the native Event
+// Stream's story (windows/events), import `Busy.events` into the Workbench's log.
 
 import type { HostData } from "@cmd/widget-api/testing/host";
 import { command, event, pane } from "@cmd/widget-api/testing/fixtures";
@@ -24,14 +25,17 @@ export const Busy: HostData = { terminals: [pane()], events: log };
 /** Paused from the title menu half a minute ago: the rows hold still, what came since waits. */
 export const Paused: HostData = { terminals: [pane()], events: log, state: { pausedAt: ago(30_000) } };
 
-/** Two classes hidden from the Show menu. */
-export const Hidden: HostData = { terminals: [pane()], events: log, state: { hiddenClasses: ["output", "git"] } };
+/** Two classes hidden from the title menu ("2 hidden"), as every Event Log keeps them. */
+export const Hidden: HostData = { terminals: [pane()], events: log, storage: { package: { hiddenClasses: ["output", "git"] } } };
 
-/** Every class hidden: a way back. */
-export const AllHidden: HostData = { terminals: [pane()], events: log, state: { hiddenClasses: ["agents", "output", "git", "notes"] } };
+/** Every class hidden: nothing matches. */
+export const AllHidden: HostData = { terminals: [pane()], events: log, storage: { package: { hiddenClasses: ["agents", "output", "actions", "git", "notes"] } } };
 
 /** In a narrow window, as in a sidebar. */
 export const Narrow: HostData & { size: "narrow" } = { terminals: [pane()], events: log, size: "narrow" };
+
+/** In a wide window. */
+export const Wide: HostData & { size: "wide" } = { terminals: [pane()], events: log, size: "wide" };
 
 /** Many events: the newest drawn. */
 export const Many: HostData = { events: Array.from({ length: 400 }, (_, i) => event({ type: ["command", "agent.prompt", "git.commit", "note"][i % 4]!, at: ago((400 - i) * 1000), data: { n: i } })) };

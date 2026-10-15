@@ -2919,7 +2919,7 @@ async function addFromLibrary(name, kind) {
 // Event Log (packages/widgets/events): the native Event Stream's job as a package. Added from the
 // Widget Library under Built-in, it shows a command run in a terminal of its workspace as it is
 // recorded (titled with the log's line, API 1.2), filters by a word, opens an event whole, lists
-// the log's classes in its Show menu and copies an event's ID from the row's menu.
+// the log's classes in its window's menu (as in its title menu) and copies an event's ID from the row's menu.
 await scenario("widget-events", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
@@ -2934,7 +2934,7 @@ await scenario("widget-events", async () => {
     await until(() => paneText(termId, 5), (t) => /\S/.test(t)); // its prompt
     await menu("view.grid");
     const { id, source } = await addFromLibrary("Event Log", "pkg:events/events");
-    check(source === "Built-in · events 1.1.0", `the Widget Library lists Event Log under Built-in (${source})`);
+    check(source === "Built-in · events 1.2.0", `the Widget Library lists Event Log under Built-in (${source})`);
     await tileIn(id);
     const tile = win.locator(`.tile[data-pane="${id}"]`);
     await select(termId);
@@ -2953,16 +2953,16 @@ await scenario("widget-events", async () => {
     const opened = await until(() => tile.locator(".ui-code").first().textContent().catch(() => ""), (t) => t.includes('"command": "echo e2e-events-ok"'), 10_000);
     await shot(win, "widget-events-open.png");
     check(filtered.length > 0 && opened.includes('"type": "command"'), `the filter keeps the rows that mention a word, and a click opens the event whole (${filtered.length} rows; ${JSON.stringify(opened.slice(0, 80))})`);
-    // API 1.2: the Show menu names the log's classes (events.classes); Copy ID puts the event's key on the clipboard.
+    // The window's menu names the log's classes (events.classes), as its title menu does; Copy ID puts the event's key on the clipboard.
     await choosing(null);
-    await tile.getByRole("button", { name: "Show", exact: true }).click();
+    await tile.locator(".tile-title").click({ button: "right" });
     const classes = await until(() => app.evaluate(() => globalThis.__lastMenu ?? []), (l) => l.includes("Command output"), 5000).catch(() => []);
     await app.evaluate(({ clipboard }) => clipboard.writeText(""));
     await choosing("Copy ID");
     await tile.locator(".ui-list-row", { hasText: "echo e2e-events-ok" }).first().click({ button: "right" });
     const copied = await until(() => app.evaluate(({ clipboard }) => clipboard.readText()), (t) => t.startsWith("command:"), 10_000).catch(() => "");
     await unchoosing();
-    check(classes.includes("Command output") && copied.startsWith("command:"), `its Show menu lists the log's classes and Copy ID copies the event's key (${classes.slice(0, 4).join(", ")}; ${JSON.stringify(copied)})`);
+    check(classes.includes("Command output") && copied.startsWith("command:"), `its menu lists the log's classes and Copy ID copies the event's key (${classes.slice(0, 4).join(", ")}; ${JSON.stringify(copied)})`);
     await call("window.close", { id });
   } finally {
     for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
