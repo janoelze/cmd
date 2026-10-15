@@ -1,4 +1,4 @@
-// The widget API, major 1 (docs/56, "The host API"; widgets/api/v1.ts, access.ts) against a
+// The widget API, major 1 (docs/56, "The host API"; widgets/api/adapter.ts, access.ts) against a
 // Core with fixtures: every verb answers in the shape protocol widget-tree.ts's ApiMethods
 // says; each namespace without its permission is refused with the permission to add, and
 // the next call works; a widget sees its own workspace only, unless granted "all"; a

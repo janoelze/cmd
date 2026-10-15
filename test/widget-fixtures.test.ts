@@ -2,7 +2,7 @@
 // (widgets/api/model.ts): an agent a widget's test makes looks as the core would send it, in
 // every state and for every kind (drift: the fixtures once gave Codex the icon "terminal").
 import { describe, expect, it } from "vitest";
-import type { Agent } from "@cmd/protocol";
+import type { Agent } from "../packages/protocol/src/model.ts";
 import { apiAgent } from "../packages/core/src/widgets/api/model.ts";
 import { fixtures } from "../packages/widget-api/src/testing/fixtures.ts";
 
