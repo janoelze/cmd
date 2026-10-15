@@ -580,7 +580,7 @@ export const Adapt = () => (
 export const Case = () => <W nodes={inView(e("Case", { minWidth: 400 }, e("Text", {}, "A Case's layout.")))} />;
 /** Covers as a widget's data: URLs come: PNGs (the core never passes on SVG), small gradients the box scales up. */
 const COVERS = [
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAnUlEQVR42q3Muw3CUBREwWXlDGHMg1qokioJ/cMJEgE6lwTRACtNPLv79SZa0UQT5xf7Cc1oQhM1ohGNVZPYOuqCzl/VUEONOqETjixidmQRsyNLMTuyqBZHFrE4sojFkaVYHVnE6sgiVkeWA29HlgE5sgzIkWVAjixHypHliBxZ+l/059JTjiw9cmTpnnJkqYccWdjKkYVNjixs+gAWN/TI0GD16QAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAjklEQVR42q3RsQ3DQAxDUYbyTJkyU3oMy6BSnJUYSBexY/VwX/fYny8oSwllj6P3GkdVCimk6hRSOHt/By2KNtCiKECLoihalIorbapoAy3K/UYj5XOjqaIALYp4pU2VlWZQFKBFUYAWRVzQWFEULUq/aKwsyKAoihZFBC3KT9q/St2+f6SIRYvSaWNFxBtZRwfA1IyupgAAAABJRU5ErkJggg==",
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAjElEQVR42q3QsRHDUAwCUCztlJkzV8awZEjxbcepxZ0KqneC7fX+sMESC7+wbj+zStiJopqo887cVBHNsChohkVBMSyK/qoNFLTCoqyNDMoDmik6FjRWtoNhURJXtaGSYliUBMOiJBgWJcGwKCmGR1kfzZW8oaGSem40Uu6NZspVzaAoPIoYHgUMk8Iv3KyflGi5WzwAAAAASUVORK5CYII=",
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAkUlEQVR42q3RsRHDUAwCUMzfKTNnrqwhGVL4n+1edDoV70A6ft8PlkxhCZSXcM33csnLOiBCh0Vcc9sllFByCYwoJTCi7ERzpWRGlDYYUUpgROl9o7FSMiNKP++fKfVUmym9q42VEhhRWmBEaYERpWVGlDvRVHluNFRaZkRpgRGlBUaU0xuaKi0zoryrjZRT+AMA21vwbeExDAAAAABJRU5ErkJggg==",
 ];
