@@ -6,7 +6,7 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "engines": { "cmd": ">=0.30" },
-  "files": ["src/nowplaying.tsx", "README.md", "LICENSE"],
+  "files": ["src/nowplaying.tsx", "src/nowplaying.test.tsx", "src/nowplaying.story.tsx", "README.md", "LICENSE"],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

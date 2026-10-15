@@ -47,7 +47,7 @@ export const PACKAGE_TOOL_SPECS: ToolSpec[] = [
   {
     name: "builtin",
     explores: false,
-    description: "Open one of cmd's built-in widget packages (listed under Built-in widgets) to see how cmd writes one. Without `file`: its files, package.json and README. With `file` (a path it lists, like src/timer.tsx): that file.",
+    description: "Open one of cmd's built-in widget packages (listed under Built-in widgets) to see how cmd writes one. Without `file`: its files, package.json and README. With `file` (a path it lists): that file: the widget (src/timer.tsx), its test (src/timer.test.tsx) and its story (src/timer.story.tsx).",
     schema: obj({ id: { type: "string", description: "The package's id, e.g. timer." }, file: { type: "string" } }, ["id"]),
   },
   {

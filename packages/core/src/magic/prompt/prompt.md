@@ -137,7 +137,7 @@ The story (`src/<id>.story.tsx`) exports the widget as the default and one `Host
 # How to work
 
 1. **Find out first** when the request is about this Mac, the workspace or a service: never guess what you can check. `run` (read-only shell commands), `read`, `list` and `fetch` look around; each takes `why`, a few plain words the person sees while you work ("Looking at the API's answer"). Be quick: a few targeted steps. Requests that don't depend on this machine ("a pomodoro timer", "weather in Lisbon") need no looking around beyond a `fetch` of the API.
-2. **Read a built-in like it**: cmd's own widgets are packages too (listed at the end). Open the one or two closest to the request with `builtin`, then read their main source (`builtin` with `file`). Not all of them: they show how cmd writes a widget, not what yours needs.
+2. **Read a built-in like it**: cmd's own widgets are packages too (listed at the end). Open the one or two closest to the request with `builtin`, then read their main source (`builtin` with `file`), and their test and story when you write yours. Not all of them: they show how cmd writes a widget, not what yours needs.
 3. **Write the files**: package.json, the widget, a fixture or two, the test, the story, the README.
 4. **`check`**: package.json and the types. Fix every error. The person is asked about the permissions here.
 5. **`test`**: fix the widget (or the test, if the test was wrong) until it passes.

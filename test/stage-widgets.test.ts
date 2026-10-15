@@ -94,10 +94,11 @@ describe("stage-widgets", () => {
     try {
       expect(builtinWidgets()).toBe(staged);
       expect(builtinListing()).toContain("- `timer`: A countdown");
-      expect(readBuiltin("timer", undefined)).toMatch(/^timer's files: LICENSE, README\.md, package\.json, src\/timer\.tsx\n/);
+      expect(readBuiltin("timer", undefined)).toMatch(/^timer's files: LICENSE, README\.md, package\.json, src\/timer\.story\.tsx, src\/timer\.test\.tsx, src\/timer\.tsx\n/);
       expect(readBuiltin("timer", "src/timer.tsx")).toBe(fs.readFileSync(path.join(root, "timer/src/timer.tsx"), "utf8"));
-      expect(fs.existsSync(path.join(staged, "timer/src/timer.test.tsx"))).toBe(false);
-      expect(() => readBuiltin("timer", "src/timer.test.tsx")).toThrow(/doesn't ship/);
+      expect(readBuiltin("timer", "src/timer.test.tsx")).toBe(fs.readFileSync(path.join(root, "timer/src/timer.test.tsx"), "utf8"));
+      expect(fs.existsSync(path.join(staged, "timer/tsconfig.json"))).toBe(false);
+      expect(() => readBuiltin("timer", "tsconfig.json")).toThrow(/doesn't ship/);
     } finally {
       process.env.CMD_BUILTIN_WIDGETS = before;
     }

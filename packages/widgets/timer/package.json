@@ -6,7 +6,7 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "engines": { "cmd": ">=0.30" },
-  "files": ["src/timer.tsx", "README.md", "LICENSE"],
+  "files": ["src/timer.tsx", "src/timer.test.tsx", "src/timer.story.tsx", "README.md", "LICENSE"],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

@@ -3,8 +3,9 @@
 // time), and the agent's `builtin` tool opens one: its files, package.json and README, or one
 // file's text. The folder is the core's own built-in root (widgets/packages.ts: packages/widgets
 // in a checkout and in the staged runtime alike), so a built-in that improves teaches Magic with
-// no second copy. Only what a package ships is readable (its `files`, widgets/shipped.ts),
-// never tests, node_modules or dot-folders; an id or a path that leaves the folder is refused.
+// no second copy. Only what a package ships is readable (its `files`, widgets/shipped.ts: the
+// widget, its test and story), never node_modules, dot-folders or anything unlisted; an id or a
+// path that leaves the folder is refused.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -19,7 +20,6 @@ export interface BuiltinRef {
 }
 
 const ID = /^[a-z0-9][a-z0-9._-]*$/;
-const TEST = /\.(test|spec)\.[cm]?[jt]sx?$/;
 const MAX = 64 * 1024;
 
 interface Manifest {
@@ -65,10 +65,9 @@ export function builtinListing(root: string | null = builtinWidgets()): string {
     .join("\n");
 }
 
-/** What a built-in may show: what it ships, without tests. */
+/** What a built-in may show: what it ships. */
 function readable(dir: string): string[] | null {
-  const s = shippedFiles(dir);
-  return s ? s.files.filter((f) => !TEST.test(f)) : null;
+  return shippedFiles(dir)?.files ?? null;
 }
 
 /** A file of the package, its real path inside the package's real folder; else null. */

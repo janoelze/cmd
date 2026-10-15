@@ -6,7 +6,7 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "engines": { "cmd": ">=0.30" },
-  "files": ["src/journal.tsx", "README.md", "LICENSE"],
+  "files": ["src/journal.tsx", "src/journal.test.tsx", "src/journal.story.tsx", "README.md", "LICENSE"],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

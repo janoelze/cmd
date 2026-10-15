@@ -1,5 +1,6 @@
 // Magic makes widget packages (docs/56, "Magic on V3"): the prompt lists cmd's built-in packages
-// and the agent reads them through `builtin` (with exploring off too), only what they ship and
+// and the agent reads them through `builtin` (with exploring off too: the widget, its test and
+// story), only what they ship and
 // never out of their folder; the scripted builds here write built-ins' files; the agent writes only the
 // package's own files; a build checks, tests and previews with the toolchain, asks for its
 // permissions as a step (Allow writes the grant, Decline fails it with the reason in the agent's
@@ -89,11 +90,13 @@ describe("the built-in packages as references", () => {
 
   it("open as their files, package.json and README; a file as its text", () => {
     const listed = readBuiltin("timer", undefined, BUILTIN_WIDGETS);
-    expect(listed).toMatch(/^timer's files: LICENSE, README\.md, package\.json, src\/timer\.tsx/);
+    expect(listed).toMatch(/^timer's files: LICENSE, README\.md, package\.json, src\/timer\.story\.tsx, src\/timer\.test\.tsx, src\/timer\.tsx\n/);
     expect(listed).toContain('--- package.json ---\n{');
     expect(listed).toContain("--- README.md ---");
     expect(readBuiltin("timer", "src/timer.tsx", BUILTIN_WIDGETS)).toBe(fs.readFileSync(builtin("timer") + "/src/timer.tsx", "utf8"));
     expect(readBuiltin("timer", "./src/timer.tsx", BUILTIN_WIDGETS)).toContain("export default");
+    expect(readBuiltin("timer", "src/timer.test.tsx", BUILTIN_WIDGETS)).toContain("@cmd/widget-api/testing");
+    expect(readBuiltin("timer", "src/timer.story.tsx", BUILTIN_WIDGETS)).toContain("export default");
   });
 
   it("refuse an unknown id, a path out of the folder, and what the package doesn't ship", () => {
@@ -101,11 +104,11 @@ describe("the built-in packages as references", () => {
     expect(no("weather")).toThrow(/no built-in package "weather" \(there are: .*timer/);
     for (const id of ["../widgets/timer", "..", "/etc", "timer/..", ".bin", "Timer"]) expect(no(id), id).toThrow(/no built-in package/);
     for (const f of ["../agents/src/activity.tsx", "../../core/package.json", "/etc/passwd", path.join(builtin("timer"), "src/timer.tsx"), "src/../../agents/package.json"]) expect(no("timer", f), f).toThrow(/doesn't ship/);
-    for (const f of ["src/timer.test.tsx", "src/timer.story.tsx", "tsconfig.json", "node_modules/react/package.json", ".cmd-preview/x"]) expect(no("timer", f), f).toThrow(/doesn't ship/);
+    for (const f of ["tsconfig.json", "node_modules/react/package.json", "node_modules/.bin/vitest", ".cmd-preview/x", "src/missing.tsx"]) expect(no("timer", f), f).toThrow(/doesn't ship/);
     expect(() => readBuiltin("timer", undefined, null)).toThrow(/no built-in package/);
   });
 
-  it("never read tests, node_modules, dot-folders or a link out of the package, even when files lists them", () => {
+  it("read the tests a package lists, never node_modules, dot-folders, an unlisted file or a link out of the package", () => {
     const root = tmp("cmd-builtins-");
     const outside = tmp("cmd-builtins-outside-");
     fs.writeFileSync(path.join(outside, "secret.ts"), "secret");
@@ -115,11 +118,13 @@ describe("the built-in packages as references", () => {
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "x", files: ["src"], cmd: { api: 1, widgets: [{ id: "x", title: "X", main: "src/x.tsx" }] } }));
     fs.writeFileSync(path.join(dir, "src", "x.tsx"), "export default 1;");
     fs.writeFileSync(path.join(dir, "src", "x.test.tsx"), "test");
+    fs.writeFileSync(path.join(dir, "notes.md"), "unlisted");
     fs.writeFileSync(path.join(dir, "src", "node_modules", "m.ts"), "m");
     fs.writeFileSync(path.join(dir, "src", ".cache", "c.ts"), "c");
     fs.symlinkSync(path.join(outside, "secret.ts"), path.join(dir, "src", "link.ts"));
-    expect(readBuiltin("x", undefined, root)).toMatch(/^x's files: package\.json, src\/link\.ts, src\/x\.tsx\n/);
-    for (const f of ["src/x.test.tsx", "src/node_modules/m.ts", "src/.cache/c.ts"]) expect(() => readBuiltin("x", f, root), f).toThrow(/doesn't ship/);
+    expect(readBuiltin("x", undefined, root)).toMatch(/^x's files: package\.json, src\/link\.ts, src\/x\.test\.tsx, src\/x\.tsx\n/);
+    expect(readBuiltin("x", "src/x.test.tsx", root)).toBe("test");
+    for (const f of ["notes.md", "src/node_modules/m.ts", "src/.cache/c.ts"]) expect(() => readBuiltin("x", f, root), f).toThrow(/doesn't ship/);
     expect(() => readBuiltin("x", "src/link.ts", root)).toThrow(/isn't a file inside x/);
   });
 
