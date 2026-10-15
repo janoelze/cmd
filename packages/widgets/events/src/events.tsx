@@ -1,14 +1,14 @@
 // Event Log, a built-in widget package (docs/57; the native Event Stream's job): every event cmd
 // records in this workspace (or every workspace's), newest first, as it is recorded, from one
-// live query (useEvents). It knows no event types or fields: a row is the log's one line for the
+// live subscription (useLog). It knows no event types or fields: a row is the log's one line for the
 // event (API 1.2's `text`, else its type) and whatever plain values its data carries; the
 // toolbar's Show menu hides the log's classes as Settings names them (cmd.events.classes, 1.2;
 // on an older cmd, the families of the types it has seen), and the filter searches the whole
 // event. An event recorded again (a command that ended) replaces its row and moves up, and says
 // how often since it showed up ("recorded again ×2"). The list runs to the window's edges under
-// the filter (a Panel, as natively); a row's chip names its class as Settings does. A click
-// opens the event as stored; a row's menu copies it or its ID; the title menu switches the
-// scope, pauses and clears.
+// the filter (a Panel, as natively; with nothing to list, a state under the same filter); a
+// row's chip names its class as Settings does. A click opens the event as stored; a row's menu
+// copies it or its ID; the title menu switches the scope, pauses and clears.
 
 import {
   Window,
@@ -17,7 +17,7 @@ import {
   WindowToolbar,
   ToolbarSearchField,
   ToolbarMenu,
-  EmptyState,
+  View,
   ListRow,
   ListRowContent,
   ListRowEnd,
@@ -164,6 +164,28 @@ export default function EventLog() {
   const toggle = (f: string) => setHidden(hidden.includes(f) ? hidden.filter((x) => x !== f) : [...hidden, f]);
   const key = keyOf;
 
+  const toolbar = (
+    <WindowToolbar label="Filter events">
+      <ToolbarSearchField value={query} placeholder="Filter: any word in an event" count={q ? `${shown.length}` : undefined} onChange={setQuery} />
+      <ToolbarMenu
+        label={hidden.length ? `${hidden.length} hidden` : "Show"}
+        icon="line.3.horizontal.decrease"
+        menu={[
+          ...families.map((f) => ({ label: titleOf(f), checked: !hidden.includes(f), run: () => toggle(f) })),
+          { separator: true as const },
+          { label: "Show All", disabled: hidden.length === 0, run: () => setHidden([]) },
+        ]}
+      />
+    </WindowToolbar>
+  );
+
+  // Nothing to list: the state replaces the body, the filter stays above it.
+  const state = all.length === 0
+    ? { icon: "waveform.path.ecg", title: "Nothing recorded yet", text: scope === "all" ? "Events show up here as cmd records them." : "Events in this workspace show up here as cmd records them." }
+    : shown.length === 0
+      ? { kind: "noResults" as const, title: "Nothing matches", text: q ? `No event mentions “${query.trim()}”.` : "Every kind here is hidden.", action: q ? { label: "Clear Filter", run: () => setQuery("") } : { label: "Show All", run: () => setHidden([]) } }
+      : null;
+
   return (
     <Window
       status={status}
@@ -175,68 +197,45 @@ export default function EventLog() {
         { label: "Clear", run: () => (setClearedAt(Date.now()), setOpen(null)) },
       ]}
     >
-      <Panel>
-        <WindowToolbar label="Filter events">
-          <ToolbarSearchField value={query} placeholder="Filter: any word in an event" count={q ? `${shown.length}` : undefined} onChange={setQuery} />
-          <ToolbarMenu
-            label={hidden.length ? `${hidden.length} hidden` : "Show"}
-            icon="line.3.horizontal.decrease"
-            menu={[
-              ...families.map((f) => ({ label: titleOf(f), checked: !hidden.includes(f), run: () => toggle(f) })),
-              { separator: true as const },
-              { label: "Show All", disabled: hidden.length === 0, run: () => setHidden([]) },
-            ]}
-          />
-        </WindowToolbar>
-        <PanelBody>
-          {shown.flatMap((e) => {
-            const fam = groupOf(e);
-            const text = e.text?.trim() || null;
-            const again = log.again.get(key(e)) ?? 0;
-            const row = (
-              <ListRow
-                key={key(e)}
-                selected={open === key(e)}
-                tip={e.key}
-                onClick={() => setOpen(open === key(e) ? null : key(e))}
-                menu={[
-                  { label: `Only ${e.type}`, run: () => setQuery(e.type) },
-                  { label: `Hide ${titleOf(fam)}`, run: () => toggle(fam) },
-                  { label: "Show Terminal", disabled: !e.terminalId, run: () => e.terminalId && void cmd.windows.select(e.terminalId).catch(() => {}) },
-                  { separator: true },
-                  { label: "Copy Event", run: () => void cmd.clipboard.write(JSON.stringify(e, null, 2)).catch(() => {}) },
-                  { label: "Copy ID", disabled: !e.key, run: () => e.key && void cmd.clipboard.write(e.key).catch(() => {}) },
-                ]}
-              >
-                <ListRowContent title={text ?? e.type} detail={[text ? e.type : null, ...details(e), again ? `recorded again ×${again}` : null].filter(Boolean).join(" · ") || null} />
-                <ListRowEnd>
-                  <Chip hue={hueOf(fam)}>{titleOf(fam)}</Chip>
-                  <ListValue>{clock(e.at)}</ListValue>
-                </ListRowEnd>
-              </ListRow>
-            );
-            return open === key(e)
-              ? [row, <CodeBlock key={`${key(e)}:json`} maxHeight={320}>{JSON.stringify(e, null, 2)}</CodeBlock>]
-              : [row];
-          })}
-          {all.length === 0 ? (
-            <EmptyState
-              compact
-              icon="waveform.path.ecg"
-              title="Nothing recorded yet"
-              text={scope === "all" ? "Events show up here as cmd records them." : "Events in this workspace show up here as cmd records them."}
-            />
-          ) : shown.length === 0 ? (
-            <EmptyState
-              compact
-              icon="waveform.path.ecg"
-              title="Nothing matches"
-              text={q ? `No event mentions “${query.trim()}”.` : "Every kind here is hidden."}
-              action={q ? { label: "Clear Filter", run: () => setQuery("") } : { label: "Show All", run: () => setHidden([]) }}
-            />
-          ) : null}
-        </PanelBody>
-      </Panel>
+      {state ? (
+        <View state={state}>{toolbar}</View>
+      ) : (
+        <Panel>
+          {toolbar}
+          <PanelBody>
+            {shown.flatMap((e) => {
+              const fam = groupOf(e);
+              const text = e.text?.trim() || null;
+              const again = log.again.get(key(e)) ?? 0;
+              const row = (
+                <ListRow
+                  key={key(e)}
+                  selected={open === key(e)}
+                  tip={e.key}
+                  onClick={() => setOpen(open === key(e) ? null : key(e))}
+                  menu={[
+                    { label: `Only ${e.type}`, run: () => setQuery(e.type) },
+                    { label: `Hide ${titleOf(fam)}`, run: () => toggle(fam) },
+                    { label: "Show Terminal", disabled: !e.terminalId, run: () => e.terminalId && void cmd.windows.select(e.terminalId).catch(() => {}) },
+                    { separator: true },
+                    { label: "Copy Event", run: () => void cmd.clipboard.write(JSON.stringify(e, null, 2)).catch(() => {}) },
+                    { label: "Copy ID", disabled: !e.key, run: () => e.key && void cmd.clipboard.write(e.key).catch(() => {}) },
+                  ]}
+                >
+                  <ListRowContent title={text ?? e.type} detail={[text ? e.type : null, ...details(e), again ? `recorded again ×${again}` : null].filter(Boolean).join(" · ") || null} />
+                  <ListRowEnd>
+                    <Chip hue={hueOf(fam)}>{titleOf(fam)}</Chip>
+                    <ListValue>{clock(e.at)}</ListValue>
+                  </ListRowEnd>
+                </ListRow>
+              );
+              return open === key(e)
+                ? [row, <CodeBlock key={`${key(e)}:json`} maxHeight={320}>{JSON.stringify(e, null, 2)}</CodeBlock>]
+                : [row];
+            })}
+          </PanelBody>
+        </Panel>
+      )}
     </Window>
   );
 }

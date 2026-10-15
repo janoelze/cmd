@@ -64,8 +64,8 @@ describe("Event Log", () => {
     expect(titles(tree.rows())).toEqual(["git.commit"]);
     expect(tree.find("ToolbarSearchField").props.count).toBe("1");
     await tree.change(tree.find("ToolbarSearchField"), "nothing-like-it");
-    expect(tree).toShowState("empty", "Nothing matches");
-    await tree.choose(tree.find("EmptyState"), "Clear Filter");
+    expect(tree).toShowState("noResults", "Nothing matches");
+    await tree.choose(tree.find("View"), "Clear Filter", "state");
     expect(tree.rows()).toHaveLength(3);
     const show = tree.find("ToolbarMenu");
     expect((show.props.menu as { label?: string }[]).map((m) => m.label)).toEqual(["Command output", "Git", undefined, "Show All"]);
@@ -74,8 +74,8 @@ describe("Event Log", () => {
     expect(tree.find("ToolbarMenu").props.label).toBe("1 hidden");
     expect(host.requests).toContainEqual(["state.set", "hiddenClasses", ["git"]]);
     await tree.choose(tree.find("ToolbarMenu"), "Command output");
-    expect(tree).toShowState("empty", "Nothing matches");
-    await tree.choose(tree.find("EmptyState"), "Show All");
+    expect(tree).toShowState("noResults", "Nothing matches");
+    await tree.choose(tree.find("View"), "Show All", "state");
     expect(tree.rows()).toHaveLength(3);
   });
 
