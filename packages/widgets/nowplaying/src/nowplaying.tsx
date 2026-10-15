@@ -1,16 +1,16 @@
-// Media Controls, a built-in widget package (docs/57, wave 2; the native Now Playing's job):
-// whatever the Mac is playing (cmd.media.get, API 1.2): the track, its artist and album, where
-// it is on a scrubber with the time gone and left, and Previous, Play or Pause, Next. Each
-// control and each seek is one press, one `cmd.media.control`. The API has no live topic for
-// it, so it asks every 2 seconds (the core holds the Mac's stream open and answers from it);
-// between answers the scrubber moves on by itself. Nothing playing, refused, or failed: a
-// state that says so. No footer, as natively; a control that didn't go through says why in one.
+// Media Controls, a built-in widget package (docs/57; the native Now Playing's job and looks):
+// whatever the Mac is playing, live (useMedia, API 1.3: a change of track or a pause from
+// anywhere shows at once): its cover, the track, its artist and album, where it is on a
+// scrubber with the time gone and left, and Previous, Play or Pause, Next. Each control and
+// each seek is one press, one `cmd.media.control`; the change comes back through useMedia.
+// Three faces in an Adapt, at the native view's numbers: short (up to 280 px tall) a thumbnail
+// in front of the title with the player at the bottom; large (from 340×440) a centred column
+// under the cover, like an iPod; otherwise the cover takes the room above the track. Nothing
+// playing: a state that says so. No footer, as natively; a control that didn't go through
+// says why in one.
 
-import { Window, View, Stack, Inline, Text, Icon, IconButton, TimeBar, StatusLine, useData, useNow, useEnv, cmd, ApiCallError, type NowPlaying, type MediaCommand } from "@cmd/widget-api";
+import { Adapt, Case, Window, View, Stack, Inline, Text, IconButton, Picture, TimeBar, StatusLine, useMedia, useNow, cmd, ApiCallError, type NowPlaying, type MediaCommand } from "@cmd/widget-api";
 import { useMemo, useState } from "react";
-
-/** How often it asks what plays, in seconds. */
-export const EVERY = 2;
 
 /** The position now: from the last report, moving on at its rate while playing, within the track. */
 export function position(n: Pick<NowPlaying, "elapsed" | "at" | "rate" | "playing" | "duration">, now = Date.now()): number | null {
@@ -28,84 +28,131 @@ export function clock(s: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
 
-const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+/** The native view's faces: short up to this height; large from this width and height. */
+export const SHORT = 280;
+export const LARGE = { width: 340, height: 440 } as const;
 
-function Player({ np, refresh }: { np: NowPlaying; refresh: () => void }) {
-  const [failed, setFailed] = useState<string | null>(null);
+type Control = (command: MediaCommand | null, seek?: number) => void;
+
+/** The cover: as large as the room allows, or a thumbnail; its box with a note when the player sent none. */
+const Cover = ({ np, thumb }: { np: NowPlaying; thumb?: boolean }) => <Picture src={np.artwork} alt={np.album ? `${np.album} cover` : "Cover"} icon="music.note" size={thumb ? 44 : "fill"} radius={thumb ? "sm" : undefined} />;
+
+/** The artist and album, or a blank line that keeps the place. */
+const Byline = ({ np }: { np: NowPlaying }) => (
+  <Text tone="dim" truncate>
+    {[np.artist, np.album].filter(Boolean).join(" · ") || " "}
+  </Text>
+);
+
+/** Where it is: the scrubber (it moves on by itself between reports) with the time gone and left; none for a stream without a length. */
+function Progress({ np, control }: { np: NowPlaying; control: Control }) {
   const now = useNow(np.playing ? 1000 : 60_000);
-  // The scrubber gets a new time only when the player reports one; it moves on by itself between.
+  // The scrubber gets a new time only when the player reports one.
   const reported = useMemo(() => position(np), [np.elapsed, np.at, np.playing, np.rate, np.duration]);
   const pos = position(np, now);
-  const control = (command: MediaCommand | null, seek?: number) =>
+  if (np.duration === null || pos === null || reported === null) return null;
+  return (
+    <Stack gap={1.5}>
+      <TimeBar duration={np.duration} time={reported} playing={np.playing} rate={np.rate || 1} onSeek={(t) => control(null, Math.max(0, t))} />
+      <Inline justify="between">
+        <Text tone="dim" size="sm" mono>
+          {clock(pos)}
+        </Text>
+        <Text tone="dim" size="sm" mono>
+          {`−${clock(np.duration - pos)}`}
+        </Text>
+      </Inline>
+    </Stack>
+  );
+}
+
+/** Previous, Play or Pause, Next: spread across the width, or centred and apart (large). */
+function Controls({ np, control, centred }: { np: NowPlaying; control: Control; centred?: boolean }) {
+  const buttons = (
+    <Inline gap={centred ? 6 : undefined} justify={centred ? undefined : "between"}>
+      <IconButton icon="backward.fill" label="Previous" onClick={() => control("previous")} />
+      <IconButton icon={np.playing ? "pause.fill" : "play.fill"} label={np.playing ? "Pause" : "Play"} onClick={() => control("toggle")} />
+      <IconButton icon="forward.fill" label="Next" onClick={() => control("next")} />
+    </Inline>
+  );
+  return centred ? <Stack align="center">{buttons}</Stack> : buttons;
+}
+
+function Player({ np }: { np: NowPlaying }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const control: Control = (command, seek) =>
     void cmd.media
       .control(command, seek === undefined ? undefined : { seek })
-      .then(() => (setFailed(null), refresh()))
+      .then(() => setFailed(null))
       .catch((e: unknown) => setFailed(e instanceof ApiCallError && e.code === "permission" ? "Controlling what plays isn't allowed for this widget" : `Couldn't reach the player: ${e instanceof Error ? e.message : String(e)}`));
 
   return (
-    <View inset>
-      <Stack gap={4}>
-        <Inline gap={3}>
-          <Icon name="music.note" size={22} />
-          <Stack gap={0.5} grow>
-            <Text size="lg" strong truncate>
-              {np.title}
-            </Text>
-            <Text tone="dim" truncate>
-              {[np.artist, np.album].filter(Boolean).join(" · ") || " "}
-            </Text>
-          </Stack>
-        </Inline>
-        {np.duration !== null && pos !== null && reported !== null && (
-          <Stack gap={1}>
-            <TimeBar duration={np.duration} time={reported} playing={np.playing} rate={np.rate || 1} onSeek={(t) => control(null, Math.max(0, t))} />
-            <Inline justify="between">
-              <Text tone="dim" size="sm" mono>
-                {clock(pos)}
-              </Text>
-              <Text tone="dim" size="sm" mono>
-                {`−${clock(np.duration - pos)}`}
-              </Text>
+    <View scroll={false}>
+      <Adapt>
+        <Case maxHeight={SHORT}>
+          <Stack pad="inset" gap={3} grow justify="between">
+            <Inline gap={3}>
+              <Cover np={np} thumb />
+              <Stack gap={1} grow>
+                <Text size="lg" strong truncate>
+                  {np.title}
+                </Text>
+                <Byline np={np} />
+              </Stack>
             </Inline>
+            <Stack gap={3}>
+              <Progress np={np} control={control} />
+              <Controls np={np} control={control} />
+            </Stack>
           </Stack>
-        )}
-        <Stack align="center">
-          <Inline gap={2}>
-            <IconButton icon="backward.fill" label="Previous" size="lg" onClick={() => control("previous")} />
-            <IconButton icon={np.playing ? "pause.fill" : "play.fill"} label={np.playing ? "Pause" : "Play"} size="lg" onClick={() => control("toggle")} />
-            <IconButton icon="forward.fill" label="Next" size="lg" onClick={() => control("next")} />
-          </Inline>
-        </Stack>
-      </Stack>
+        </Case>
+        <Case minWidth={LARGE.width} minHeight={LARGE.height}>
+          <Stack pad="inset" gap={4} grow>
+            <Cover np={np} />
+            <Stack gap={1} align="center">
+              <Text size="lg" strong fit>
+                {np.title}
+              </Text>
+              <Byline np={np} />
+            </Stack>
+            <Progress np={np} control={control} />
+            <Controls np={np} control={control} centred />
+          </Stack>
+        </Case>
+        <Case>
+          <Stack pad="inset" gap={3} grow>
+            <Cover np={np} />
+            <Stack gap={1}>
+              <Text size="lg" strong fit>
+                {np.title}
+              </Text>
+              <Byline np={np} />
+            </Stack>
+            <Progress np={np} control={control} />
+            <Controls np={np} control={control} />
+          </Stack>
+        </Case>
+      </Adapt>
       {failed && <StatusLine>{failed}</StatusLine>}
     </View>
   );
 }
 
-export default function MediaControls() {
-  const served = cmd.env.has("media.get");
-  const { data, error, refresh } = useData(() => (served ? cmd.media.get() : Promise.resolve(null)), { every: served ? EVERY : 0 });
-  const refused = error instanceof ApiCallError && error.code === "permission";
-  const np = refused ? null : (data ?? null);
-  // The title bar's line: what plays, cut short; none in a narrow window, where the track is right under it.
-  const narrow = useEnv().size === "narrow";
-  const line = np && !narrow ? clip([np.title, np.artist].filter(Boolean).join(" · "), 40) : null;
-
-  const state = !served
-    ? { icon: "music.note", title: "Needs a newer cmd", text: "Update cmd to see what's playing here." }
-    : refused
-      ? { kind: "error" as const, title: "What's playing isn't shared with this widget", text: error.message }
-      : data === undefined && error
-        ? { kind: "error" as const, title: "Couldn't see what's playing", text: error.message, action: { label: "Try Again", run: refresh } }
-        : data === undefined
-          ? { kind: "loading" as const, title: "Looking for what's playing" }
-          : data === null
-            ? { icon: "music.note", title: "Nothing playing", text: "Play something in Music, Spotify or a browser and it shows here." }
-            : null;
-
+function Live() {
+  const np = useMedia();
   return (
-    <Window status={line}>
-      {state || !np ? <View state={state} /> : <Player np={np} refresh={refresh} />}
+    <Window status={np ? [np.title, np.artist].filter(Boolean).join(" · ") : null}>
+      {np ? <Player np={np} /> : <View state={{ icon: "music.note", title: "Nothing playing", text: "Play something in Music, Spotify or a browser and it shows here." }} />}
+    </Window>
+  );
+}
+
+export default function MediaControls() {
+  // useMedia, Adapt and Picture came in API 1.3.
+  if (cmd.env.has("Adapt")) return <Live />;
+  return (
+    <Window>
+      <View state={{ icon: "music.note", title: "Needs a newer cmd", text: "Update cmd to see what's playing here." }} />
     </Window>
   );
 }

@@ -3226,11 +3226,12 @@ await scenario("widget-notifications", async () => {
   }
 });
 
-// Media Controls (packages/widgets/nowplaying): the native Now Playing's job as a package. Nothing
-// can be made to play here, and its controls would reach whatever the Mac plays, so this checks
-// the live read only: added from the Widget Library, it says what cmd's own Now Playing says
-// (nothing playing, or the track), and presses nothing. The playing states are its tests and
-// story, from fixtures.
+// Media Controls (packages/widgets/nowplaying): the native Now Playing's job and faces as a
+// package. Nothing can be made to play here, and its controls would reach whatever the Mac
+// plays, so this checks the live read only: added from the Widget Library, it comes to say
+// what cmd's own Now Playing says (nothing playing, or the track in one of its faces, the Adapt
+// having picked one) and presses nothing. The playing states, the faces and the controls are
+// its tests and story, from fixtures.
 await scenario("widget-nowplaying", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
@@ -3239,12 +3240,16 @@ await scenario("widget-nowplaying", async () => {
   check(source === "Built-in · nowplaying 1.0.0", `the Widget Library lists Media Controls under Built-in (${source})`);
   await tileIn(id);
   const tile = win.locator(`.tile[data-pane="${id}"]`);
-  // Past "Looking for what's playing": the first answer (the core waits up to 1.5 s for the Mac's).
-  const player = tile.getByRole("button", { name: "Previous" });
-  const text = await until(async () => ((await player.count()) ? "player " : "") + (await tile.textContent()), (t) => t.includes("Nothing playing") || t.startsWith("player "), 30_000).catch(() => "");
-  const np = await call("nowPlaying.get");
+  // useMedia's first value comes once the Mac's stream has spoken (the core waits up to 1.5 s); until then it says nothing plays.
+  const shows = async () => {
+    const np = await call("nowPlaying.get");
+    // The face drawn: 0 short, 1 large, 2 the one between.
+    const face = (await tile.locator(".ui-adapt").evaluateAll((els) => els.map((e) => e.dataset.case)))[0] ?? null;
+    return { np, face, text: (await tile.textContent()) ?? "" };
+  };
+  const seen = await until(shows, ({ np, face, text }) => (np === null ? text.includes("Nothing playing") : face !== null && text.includes(np.title)), 30_000).catch(() => null);
   await shot(win, "widget-nowplaying.png");
-  check(np === null ? text.includes("Nothing playing") : text.includes(np.title), `it shows what the Mac plays, as cmd reads it (${np === null ? "nothing" : JSON.stringify(np.title)}; ${JSON.stringify(text.slice(0, 80))})`);
+  check(!!seen, `it shows what the Mac plays, as cmd reads it${seen ? ` (${seen.np === null ? "nothing" : `${JSON.stringify(seen.np.title)}, face ${seen.face}`})` : ""}`);
   await call("window.close", { id });
 });
 

@@ -1,7 +1,7 @@
 {
   "name": "nowplaying",
   "version": "1.0.0",
-  "description": "What the Mac is playing, with play, pause, skips and a scrubber.",
+  "description": "What the Mac is playing, with its cover, play, pause, skips and a scrubber.",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -22,7 +22,7 @@
         "id": "nowplaying",
         "title": "Media Controls",
         "icon": "music.note",
-        "description": "Whatever the Mac is playing, from Music, Spotify or a browser tab: the track, where it is, play and pause, skips and a scrubber.",
+        "description": "Whatever the Mac is playing, from Music, Spotify or a browser tab: the cover and track, where it is, play and pause, skips and a scrubber.",
         "main": "src/nowplaying.tsx",
         "size": "s"
       }
