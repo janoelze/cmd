@@ -1,6 +1,6 @@
 # Event Log
 
-A cmd widget: everything cmd records in this workspace, live, newest first. Commands, agents, git, notifications, tool calls: each row is the log's line for the event, its type, the plain values it carries and when it happened. An event recorded again (a command that ended) replaces its row and moves up. Filter by any word in an event; hide the log's classes (as Settings → Data names them) from the toolbar's **Show** menu; click a row to see the event whole; **Copy Event** and **Copy ID** are in a row's menu. The title menu switches between This Workspace and All Workspaces, pauses (new events wait, counted in the title bar) and clears.
+A cmd widget: everything cmd records in this workspace, live, newest first. Commands, agents, git, notifications, tool calls: each row is the log's line for the event, its type, the plain values it carries and when it happened. An event recorded again (a command that ended) replaces its row, moves up and says how often ("recorded again ×2"). Each row's chip names its class as Settings → Data does. Filter by any word in an event; hide the log's classes (as Settings → Data names them) from the toolbar's **Show** menu; click a row to see the event whole; **Copy Event** and **Copy ID** are in a row's menu. The title menu switches between This Workspace and All Workspaces, pauses (new events wait, counted in the title bar) and clears.
 
 It ships with cmd (Widget Library → Built-in), does the native Event Stream's job, and is written against the widget API like any package ([`@cmd/widget-api`](../../widget-api/README.md), [docs/57](../../../docs/57-builtin-widgets.md)).
 
@@ -14,6 +14,7 @@ Permissions: `workspace: ["read", "all"]` (this workspace's events, and every wo
 
 - **No "explain".** The native view has no AI explanation either: its `data.explain` call reads the class list, which the package reads through `cmd.events.classes` (API 1.2) for its Show menu. So there is nothing to rebuild on `cmd.ai.complete`, and nothing is left out.
 - **One workspace at a time, or all.** The native view reads the whole log, events without a workspace too (the data layer's own); a widget reads its workspace's, or every workspace's with All Workspaces, and never events that belong to none.
-- **No "recorded again ×n" count**: an event recorded again replaces its row, which moves up.
+- **The classes are in the toolbar's Show menu**, not the title menu: a widget's title menu button can't say "3 hidden".
+- **A class's chip has a colour of its own**, not the one the app gives the class.
 
 On a cmd before API 1.2 the rows say the event's type (no `text`), the Show menu lists the families of the types it has seen, and Copy does nothing.

@@ -4,29 +4,32 @@
 // event (API 1.2's `text`, else its type) and whatever plain values its data carries; the
 // toolbar's Show menu hides the log's classes as Settings names them (cmd.events.classes, 1.2;
 // on an older cmd, the families of the types it has seen), and the filter searches the whole
-// event. An event recorded again (a command that ended) replaces its row and moves up. A click
+// event. An event recorded again (a command that ended) replaces its row and moves up, and says
+// how often since it showed up ("recorded again ×2"). The list runs to the window's edges under
+// the filter (a Panel, as natively); a row's chip names its class as Settings does. A click
 // opens the event as stored; a row's menu copies it or its ID; the title menu switches the
 // scope, pauses and clears.
 
 import {
   Window,
-  View,
+  Panel,
+  PanelBody,
   WindowToolbar,
   ToolbarSearchField,
   ToolbarMenu,
-  List,
+  EmptyState,
   ListRow,
   ListRowContent,
   ListRowEnd,
   ListValue,
   Chip,
   CodeBlock,
-  useEvents,
   useStoredState,
   useNow,
   cmd,
   type Event,
   type EventClass,
+  type EventQuery,
 } from "@cmd/widget-api";
 import { useEffect, useState } from "react";
 
@@ -79,7 +82,45 @@ export function details(e: Event): string[] {
   return typeof e.until === "number" && e.until > e.at ? [...fields, `lasted ${lasted(e.until - e.at)}`] : fields;
 }
 
-/** Newest first: the log's order is arrival (useEvents appends, a recorded-again event at the end), so a row recorded again moves up. */
+const keyOf = (e: Event) => e.key ?? `#${e.id}`;
+
+/**
+ * The log, live, as useEvents keeps it (an event recorded again replaces the one before, at the
+ * end), plus how often each was recorded again since it showed up: useEvents merges those away.
+ */
+export function useLog(query: EventQuery): { events: Event[]; again: Map<string, number> } {
+  const [log, setLog] = useState<{ events: Event[]; again: Map<string, number> }>({ events: [], again: new Map() });
+  const q = JSON.stringify(query);
+  useEffect(() => {
+    let first = true;
+    setLog({ events: [], again: new Map() });
+    return cmd.events.subscribe(query, (batch) => {
+      const initial = first;
+      first = false;
+      setLog((prev) => {
+        const again = initial ? new Map<string, number>() : new Map(prev.again);
+        let events = initial ? [] : prev.events;
+        for (const e of batch) {
+          const k = keyOf(e);
+          const had = events.some((x) => keyOf(x) === k);
+          if (had) {
+            events = events.filter((x) => keyOf(x) !== k);
+            if (!initial) again.set(k, (again.get(k) ?? 0) + 1);
+          }
+          events = [...events, e];
+        }
+        const kept = events.slice(-(query.limit ?? 200));
+        const keys = new Set(kept.map(keyOf));
+        for (const k of again.keys()) if (!keys.has(k)) again.delete(k);
+        return { events: kept, again };
+      });
+    });
+    // The query is data: subscribe again only when it says something else.
+  }, [q]);
+  return log;
+}
+
+/** Newest first: the log's order is arrival (useLog appends, a recorded-again event at the end), so a row recorded again moves up. */
 export function newestFirst(events: readonly Event[]): Event[] {
   const seen = new Set<string>();
   const out: Event[] = [];
@@ -103,7 +144,8 @@ export default function EventLog() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const now = useNow(5000);
-  const live = newestFirst(useEvents({ limit: KEEP, ...(scope === "all" ? { scope } : {}) })).filter((e) => e.at > clearedAt);
+  const log = useLog({ limit: KEEP, ...(scope === "all" ? { scope } : {}) });
+  const live = newestFirst(log.events).filter((e) => e.at > clearedAt);
 
   // Paused: the rows stay as they were when it paused (across a reload too); what came since waits, counted.
   const paused = pausedAt !== null;
@@ -120,13 +162,7 @@ export default function EventLog() {
   const status = paused ? (waiting ? `Paused · ${waiting} waiting` : "Paused") : perMinute ? `${perMinute}/min` : null;
 
   const toggle = (f: string) => setHidden(hidden.includes(f) ? hidden.filter((x) => x !== f) : [...hidden, f]);
-  const key = (e: Event) => e.key ?? `#${e.id}`;
-
-  const state = all.length === 0
-    ? { icon: "waveform.path.ecg", title: "Nothing recorded yet", text: scope === "all" ? "Events show up here as cmd records them." : "Events in this workspace show up here as cmd records them." }
-    : shown.length === 0
-      ? { kind: "noResults" as const, title: "Nothing matches", text: q ? `No event mentions “${query.trim()}”.` : "Every kind here is hidden.", action: q ? { label: "Clear Filter", run: () => setQuery("") } : { label: "Show All", run: () => setHidden([]) } }
-      : null;
+  const key = keyOf;
 
   return (
     <Window
@@ -139,7 +175,7 @@ export default function EventLog() {
         { label: "Clear", run: () => (setClearedAt(Date.now()), setOpen(null)) },
       ]}
     >
-      <View state={state}>
+      <Panel>
         <WindowToolbar label="Filter events">
           <ToolbarSearchField value={query} placeholder="Filter: any word in an event" count={q ? `${shown.length}` : undefined} onChange={setQuery} />
           <ToolbarMenu
@@ -152,10 +188,11 @@ export default function EventLog() {
             ]}
           />
         </WindowToolbar>
-        <List>
+        <PanelBody>
           {shown.flatMap((e) => {
             const fam = groupOf(e);
             const text = e.text?.trim() || null;
+            const again = log.again.get(key(e)) ?? 0;
             const row = (
               <ListRow
                 key={key(e)}
@@ -171,9 +208,9 @@ export default function EventLog() {
                   { label: "Copy ID", disabled: !e.key, run: () => e.key && void cmd.clipboard.write(e.key).catch(() => {}) },
                 ]}
               >
-                <ListRowContent title={text ?? e.type} detail={[text ? e.type : null, ...details(e)].filter(Boolean).join(" · ") || null} />
+                <ListRowContent title={text ?? e.type} detail={[text ? e.type : null, ...details(e), again ? `recorded again ×${again}` : null].filter(Boolean).join(" · ") || null} />
                 <ListRowEnd>
-                  <Chip hue={hueOf(fam)}>{fam}</Chip>
+                  <Chip hue={hueOf(fam)}>{titleOf(fam)}</Chip>
                   <ListValue>{clock(e.at)}</ListValue>
                 </ListRowEnd>
               </ListRow>
@@ -182,8 +219,24 @@ export default function EventLog() {
               ? [row, <CodeBlock key={`${key(e)}:json`} maxHeight={320}>{JSON.stringify(e, null, 2)}</CodeBlock>]
               : [row];
           })}
-        </List>
-      </View>
+          {all.length === 0 ? (
+            <EmptyState
+              compact
+              icon="waveform.path.ecg"
+              title="Nothing recorded yet"
+              text={scope === "all" ? "Events show up here as cmd records them." : "Events in this workspace show up here as cmd records them."}
+            />
+          ) : shown.length === 0 ? (
+            <EmptyState
+              compact
+              icon="waveform.path.ecg"
+              title="Nothing matches"
+              text={q ? `No event mentions “${query.trim()}”.` : "Every kind here is hidden."}
+              action={q ? { label: "Clear Filter", run: () => setQuery("") } : { label: "Show All", run: () => setHidden([]) }}
+            />
+          ) : null}
+        </PanelBody>
+      </Panel>
     </Window>
   );
 }

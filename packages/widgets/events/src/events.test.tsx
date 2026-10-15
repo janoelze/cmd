@@ -1,11 +1,12 @@
 // Event Log against the fake host (@cmd/widget-api/testing): the native Event Stream's job. Rows
-// newest first with their plain values; an event recorded again replaces its row and moves up;
+// newest first with their plain values; an event recorded again replaces its row, moves up and
+// says how often; the list edge to edge (a Panel) and a chip naming the class;
 // the filter and the Show menu, with their no-results states; a click opens the event whole;
 // Pause holds the rows and counts what waits, Clear starts over; every workspace's from the
 // title menu, live; the empty state; many rows, the newest drawn. API 1.2: a row's title is the
 // log's line, the Show menu the log's classes (families on an older cmd), Copy Event and Copy ID.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
 import EventLog, { SHOW, classOf, details, familyOf } from "./events.tsx";
 
@@ -34,6 +35,20 @@ describe("Event Log", () => {
     await tree.idle();
     expect(titles(tree.rows())).toEqual(["command", "note"]);
     expect(JSON.stringify(tree.rows()[0])).toContain("exitCode 0");
+    expect(JSON.stringify(tree.rows()[0])).toContain("recorded again ×1");
+    host.emit(command({ command: "pnpm e2e", ago: 10_000, exitCode: 0, took: 9500, key: "c1" }));
+    await tree.idle();
+    expect(tree.rows()).toHaveLength(2);
+    expect(JSON.stringify(tree.rows()[0])).toContain("recorded again ×2");
+    expect(JSON.stringify(tree.rows()[1])).not.toContain("recorded again");
+  });
+
+  it("runs to the window's edges under the filter, a row's chip naming its class as Settings does", async () => {
+    const tree = await render(<EventLog />, createHost({ events: [command({ command: "ls", exitCode: 0 }), event({ type: "git.commit", data: {} })] }));
+    expect(tree.findAll("Panel")).toHaveLength(1);
+    expect(tree.findAll("View")).toHaveLength(0);
+    expect(tree.find("Panel").children.map((c) => (c as { type: string }).type)).toEqual(["WindowToolbar", "PanelBody"]);
+    expect(tree.findAll("Chip").map((c) => JSON.stringify(c.children))).toEqual([expect.stringContaining("Git"), expect.stringContaining("Command output")]);
   });
 
   it("titles a row with the log's line for the event, its type beside", async () => {
@@ -49,8 +64,8 @@ describe("Event Log", () => {
     expect(titles(tree.rows())).toEqual(["git.commit"]);
     expect(tree.find("ToolbarSearchField").props.count).toBe("1");
     await tree.change(tree.find("ToolbarSearchField"), "nothing-like-it");
-    expect(tree).toShowState("noResults", "Nothing matches");
-    await tree.choose(tree.find("View"), "Clear Filter", "state");
+    expect(tree).toShowState("empty", "Nothing matches");
+    await tree.choose(tree.find("EmptyState"), "Clear Filter");
     expect(tree.rows()).toHaveLength(3);
     const show = tree.find("ToolbarMenu");
     expect((show.props.menu as { label?: string }[]).map((m) => m.label)).toEqual(["Command output", "Git", undefined, "Show All"]);
@@ -59,8 +74,8 @@ describe("Event Log", () => {
     expect(tree.find("ToolbarMenu").props.label).toBe("1 hidden");
     expect(host.requests).toContainEqual(["state.set", "hiddenClasses", ["git"]]);
     await tree.choose(tree.find("ToolbarMenu"), "Command output");
-    expect(tree).toShowState("noResults", "Nothing matches");
-    await tree.choose(tree.find("View"), "Show All", "state");
+    expect(tree).toShowState("empty", "Nothing matches");
+    await tree.choose(tree.find("EmptyState"), "Show All");
     expect(tree.rows()).toHaveLength(3);
   });
 
@@ -107,9 +122,13 @@ describe("Event Log", () => {
     expect(tree.find("Window").props.status).toBe("Paused · 2 waiting");
     await tree.choose(tree.find("Window"), "Resume");
     expect(tree.rows()).toHaveLength(3);
+    // Clear after the two came (they were stamped a few ms ahead), whatever the machine's speed.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.advanceTimersByTime(20);
     await tree.choose(tree.find("Window"), "Clear");
+    vi.useRealTimers();
     expect(tree).toShowState("empty", "Nothing recorded yet");
-    host.emit(event({ type: "note", at: Date.now() + 10, data: { text: "after" } }));
+    host.emit(event({ type: "note", at: Date.now() + 1000, data: { text: "after" } }));
     await tree.idle();
     expect(tree.rows()).toHaveLength(1);
   });
