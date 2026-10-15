@@ -4,6 +4,7 @@
 // a node this tree lacks, is refused and the process is asked for the whole tree again.
 
 import { TREE_ROOT, type PatchOp, type TreeElement, type TreeNode, type WidgetPatch, type WidgetTree } from "@cmd/protocol";
+import { API_ELEMENTS, type ApiElementSpec, type WireValue } from "@cmd/protocol";
 
 export class TreeState {
   rev = 0;
@@ -123,4 +124,29 @@ export class TreeState {
       }
     }
   }
+
+  /**
+   * Whether `handler` fires as `event` on an element of the tree: one of the events its spec
+   * names, or "run" inside a prop that holds handlers (a menu entry, an action, a view state's).
+   */
+  fires(handler: number, event: string): boolean {
+    for (const { node } of this.#nodes.values()) {
+      const spec = node.type === "#text" ? undefined : (API_ELEMENTS as Record<string, ApiElementSpec>)[node.type];
+      if (!spec) continue;
+      for (const [k, v] of Object.entries((node as TreeElement).props)) {
+        if (k in spec.events ? k === event && holds(v, handler, false) : event === "run" && HOLDERS.has(spec.props[k]?.type as string) && holds(v, handler, true)) return true;
+      }
+    }
+    return false;
+  }
+}
+
+/** The prop types a "run" handler sits inside. */
+const HOLDERS = new Set(["menu", "action", "viewState"]);
+
+/** Whether `v` is the handler ref (or, `deep`, holds it anywhere inside). */
+function holds(v: WireValue | undefined, handler: number, deep: boolean): boolean {
+  if (!v || typeof v !== "object") return false;
+  if (!Array.isArray(v) && (v as { $handler?: unknown }).$handler === handler) return true;
+  return deep && Object.values(v).some((x) => holds(x as WireValue, handler, true));
 }

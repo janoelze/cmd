@@ -156,9 +156,11 @@ describe("the widget host", () => {
   });
 
   it("forwards the window's interactions and env to the process", async () => {
-    const { core, rt, open, isStatus } = await setup();
+    const { core, rt, open, isStatus, trees } = await setup();
     const w = await open();
     await until(isStatus(w.id, "running"), "running");
+    rt.last.send({ kind: "tree", rev: 1, nodes: [{ id: 1, type: "Button", props: { label: "Go", onClick: { $handler: 7 } }, children: [] }] });
+    await until(() => trees(w.id).some((m) => m.kind === "tree"), "the tree");
     core.handlers["widget.interact"]({ windowId: w.id, handler: 7, event: "onClick" });
     expect(await rt.last.next("interaction")).toEqual({ kind: "interaction", handler: 7, event: "onClick" });
     core.handlers["widget.env"]({ windowId: w.id, theme: "light", size: "narrow", placement: "sidebar" });

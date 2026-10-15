@@ -25,6 +25,7 @@ import { PackageConfig } from "../config.ts";
 import { HostConnection, type ConnectionTimes } from "./connection.ts";
 import type { ExitInfo, RuntimeProcess, WidgetRuntime } from "./runtime.ts";
 import { LogLimit } from "./log-limit.ts";
+import { WindowPress } from "./press.ts";
 import { HOST_TIMES, WIDGET_MEMORY_MB } from "../limits.ts";
 import { loadError, realDir } from "./load-error.ts";
 import type { ActDeps } from "../api/act.ts";
@@ -78,9 +79,8 @@ interface Instance {
   timers: { stop?: NodeJS.Timeout; restart?: NodeJS.Timeout; hello?: NodeJS.Timeout };
   env: Pick<WidgetEnv, "theme" | "size" | "placement">;
   config: string;
-  pressedAt: number;
-  /** That press came from a paired device. */
-  pressedRemote: boolean;
+  /** The person's last press (press.ts). */
+  press: WindowPress;
   permissions: WidgetPermissions | null;
   /** The widget's error before it said hello (its main didn't import): an exit then is a load failure, not a crash. */
   loadError: string | null;
@@ -169,11 +169,7 @@ export class WidgetHost {
     const inst = this.#must(windowId);
     if (!inst.conn || !inst.adapter) throw new Error("this widget isn't running");
     if (!Number.isInteger(handler) || typeof event !== "string") throw new Error("an interaction names a handler and its event");
-    // Typing into a field is no press: a widget can't act while the person types.
-    if (!(event === "onChange" && typeof value === "string" && inst.tree.typesInto(handler))) {
-      inst.pressedAt = Date.now();
-      inst.pressedRemote = remote;
-    }
+    if (!inst.press.interaction(inst.tree, handler, event, value, remote)) return;
     inst.conn.send({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value: value as WireValue }) });
   }
 
@@ -301,8 +297,7 @@ export class WidgetHost {
       timers: {},
       env: { theme: this.#core.settings.settings["theme.appearance"] === "light" ? "light" : "dark", size: "regular", placement: "board" },
       config: "",
-      pressedAt: 0,
-      pressedRemote: false,
+      press: new WindowPress(`${w.kind} ${w.id}`),
       permissions: null,
       loadError: null,
       logs: new LogLimit((l) => this.#core.broadcast({ type: "widget.log", windowId: w.id, ...l })),
@@ -420,9 +415,7 @@ export class WidgetHost {
       pkg,
       widget: inst.widget!,
       permissions: inst.permissions!,
-      pressedAt: () => inst.pressedAt,
-      pressedRemote: () => inst.pressedRemote,
-      takePress: () => void (inst.pressedAt = 0),
+      press: inst.press,
       acts: () => this.#o.acts?.() ?? null,
       secret: (key) => this.config.secrets(pkg.name).get(inst.widget!.id)[key] ?? null,
       aiUsage: this.#aiUsage,

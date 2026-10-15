@@ -36,6 +36,8 @@ async function setup(o: { pkgs?: FakePackage[]; builtin?: boolean } = {}) {
   cores.push(core);
   const rt = new FakeWidgetRuntime(core.widgetTokens);
   core.library.host.configure({ runtime: rt, times: { pingMs: 1000, stallMs: 5000, stopAfterMs: 100, restartMs: 5, helloMs: 2000 } });
+  // Each process draws a button (handler 1, onClick): a press counts only on a handler the tree has.
+  rt.boot = (p) => void p.connect().hello().send({ kind: "tree", rev: 1, nodes: [{ id: 1, type: "Button", props: { label: "Go", onClick: { $handler: 1 } }, children: [] }] });
   const acting: ToolActivity[] = [];
   const events: CoreEvent[] = [];
   core.serve({ access: "local", send: (line) => {
@@ -59,6 +61,9 @@ async function setup(o: { pkgs?: FakePackage[]; builtin?: boolean } = {}) {
   const elsewhere = core.panes.create({ workspaceId: other.id });
   const win = (await core.handlers["widget.add"]({ ref: `pkg:${o.pkgs?.[0]?.name ?? "demo"}/main`, workspaceId: ws.id })) as AppWindow;
   await until(() => core.library.host.status(win.id)?.state === "running", "the widget's process");
+  /** The window's tree once the core has it (the whole tree with `rev`). */
+  const drawn = (windowId: string, rev = 1) => until(() => events.some((e) => e.type === "widget.tree" && e.windowId === windowId && e.message.kind === "tree" && e.message.rev === rev), "the tree");
+  await drawn(win.id);
   const proc = rt.last;
   let n = 100;
 
@@ -100,7 +105,7 @@ async function setup(o: { pkgs?: FakePackage[]; builtin?: boolean } = {}) {
     return { ask: a, result: await r };
   };
   const ptyOf = (paneId: string) => f.ptys.find((p) => (p.opts as { env?: Record<string, string> }).env?.CMD_PANE_ID === paneId) as FakePty;
-  return { core, rt, proc, ws, other, win, term, elsewhere, repo, acting, events, call, ok, refused, press, asked, answer, act, ptyOf, waits: () => acting.filter((a) => a.state === "waiting").length };
+  return { core, rt, proc, ws, other, win, term, elsewhere, repo, acting, events, drawn, call, ok, refused, press, asked, answer, act, ptyOf, waits: () => acting.filter((a) => a.state === "waiting").length };
 }
 
 describe("acting widgets (API 1.1)", () => {
@@ -135,6 +140,7 @@ describe("acting widgets (API 1.1)", () => {
     const w2 = (await t.core.handlers["widget.add"]({ ref: "pkg:other/main", workspaceId: t.ws.id })) as AppWindow;
     await until(() => t.core.library.host.status(w2.id)?.state === "running", "the other widget");
     const p2 = t.rt.last as FakeProcess;
+    await t.drawn(w2.id);
     t.core.library.host.interact(w2.id, 1, "onClick");
     p2.send({ kind: "call", id: 7, method: "terminals.open", params: [{}] });
     const ask = await t.asked();
@@ -145,6 +151,7 @@ describe("acting widgets (API 1.1)", () => {
     const w3 = (await t.core.handlers["widget.add"]({ ref: "pkg:demo/main", workspaceId: t.other.id })) as AppWindow;
     await until(() => t.core.library.host.status(w3.id)?.state === "running", "the widget elsewhere");
     const p3 = t.rt.last as FakeProcess;
+    await t.drawn(w3.id);
     t.core.library.host.interact(w3.id, 1, "onClick");
     p3.send({ kind: "call", id: 8, method: "terminals.open", params: [{}] });
     expect((await t.asked()).workspaceId).toBe(t.other.id);
@@ -252,10 +259,28 @@ describe("acting widgets (API 1.1)", () => {
     await t.answer(true);
     expect((await first).ok).toBe(true);
     // Typing into a field isn't a press.
-    t.proc.send({ kind: "tree", rev: 1, nodes: [{ id: 1, type: "ToolbarField", props: { onChange: { $handler: 9 } }, children: [] }] });
-    await until(() => t.core.library.host.status(t.win.id) !== null, "the tree");
+    t.proc.send({ kind: "tree", rev: 2, nodes: [{ id: 1, type: "ToolbarField", props: { onChange: { $handler: 9 } }, children: [] }] });
+    await t.drawn(t.win.id, 2);
     t.core.library.host.interact(t.win.id, 9, "onChange", "pnpm");
     expect((await t.refused("terminals.open", {})).message).toMatch(/right after the person presses something/);
+  });
+
+  it("counts a press only on a handler the tree has, with an event its element fires", async () => {
+    const t = await setup();
+    const sent = t.proc.received.length;
+    // No handler 42 in the tree; the button's handler as a change: nothing armed, nothing sent on.
+    t.core.library.host.interact(t.win.id, 42, "onClick");
+    t.core.library.host.interact(t.win.id, 1, "onChange", "x");
+    t.core.library.host.interact(t.win.id, 1, "run");
+    expect((await t.refused("terminals.open", {})).message).toMatch(/right after the person presses something/);
+    expect(t.proc.received.slice(sent).filter((m) => m.kind === "interaction")).toEqual([]);
+    // A menu entry's handler runs as "run".
+    t.proc.send({ kind: "tree", rev: 2, nodes: [{ id: 1, type: "ListRow", props: { title: "a", menu: [{ label: "Open", run: { $handler: 5 } }] }, children: [] }] });
+    await t.drawn(t.win.id, 2);
+    t.core.library.host.interact(t.win.id, 5, "run");
+    const r = t.call("terminals.open", {});
+    await t.answer(true);
+    expect((await r).ok).toBe(true);
   });
 
   it("names nothing outside its workspace, nor its own window", async () => {

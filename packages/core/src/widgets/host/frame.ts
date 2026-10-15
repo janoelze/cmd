@@ -45,14 +45,14 @@ export async function frameCall(core: FrameCore, windowId: WindowId, verb: strin
   if (!(FRAME_VERBS as readonly string[]).includes(verb)) throw invalid(`A frame can't call ${String(verb).slice(0, 60)}.`);
   const args = (Array.isArray(params) ? params : []) as WireValue[];
   if (verb === "windows.open" && !(typeof args[0] === "string" && /^https?:\/\//i.test(args[0]))) throw invalid("A frame opens http(s) links only.");
-  const at = pressed ? Date.now() : 0;
+  let at = pressed ? Date.now() : 0;
   const adapter = widgetApi(core, {
     windowId,
     workspaceId: () => core.windows.others().find((w) => w.id === windowId)?.workspaceId ?? "",
     pkg: f.pkg,
     widget: f.widget,
     permissions: f.permissions,
-    pressedAt: () => at,
+    press: { at: () => at, remote: () => false, take: () => void (at = 0) },
     secret: () => null,
     aiUsage: new AiUsage(null),
   });

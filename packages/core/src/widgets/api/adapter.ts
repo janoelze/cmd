@@ -20,7 +20,7 @@ import { widgetComplete, type AiUsage } from "./ai.ts";
 import { apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
 import { brokeredFetch } from "./net.ts";
 import { subscribeTopic } from "./topics.ts";
-import { widgetActs, type ActDeps } from "./act.ts";
+import { widgetActs, type ActDeps, type Press } from "./act.ts";
 import { widgetRunner, type RunScope } from "./run.ts";
 
 export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call">;
@@ -34,12 +34,8 @@ export interface WidgetScope {
   widget: PackageWidget;
   /** declared ∩ granted. */
   permissions: WidgetPermissions;
-  /** When the person last pressed something in the widget (ms). */
-  pressedAt(): number;
-  /** Whether that press came from a paired device (an act then asks on the Mac, never kept). */
-  pressedRemote?(): boolean;
-  /** An act takes the press: one act per press (1.1). */
-  takePress?(): void;
+  /** The person's last press in the widget (host/press.ts): an act or windows.open takes it, one per press. */
+  press: Press;
   /** The tools' approvals and board marks the acts ask and show through; none: acts are refused. */
   acts?: () => ActDeps | null;
   /** Tests: what cmd.run runs instead of execArgv. */
@@ -144,19 +140,13 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     return w;
   };
   const kv = () => ({ ...((win().state.kv as Record<string, WireValue> | undefined) ?? {}) });
-  // An act takes the press it came after: the host forgets it (takePress); without a host (tests), it is kept here.
-  let pressTaken = -1;
   const acts = widgetActs(core, {
     windowId: scope.windowId,
     workspaceId: own,
     pkg: scope.pkg,
     widget: scope.widget,
     permissions: perms,
-    press: {
-      at: () => (scope.takePress || scope.pressedAt() !== pressTaken ? scope.pressedAt() : 0),
-      remote: () => scope.pressedRemote?.() ?? false,
-      take: () => (scope.takePress ? scope.takePress() : (pressTaken = scope.pressedAt())),
-    },
+    press: scope.press,
     deps: () => scope.acts?.() ?? null,
   });
   const run = widgetRunner({ permissions: perms, root: () => core.workspaces.get(own())?.root ?? null, exec: scope.exec });
@@ -203,8 +193,9 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     },
     "windows.list": (q) => windows(q),
     "windows.open": (target) => {
-      if (Date.now() - scope.pressedAt() > OPEN_AFTER_PRESS_MS) throw invalid("windows.open works right after the person presses something in the widget.");
+      if (Date.now() - scope.press.at() > OPEN_AFTER_PRESS_MS) throw invalid("windows.open works right after the person presses something in the widget.");
       if (typeof target !== "string" || !target.trim()) throw invalid("windows.open: name a URL, a path or a widget");
+      scope.press.take(); // one window per press
       const ws = workspace();
       const type = parsePackageKind(target) || core.windowTypes.get(target)?.role === "widget" ? core.windowTypes.get(target) : null;
       const w = type ? core.windows.open(type.kind, {}, ws) : core.windows.openTarget(target.trim(), ws);

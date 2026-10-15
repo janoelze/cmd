@@ -39,7 +39,7 @@ function adapter(permissions: WidgetPermissions): WidgetApi {
   const pkg = core.library.packages.forKind("pkg:demo/main")!;
   // The services as a feature gets them (kernel/context.ts), with `opened` counting nothing.
   const ctx = { agents: core.agents, panes: core.panes, windows: core.windows, windowTypes: core.windowTypes, workspaces: core.workspaces, data: core.data, actions: core.actions, notifications: core.notifications, ai: core.ai, settings: core.settings, broadcast: (e: CoreEvent) => core.server.broadcast(e), opened: <W>(w: W) => w, call: core.call.bind(core) as never };
-  return widgetApi(ctx, { windowId, workspaceId: () => A.id, pkg, widget: pkg.widgets[0]!, permissions, pressedAt: () => pressed, secret: () => null, aiUsage: new AiUsage(null) });
+  return widgetApi(ctx, { windowId, workspaceId: () => A.id, pkg, widget: pkg.widgets[0]!, permissions, press: { at: () => pressed, remote: () => false, take: () => void (pressed = 0) }, secret: () => null, aiUsage: new AiUsage(null) });
 }
 
 /** A verb, typed as the d.ts types it. */
@@ -229,12 +229,14 @@ describe("API 1", () => {
     expect(r.text).not.toContain("line 30 ");
   });
 
-  it("opens a window only right after the person pressed something", async () => {
+  it("opens one window per press, only right after it", async () => {
     const api = adapter(noPermissions());
     pressed = Date.now() - 60_000;
     expect((await refusal(api.call("windows.open", ["pkg:demo/main"]))).message).toMatch(/presses something/);
     pressed = Date.now();
     expect(await api.call("windows.open", ["pkg:demo/main"])).toMatchObject({ id: expect.any(String) });
+    // One window per press: the second waits for another.
+    expect((await refusal(api.call("windows.open", ["pkg:demo/main"]))).message).toMatch(/presses something/);
   });
 
   it("notifies once per key and words", async () => {
