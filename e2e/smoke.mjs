@@ -2680,8 +2680,11 @@ await scenario("widget-commands", async () => {
     const labels = await until(() => app.evaluate(() => globalThis.__lastMenu ?? []), (l) => l.includes("Run Again"), 5000);
     await unchoosing();
     const opened = (await until(terminals, (l) => l.length === before.length + 1, 10_000)).find((id) => !before.includes(id));
-    const typed = opened ? await until(() => paneText(opened, 5), (t) => t.includes("echo e2e-commands-ok"), 15_000) : "";
-    check(labels.includes("Show Terminal") && !!opened && typed.includes("echo e2e-commands-ok") && !/^e2e-commands-ok$/m.test(typed), `Run Again opens a terminal with the command typed, not run (${labels.join(", ")}; ${JSON.stringify(typed.trim().slice(-60))})`);
+    // The screen without whitespace: a narrow terminal wraps the line anywhere. Typed: once; run: its output is a second.
+    const flat = (t) => t.replace(/\s+/g, "").split(path.basename(where)).join(""); // the prompt's folder is "cmd-e2e-commands-<random>"
+    const typed = opened ? await until(() => paneText(opened, 5), (t) => flat(t).includes("echoe2e-commands-ok"), 15_000) : "";
+    const times = flat(typed).split("e2e-commands-ok").length - 1;
+    check(labels.includes("Show Terminal") && !!opened && flat(typed).includes("echoe2e-commands-ok") && times === 1, `Run Again opens a terminal with the command typed, not run (${labels.join(", ")}; ${JSON.stringify(typed.trim().slice(-60))})`);
     await shot(win, "widget-commands-run-again.png");
     await call("window.close", { id: w.id });
   } finally {
