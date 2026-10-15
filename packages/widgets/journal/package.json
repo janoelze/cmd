@@ -1,6 +1,6 @@
 {
   "name": "journal",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "What happened in this workspace, a few lines a day, as the Journal wrote it.",
   "private": true,
   "license": "AGPL-3.0-only",

@@ -1,6 +1,6 @@
 {
   "name": "stats",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "How you and your agents used cmd: agent time, turns, commands, tokens, when you work.",
   "private": true,
   "license": "AGPL-3.0-only",
