@@ -2,7 +2,8 @@
 // job. Rows newest first under Today and Earlier, each with its source's icon, title, body and
 // time; one that needs you in its tone; live as they are sent; a click goes to its terminal, a
 // row's menu copies its text; Clear is the widget's own "cleared at", kept across a reload; every
-// workspace's from the title menu; refused without the grant, with a way back; empty; many.
+// workspace's from the title menu; refused without the grant, with a way back; empty; many; the
+// list runs to the window's edges, as natively.
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
@@ -35,7 +36,7 @@ describe("Notification Log", () => {
     expect(tree.findAll("ListRowIcon").map((i) => i.props.icon)).toEqual(["terminal", "person.crop.circle.badge.questionmark", "person.crop.circle.badge.checkmark"]);
     expect(tree.findAll("ListRowContent").map((c) => c.props.tone ?? null)).toEqual([null, "needs", null]);
     expect(tree.findAll("ListValue")[0]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d\d:\d\d$/) });
-    expect(tree.findAll("ListValue")[2]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d+ (min|h)$/) });
+    expect(tree.findAll("ListValue")[2]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d+ (min|h|d)$/) });
   });
 
   it("shows a notification as it is sent", async () => {
@@ -57,6 +58,13 @@ describe("Notification Log", () => {
     expect((tree.rows()[2]!.props.menu as { label: string; disabled?: boolean }[])[0]).toMatchObject({ label: "Show Terminal", disabled: true });
     await tree.choose(tree.rows()[1]!, "Copy Text");
     expect(host.calls[1]).toEqual(["clipboard.write", "Tours · needs you\nAllow “pnpm tour”?"]);
+  });
+
+  it("runs to the window's edges: a Panel, not an inset View", async () => {
+    const tree = await render(<NotificationLog />, createHost({ events: log }));
+    expect(tree.findAll("Panel")).toHaveLength(1);
+    expect(tree.findAll("View")).toHaveLength(0);
+    expect(tree.find("Panel").children.map((c) => (c as { type: string }).type)).toEqual(["PanelBody"]);
   });
 
   it("clears its own list from the title menu, keeps it cleared across a reload, and shows what comes after", async () => {

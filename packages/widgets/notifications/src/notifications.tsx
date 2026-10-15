@@ -1,12 +1,13 @@
 // Notification Log, a built-in widget package (docs/57, wave 2; the native Notifications' job):
 // the notifications cmd sent in this workspace (or every workspace's), shown or not, so one
 // missed while away is still here. One live query over the log's notification events
-// (useEvents; notes need no class), newest first, under Today and Earlier. A click goes to the
+// (useEvents; notes need no class), newest first, under Today and Earlier, in a list that runs
+// to the window's edges (a Panel, as natively). A click goes to the
 // terminal a notification is about (cmd.windows.select); its menu copies its text. Clear is the
 // widget's own: a "cleared at" kept per window (useStoredState), so clearing here clears no
 // other list. A refusal (All Workspaces without the grant) says what it needs.
 
-import { Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, ListValue, useEvents, useStoredState, useNow, fmt, cmd, ApiCallError, type Event } from "@cmd/widget-api";
+import { Window, View, Panel, PanelBody, EmptyState, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, ListValue, useEvents, useStoredState, useNow, fmt, cmd, ApiCallError, type Event } from "@cmd/widget-api";
 import { Component, type ReactNode } from "react";
 
 type Scope = "workspace" | "all";
@@ -84,37 +85,41 @@ function Notifications() {
         { label: "Clear Notifications", disabled: notes.length === 0, run: () => setClearedAt(Date.now()) },
       ]}
     >
-      <View
-        state={
-          notes.length === 0
-            ? { icon: "bell", title: "No notifications", text: clearedAt ? "New ones show up here. Cleared ones stay in the Event Log." : "When an agent needs you or a long command finishes, it shows up here, even if you missed it." }
-            : null
-        }
-      >
-        <List>
-          {groups.map((g) => (
-            <ListSection key={g.title} title={g.title} count={g.items.length}>
-              {g.items.map((n) => (
-                <ListRow
-                  key={n.key}
-                  tip={n.body.length > 60 ? n.body : undefined}
-                  onClick={() => go(n)}
-                  menu={[
-                    { label: "Show Terminal", disabled: !n.terminalId, run: () => go(n) },
-                    { label: "Copy Text", run: () => void cmd.clipboard.write(n.body ? `${n.title}\n${n.body}` : n.title).catch(() => {}) },
-                  ]}
-                >
-                  <ListRowIcon icon={iconOf(n.source)} />
-                  <ListRowContent title={n.title} detail={n.body || " "} tone={n.urgent && n.source !== "timer" ? "needs" : undefined} />
-                  <ListRowEnd>
-                    <ListValue>{n.at >= today ? fmt.time(n.at) : age(n.at, now)}</ListValue>
-                  </ListRowEnd>
-                </ListRow>
-              ))}
-            </ListSection>
-          ))}
-        </List>
-      </View>
+      <Panel>
+        <PanelBody>
+          <List>
+            {groups.map((g) => (
+              <ListSection key={g.title} title={g.title} count={g.items.length}>
+                {g.items.map((n) => (
+                  <ListRow
+                    key={n.key}
+                    tip={n.body.length > 60 ? n.body : undefined}
+                    onClick={() => go(n)}
+                    menu={[
+                      { label: "Show Terminal", disabled: !n.terminalId, run: () => go(n) },
+                      { label: "Copy Text", run: () => void cmd.clipboard.write(n.body ? `${n.title}\n${n.body}` : n.title).catch(() => {}) },
+                    ]}
+                  >
+                    <ListRowIcon icon={iconOf(n.source)} />
+                    <ListRowContent title={n.title} detail={n.body || " "} tone={n.urgent && n.source !== "timer" ? "needs" : undefined} />
+                    <ListRowEnd>
+                      <ListValue>{n.at >= today ? fmt.time(n.at) : age(n.at, now)}</ListValue>
+                    </ListRowEnd>
+                  </ListRow>
+                ))}
+              </ListSection>
+            ))}
+          </List>
+          {notes.length === 0 && (
+            <EmptyState
+              compact
+              icon="bell"
+              title="No notifications"
+              text={clearedAt ? "New ones show up here. Cleared ones stay in the Event Log." : "When an agent needs you or a long command finishes, it shows up here, even if you missed it."}
+            />
+          )}
+        </PanelBody>
+      </Panel>
     </Window>
   );
 }
