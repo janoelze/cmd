@@ -84,8 +84,8 @@ describe("widget package stories", () => {
             const root = createRoot(el, { onCaughtError: (e) => void errors.push(`caught: ${String(e)}`), onUncaughtError: (e) => void errors.push(`uncaught: ${String(e)}`) });
             errors.length = 0;
             await act(async () => root.render(createElement(Story)));
-            // The widget runs, then its tree is drawn (inside act: the still arrives after the first render): a row, the empty state, or text (a countdown).
-            await act(async () => void (await vi.waitFor(() => expect(el.querySelector(".ui-list-row, .ui-viewstate-title, .ui-view .ui-text"), `${name} (${theme.id}) drew nothing`).not.toBeNull())));
+            // The widget runs, then its tree is drawn (inside act: the still arrives after the first render): a row, a state (empty, loading), or text (a countdown).
+            await act(async () => void (await vi.waitFor(() => expect(el.querySelector(".ui-list-row, .ui-viewstate, .ui-view .ui-text"), `${name} (${theme.id}) drew nothing`).not.toBeNull())));
             if (errors.length) broken.push(`${path.basename(file)} ${name} (${theme.id}): ${errors[0]}`);
             await act(async () => root.unmount());
             el.remove();

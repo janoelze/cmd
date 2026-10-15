@@ -1,0 +1,32 @@
+{
+  "name": "resources",
+  "version": "1.0.0",
+  "description": "What each terminal uses, live: CPU and memory of everything running in it.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/resources.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "resources",
+        "title": "Terminal Usage",
+        "icon": "gauge.with.dots.needle.33percent",
+        "description": "What each terminal in this workspace uses, live: CPU and memory of everything running in it, busiest first. A click goes to the terminal.",
+        "main": "src/resources.tsx",
+        "size": "m"
+      }
+    ],
+    "permissions": { "workspace": ["read", "all"] }
+  }
+}
