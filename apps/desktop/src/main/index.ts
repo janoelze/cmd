@@ -500,10 +500,10 @@ function createWindow(workspaceId: string, b: Bounds): BrowserWindow {
     },
   });
   if (b.maximized) win.maximize();
-  // Subframes are Magic widgets, Visualizers and Jam: they stay on their own page. host.js turns
-  // link clicks into open-url; a widget that sets location itself gets a browser too.
+  // Subframes are frame widgets, Visualizers and Jam: they stay on their own page. A Visualizer or
+  // Jam page that goes to an http(s) URL gets a browser window; a frame widget's never does.
   win.webContents.on("will-frame-navigate", (e) => {
-    if (e.isMainFrame || (e.url.startsWith("cmd-widget:") && !e.url.startsWith(PACKAGE_FRAME_BASE)) || isPackageFramePage(e.url) || isFramePage(e.url)) return;
+    if (e.isMainFrame || isPackageFramePage(e.url) || isFramePage(e.url)) return;
     e.preventDefault(); // a frame widget's page goes nowhere: its links open through the app, after a press (lib/frames.ts)
     if (/^https?:/i.test(e.url) && !e.frame?.url.startsWith(PACKAGE_FRAME_BASE)) win.webContents.send("open-url", e.url);
   });
