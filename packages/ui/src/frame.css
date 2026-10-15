@@ -166,9 +166,10 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
 .ui-text[data-select] { user-select: text; overflow-wrap: anywhere; }
 /* Text fit: one line as large as the column allows (the line's length is --chars), from its size up to display. */
 .ui-text-fit { display: block; align-self: stretch; width: 100%; min-width: 0; container-type: inline-size; }
+.ui-stack:has(> .ui-text-fit) { align-self: stretch; } /* a fit title fills its column: the column takes the width it is given, not its content's (none: a size container has no width of its own) */
 .ui-stack[data-align="center"] > .ui-text-fit { text-align: center; }
 .ui-stack[data-align="end"] > .ui-text-fit { text-align: end; }
-.ui-text[data-fit] { display: block; font-size: clamp(var(--fit-from), calc(100cqi / (var(--chars) * 0.6)), var(--text-display)); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-text[data-fit] { display: block; font-size: clamp(var(--fit-from), calc(100cqi / (var(--chars, 12) * 0.6)), var(--text-display)); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Text on its own line in a Stack is a paragraph: room between its lines, wrapped evenly. */
 .ui-stack > .ui-text:not([data-truncate]) { display: block; line-height: 1.45; text-wrap: pretty; }
 .ui-text[data-balance], .ui-stack > .ui-text[data-balance] { text-wrap: balance; }

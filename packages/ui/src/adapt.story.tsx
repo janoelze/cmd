@@ -8,6 +8,9 @@ import { IconButton } from "./button.tsx";
 import { Inline, Pane, Panes, Stack, Text, View } from "./frame.tsx";
 import { Icon } from "./icon.tsx";
 
+/** The boxes side by side, wrapping in a stage that is narrower. */
+const Row = ({ children }: { children: ReactNode }) => <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "var(--space-4)", maxWidth: 880 }}>{children}</div>;
+
 /** A window's body at a size, with its size written under it. */
 const Box = ({ w, h, children }: { w: number; h: number; children: ReactNode }) => (
   <Stack gap={1}>
@@ -29,7 +32,7 @@ const Controls = ({ gap = 2 }: { gap?: 2 | 6 }) => (
 /** The three faces of a player: short (a line and the controls), large (a centred column, the title as large as it fits) and the fallback. */
 const Player = () => (
   <Adapt>
-    <Case maxHeight={280}>
+    <Case maxHeight={240}>
       <Stack pad="inset" gap={3} justify="between" grow>
         <Inline gap={3}>
           <Icon name="music.note" size={28} />
@@ -45,9 +48,9 @@ const Player = () => (
         <Controls />
       </Stack>
     </Case>
-    <Case minWidth={340} minHeight={440}>
+    <Case minWidth={280} minHeight={360}>
       <Stack pad="inset" gap={4} align="center" justify="center" grow>
-        <Icon name="music.note" size={96} />
+        <Icon name="music.note" size={64} />
         <Stack gap={1} align="center">
           <Text strong fit size="lg">
             Windowlicker
@@ -59,7 +62,7 @@ const Player = () => (
     </Case>
     <Case>
       <Stack pad="inset" gap={3} grow justify="end">
-        <Icon name="music.note" size={64} />
+        <Icon name="music.note" size={44} />
         <Stack gap={0.5}>
           <Text strong size="lg" truncate>
             Windowlicker
@@ -72,25 +75,25 @@ const Player = () => (
   </Adapt>
 );
 
-/** One player at three sizes: short (240 tall), the fallback (320×360) and large (400×480): each its own face. */
+/** One player at three sizes: short (up to 240 tall), large (from 280×360) and the fallback between: each its own face. (Now Playing breaks at 280 and 340×440; these are smaller to fit a stage.) */
 export const Faces = () => (
-  <Inline gap={4} align="start">
-    <Box w={420} h={240}>
+  <Row>
+    <Box w={280} h={200}>
       <View scroll={false}>
         <Player />
       </View>
     </Box>
-    <Box w={320} h={360}>
+    <Box w={240} h={320}>
       <View scroll={false}>
         <Player />
       </View>
     </Box>
-    <Box w={400} h={480}>
+    <Box w={300} h={380}>
       <View scroll={false}>
         <Player />
       </View>
     </Box>
-  </Inline>
+  </Row>
 );
 
 /** In Panes, each Adapt reads its pane's width, not the window's: the same window, a list face in a narrow pane and a row in a wide one. */
@@ -111,7 +114,7 @@ const Counts = () => (
   </Adapt>
 );
 export const InPanes = () => (
-  <Inline gap={4} align="start">
+  <Row>
     <Box w={480} h={260}>
       <View inset>
         <Panes>
@@ -133,12 +136,12 @@ export const InPanes = () => (
         </Panes>
       </View>
     </Box>
-  </Inline>
+  </Row>
 );
 
 /** Stack `justify` in a growing column: start, center, end, between. */
 export const Justify = () => (
-  <Inline gap={4} align="start">
+  <Row>
     {(["start", "center", "end", "between"] as const).map((j) => (
       <Box key={j} w={160} h={200}>
         <Stack pad="inset" grow justify={j}>
@@ -147,20 +150,20 @@ export const Justify = () => (
         </Stack>
       </Box>
     ))}
-  </Inline>
+  </Row>
 );
 
-/** Text `fit` in columns of three widths: one line, from its size up to the display size. */
+/** Text `fit` in columns of three widths: one line, from its size (md here) up to the display size. */
 export const Fit = () => (
-  <Inline gap={4} align="start">
-    {[200, 320, 520].map((w) => (
-      <Box key={w} w={w} h={120}>
+  <Row>
+    {[120, 160, 240].map((w) => (
+      <Box key={w} w={w} h={96}>
         <Stack pad="inset" grow justify="center">
-          <Text strong fit size="lg">
+          <Text strong fit>
             Windowlicker
           </Text>
         </Stack>
       </Box>
     ))}
-  </Inline>
+  </Row>
 );

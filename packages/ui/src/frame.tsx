@@ -370,24 +370,25 @@ export function Filmstrip({ items, selected, onSelect }: { items: readonly { key
 /** Text in one of the kit's roles: `dim` for secondary, `mono` for values and IDs, `strong` for a name; `truncate` cuts one line with an ellipsis; `balance` wraps a short paragraph into lines of about one length (an intro under a title); `fit` grows one line with its container's width, from `size` up to the display size (a title that fills a column). */
 export function Text({ tone, size, mono, strong, truncate, select, balance, fit, children }: { tone?: "dim" | Tone; size?: TextSize; mono?: boolean; strong?: boolean; truncate?: boolean; /** A value to read and copy (a path, a hash): selectable, a long one breaks anywhere. */ select?: boolean; balance?: boolean; /** One line as large as its container's width allows, from `size` (default md) up to display. */ fit?: boolean; children: ReactNode }) {
   const text = (
-    <span className="ui-text" data-tone={tone} data-size={size} data-mono={mono || undefined} data-strong={strong || undefined} data-truncate={truncate || undefined} data-select={select || undefined} data-balance={balance || undefined} data-fit={fit || undefined}>
+    <span className="ui-text" data-tone={tone} data-size={size} data-mono={mono || undefined} data-strong={strong || undefined} data-truncate={truncate || undefined} data-select={select || undefined} data-balance={balance || undefined} data-fit={fit || undefined} style={fit ? ({ "--fit-from": `var(--text-${size ?? "md"})` } as CSSProperties) : undefined}>
       {children}
     </span>
   );
-  if (!fit) return text;
-  // The container its width is read from (container units), sized by its parent; --chars is how long the line is.
-  return (
-    <span className="ui-text-fit" style={{ "--chars": Math.max(8, textLength(children)), "--fit-from": `var(--text-${size ?? "md"})` } as CSSProperties}>
-      {text}
-    </span>
-  );
+  return fit ? <Fit>{text}</Fit> : text;
 }
 
-/** How many characters a Text's children read as (its words, joined). */
-function textLength(children: ReactNode): number {
-  if (typeof children === "string" || typeof children === "number") return String(children).length;
-  if (Array.isArray(children)) return children.reduce((n: number, c: ReactNode) => n + textLength(c), 0);
-  return 0;
+/** Text fit's container: its width is what the text grows to (container units); --chars is how long the line is, read from what it shows (its children may be drawn nodes, not strings). */
+function Fit({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) el.style.setProperty("--chars", String(Math.max(8, el.textContent?.length ?? 0)));
+  });
+  return (
+    <span ref={ref} className="ui-text-fit">
+      {children}
+    </span>
+  );
 }
 
 /**
