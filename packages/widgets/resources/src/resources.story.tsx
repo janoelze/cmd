@@ -1,55 +1,65 @@
 // Terminal Usage's states for the UI Workbench (`pnpm workbench widgets/resources`): the widget
-// against the fake host, one variant per state, each the host's data (stand-in samples).
+// against the fake host, one variant per state. The terminals and cmd's own numbers are the native
+// Resources story's (windows/resources/ResourcesView.story.tsx), so the two can be compared side by
+// side; the sparklines start with the widget, so a still has one sample. `cmd widget preview`
+// draws the first six.
 
 import type { HostData } from "@cmd/widget-api/testing/host";
-import { agent, pane, usage } from "@cmd/widget-api/testing/fixtures";
+import { agent, appUsage, pane, usage } from "@cmd/widget-api/testing/fixtures";
 import TerminalUsage from "./resources.tsx";
 
 export default TerminalUsage;
 
 const MB = 2 ** 20;
-const top = (...names: [string, number][]) => names.map(([name, mb]) => ({ name, memory: mb * MB }));
+const top = (...names: string[]) => names.map((name, i) => ({ name, memory: (100 - i * 30) * MB }));
 
+/** The native story's four terminals: two agents at work, a dev server, an idle shell. */
 const terminals = [
   pane({ title: "Claude · window design", agentId: "a1" }),
   pane({ title: "pnpm dev", command: "pnpm dev" }),
   pane({ title: "Codex · sqlite viewer", agentId: "a2" }),
   pane({ title: "zsh" }),
 ];
-// The agents in two of them: their rows say the agent's name and its kind's icon, as the sidebar does.
 const agents = [agent({ id: "a1", name: "Claude · window design", terminalId: "t-claude-window-design" }), agent({ id: "a2", name: "Codex · sqlite viewer", kind: "codex", terminalId: "t-codex-sqlite-viewer" })];
 const samples = [
-  usage({ id: "t-claude-window-design", cpu: 92, memory: 812 * MB, processes: 9, top: top(["claude", 600], ["node", 200], ["rg", 12]) }),
-  usage({ id: "t-pnpm-dev", cpu: 21.4, memory: 1240 * MB, processes: 14, top: top(["Electron Helper (Renderer)", 700], ["node", 400], ["esbuild", 140]) }),
-  usage({ id: "t-codex-sqlite-viewer", cpu: 6.1, memory: 288 * MB, processes: 4, top: top(["codex", 200], ["node", 88]) }),
-  usage({ id: "t-zsh", cpu: 0.2, memory: 6 * MB, top: top(["zsh", 6]) }),
+  usage({ id: "t-claude-window-design", cpu: 92, memory: 812 * MB, processes: 9, top: top("claude", "node", "rg") }),
+  usage({ id: "t-pnpm-dev", cpu: 21.4, memory: 1240 * MB, processes: 14, top: top("Electron Helper (Renderer)", "node", "esbuild") }),
+  usage({ id: "t-codex-sqlite-viewer", cpu: 6.1, memory: 288 * MB, processes: 4, top: top("codex", "node") }),
+  usage({ id: "t-zsh", cpu: 0.2, memory: 6 * MB, processes: 1, top: top("zsh") }),
 ];
+/** cmd itself, as the native story has it. */
+const own = appUsage({ app: { cpu: 8.2, memory: 640 * MB }, background: { cpu: 1.4, memory: 96 * MB } });
 
-/** A busy workspace: an agent at work, a dev server, an idle shell. */
-export const Busy: HostData = { terminals, agents, terminalUsage: samples };
+/** A busy workspace: agents at work, a dev server, an idle shell; then cmd itself. */
+export const Busy: HostData = { terminals, agents, terminalUsage: samples, appUsage: own };
 
-/** Every workspace's terminals, from the title menu: where each runs. */
+/** Every workspace's terminals, from the title menu: each with its workspace's name. */
 export const EveryWorkspace: HostData = {
-  terminals: [...terminals, pane({ title: "make watch", workspaceId: "ws-2", cwd: "/Users/me/src/fl-studio-web" })],
-  terminalUsage: [...samples, usage({ id: "t-make-watch", workspaceId: "ws-2", cpu: 44, memory: 420 * MB, processes: 6, top: top(["make", 4], ["node", 400]) })],
+  workspace: { name: "cmd" },
+  terminals: [...terminals.slice(0, 2), { ...terminals[2]!, workspaceId: "ws-2" }, { ...terminals[3]!, workspaceId: "ws-3" }],
+  agents,
+  terminalUsage: samples.map((u, i) => ({ ...u, workspaceId: ["ws-1", "ws-1", "ws-2", "ws-3"][i]! })),
+  workspaces: [{ id: "ws-1", name: "cmd" }, { id: "ws-2", name: "fl-studio-web" }, { id: "ws-3", name: "Home" }],
+  appUsage: own,
   state: { scope: "all" },
 };
 
 /** One quiet terminal. */
-export const OneTerminal: HostData = { terminals: [pane()], terminalUsage: [usage()] };
+export const OneTerminal: HostData = { terminals: terminals.slice(3), terminalUsage: samples.slice(3), appUsage: own };
 
-/** In a narrow window, as in a sidebar: the least important columns give way. */
-export const Narrow: HostData & { size: "narrow" } = { terminals, agents, terminalUsage: samples, size: "narrow" };
+/** Nothing running in this workspace: cmd's own use still shows. */
+export const NothingRunning: HostData = { terminals: [], terminalUsage: [], appUsage: own };
 
 /** Terminals cmd hasn't sampled yet. */
-export const Loading: HostData = { terminals, terminalUsage: [] };
+export const Measuring: HostData = { terminals, agents, terminalUsage: [], appUsage: own };
 
-/** Nothing running in this workspace. */
-export const Empty: HostData = { terminals: [], terminalUsage: [] };
-
-/** Many terminals, sorted by memory. */
+/** Many terminals, sorted by memory from its header. */
 export const Many: HostData = {
   terminals: Array.from({ length: 40 }, (_, i) => pane({ title: `job ${i + 1}` })),
   terminalUsage: Array.from({ length: 40 }, (_, i) => usage({ id: `t-job-${i + 1}`, cpu: (i * 37) % 100, memory: ((i * 53) % 900) * MB + MB, processes: 1 + (i % 5) })),
+  appUsage: own,
   state: { sort: { key: "memory", desc: true } },
 };
+
+/** Nothing running, and cmd can't tell what it uses itself. */
+export const Empty: HostData = { terminals: [], terminalUsage: [], appUsage: appUsage({ app: null, background: null }) };

@@ -22,11 +22,11 @@
         "id": "resources",
         "title": "Terminal Usage",
         "icon": "gauge.with.dots.needle.33percent",
-        "description": "What each terminal in this workspace uses, live: CPU and memory of everything running in it, busiest first. A click goes to the terminal.",
+        "description": "What each terminal in this workspace uses, live: CPU and memory of everything running in it, busiest first, and what cmd itself uses. A click goes to the terminal.",
         "main": "src/resources.tsx",
         "size": "m"
       }
     ],
-    "permissions": { "workspace": ["read", "all"] }
+    "permissions": { "workspace": ["read", "all"], "events": ["system"] }
   }
 }

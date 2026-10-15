@@ -44,7 +44,7 @@ Sixteen native window types have `role: "widget"`. Lines are the renderer's view
 | Stats | `stats` | 324 | `stats.query`, `stats.queryMany` | **done** (`stats`, "Usage Stats"); native stays. Re-ported on 1.3 (reports-b): one `useStat` per number, no polling; the native page's panes in either scope (projects and cmd's model calls in This Workspace too), `Stat` with a `Delta` and a sparkline inside, a detail with its change and spread; what is left is in the audit's table |
 | Journal | `journal` | 307 | `journal.day/days/week` | **done** (`journal`, "Work Log"); native stays. Read only on `journal.days`: the written days, no Write Again, week, All Workspaces or project chips; looks again every 5 min |
 | Notifications | `notifications` | 138 | the notification list, clear | **done** (`notifications`, "Notification Log"); native stays. On `useEvents({ types: ["notification"] })`; Clear in the package's storage (every Notification Log); only notifications about a workspace; a click goes to its terminal or window (re-ported on 1.3, reports-a) |
-| Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **done** (`resources`, "Terminal Usage"); native stays. On `useTerminalUsage` and `DataGrid`; its "cmd" pane (`core.processes`) and the Task Manager link stay native; other workspaces' terminals show their folder, not the workspace's name |
+| Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **done** (`resources`, "Terminal Usage"); native stays. Re-ported on 1.3 (reports-b): `useTerminalUsage`, `DataGrid`, its "cmd" pane on `useAppUsage`, other workspaces' names from `useWorkspaces`, the sparklines inside the tiles in the chart palette; the Task Manager link stays native (rejected); what is left is in the audit's table |
 | Now Playing | `nowplaying` | 93 | `nowPlaying.get/control` | **done** (`nowplaying`, "Media Controls"); native stays. Re-ported on 1.3 (reports-media): live on `useMedia`, the cover a `Picture`, the native's three faces in an `Adapt`, `media.control` per press; what still differs is in the parity audit below |
 | Navigator | `navigator` | 335 | `search.query` (transcripts) | **stays native**: decided, no `search.query`; it is the board's sidebar for sessions, a window |
 | Visualizer | `visualizer` | 162 | a frame with presets | **stays native for now** (wave 3): a frame page can draw the presets (WebGL2, a running `AudioContext`, a library from its package) but hears nothing: no microphone, no system audio, no Jam window's sound. Needs an audio-levels feed (1.3 candidate) |
@@ -286,14 +286,22 @@ Re-ported on 1.3 (reports-media, 2026-10-16): shots side by side, the same media
 
 **Resources → Terminal Usage**
 
+Re-ported (reports-b, 2026-10-16), compared side by side with the native story's terminals and cmd's numbers (the package's story replays them) in `.cmd-dev/shots/reports/resources/` of that worktree.
+
 | Difference | Class | Fix |
 |---|---|---|
-| The sparkline is inside the stat's tile, in the chart palette (CPU series 0, memory series 1, green); the package's sits under the tile in accent and neutral | a | `Stat` children and `Sparkline series` (A8): built (widget-display) |
-| A terminal's name and icon are the sidebar's (an agent's name and its kind's icon: "Codex · sqlite viewer", ✦); the package's are the terminal's title and a generic `sparkles` | d | `useAgents` by `agentId`: `agent.name`, `agent.icon`. Fixed (widget-port-fixes). |
-| Other workspaces' terminals say the workspace's name; the package's say their folder | c | `workspaces` topic (C6): built (widget-data) |
-| A "cmd" pane: the app and the background process | c | `app.usage` (C12): built (widget-data) |
-| A Task Manager link in the footer | c | `app.open("taskManager")` (C13): rejected by Jan (2026-10-15), widgets never open cmd's own windows |
+| The sparkline is inside the stat's tile, in the chart palette (CPU series 0, memory series 1, green); the package's sat under the tile in accent and neutral | a | `Stat` children and `Sparkline series` (A8): built (widget-display). Re-ported: `<Stat><Sparkline series={0} /></Stat>`, drawn from the first sample as the native |
+| A terminal's name is the sidebar's (an agent's name; a shell's title, or what runs in it when the title is only the shell's) | d | Fixed (widget-port-fixes) for agents; re-ported: a title the sidebar calls generic (zsh, claude…) gives way to the terminal's largest process. The native takes its foreground process, which the API doesn't give (`ApiTerminal` has the typed command line, whose first word can be shell syntax: `while`); the largest process is the same for a program that runs alone, and would need `ApiTerminal.foreground` to match always |
+| Other workspaces' terminals say the workspace's name, after the terminal's ("make · fl-studio-web"); the package's said their folder, in a column of its own | c | `workspaces` topic (C6): built (widget-data). Re-ported: `useWorkspaces`, in the name cell as the native; the Workspace column is gone |
+| A "cmd" pane: the app and the background process (Part, CPU, Memory; the background's tip) | c | `app.usage` (C12): built (widget-data). Re-ported: `useAppUsage` (`events: ["system"]`), left out where cmd can't tell (`app` or `background` null) |
+| Nothing running: the native shows the tiles, "No terminals are running in this workspace." and the cmd pane; the package showed the empty state | d | Fixed (reports-b): as the native; the empty state ("Nothing running") only when cmd can't tell its own use either, the native's rule |
+| Memory as the native writes it ("2.0 GB", "6 MB": whole MB) | d | Fixed (reports-b): the package's `mem`, the native's `formatBytes` rule; `fmt.bytes` writes "2 GB", "1.5 MB" |
+| A Task Manager link in the footer and the title menu | c | `app.open("taskManager")` (C13): rejected by Jan (2026-10-15), widgets never open cmd's own windows; the README says where it is |
 | The package's header sorts; the native is always busiest first | e | an improvement, kept: the default without a sort is the native order |
+| An agent's row shows its kind's icon; the native view draws the terminal icon on every row (`fieldsOf` without a window), though its story shows ✦ | e | the sidebar's icon, which the audit asked for; the native's story and code disagree, and the package follows the story |
+| A terminal not sampled yet: "Measuring…" in the Terminals pane; the native says no terminals are running | e | the native's line is wrong for that moment; cmd samples a new terminal within seconds |
+| "1 process" in the footer; the native says "1 processes" | e | grammar (copywriting) |
+| In the stories only: the sparklines hold one sample, the native story's sixty | e | a still is one render; the widget keeps its history while it runs, as the native does |
 
 **Stats → Usage Stats**
 

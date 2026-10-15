@@ -3091,10 +3091,11 @@ await scenario("widget-stats", async () => {
   }
 });
 
-// Terminal Usage (packages/widgets/resources): the terminals part of the native Resources widget as
-// a package. Added from the Widget Library in a workspace of its own, it lists the workspace's
-// terminal with what it uses (useTerminalUsage, API 1.2), live: a busy loop started in it shows as
-// CPU on its row and in the title bar; a click on the row goes to the terminal.
+// Terminal Usage (packages/widgets/resources): the native Resources widget as a package. Added from
+// the Widget Library in a workspace of its own, it lists the workspace's terminal with what it uses
+// (useTerminalUsage, API 1.2), live: a busy loop started in it shows as CPU on its row and in the
+// title bar; cmd's own pane shows the app and the background process (useAppUsage, 1.3); a click
+// on the row goes to the terminal.
 await scenario("widget-resources", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
@@ -3112,7 +3113,7 @@ await scenario("widget-resources", async () => {
     check(source === "Built-in · resources 1.0.0", `the Widget Library lists Terminal Usage under Built-in (${source})`);
     await tileIn(id);
     const tile = win.locator(`.tile[data-pane="${id}"]`);
-    const rows = () => tile.locator(".ui-grid tbody tr").allTextContents();
+    const rows = () => tile.locator(".ui-pane", { has: win.locator(".ui-pane-title", { hasText: /^Terminals$/ }) }).locator(".ui-grid tbody tr").allTextContents();
     const listed = await until(rows, (r) => r.length === 1 && /MB|KB|GB/.test(r[0]), 30_000).catch(() => []);
     check(listed.length === 1, `it lists the workspace's terminal with what it uses (${listed.map((t) => t.slice(0, 60)).join(" | ")})`);
     await call("pane.write", { paneId: termId, data: "while :; do :; done\r" });
@@ -3120,6 +3121,8 @@ await scenario("widget-resources", async () => {
     const row = (await rows())[0] ?? "";
     await shot(win, "widget-resources.png");
     check(/\d+%/.test(busy) && /\d+%/.test(row), `a busy loop shows as CPU on its row and in the title bar, live (${JSON.stringify(busy)}; ${JSON.stringify(row.slice(0, 60))})`);
+    const own = await until(() => tile.locator(".ui-pane", { has: win.locator(".ui-pane-title", { hasText: /^cmd$/i }) }).locator(".ui-grid tbody tr").allTextContents(), (r) => r.length === 2, 15_000).catch(() => []);
+    check(/^App/.test(own[0] ?? "") && /^Background/.test(own[1] ?? "") && own.every((r) => /\d%/.test(r)), `cmd's own pane shows the app and the background process (${own.map((t) => t.slice(0, 40)).join(" | ")})`);
     await call("pane.write", { paneId: termId, data: "\x03" });
     await tile.locator(".ui-grid tbody tr").first().click();
     const went = await until(selected, (s) => s === termId, 10_000).catch(() => null);
