@@ -185,3 +185,18 @@ describe("the fake host", () => {
     expect(tree.toJSON()).toEqual([{ type: "Stat", props: { label: "Runs", value: 3, onSelect: "ƒ" }, children: [] }]);
   });
 });
+
+describe("cmd.env.has (1.2: elements too)", () => {
+  const probe = (names: string[]) => () => <Text>{names.map((n) => `${n}:${cmd.env.has(n)}`).join(" ")}</Text>;
+  const names = ["agents.start", "ListRow", "DataGrid", "TimeBars", "Nothing"];
+
+  it("answers for verbs and for the elements this cmd lists", async () => {
+    const tree = await render(probe(names), createHost());
+    expect(tree.text()).toBe("agents.start:true ListRow:true DataGrid:true TimeBars:true Nothing:false");
+  });
+
+  it("on a cmd before 1.2, which lists no elements, answers by its minor", async () => {
+    const tree = await render(probe(names), createHost({ env: { api: { major: 1, minor: 1 }, elements: undefined } }));
+    expect(tree.text()).toBe("agents.start:true ListRow:true DataGrid:false TimeBars:false Nothing:false");
+  });
+});

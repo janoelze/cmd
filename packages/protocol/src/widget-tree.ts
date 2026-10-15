@@ -18,8 +18,8 @@ import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 
 /** The API major this file describes. */
 export const WIDGET_API = 1;
-/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`. */
-export const WIDGET_API_MINOR = 1;
+/** The minor served within it; a minor only adds. 1.1 added the acts (docs/56, phase 4) and `run`; 1.2 the window-content elements (docs/57). */
+export const WIDGET_API_MINOR = 2;
 
 // ── the tree ────────────────────────────────────────────
 
@@ -221,6 +221,8 @@ export interface WidgetEnv {
   api: { major: number; minor: number };
   /** The verbs this core serves (`cmd.env.has`). */
   verbs: ApiVerb[];
+  /** 1.2: the elements this cmd draws (`cmd.env.has`); a cmd before 1.2 sends none, and draws 1.1's. */
+  elements?: ApiElement[];
   theme: "dark" | "light";
   /** The window's size class. */
   size: "narrow" | "regular" | "wide";

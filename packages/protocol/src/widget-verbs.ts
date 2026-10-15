@@ -35,7 +35,7 @@ export type ApiVerbSpec =
   | { since: ApiMinor; mode: "confirm"; needs: "act"; ask: Permission; typed?: true | "person" };
 
 /** A minor of API 1. */
-export type ApiMinor = "1.0" | "1.1";
+export type ApiMinor = "1.0" | "1.1" | "1.2";
 
 /** Every verb of the API, in the order cmd.env.verbs lists them. */
 export const API = {

@@ -13,7 +13,7 @@
 import { createElement, type ReactNode } from "react";
 import { useConfig, type ConfigShape, type ConfigValues } from "./hooks.ts";
 
-export * from "./elements.ts";
+export * from "./elements.gen.ts";
 export { cmd } from "./cmd.ts";
 export { fmt } from "./fmt.ts";
 export { ApiCallError } from "./connection.ts";

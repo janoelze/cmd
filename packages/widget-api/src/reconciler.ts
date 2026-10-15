@@ -9,7 +9,7 @@ import { Component, createContext, createElement, type ReactNode } from "react";
 import createReconciler from "react-reconciler";
 import type { PatchOp, TreeNode, WireValue } from "@cmd/protocol/widget-tree";
 import type { Connection } from "./connection.ts";
-import { Button, Callout, Text } from "./elements.ts";
+import { Button, Callout, Text } from "./elements.gen.ts";
 
 // react-reconciler/constants (inlined: the module is CommonJS behind a condition).
 const ConcurrentRoot = 1;

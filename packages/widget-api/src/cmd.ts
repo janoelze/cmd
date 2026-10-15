@@ -7,6 +7,7 @@
 
 import type { ApiMethods, ApiVerb, ApiEventQuery, ApiRunOptions, ApiRunResult, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { connection } from "./connection.ts";
+import { ELEMENT_SINCE } from "./elements-since.gen.ts";
 import { fmt } from "./fmt.ts";
 import { useActions, useAgents, useCompletion, useConfig, useEnv, useEvents, useGit, useTerminals, useWindows, useWorkspace } from "./hooks.ts";
 
@@ -253,9 +254,17 @@ export const cmd = {
     get(): WidgetEnv {
       return connection().env;
     },
-    /** Whether this cmd serves a verb ("agents.start", added in 1.1): for a widget that also runs on an older cmd. @since 1.0 */
+    /**
+     * Whether this cmd serves a verb ("agents.start", added in 1.1) or draws an element ("DataGrid",
+     * added in 1.2): for a widget that also runs on an older cmd. @since 1.0
+     */
     has(name: string): boolean {
-      return (connection().env.verbs as string[]).includes(name);
+      const env = connection().env;
+      if ((env.verbs as string[]).includes(name)) return true;
+      // A cmd before 1.2 doesn't list its elements: it draws those of its minor and before.
+      if (env.elements) return (env.elements as string[]).includes(name);
+      const since = ELEMENT_SINCE[name];
+      return !!since && Number(since.split(".")[1]) <= env.api.minor;
     },
     /** Live: the hook `useEnv()`. @since 1.0 */
     use: useEnv,

@@ -1,134 +1,21 @@
 // The elements of the widget API (docs/56, "The view"): the one place an element's props,
 // events, children and docs are written. Everything else is read or generated from
-// API_ELEMENTS: the renderer's sanitiser and element table, @cmd/widget-api's elements.ts
+// API_ELEMENTS: the renderer's sanitiser and element table, @cmd/widget-api's elements.gen.ts
 // (`pnpm widget-api:gen`), its README reference and the website (`pnpm widget-api:docs`),
 // the testing tree's gestures and titles. Split from widget-tree.ts, which re-exports all
-// of it, so `@cmd/protocol/widget-tree` is still the whole wire contract.
+// of it, so `@cmd/protocol/widget-tree` is still the whole wire contract. The vocabulary (enums,
+// prop types, gestures) is widget-spec.ts; each minor that adds elements has a file
+// (widget-elements-1.2.ts), merged into API_ELEMENTS here.
 
-import type { ApiLight, ApiTone, HandlerRef } from "./widget-tree.ts";
-import type { VIEW_STATE_KINDS } from "./widget-values.ts";
+import type { HandlerRef } from "./widget-tree.ts";
+import { ALIGN, BREAKS, DISABLED, LIGHTS, SPACE, SYMBOL, TEXT_SIZES, TIP, TONES, TOOLBAR_ITEM, chosen, none, press, typed, type ActionOf, type ApiElementSpec, type MenuEntryOf, type OptionOf, type ViewStateOf } from "./widget-spec.ts";
+import { ELEMENTS_1_2 } from "./widget-elements-1.2.ts";
 
-// ── the enums ───────────────────────────────────────────
+export { SPACE, TONES, LIGHTS, TEXT_SIZES, ALIGN, BREAKS, UNITS, API_ENUMS, TOOLBAR_ITEM, isShape } from "./widget-spec.ts";
+export type { MenuEntryOf, ActionOf, ViewStateOf, OptionOf, WireMenuEntry, ApiFieldType, ApiFieldSpec, ApiShape, ApiPropType, ApiPropSpec, ApiGesture, ApiEventSpec, ApiElementSpec } from "./widget-spec.ts";
 
-/** Steps of the spacing scale (`2` is 8 px), and 0. */
-export const SPACE = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12] as const;
-/** The tones: what colours are named by. */
-export const TONES = ["neutral", "accent", "success", "warning", "danger"] as const;
-/** A status light: an agent's state, or a tone. */
-export const LIGHTS = ["needs", "unseen", "working", "done", "idle", "off", ...TONES] as const;
-/** The type scale. */
-export const TEXT_SIZES = ["2xs", "xs", "sm", "md", "base", "lg", "xl", "display"] as const;
-/** How children line up across a Stack or an Inline. */
-export const ALIGN = ["start", "center", "end", "stretch", "baseline"] as const;
-/** The window's size classes (Hide). */
-export const BREAKS = ["narrow", "regular"] as const;
-
-/**
- * The enums @cmd/widget-api names as types (elements.ts is generated with them): a prop
- * whose values contain one of these runs shows its name (`Space | "inset"`, `"dim" | Tone`).
- * `exported: false` is named in the d.ts but not exported.
- */
-export const API_ENUMS = {
-  Space: { values: SPACE, doc: "A step of the spacing scale (`2` is 8 px), or 0.", exported: true },
-  Tone: { values: TONES, doc: "Tones, never colours.", exported: true },
-  Light: { values: LIGHTS, doc: "A status light: an agent's state, or a tone.", exported: true },
-  TextSize: { values: TEXT_SIZES, doc: "The type scale.", exported: true },
-  Align: { values: ALIGN, doc: "How children line up across a Stack or an Inline.", exported: false },
-} as const;
-
-// widget-tree.ts spells ApiTone and ApiLight out (Magic's prompt pastes them as declared): held to the consts here.
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-const sameTone: Same<ApiTone, (typeof TONES)[number]> = true;
-const sameLight: Same<ApiLight, (typeof LIGHTS)[number]> = true;
-void sameTone, sameLight;
-
-// ── the shapes inside props ─────────────────────────────
-
-/** A menu entry in a prop (`Window menu`, `ListRow menu`): data, with `run` a handler `H` (a function in the widget, a HandlerRef on the wire). */
-export type MenuEntryOf<H> = { label: string; run?: H; checked?: boolean; disabled?: boolean; submenu?: MenuEntryOf<H>[] } | { separator: true };
-/** A button as data: an empty state's or a view state's one way on. */
-export interface ActionOf<H> {
-  label: string;
-  run: H;
-}
-/** What replaces a View's body: empty (the default), loading, no results, error; one line and one action. */
-export interface ViewStateOf<H> {
-  kind?: (typeof VIEW_STATE_KINDS)[number];
-  /** An SF Symbol name. */
-  icon?: string;
-  title?: string;
-  text?: string;
-  action?: ActionOf<H>;
-}
-/** A ToolbarSegmented's option: a value, a label, an optional SF Symbol. */
-export interface OptionOf<T extends string = string> {
-  value: T;
-  label: string;
-  icon?: string;
-}
-
-/** A menu entry on the wire. */
-export type WireMenuEntry = MenuEntryOf<HandlerRef>;
-
-// ── the spec ────────────────────────────────────────────
-
-/**
- * A prop's type on the wire. A string or number array is an enum. "text" is a string or a
- * number; "numbers" a (number | null)[] (null is a gap); "menu" a MenuEntryOf[]; "action"
- * an ActionOf; "viewState" a ViewStateOf; "options" OptionOf[]; "option" one option's value
- * (a string; the element is generic over it in @cmd/widget-api).
- */
-export type ApiPropType = "string" | "text" | "number" | "boolean" | "numbers" | "menu" | "action" | "viewState" | "options" | "option" | readonly (string | number)[];
-
-export interface ApiPropSpec {
-  type: ApiPropType;
-  /** The element needs it (the d.ts says so; the renderer draws it empty without). */
-  required?: boolean;
-  /** null is a value of its own ("none"); any prop may be null on the wire, which unsets it. */
-  nullable?: boolean;
-  /** Its JSDoc. */
-  doc: string;
-  /** What the testing tree reads as words: the element's title (`find(type, title)`), or more of its words (`text()`). */
-  shows?: "title" | "words";
-}
-
-/** What a person does to fire an event (the testing tree's press, doubleClick, change, submit). "change" and "submit" carry a value. */
-export type ApiGesture = "press" | "doubleClick" | "change" | "submit" | "dismiss";
-
-export interface ApiEventSpec {
-  gesture: ApiGesture;
-  /** Its JSDoc. */
-  doc: string;
-}
-
-export interface ApiElementSpec {
-  /** Its JSDoc. */
-  doc?: string;
-  /** The API version it came in. */
-  since?: string;
-  props: Record<string, ApiPropSpec>;
-  /** The handler props it takes ("onClick"); a handler anywhere else is dropped. */
-  events: Record<string, ApiEventSpec>;
-  /** What it holds: nothing, strings only, elements only, or both. */
-  children: "none" | "text" | "elements" | "any";
-  /** The children prop's JSDoc. */
-  childrenDoc?: string;
-}
-
-const none = { props: {}, events: {}, children: "none" } as const;
-const press = (doc: string) => ({ gesture: "press", doc }) as const;
-const typed = (doc: string) => ({ gesture: "change", doc }) as const;
-const SYMBOL = "An SF Symbol name.";
-const TIP = { type: "string", doc: "A tooltip." } as const;
-const DISABLED = { type: "boolean", doc: "Greyed out, not pressable." } as const;
-/** What every toolbar item takes (the d.ts's ToolbarItem): its place in the ⋯ menu when room runs out, faded until hovered. */
-export const TOOLBAR_ITEM = {
-  priority: { type: "number", doc: "Moves to the ⋯ menu when there is no room, lowest first; without one it stays." },
-  secondary: { type: "boolean", doc: "Faded until the window is hovered or selected." },
-} as const;
-
-/** API 1's elements, with each one's props, events, children and docs: the allow-list the renderer enforces. */
-export const API_ELEMENTS = {
+/** API 1.0's elements, with each one's props, events, children and docs. */
+const ELEMENTS_1_0 = {
   Window: {
     doc: "The widget's window, around everything: the title bar (icon and name from the manifest), its status line and menus. Optional; a widget without one gets the bare title bar.",
     props: {
@@ -149,7 +36,7 @@ export const API_ELEMENTS = {
     },
     events: {},
     children: "elements",
-    childrenDoc: "The body; a WindowToolbar among them becomes the view's toolbar.",
+    childrenDoc: "The body; a WindowToolbar among them becomes the view's toolbar, a StatusLine its footer.",
   },
   WindowToolbar: {
     doc: "A view's toolbar: buttons, fields, segmented controls. Items that don't fit move to a ⋯ menu.",
@@ -207,7 +94,7 @@ export const API_ELEMENTS = {
       label: { type: "string", required: true, shows: "title", doc: "Its accessible name." },
       ...TOOLBAR_ITEM,
     },
-    events: { onChange: typed("An option was chosen.") },
+    events: { onChange: chosen("An option was chosen.") },
     children: "none",
   },
   ToolbarMenu: {
@@ -440,6 +327,9 @@ export const API_ELEMENTS = {
   },
 } as const satisfies Record<string, ApiElementSpec>;
 
+/** API 1's elements (1.0's, then each minor's): the allow-list the renderer enforces. */
+export const API_ELEMENTS = { ...ELEMENTS_1_0, ...ELEMENTS_1_2 } as const satisfies Record<string, ApiElementSpec>;
+
 export type ApiElement = keyof typeof API_ELEMENTS;
 export const API_ELEMENT_NAMES = Object.keys(API_ELEMENTS) as ApiElement[];
 
@@ -465,17 +355,31 @@ export type WireTypeOf<T, H = HandlerRef> = T extends "string" | "option"
                 ? ViewStateOf<H>
                 : T extends "options"
                   ? OptionOf[]
-                  : T extends readonly (infer V)[]
-                    ? V
-                    : never;
+                  : T extends "strings"
+                    ? string[]
+                    : T extends "matrix"
+                      ? number[][]
+                      : T extends "cells"
+                        ? (string | number | null)[]
+                        : T extends { list: infer F }
+                          ? FieldsOf<F>[]
+                          : T extends { record: infer F }
+                            ? FieldsOf<F>
+                            : T extends readonly (infer V)[]
+                              ? V
+                              : never;
 
 type RequiredKeys<P> = { [K in keyof P]: P[K] extends { required: true } ? K : never }[keyof P];
 type PropValue<S, H> = S extends { type: infer T } ? WireTypeOf<T, H> | (S extends { nullable: true } ? null : never) : never;
+/** A record's fields as values (1.2: a series, a column, a row). */
+export type FieldsOf<F> = { -readonly [K in Exclude<keyof F, RequiredKeys<F>>]?: PropValue<F[K], never> } & { -readonly [K in RequiredKeys<F>]: PropValue<F[K], never> };
 /** An element's props (not its events or children) as values, with handlers `H` inside menus and actions. */
 export type SpecPropsOf<E extends ApiElement, H = HandlerRef> = { -readonly [K in Exclude<keyof ApiElementOf<E>["props"], RequiredKeys<ApiElementOf<E>["props"]>>]?: PropValue<ApiElementOf<E>["props"][K], H> } & {
   -readonly [K in RequiredKeys<ApiElementOf<E>["props"]>]: PropValue<ApiElementOf<E>["props"][K], H>;
 };
 /** An element's event names. */
 export type EventsOf<E extends ApiElement> = keyof ApiElementOf<E>["events"] & string;
+/** The value an element's event carries: the spec's `value` (with null when nullable), a string for "change" and "submit", none else. */
+export type EventValueOf<S> = S extends { value: infer V } ? WireTypeOf<V> | (S extends { nullable: true } ? null : never) : S extends { gesture: "change" | "submit" } ? string : undefined;
 
 export * from "./widget-values.ts";

@@ -22,7 +22,7 @@ afterEach(async () => {
 
 const ACTS = { act: ["agents", "terminals", "actions", "windows"], workspace: ["read"] };
 
-async function setup(o: { pkgs?: FakePackage[]; builtin?: boolean } = {}) {
+async function setup(o: { pkgs?: FakePackage[]; builtin?: boolean; minor?: number } = {}) {
   const home = tmp("cmd-widgets-home-");
   // Built in: the packages cmd ships (CMD_BUILTIN_WIDGETS), granted what they declare.
   const builtin = o.builtin ? tmp("cmd-widgets-builtin-") : null;
@@ -37,7 +37,7 @@ async function setup(o: { pkgs?: FakePackage[]; builtin?: boolean } = {}) {
   const rt = new FakeWidgetRuntime(core.widgetTokens);
   core.library.host.configure({ runtime: rt, times: { pingMs: 1000, stallMs: 5000, stopAfterMs: 100, restartMs: 5, helloMs: 2000 } });
   // Each process draws a button (handler 1, onClick): a press counts only on a handler the tree has.
-  rt.boot = (p) => void p.connect().hello().send({ kind: "tree", rev: 1, nodes: [{ id: 1, type: "Button", props: { label: "Go", onClick: { $handler: 1 } }, children: [] }] });
+  rt.boot = (p) => void p.connect().hello(o.minor === undefined ? {} : { minor: o.minor }).send({ kind: "tree", rev: 1, nodes: [{ id: 1, type: "Button", props: { label: "Go", onClick: { $handler: 1 } }, children: [] }] });
   const acting: ToolActivity[] = [];
   const events: CoreEvent[] = [];
   core.serve({ access: "local", send: (line) => {
@@ -263,6 +263,15 @@ describe("acting widgets (API 1.1)", () => {
     await t.drawn(t.win.id, 2);
     t.core.library.host.interact(t.win.id, 9, "onChange", "pnpm");
     expect((await t.refused("terminals.open", {})).message).toMatch(/right after the person presses something/);
+    // Nor into a TextField in the body (1.2); a ToolbarSegmented's choice and a DataGrid row's pick are presses.
+    t.proc.send({ kind: "tree", rev: 3, nodes: [{ id: 1, type: "TextField", props: { value: "", onChange: { $handler: 10 } }, children: [] }, { id: 2, type: "DataGrid", props: { columns: [], rows: [], onRowClick: { $handler: 11 } }, children: [] }] });
+    await t.drawn(t.win.id, 3);
+    t.core.library.host.interact(t.win.id, 10, "onChange", "pnpm");
+    expect((await t.refused("terminals.open", {})).message).toMatch(/right after the person presses something/);
+    t.core.library.host.interact(t.win.id, 11, "onRowClick", "r-1");
+    const picked = t.call("terminals.open", {});
+    await t.answer(true);
+    expect((await picked).ok).toBe(true);
   });
 
   it("counts a press only on a handler the tree has, with an event its element fires", async () => {
@@ -355,9 +364,21 @@ describe("acting widgets (API 1.1)", () => {
 
   it("serves a process built for 1.0 unchanged", async () => {
     const t = await setup({ pkgs: [{ permissions: { workspace: ["read"] } }] });
-    // The fake process says hello with minor 0 (fake-widget-runtime.ts); its reads work and it is told what 1.1 serves.
-    expect(t.proc.got("ready")[0]!.env).toMatchObject({ api: { major: 1, minor: 1 }, verbs: expect.arrayContaining(["agents.list", "agents.start", "run.exec"]) });
+    // The fake process says hello with minor 0 (fake-widget-runtime.ts); its reads work and it is told what 1.2 serves.
+    expect(t.proc.got("ready")[0]!.env).toMatchObject({ api: { major: 1, minor: 2 }, verbs: expect.arrayContaining(["agents.list", "agents.start", "run.exec"]) });
     expect(await t.ok("workspace.get")).toMatchObject({ id: t.ws.id });
     expect(await t.ok("state.set", "k", 1)).toBeNull();
+  });
+
+  it("serves a process built for 1.1 unchanged, and tells it the elements this cmd draws", async () => {
+    const t = await setup({ minor: 1, pkgs: [{ permissions: { workspace: ["read"], act: ["terminals.open"] } }] });
+    const env = t.proc.got("ready")[0]!.env;
+    expect(env).toMatchObject({ api: { major: 1, minor: 2 }, verbs: expect.arrayContaining(["terminals.open", "run.exec"]) });
+    expect(env.elements).toEqual(expect.arrayContaining(["Button", "ListRow", "DataGrid", "TimeBars", "StatusLine"]));
+    // Its 1.1 tree (a Button) is drawn and pressed as before; its act asks as before.
+    t.press();
+    const opened = t.call("terminals.open", {});
+    await t.answer(true);
+    expect((await opened).ok).toBe(true);
   });
 });

@@ -14,7 +14,7 @@
 // The window's API (api/adapter.ts) is made at its start with a grant, before hello, so a frame's
 // page (frame.ts) uses the process's adapter, Deno or not; it ends with the process or the window.
 
-import { WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
+import { API_ELEMENT_NAMES, WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../../kernel/context.ts";
 import { ApiRefusal } from "../api/access.ts";
@@ -583,7 +583,7 @@ export class WidgetHost {
   }
 
   #env(inst: Instance): WidgetEnv {
-    return { version: cmdVersion() ?? "0.0.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: inst.adapter?.verbs ?? [], ...inst.env };
+    return { version: cmdVersion() ?? "0.0.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: inst.adapter?.verbs ?? [], elements: [...API_ELEMENT_NAMES], ...inst.env };
   }
 
   /** The window's config: the manifest's defaults, then the person's values; never a secret. */

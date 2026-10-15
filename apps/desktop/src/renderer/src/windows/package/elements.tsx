@@ -6,10 +6,29 @@
 // renaming a kit component changes a line here, not a widget. KIT is typed against the
 // spec (KitProps), so a kit component that stops taking an element's props, or an enum
 // value, fails tsc; an element added to API_ELEMENTS without a line in either fails too.
+// API 1.2's elements that translate are entries-1.2.tsx's (ENTRIES_1_2), each with its reason.
 
 import {
   Badge,
   Button,
+  CodeBlock,
+  Delta,
+  Icon,
+  IconButton,
+  LinkButton,
+  ListGroup,
+  ListRowActions,
+  ListValue,
+  Mark,
+  Pane,
+  Panel,
+  PanelBody,
+  Panes,
+  Ribbon,
+  Spinner,
+  TimeBar,
+  Timeline,
+  TimelineEntry,
   Callout,
   Chip,
   EmptyState,
@@ -39,39 +58,15 @@ import {
   WindowToolbar,
   type ViewStateSpec,
 } from "@cmd/ui";
-import { createElement, memo, startTransition, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { API_ELEMENTS, isHandler, type ApiElement, type ApiElementOf, type ApiElementSpec, type ApiPropType, type EventsOf, type OptionOf, type SpecPropsOf, type TreeElement, type TreeNode, type WireMenuEntry, type WireValue, type WindowId } from "@cmd/protocol";
+import { createElement, memo, startTransition, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { API_ELEMENTS, type ApiElement, type ApiElementOf, type ApiElementSpec, type ApiPropType, type EventValueOf, type OptionOf, type SpecPropsOf, type TreeNode, type WireMenuEntry, type WireValue } from "@cmd/protocol";
 import { showContextMenu } from "../../lib/context.ts";
 import { setWindowStatus } from "../../lib/windowActions.ts";
-import { menuEntries, setChrome, type Send } from "./chrome.ts";
+import { menuEntries, setChrome } from "./chrome.ts";
+import { on, press, str, useDraft, v, type DrawContext, type Drawn } from "./draw.ts";
+import { ENTRIES_1_2, type Translated12 } from "./entries-1.2.tsx";
 
-/** What every element is drawn with: its window and the way back to its process. */
-export interface DrawContext {
-  windowId: WindowId;
-  send: Send;
-}
-
-/** An entry's input: the element's (sanitised) props, its children drawn, and the node. */
-export interface Drawn {
-  p: Record<string, WireValue>;
-  children: ReactNode;
-  node: TreeElement;
-  ctx: DrawContext;
-}
-
-/** A prop as the kit's type (the sanitiser checked it against API_ELEMENTS). */
-const v = <T,>(x: WireValue | undefined): T | undefined => (x === null || x === undefined ? undefined : (x as T));
-const str = (x: WireValue | undefined) => (typeof x === "string" ? x : undefined);
-
-/** A handler prop as a function sending its interaction; undefined without one. */
-function on(ctx: DrawContext, ref: WireValue | undefined, event: string): ((value?: WireValue) => void) | undefined {
-  return isHandler(ref) ? (value?: WireValue) => ctx.send(ref.$handler, event, value) : undefined;
-}
-/** The same, for the kit's handlers that pass a DOM event: none of it crosses. */
-function press(ctx: DrawContext, ref: WireValue | undefined, event: string): (() => void) | undefined {
-  const fn = on(ctx, ref, event);
-  return fn && (() => fn());
-}
+export type { DrawContext, Drawn } from "./draw.ts";
 
 const visible = (nodes: readonly TreeNode[]) => nodes.filter((n) => n.type === "#text" || !n.props.$hidden);
 
@@ -104,39 +99,6 @@ function viewState(x: WireValue | undefined, ctx: DrawContext): ViewStateSpec | 
     default:
       return { kind: "empty", icon: s.icon, title: s.title ?? "", text: s.text, action };
   }
-}
-
-/** A text the person types into: the caret stays here, the value goes to the process debounced (docs/56). */
-const DEBOUNCE_MS = 150;
-function useDraft(value: string, send: ((v: string) => void) | undefined): [string, (v: string) => void, () => string] {
-  const [draft, setDraft] = useState(value);
-  const sent = useRef(value);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const latest = useRef(value);
-  // The tree's value wins when it changes to something this field didn't send (the widget cleared it).
-  useEffect(() => {
-    if (value !== sent.current) {
-      sent.current = value;
-      latest.current = value;
-      setDraft(value);
-    }
-  }, [value]);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const flush = () => {
-    clearTimeout(timer.current);
-    if (latest.current !== sent.current) {
-      sent.current = latest.current;
-      send?.(latest.current);
-    }
-    return latest.current;
-  };
-  const change = (next: string) => {
-    latest.current = next;
-    setDraft(next);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(flush, DEBOUNCE_MS);
-  };
-  return [draft, change, flush];
 }
 
 function Field({ p, ctx }: Drawn) {
@@ -208,23 +170,26 @@ function WindowEntry({ p, ctx, children }: Drawn) {
   return <>{children}</>;
 }
 
-/** A View: its top WindowToolbars become the toolbar, a bottom one sits under the content (a player's bar). */
+/** A View: its top WindowToolbars become the toolbar, a bottom one sits under the content (a player's bar); a StatusLine is its footer (1.2). */
 function ViewEntry({ p, node, ctx }: Drawn) {
   const kids = visible(node.children);
   const top = kids.filter((c) => c.type === "WindowToolbar" && !c.props.bottom);
-  const rest = kids.filter((c) => !top.includes(c));
+  const foot = kids.filter((c) => c.type === "StatusLine");
+  const rest = kids.filter((c) => !top.includes(c) && !foot.includes(c));
   return (
-    <View inset={p.inset === true} scroll={p.scroll !== false} state={viewState(p.state, ctx)} toolbar={top.length ? drawAll(top, ctx) : undefined}>
+    <View inset={p.inset === true} scroll={p.scroll !== false} state={viewState(p.state, ctx)} toolbar={top.length ? drawAll(top, ctx) : undefined} footer={foot.length ? drawAll(foot, ctx) : undefined}>
       {drawAll(rest, ctx)}
     </View>
   );
 }
 
-/** An element's props as the kit takes them: the spec's values, each event a function without arguments, its children (drawn) when it holds any. */
-export type KitProps<E extends ApiElement> = SpecPropsOf<E> & { [K in EventsOf<E>]?: () => void } & (ApiElementOf<E>["children"] extends "none" ? unknown : { children: ReactNode });
+/** An event as the kit's handler: a pick passes its value (a row's key, a bucket), the others nothing. */
+type KitEvent<S> = S extends { gesture: "pick" } ? (value: Exclude<EventValueOf<S>, undefined>) => void : () => void;
+/** An element's props as the kit takes them: the spec's values, each event a function (with a pick's value), its children (drawn) when it holds any. */
+export type KitProps<E extends ApiElement> = SpecPropsOf<E> & { [K in keyof ApiElementOf<E>["events"] & string]?: KitEvent<ApiElementOf<E>["events"][K]> } & (ApiElementOf<E>["children"] extends "none" ? unknown : { children: ReactNode });
 
-/** The elements that translate (ENTRIES); every other one is its kit component (KIT). */
-type Translated = "Window" | "View" | "ToolbarField" | "ToolbarSearchField" | "ToolbarSegmented" | "ToolbarMenu" | "ListRow" | "EmptyState";
+/** The elements that translate (ENTRIES, ENTRIES_1_2); every other one is its kit component (KIT). */
+type Translated = "Window" | "View" | "ToolbarField" | "ToolbarSearchField" | "ToolbarSegmented" | "ToolbarMenu" | "ListRow" | "EmptyState" | Translated12;
 
 /**
  * The elements the kit component of the same name draws from the spec's props as they are.
@@ -254,6 +219,25 @@ const KIT = {
   Button,
   Callout,
   Progress,
+  // 1.2
+  Panes,
+  Pane,
+  Panel,
+  PanelBody,
+  ListGroup,
+  ListRowActions,
+  ListValue,
+  CodeBlock,
+  Icon,
+  Mark,
+  Delta,
+  Spinner,
+  IconButton,
+  LinkButton,
+  TimeBar,
+  Timeline,
+  TimelineEntry,
+  Ribbon,
 } satisfies { [E in Exclude<ApiElement, Translated>]: (props: KitProps<E>) => ReactNode };
 
 /** What a required prop the sanitiser dropped is drawn as. */
@@ -264,7 +248,7 @@ function empty(type: ApiPropType): WireValue | undefined {
 }
 
 /** The elements whose children are rows: drawn progressively. */
-const ROWS = new Set<ApiElement>(["List", "ListSection"]);
+const ROWS = new Set<ApiElement>(["List", "ListSection", "ListGroup"]);
 
 /** A kit component drawn from the spec: the sanitised props, the spec's events as presses, the children when it holds any. */
 function passThrough(name: keyof typeof KIT): ComponentType<Drawn> {
@@ -273,7 +257,8 @@ function passThrough(name: keyof typeof KIT): ComponentType<Drawn> {
   function Entry({ p, node, ctx, children }: Drawn) {
     const props: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(spec.props)) props[k] = p[k] ?? (s.required ? empty(s.type) : undefined);
-    for (const k of Object.keys(spec.events)) props[k] = press(ctx, p[k], k);
+    // A pick passes on the value the kit gives it (a bar's id, a time); other events none of the DOM's.
+    for (const [k, e] of Object.entries(spec.events)) props[k] = e.gesture === "pick" ? on(ctx, p[k], k) : press(ctx, p[k], k);
     if (spec.children !== "none") props.children = ROWS.has(name) ? <Rows nodes={node.children} ctx={ctx} /> : children;
     return createElement(Kit, props);
   }
@@ -282,7 +267,7 @@ function passThrough(name: keyof typeof KIT): ComponentType<Drawn> {
 }
 
 /** The elements that translate: the title bar, the view's toolbar and states, the toolbar's fields (a draft kept here), menus and actions. */
-const ENTRIES: { readonly [K in Translated]: ComponentType<Drawn> } = {
+const ENTRIES: { readonly [K in Exclude<Translated, Translated12>]: ComponentType<Drawn> } = {
   Window: WindowEntry,
   View: ViewEntry,
   ToolbarField: Field,
@@ -330,4 +315,5 @@ const ENTRIES: { readonly [K in Translated]: ComponentType<Drawn> } = {
 export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
   ...(Object.fromEntries(Object.keys(KIT).map((k) => [k, passThrough(k as keyof typeof KIT)])) as { [K in keyof typeof KIT]: ComponentType<Drawn> }),
   ...ENTRIES,
+  ...ENTRIES_1_2,
 };

@@ -2,8 +2,8 @@
 // object (by type and at run time, sending its own name, which the fake host serves), its
 // JSDoc's @since and "Needs" are its API row's, every element of API_ELEMENTS
 // is exported with exactly the spec's props and events, the versions agree, and every
-// export, verb and prop has JSDoc (the README reference is generated from it). elements.ts
-// is generated from that spec (docs.test.ts checks it is current); these hold it to it anyway.
+// export, verb and prop has JSDoc (the README reference is generated from it). The elements
+// (elements.gen.ts) is generated from that spec (docs.test.ts checks it is current); these hold it to it anyway.
 
 import ts from "typescript";
 import { describe, expect, expectTypeOf, it } from "vitest";
@@ -11,7 +11,7 @@ import { API, API_ELEMENTS, API_VERBS, WIDGET_API, WIDGET_API_MINOR, type ApiEle
 import * as api from "@cmd/widget-api";
 import { createHost, fixtures, render } from "@cmd/widget-api/testing";
 import { verbs } from "../src/cmd.ts";
-import type { ElementProps } from "../src/elements.ts";
+import type { ElementProps } from "../src/elements.gen.ts";
 import { apiExports } from "../../../scripts/widget-api-docs.ts";
 
 type Cmd = typeof api.cmd;

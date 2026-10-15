@@ -26,8 +26,8 @@ export class TreeState {
   /** Whether `handler` is a text field's onChange (typing, not a press). */
   typesInto(handler: number): boolean {
     for (const node of this.#tree.nodes()) {
-      if (node.type !== "ToolbarField" && node.type !== "ToolbarSearchField") continue;
-      const h = node.props.onChange;
+      const spec = node.type === "#text" ? undefined : (API_ELEMENTS as Record<string, ApiElementSpec>)[node.type];
+      const h = spec?.events.onChange?.typing ? (node as TreeElement).props.onChange : undefined;
       if (h && typeof h === "object" && !Array.isArray(h) && (h as { $handler?: unknown }).$handler === handler) return true;
     }
     return false;

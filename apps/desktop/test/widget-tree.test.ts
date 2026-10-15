@@ -184,6 +184,31 @@ describe("the allow-list", () => {
     expect(((s.snapshot.nodes[0] as TreeElement).children[0] as { text: string }).text).toBe("fine");
   });
 
+  it("checks records in props (1.2): fields by their type, the required ones there, unknown ones left out", () => {
+    const { s, warnings } = store();
+    const columns = [{ key: "name", label: "Name", grow: true, color: "red" }, { key: "cpu", label: "CPU", align: "end" }];
+    s.apply(
+      tree([
+        el(1, "DataGrid", { columns, rows: [{ key: "a", cells: ["zsh", 12] }], sort: { key: "cpu", desc: true } }),
+        el(2, "DataGrid", { columns, rows: [{ key: "b", cells: ["<b>x</b>", 1] }], sort: { key: "cpu" } }),
+        el(3, "TimeBars", { buckets: [1, 2], labels: ["M", "T"], label: "Runs", series: [{ key: "s", label: "Runs", values: [1, null] }], unit: "furlongs" }),
+        el(4, "PunchCard", { values: [[1, 2], [3, "4"]], rows: ["Mon", "Tue"], label: "When" }),
+      ]),
+    );
+    const props = (i: number) => (s.snapshot.nodes[i] as TreeElement).props;
+    expect(props(0)).toEqual({ columns: [{ key: "name", label: "Name", grow: true }, { key: "cpu", label: "CPU", align: "end" }], rows: [{ key: "a", cells: ["zsh", 12] }], sort: { key: "cpu", desc: true } });
+    expect(Object.keys(props(1))).toEqual(["columns"]);
+    expect(props(2).series).toEqual([{ key: "s", label: "Runs", values: [1, null] }]);
+    expect(props(2).unit).toBeUndefined();
+    expect(props(3).values).toBeUndefined();
+    expect(warnings).toEqual([
+      'widget: <DataGrid> prop "rows" dropped: a GridRow\'s cells: markup in text',
+      'widget: <DataGrid> prop "sort" dropped: a GridSort has no desc',
+      'widget: <TimeBars> prop "unit" dropped: "furlongs" isn\'t one of count, ms, bytes, tokens, percent',
+      'widget: <PunchCard> prop "values" dropped: not rows of numbers',
+    ]);
+  });
+
   it("drops a $-prop other than $hidden", () => {
     const { s, warnings } = store();
     s.apply(tree([el(1, "Text", { $hidden: true, $html: "<b>" }, [])]));

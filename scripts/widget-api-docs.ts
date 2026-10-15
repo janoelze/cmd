@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import { API as VERBS, API_ELEMENTS, WIDGET_API, WIDGET_API_MINOR, topicVerb, type ApiVerbSpec } from "../packages/protocol/src/widget-tree.ts";
+import { API as VERBS, API_ELEMENTS, WIDGET_API, WIDGET_API_MINOR, isShape, topicVerb, type ApiElementSpec, type ApiVerbSpec } from "../packages/protocol/src/widget-tree.ts";
 
 /** A verb's row by its name ("agents.list"), or undefined. */
 const rowOf = (verb: string): ApiVerbSpec | undefined => (VERBS as Record<string, ApiVerbSpec>)[verb];
@@ -60,7 +60,7 @@ export function reference(): string {
     return name + text.replace(/^(<[^>]*>)?\(\.\.\.args: \[(.*)\]\)/, (_, g = "", p) => `${g}(${p})`).replace(/^(<[^>]*>)?\((.*?)\) => /, (_, g = "", p) => `${g}(${p}): `);
   };
   const find = (name: string) => exported.find((s) => s.name === name);
-  const out: string[] = [START, "", "## Reference", "", `API ${WIDGET_API}, minor ${WIDGET_API_MINOR}. Everything here is in API ${WIDGET_API} for good; what came after 1.0 says \`@since 1.x\`, and a widget that also runs on an older cmd checks \`cmd.env.has(verb)\` first.`, ""];
+  const out: string[] = [START, "", "## Reference", "", `API ${WIDGET_API}, minor ${WIDGET_API_MINOR}. Everything here is in API ${WIDGET_API} for good; what came after 1.0 says \`@since 1.x\`, and a widget that also runs on an older cmd checks \`cmd.env.has(name)\` first (a verb or an element).`, ""];
 
   out.push("### `cmd`", "", doc(find("cmd")!), "");
   for (const ns of checker.getTypeOfSymbol(find("cmd")!).getProperties()) {
@@ -92,7 +92,7 @@ export function reference(): string {
   for (const name of Object.keys(API_ELEMENTS)) {
     const el = find(name);
     const props = find(`${name}Props`);
-    out.push(`#### \`${name}\``, "", el ? doc(el) : "", "");
+    out.push(`#### \`${name}\``, "", el ? `${doc(el)}${since(el) === "1.0" ? "" : ` Since ${since(el)}.`}` : "", "");
     const list = props ? checker.getDeclaredTypeOfSymbol(props).getProperties() : [];
     if (!list.length) {
       out.push("No props.", "");
@@ -100,6 +100,19 @@ export function reference(): string {
     }
     out.push("| Prop | Type | What |", "|---|---|---|");
     for (const p of list) {
+      const d = p.valueDeclaration ?? p.declarations?.[0];
+      const type = d && ts.isPropertySignature(d) && d.type ? d.type.getText() : checker.typeToString(checker.getTypeOfSymbol(p));
+      out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)} |`);
+    }
+    out.push("");
+  }
+  // The records props hold (1.2): their fields, once each.
+  const shapes = [...new Set((Object.values(API_ELEMENTS) as ApiElementSpec[]).flatMap((e) => [...Object.values(e.props).map((p) => p.type), ...Object.values(e.events).map((x) => x.value)]).flatMap((t) => (t && isShape(t) ? [t.name] : [])))];
+  if (shapes.length) out.push("### Records", "", "What the charts' and DataGrid's props hold: plain values, a field each.", "");
+  for (const name of shapes) {
+    const s = find(name)!;
+    out.push(`#### \`${name}\``, "", `${doc(s)} Since ${since(s)}.`, "", "| Field | Type | What |", "|---|---|---|");
+    for (const p of checker.getDeclaredTypeOfSymbol(s).getProperties()) {
       const d = p.valueDeclaration ?? p.declarations?.[0];
       const type = d && ts.isPropertySignature(d) && d.type ? d.type.getText() : checker.typeToString(checker.getTypeOfSymbol(p));
       out.push(`| \`${p.name}\`${p.flags & ts.SymbolFlags.Optional ? "" : " (required)"} | ${code(type)} | ${doc(p)} |`);
@@ -215,7 +228,7 @@ export function websitePage(ref = reference()): string {
     '<h2 id="start">Make one</h2>',
     "<pre><code>cmd widget new my-widget       # a package with a widget, its test, its story, CLAUDE.md\ncd my-widget\ncmd widget dev                 # on the board, its console here; saves reload it\nnpm test                       # or cmd widget test\ncmd widget check               # package.json, permissions, types\ncmd widget preview . --themes all --sizes all</code></pre>",
     "<p>Or ask Magic for one: it writes the same kind of package. Agents working in a package read its <code>CLAUDE.md</code> and this reference, which <code>cmd widget new</code> links at <code>node_modules/@cmd/widget-api/README.md</code>.</p>",
-    `<p class="api-toc">${["cmd", ...namespaces, "Hooks", "Frames", "Elements"].map((n) => `<a href="#${slug(n === "cmd" ? "`cmd`" : n)}"><code>${esc(n)}</code></a>`).join(" · ")}</p>`,
+    `<p class="api-toc">${["cmd", ...namespaces, "Hooks", "Frames", "Elements", "Records"].map((n) => `<a href="#${slug(n === "cmd" ? "`cmd`" : n)}"><code>${esc(n)}</code></a>`).join(" · ")}</p>`,
     referenceHtml(ref.replace(/^## Reference$/m, "")),
     "",
   ].join("\n");

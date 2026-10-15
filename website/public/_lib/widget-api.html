@@ -9,8 +9,8 @@ npm test                       # or cmd widget test
 cmd widget check               # package.json, permissions, types
 cmd widget preview . --themes all --sizes all</code></pre>
 <p>Or ask Magic for one: it writes the same kind of package. Agents working in a package read its <code>CLAUDE.md</code> and this reference, which <code>cmd widget new</code> links at <code>node_modules/@cmd/widget-api/README.md</code>.</p>
-<p class="api-toc"><a href="#cmd"><code>cmd</code></a> · <a href="#cmd-workspace"><code>cmd.workspace</code></a> · <a href="#cmd-agents"><code>cmd.agents</code></a> · <a href="#cmd-terminals"><code>cmd.terminals</code></a> · <a href="#cmd-windows"><code>cmd.windows</code></a> · <a href="#cmd-events"><code>cmd.events</code></a> · <a href="#cmd-git"><code>cmd.git</code></a> · <a href="#cmd-actions"><code>cmd.actions</code></a> · <a href="#cmd-notify"><code>cmd.notify</code></a> · <a href="#cmd-net"><code>cmd.net</code></a> · <a href="#cmd-ai"><code>cmd.ai</code></a> · <a href="#cmd-run"><code>cmd.run</code></a> · <a href="#cmd-config"><code>cmd.config</code></a> · <a href="#cmd-state"><code>cmd.state</code></a> · <a href="#cmd-env"><code>cmd.env</code></a> · <a href="#cmd-fmt"><code>cmd.fmt</code></a> · <a href="#hooks"><code>Hooks</code></a> · <a href="#frames"><code>Frames</code></a> · <a href="#elements"><code>Elements</code></a></p>
-<p>API 1, minor 1. Everything here is in API 1 for good; what came after 1.0 says <code>@since 1.x</code>, and a widget that also runs on an older cmd checks <code>cmd.env.has(verb)</code> first.</p>
+<p class="api-toc"><a href="#cmd"><code>cmd</code></a> · <a href="#cmd-workspace"><code>cmd.workspace</code></a> · <a href="#cmd-agents"><code>cmd.agents</code></a> · <a href="#cmd-terminals"><code>cmd.terminals</code></a> · <a href="#cmd-windows"><code>cmd.windows</code></a> · <a href="#cmd-events"><code>cmd.events</code></a> · <a href="#cmd-git"><code>cmd.git</code></a> · <a href="#cmd-actions"><code>cmd.actions</code></a> · <a href="#cmd-notify"><code>cmd.notify</code></a> · <a href="#cmd-net"><code>cmd.net</code></a> · <a href="#cmd-ai"><code>cmd.ai</code></a> · <a href="#cmd-run"><code>cmd.run</code></a> · <a href="#cmd-config"><code>cmd.config</code></a> · <a href="#cmd-state"><code>cmd.state</code></a> · <a href="#cmd-env"><code>cmd.env</code></a> · <a href="#cmd-fmt"><code>cmd.fmt</code></a> · <a href="#hooks"><code>Hooks</code></a> · <a href="#frames"><code>Frames</code></a> · <a href="#elements"><code>Elements</code></a> · <a href="#records"><code>Records</code></a></p>
+<p>API 1, minor 2. Everything here is in API 1 for good; what came after 1.0 says <code>@since 1.x</code>, and a widget that also runs on an older cmd checks <code>cmd.env.has(name)</code> first (a verb or an element).</p>
 <h3 id="cmd"><code>cmd</code></h3>
 <p>cmd, as a widget sees it. Reads run at once within the widget's grant; acts (1.1) ask the person (docs/55), only right after they pressed something in the widget, and only in its own workspace. Every method is async and rejects with an <code>ApiCallError</code> when the grant lacks what it needs (<code>error.permission</code> names it) or the person says no (<code>code: &quot;denied&quot;</code>).</p>
 <h4 id="cmd-workspace"><code>cmd.workspace</code></h4>
@@ -112,7 +112,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <p>Where the widget runs.</p>
 <div class="api-table"><table><thead><tr><th>Verb</th><th>Since</th><th>Permission</th><th>What</th></tr></thead><tbody>
 <tr><td><code>cmd.env.get(): WidgetEnv</code></td><td>1.0</td><td>none</td><td>cmd's version, the API served, theme, size class and placement.</td></tr>
-<tr><td><code>cmd.env.has(name: string): boolean</code></td><td>1.0</td><td>none</td><td>Whether this cmd serves a verb (&quot;agents.start&quot;, added in 1.1): for a widget that also runs on an older cmd.</td></tr>
+<tr><td><code>cmd.env.has(name: string): boolean</code></td><td>1.0</td><td>none</td><td>Whether this cmd serves a verb (&quot;agents.start&quot;, added in 1.1) or draws an element (&quot;DataGrid&quot;, added in 1.2): for a widget that also runs on an older cmd.</td></tr>
 <tr><td><code>cmd.env.use(): WidgetEnv</code></td><td>1.0</td><td>none</td><td>Live: the hook <code>useEnv()</code>.</td></tr>
 </tbody></table></div>
 <h4 id="cmd-fmt"><code>cmd.fmt</code></h4>
@@ -178,7 +178,7 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>inset</code></td><td><code>boolean</code></td><td>Pads the body by the window inset.</td></tr>
 <tr><td><code>scroll</code></td><td><code>boolean</code></td><td>The body scrolls (default true).</td></tr>
 <tr><td><code>state</code></td><td><code>ViewState | null</code></td><td>Shown instead of the body: empty, loading, no results, error.</td></tr>
-<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>The body; a WindowToolbar among them becomes the view's toolbar.</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>The body; a WindowToolbar among them becomes the view's toolbar, a StatusLine its footer.</td></tr>
 </tbody></table></div>
 <h4 id="windowtoolbar"><code>WindowToolbar</code></h4>
 <p>A view's toolbar: buttons, fields, segmented controls. Items that don't fit move to a ⋯ menu.</p>
@@ -426,4 +426,305 @@ cmd widget preview . --themes all --sizes all</code></pre>
 <tr><td><code>value</code></td><td><code>number</code></td><td>0–1; without one it is indeterminate.</td></tr>
 <tr><td><code>tone</code></td><td><code>Tone</code></td><td>Its colour (default accent).</td></tr>
 <tr><td><code>label</code></td><td><code>string</code></td><td>Its accessible name.</td></tr>
+</tbody></table></div>
+<h4 id="panes"><code>Panes</code></h4>
+<p>A dashboard's sections: one column, two side by side once the window is wide. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>Its Panes.</td></tr>
+</tbody></table></div>
+<h4 id="pane"><code>Pane</code></h4>
+<p>One section of Panes: a title line, then its content. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>title</code></td><td><code>string</code></td><td>Its name.</td></tr>
+<tr><td><code>aside</code></td><td><code>string | number</code></td><td>At the title's right: a count, a unit.</td></tr>
+<tr><td><code>wide</code></td><td><code>boolean</code></td><td>Spans every column.</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>What the section shows.</td></tr>
+</tbody></table></div>
+<h4 id="panel"><code>Panel</code></h4>
+<p>A frame for a list that runs to the window's edges: a WindowToolbar over a PanelBody. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>A WindowToolbar, then a PanelBody.</td></tr>
+</tbody></table></div>
+<h4 id="panelbody"><code>PanelBody</code></h4>
+<p>A Panel's scrolling body. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>Its rows.</td></tr>
+</tbody></table></div>
+<h4 id="listgroup"><code>ListGroup</code></h4>
+<p>Rows without a heading: a list's main action, above its sections. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>Its ListRows.</td></tr>
+</tbody></table></div>
+<h4 id="listrowactions"><code>ListRowActions</code></h4>
+<p>Buttons a row shows while the pointer is over it (Run, Stop), in place of its end. Pressing one doesn't press the row. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>IconButtons, or a small Button.</td></tr>
+</tbody></table></div>
+<h4 id="listvalue"><code>ListValue</code></h4>
+<p>A number at a row's end, in even-width digits (CPU, a duration). Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>strong</code></td><td><code>boolean</code></td><td>In the text colour instead of dim.</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>The value, formatted.</td></tr>
+</tbody></table></div>
+<h4 id="codeblock"><code>CodeBlock</code></h4>
+<p>Output, an error, a command, a record: monospaced, wrapped, scrolling past a height. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>maxHeight</code></td><td><code>number</code></td><td>In px before it scrolls (default 180).</td></tr>
+<tr><td><code>tone</code></td><td><code>&quot;danger&quot;</code></td><td>&quot;danger&quot; for an error.</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>The text, as it is.</td></tr>
+</tbody></table></div>
+<h4 id="icon"><code>Icon</code></h4>
+<p>An SF Symbol on its own (in a line of text, a status line). Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>name</code> (required)</td><td><code>string</code></td><td>An SF Symbol name.</td></tr>
+<tr><td><code>size</code></td><td><code>12 | 13 | 14 | 20 | 22</code></td><td>In points: 12 small, 13 a row's, 14 a toolbar's (default), 20 an empty state's, 22 a feature's.</td></tr>
+<tr><td><code>weight</code></td><td><code>&quot;regular&quot; | &quot;medium&quot; | &quot;semibold&quot; | &quot;bold&quot;</code></td><td>Its stroke (default medium).</td></tr>
+</tbody></table></div>
+<h4 id="mark"><code>Mark</code></h4>
+<p>An icon that gives way to a status light when there is one: a row's, or one in a line of text. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>icon</code> (required)</td><td><code>string</code></td><td>An SF Symbol name.</td></tr>
+<tr><td><code>light</code></td><td><code>Light</code></td><td>The status light that takes the icon's place.</td></tr>
+<tr><td><code>tone</code></td><td><code>Light | &quot;dim&quot;</code></td><td>Colours the icon.</td></tr>
+</tbody></table></div>
+<h4 id="delta"><code>Delta</code></h4>
+<p>A change against the period before: ▲ 18% in green when up is good, red when it isn't, dim when flat. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>text</code> (required)</td><td><code>string</code></td><td>The change (&quot;18%&quot;; a leading sign is dropped).</td></tr>
+<tr><td><code>trend</code> (required)</td><td><code>&quot;up&quot; | &quot;down&quot; | &quot;flat&quot;</code></td><td>Which way it went.</td></tr>
+<tr><td><code>good</code></td><td><code>&quot;up&quot; | &quot;down&quot;</code></td><td>Which way is better; without one it stays neutral.</td></tr>
+</tbody></table></div>
+<h4 id="spinner"><code>Spinner</code></h4>
+<p>Something is happening, in a row or a status line. A view that is loading says so with its <code>state</code> instead. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>size</code></td><td><code>10 | 12 | 14 | 16</code></td><td>In px (default 12).</td></tr>
+<tr><td><code>label</code></td><td><code>string</code></td><td>Its accessible name.</td></tr>
+</tbody></table></div>
+<h4 id="statusline"><code>StatusLine</code></h4>
+<p>A view's footer: one quiet line under the content (counts, where it runs). In a View it sits at the bottom edge. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>end</code></td><td><code>string | number</code></td><td>At the line's right (a branch, a folder).</td></tr>
+<tr><td><code>action</code></td><td><code>Action</code></td><td>A quiet link at the line's right (Task Manager).</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>The line: words, and a Spinner or an Icon among them.</td></tr>
+</tbody></table></div>
+<h4 id="iconbutton"><code>IconButton</code></h4>
+<p>A button that is an icon alone (a row's Run, a bar's Refresh). Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>icon</code> (required)</td><td><code>string</code></td><td>An SF Symbol name.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>Its tooltip and accessible name.</td></tr>
+<tr><td><code>size</code></td><td><code>&quot;sm&quot; | &quot;md&quot; | &quot;lg&quot;</code></td><td>&quot;sm&quot; in a row, &quot;md&quot; (default) elsewhere.</td></tr>
+<tr><td><code>variant</code></td><td><code>&quot;ghost&quot; | &quot;default&quot;</code></td><td>&quot;ghost&quot; (default) for bars and rows, &quot;default&quot; for a filled square beside other controls.</td></tr>
+<tr><td><code>pressed</code></td><td><code>boolean</code></td><td>On (a mode that is active).</td></tr>
+<tr><td><code>tone</code></td><td><code>&quot;accent&quot; | &quot;needs&quot;</code></td><td>Its icon in a tone: accent (something is on), needs (it needs a look).</td></tr>
+<tr><td><code>pulse</code></td><td><code>boolean</code></td><td>The icon pulses: something waits for an answer.</td></tr>
+<tr><td><code>disabled</code></td><td><code>boolean</code></td><td>Greyed out, not pressable.</td></tr>
+<tr><td><code>onClick</code></td><td><code>() =&gt; void</code></td><td>Pressed.</td></tr>
+</tbody></table></div>
+<h4 id="linkbutton"><code>LinkButton</code></h4>
+<p>An action inside running text or a dim line: coloured text, no box. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>tone</code></td><td><code>&quot;accent&quot; | &quot;dim&quot; | &quot;danger&quot;</code></td><td>&quot;accent&quot; (default), &quot;dim&quot; in a footer, &quot;danger&quot;.</td></tr>
+<tr><td><code>disabled</code></td><td><code>boolean</code></td><td>Greyed out, not pressable.</td></tr>
+<tr><td><code>onClick</code></td><td><code>() =&gt; void</code></td><td>Pressed.</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>Its words.</td></tr>
+</tbody></table></div>
+<h4 id="textfield"><code>TextField</code></h4>
+<p>A text field in the body (a form, a length to type). The app keeps the caret and sends what is typed, debounced; a filter belongs in the toolbar (ToolbarSearchField). Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>value</code> (required)</td><td><code>string</code></td><td>The text in it.</td></tr>
+<tr><td><code>placeholder</code></td><td><code>string</code></td><td>Shown while it is empty.</td></tr>
+<tr><td><code>label</code></td><td><code>string</code></td><td>Its accessible name, when the placeholder doesn't say what it is.</td></tr>
+<tr><td><code>icon</code></td><td><code>string</code></td><td>An SF Symbol name before the text.</td></tr>
+<tr><td><code>code</code></td><td><code>boolean</code></td><td>Commands, paths, keys: the monospaced font.</td></tr>
+<tr><td><code>size</code></td><td><code>&quot;sm&quot; | &quot;md&quot; | &quot;lg&quot;</code></td><td>&quot;sm&quot;, &quot;md&quot; (default) or &quot;lg&quot;.</td></tr>
+<tr><td><code>fill</code></td><td><code>boolean</code></td><td>As wide as its container (default 240 px).</td></tr>
+<tr><td><code>invalid</code></td><td><code>boolean</code></td><td>Marked as not what it should be.</td></tr>
+<tr><td><code>disabled</code></td><td><code>boolean</code></td><td>Greyed out, not pressable.</td></tr>
+<tr><td><code>onChange</code></td><td><code>(value: string) =&gt; void</code></td><td>The text as typed (debounced by the app, which keeps the caret).</td></tr>
+<tr><td><code>onSubmit</code></td><td><code>(value: string) =&gt; void</code></td><td>Return pressed, with the text.</td></tr>
+</tbody></table></div>
+<h4 id="timeseries"><code>TimeSeries</code></h4>
+<p>Lines over time buckets, filled under when there's one; the period before dashed. For rates, gauges and running totals. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>buckets</code> (required)</td><td><code>(number | null)[]</code></td><td>Each bucket's start, in ms since the epoch.</td></tr>
+<tr><td><code>series</code> (required)</td><td><code>ChartSeries[]</code></td><td>One series, or several (stacked bars, lines over each other).</td></tr>
+<tr><td><code>labels</code> (required)</td><td><code>string[]</code></td><td>Each bucket's short label on the x axis (&quot;M&quot;, &quot;14&quot;), in order.</td></tr>
+<tr><td><code>longLabels</code></td><td><code>string[]</code></td><td>Each bucket's long label, in the readout under the cursor (&quot;Mon 14 Oct&quot;); <code>labels</code> without.</td></tr>
+<tr><td><code>previous</code></td><td><code>(number | null)[]</code></td><td>The same buckets one period earlier.</td></tr>
+<tr><td><code>current</code></td><td><code>number | null</code></td><td>The bucket that matters (today), by index: in the accent.</td></tr>
+<tr><td><code>unit</code></td><td><code>Unit</code></td><td>How its values read: counts (the default), <code>ms</code> as durations, bytes, tokens, percent.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>What it shows, in words: its header without a summary, and its accessible name.</td></tr>
+<tr><td><code>summary</code></td><td><code>string</code></td><td>Its header (&quot;Active 3h 12m&quot;), replaced by the bucket under the cursor.</td></tr>
+<tr><td><code>height</code></td><td><code>number</code></td><td>In px (default 120).</td></tr>
+<tr><td><code>fill</code></td><td><code>boolean</code></td><td>As tall as its pane, instead of <code>height</code>.</td></tr>
+<tr><td><code>area</code></td><td><code>boolean</code></td><td>Fills under a single line (default true).</td></tr>
+<tr><td><code>onSelect</code></td><td><code>(value: number) =&gt; void</code></td><td>A bucket was clicked: its index.</td></tr>
+</tbody></table></div>
+<h4 id="timebars"><code>TimeBars</code></h4>
+<p>Bars over time buckets: the current one in the accent, the period before as ticks, an average line. The chart most stats want. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>buckets</code> (required)</td><td><code>(number | null)[]</code></td><td>Each bucket's start, in ms since the epoch.</td></tr>
+<tr><td><code>series</code> (required)</td><td><code>ChartSeries[]</code></td><td>One series, or several (stacked bars, lines over each other).</td></tr>
+<tr><td><code>labels</code> (required)</td><td><code>string[]</code></td><td>Each bucket's short label on the x axis (&quot;M&quot;, &quot;14&quot;), in order.</td></tr>
+<tr><td><code>longLabels</code></td><td><code>string[]</code></td><td>Each bucket's long label, in the readout under the cursor (&quot;Mon 14 Oct&quot;); <code>labels</code> without.</td></tr>
+<tr><td><code>previous</code></td><td><code>(number | null)[]</code></td><td>The same buckets one period earlier.</td></tr>
+<tr><td><code>current</code></td><td><code>number | null</code></td><td>The bucket that matters (today), by index: in the accent.</td></tr>
+<tr><td><code>unit</code></td><td><code>Unit</code></td><td>How its values read: counts (the default), <code>ms</code> as durations, bytes, tokens, percent.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>What it shows, in words: its header without a summary, and its accessible name.</td></tr>
+<tr><td><code>summary</code></td><td><code>string</code></td><td>Its header (&quot;Active 3h 12m&quot;), replaced by the bucket under the cursor.</td></tr>
+<tr><td><code>height</code></td><td><code>number</code></td><td>In px (default 120).</td></tr>
+<tr><td><code>fill</code></td><td><code>boolean</code></td><td>As tall as its pane, instead of <code>height</code>.</td></tr>
+<tr><td><code>average</code></td><td><code>boolean</code></td><td>A dashed line at the mean of the buckets with data.</td></tr>
+<tr><td><code>onSelect</code></td><td><code>(value: number) =&gt; void</code></td><td>A bucket was clicked: its index.</td></tr>
+</tbody></table></div>
+<h4 id="timebar"><code>TimeBar</code></h4>
+<p>A track's position (a song's, a video's): played in the accent, moving on by itself while playing. Click or drag to seek. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>duration</code> (required)</td><td><code>number</code></td><td>Its length, in seconds.</td></tr>
+<tr><td><code>time</code> (required)</td><td><code>number</code></td><td>Where it is now, in seconds.</td></tr>
+<tr><td><code>playing</code></td><td><code>boolean</code></td><td>Moves on by itself from <code>time</code> (send a new <code>time</code> only when the player reports one).</td></tr>
+<tr><td><code>rate</code></td><td><code>number</code></td><td>How fast it moves while playing (default 1).</td></tr>
+<tr><td><code>label</code></td><td><code>string</code></td><td>Its accessible name (default &quot;Position&quot;).</td></tr>
+<tr><td><code>onSeek</code></td><td><code>(value: number) =&gt; void</code></td><td>Seeked: the time let go at, in seconds.</td></tr>
+</tbody></table></div>
+<h4 id="ranking"><code>Ranking</code></h4>
+<p>A ranked list with a bar per row (most used, slowest): label, bar, value. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>rows</code> (required)</td><td><code>RankingRow[]</code></td><td>The rows, in the order shown.</td></tr>
+<tr><td><code>unit</code></td><td><code>Unit</code></td><td>How its values read: counts (the default), <code>ms</code> as durations, bytes, tokens, percent.</td></tr>
+<tr><td><code>max</code></td><td><code>number</code></td><td>The value of a full bar (default the largest).</td></tr>
+<tr><td><code>empty</code></td><td><code>string</code></td><td>Shown without rows (default &quot;Nothing yet&quot;).</td></tr>
+<tr><td><code>onSelect</code></td><td><code>(value: string) =&gt; void</code></td><td>A row was pressed: its key. Rows are buttons only with it.</td></tr>
+</tbody></table></div>
+<h4 id="proportion"><code>Proportion</code></h4>
+<p>Shares of a whole as one bar split by part, with labels and percentages under it. Instead of a pie. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>parts</code> (required)</td><td><code>ProportionPart[]</code></td><td>The parts, in order.</td></tr>
+<tr><td><code>unit</code></td><td><code>Unit</code></td><td>How its values read: counts (the default), <code>ms</code> as durations, bytes, tokens, percent.</td></tr>
+</tbody></table></div>
+<h4 id="punchcard"><code>PunchCard</code></h4>
+<p>When things happen: rows (weekdays) × the 24 hours, five levels of one hue. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>values</code> (required)</td><td><code>number[][]</code></td><td>values[row][hour]: 24 numbers per row.</td></tr>
+<tr><td><code>rows</code> (required)</td><td><code>string[]</code></td><td>Each row's label (&quot;Mon&quot;), in order.</td></tr>
+<tr><td><code>unit</code></td><td><code>Unit</code></td><td>How its values read: counts (the default), <code>ms</code> as durations, bytes, tokens, percent.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>What it shows, in words: its header without a summary, and its accessible name.</td></tr>
+</tbody></table></div>
+<h4 id="calendar"><code>Calendar</code></h4>
+<p>A run of days (a year) as weeks × weekdays, five levels of one hue, empty days still visible. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>start</code> (required)</td><td><code>number</code></td><td>The first day, in ms since the epoch.</td></tr>
+<tr><td><code>values</code> (required)</td><td><code>(number | null)[]</code></td><td>One per day from <code>start</code>; null for no data.</td></tr>
+<tr><td><code>unit</code></td><td><code>Unit</code></td><td>How its values read: counts (the default), <code>ms</code> as durations, bytes, tokens, percent.</td></tr>
+<tr><td><code>firstDay</code></td><td><code>0 | 1 | 6</code></td><td>The week's first day: 0 Sunday, 1 Monday (default), 6 Saturday.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>What it shows, in words: its header without a summary, and its accessible name.</td></tr>
+<tr><td><code>dayLabels</code></td><td><code>string[]</code></td><td>Each day's name in the readout, in order (default the date).</td></tr>
+<tr><td><code>onSelect</code></td><td><code>(value: number) =&gt; void</code></td><td>A day with data was clicked: its start, in ms.</td></tr>
+</tbody></table></div>
+<h4 id="timeline"><code>Timeline</code></h4>
+<p>Entries down a rail, in the order given (newest or oldest first). Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>Its TimelineEntries.</td></tr>
+</tbody></table></div>
+<h4 id="timelineentry"><code>TimelineEntry</code></h4>
+<p>One entry of a Timeline: its time, a mark in its hue on the rail, then what happened. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>time</code> (required)</td><td><code>string | number</code></td><td>Its time (&quot;14:05&quot;).</td></tr>
+<tr><td><code>hue</code> (required)</td><td><code>number</code></td><td>The mark's hue (0–360): its kind's or project's.</td></tr>
+<tr><td><code>label</code></td><td><code>string</code></td><td>The mark's tooltip.</td></tr>
+<tr><td><code>picked</code></td><td><code>boolean</code></td><td>Rings the mark (the entry picked in a Ribbon).</td></tr>
+<tr><td><code>children</code></td><td><code>ReactNode</code></td><td>What happened: Text, and more.</td></tr>
+</tbody></table></div>
+<h4 id="ribbon"><code>Ribbon</code></h4>
+<p>Bars between two times on lanes (parallel work on lanes of its own), ticks under them; a click picks one. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>items</code> (required)</td><td><code>RibbonItem[]</code></td><td>The bars.</td></tr>
+<tr><td><code>from</code> (required)</td><td><code>number</code></td><td>Its left edge, in ms since the epoch.</td></tr>
+<tr><td><code>to</code> (required)</td><td><code>number</code></td><td>Its right edge.</td></tr>
+<tr><td><code>ticks</code> (required)</td><td><code>RibbonTick[]</code></td><td>The ticks under it.</td></tr>
+<tr><td><code>picked</code></td><td><code>string | null</code></td><td>The picked item's id.</td></tr>
+<tr><td><code>onPick</code></td><td><code>(value: string) =&gt; void</code></td><td>A bar was clicked: its id.</td></tr>
+</tbody></table></div>
+<h4 id="datagrid"><code>DataGrid</code></h4>
+<p>A table: rows and columns of values, a header that sorts, columns that drop as the window narrows. For records; a list of things to open is a List. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Prop</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>columns</code> (required)</td><td><code>GridColumn[]</code></td><td>The columns, in order.</td></tr>
+<tr><td><code>rows</code> (required)</td><td><code>GridRow[]</code></td><td>The rows, in order.</td></tr>
+<tr><td><code>sort</code></td><td><code>GridSort | null</code></td><td>The column it is sorted by, shown in its header.</td></tr>
+<tr><td><code>selected</code></td><td><code>string | null</code></td><td>The selected row's key.</td></tr>
+<tr><td><code>mono</code></td><td><code>boolean</code></td><td>Values in the monospaced font (data, not labels).</td></tr>
+<tr><td><code>numbered</code></td><td><code>boolean</code></td><td>A row number before each row.</td></tr>
+<tr><td><code>headless</code></td><td><code>boolean</code></td><td>No header, where the values say what they are.</td></tr>
+<tr><td><code>onSort</code></td><td><code>(value: GridSort | null) =&gt; void</code></td><td>A header was clicked: the next sort (ascending, then descending, then none). The header sorts only with it.</td></tr>
+<tr><td><code>onRowClick</code></td><td><code>(value: string) =&gt; void</code></td><td>A row was clicked: its key.</td></tr>
+<tr><td><code>onRowDoubleClick</code></td><td><code>(value: string) =&gt; void</code></td><td>A row was double-clicked: its key.</td></tr>
+<tr><td><code>onToggle</code></td><td><code>(value: string) =&gt; void</code></td><td>A row's disclosure was clicked: its key.</td></tr>
+</tbody></table></div>
+<h3 id="records">Records</h3>
+<p>What the charts' and DataGrid's props hold: plain values, a field each.</p>
+<h4 id="chartseries"><code>ChartSeries</code></h4>
+<p>One series of a chart: a key, its name in the legend and the readout, and a value per bucket (null: no data). Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>key</code> (required)</td><td><code>string</code></td><td>Unique among the series.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>Its name in the legend and the readout.</td></tr>
+<tr><td><code>values</code> (required)</td><td><code>(number | null)[]</code></td><td>One per bucket, in order; null for no data.</td></tr>
+</tbody></table></div>
+<h4 id="rankingrow"><code>RankingRow</code></h4>
+<p>A row of a Ranking: what it is, its value, and a note after the value. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>key</code> (required)</td><td><code>string</code></td><td>Unique among the rows; what <code>onSelect</code> says.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string | number</code></td><td>What it is.</td></tr>
+<tr><td><code>value</code> (required)</td><td><code>number</code></td><td>Its value, in the Ranking's unit.</td></tr>
+<tr><td><code>note</code></td><td><code>string | number</code></td><td>A second number after the value (&quot;9% failed&quot;).</td></tr>
+</tbody></table></div>
+<h4 id="proportionpart"><code>ProportionPart</code></h4>
+<p>A part of a Proportion's whole. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>key</code> (required)</td><td><code>string</code></td><td>Unique among the parts.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>Its name.</td></tr>
+<tr><td><code>value</code> (required)</td><td><code>number</code></td><td>Its share, in the Proportion's unit.</td></tr>
+</tbody></table></div>
+<h4 id="ribbonitem"><code>RibbonItem</code></h4>
+<p>A bar of a Ribbon: from <code>start</code> to <code>end</code> (ms), in a hue. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>id</code> (required)</td><td><code>string</code></td><td>Unique among the items; what <code>onPick</code> says.</td></tr>
+<tr><td><code>start</code> (required)</td><td><code>number</code></td><td>When it starts, in ms since the epoch.</td></tr>
+<tr><td><code>end</code> (required)</td><td><code>number</code></td><td>When it ends.</td></tr>
+<tr><td><code>hue</code> (required)</td><td><code>number</code></td><td>Its colour as a hue (0–360): a kind's or a project's.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>Its tooltip and accessible name.</td></tr>
+</tbody></table></div>
+<h4 id="ribbontick"><code>RibbonTick</code></h4>
+<p>A tick under a Ribbon: a time and its label. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>at</code> (required)</td><td><code>number</code></td><td>When, in ms since the epoch.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>Its label (&quot;14:00&quot;).</td></tr>
+</tbody></table></div>
+<h4 id="gridcolumn"><code>GridColumn</code></h4>
+<p>A column of a DataGrid. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>key</code> (required)</td><td><code>string</code></td><td>Unique among the columns; what a sort names.</td></tr>
+<tr><td><code>label</code> (required)</td><td><code>string</code></td><td>Its header (empty for an icon column).</td></tr>
+<tr><td><code>note</code></td><td><code>string</code></td><td>A second line under the header (a unit, a type).</td></tr>
+<tr><td><code>align</code></td><td><code>&quot;start&quot; | &quot;end&quot;</code></td><td>&quot;end&quot; for numbers.</td></tr>
+<tr><td><code>grow</code></td><td><code>boolean</code></td><td>Takes the width left over (the name column).</td></tr>
+<tr><td><code>hide</code></td><td><code>&quot;narrow&quot; | &quot;regular&quot;</code></td><td>Dropped while the table is narrower than this size class: the columns that matter least.</td></tr>
+<tr><td><code>icon</code></td><td><code>boolean</code></td><td>Its cells are SF Symbol names, drawn as icons (with the row's <code>light</code>): as narrow as an icon.</td></tr>
+<tr><td><code>dim</code></td><td><code>boolean</code></td><td>Its values in the dim tone (a detail beside the name).</td></tr>
+</tbody></table></div>
+<h4 id="gridrow"><code>GridRow</code></h4>
+<p>A row of a DataGrid: its key and a value per column. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>key</code> (required)</td><td><code>string</code></td><td>Unique among the rows; what <code>selected</code> and the row events say.</td></tr>
+<tr><td><code>cells</code> (required)</td><td><code>(string | number | null)[]</code></td><td>A value per column, in the columns' order: text, a number, or null for nothing.</td></tr>
+<tr><td><code>light</code></td><td><code>Light</code></td><td>A status light in place of the icon column's icon (a busy terminal).</td></tr>
+<tr><td><code>tip</code></td><td><code>string</code></td><td>A tooltip on the row's name.</td></tr>
+<tr><td><code>heading</code></td><td><code>boolean</code></td><td>A section's heading: its cells are the section's name and totals; not selectable.</td></tr>
+<tr><td><code>depth</code></td><td><code>number</code></td><td>Nested this deep under the row before it (1: a child).</td></tr>
+<tr><td><code>expanded</code></td><td><code>boolean</code></td><td>Has rows nested under it: a disclosure, open or not (<code>onToggle</code>).</td></tr>
+</tbody></table></div>
+<h4 id="gridsort"><code>GridSort</code></h4>
+<p>A DataGrid's sort: a column's key, and whether it is descending. Since 1.2.</p>
+<div class="api-table"><table><thead><tr><th>Field</th><th>Type</th><th>What</th></tr></thead><tbody>
+<tr><td><code>key</code> (required)</td><td><code>string</code></td><td>The column's key.</td></tr>
+<tr><td><code>desc</code> (required)</td><td><code>boolean</code></td><td>Descending.</td></tr>
 </tbody></table></div>

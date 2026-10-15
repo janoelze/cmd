@@ -31,7 +31,7 @@ export default function Agents() {
 
 ## Reference
 
-API 1, minor 1. Everything here is in API 1 for good; what came after 1.0 says `@since 1.x`, and a widget that also runs on an older cmd checks `cmd.env.has(verb)` first.
+API 1, minor 2. Everything here is in API 1 for good; what came after 1.0 says `@since 1.x`, and a widget that also runs on an older cmd checks `cmd.env.has(name)` first (a verb or an element).
 
 ### `cmd`
 
@@ -178,7 +178,7 @@ Where the widget runs.
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.env.get(): WidgetEnv` | 1.0 | none | cmd's version, the API served, theme, size class and placement. |
-| `cmd.env.has(name: string): boolean` | 1.0 | none | Whether this cmd serves a verb ("agents.start", added in 1.1): for a widget that also runs on an older cmd. |
+| `cmd.env.has(name: string): boolean` | 1.0 | none | Whether this cmd serves a verb ("agents.start", added in 1.1) or draws an element ("DataGrid", added in 1.2): for a widget that also runs on an older cmd. |
 | `cmd.env.use(): WidgetEnv` | 1.0 | none | Live: the hook `useEnv()`. |
 
 #### `cmd.fmt`
@@ -262,7 +262,7 @@ A window's content frame: toolbar, scrolling body, and the states that replace i
 | `inset` | `boolean` | Pads the body by the window inset. |
 | `scroll` | `boolean` | The body scrolls (default true). |
 | `state` | `ViewState \| null` | Shown instead of the body: empty, loading, no results, error. |
-| `children` | `ReactNode` | The body; a WindowToolbar among them becomes the view's toolbar. |
+| `children` | `ReactNode` | The body; a WindowToolbar among them becomes the view's toolbar, a StatusLine its footer. |
 
 #### `WindowToolbar`
 
@@ -594,5 +594,413 @@ A progress bar.
 | `value` | `number` | 0–1; without one it is indeterminate. |
 | `tone` | `Tone` | Its colour (default accent). |
 | `label` | `string` | Its accessible name. |
+
+#### `Panes`
+
+A dashboard's sections: one column, two side by side once the window is wide. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `children` | `ReactNode` | Its Panes. |
+
+#### `Pane`
+
+One section of Panes: a title line, then its content. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `title` | `string` | Its name. |
+| `aside` | `string \| number` | At the title's right: a count, a unit. |
+| `wide` | `boolean` | Spans every column. |
+| `children` | `ReactNode` | What the section shows. |
+
+#### `Panel`
+
+A frame for a list that runs to the window's edges: a WindowToolbar over a PanelBody. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `children` | `ReactNode` | A WindowToolbar, then a PanelBody. |
+
+#### `PanelBody`
+
+A Panel's scrolling body. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `children` | `ReactNode` | Its rows. |
+
+#### `ListGroup`
+
+Rows without a heading: a list's main action, above its sections. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `children` | `ReactNode` | Its ListRows. |
+
+#### `ListRowActions`
+
+Buttons a row shows while the pointer is over it (Run, Stop), in place of its end. Pressing one doesn't press the row. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `children` | `ReactNode` | IconButtons, or a small Button. |
+
+#### `ListValue`
+
+A number at a row's end, in even-width digits (CPU, a duration). Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `strong` | `boolean` | In the text colour instead of dim. |
+| `children` | `ReactNode` | The value, formatted. |
+
+#### `CodeBlock`
+
+Output, an error, a command, a record: monospaced, wrapped, scrolling past a height. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `maxHeight` | `number` | In px before it scrolls (default 180). |
+| `tone` | `"danger"` | "danger" for an error. |
+| `children` | `ReactNode` | The text, as it is. |
+
+#### `Icon`
+
+An SF Symbol on its own (in a line of text, a status line). Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `name` (required) | `string` | An SF Symbol name. |
+| `size` | `12 \| 13 \| 14 \| 20 \| 22` | In points: 12 small, 13 a row's, 14 a toolbar's (default), 20 an empty state's, 22 a feature's. |
+| `weight` | `"regular" \| "medium" \| "semibold" \| "bold"` | Its stroke (default medium). |
+
+#### `Mark`
+
+An icon that gives way to a status light when there is one: a row's, or one in a line of text. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `icon` (required) | `string` | An SF Symbol name. |
+| `light` | `Light` | The status light that takes the icon's place. |
+| `tone` | `Light \| "dim"` | Colours the icon. |
+
+#### `Delta`
+
+A change against the period before: ▲ 18% in green when up is good, red when it isn't, dim when flat. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `text` (required) | `string` | The change ("18%"; a leading sign is dropped). |
+| `trend` (required) | `"up" \| "down" \| "flat"` | Which way it went. |
+| `good` | `"up" \| "down"` | Which way is better; without one it stays neutral. |
+
+#### `Spinner`
+
+Something is happening, in a row or a status line. A view that is loading says so with its `state` instead. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `size` | `10 \| 12 \| 14 \| 16` | In px (default 12). |
+| `label` | `string` | Its accessible name. |
+
+#### `StatusLine`
+
+A view's footer: one quiet line under the content (counts, where it runs). In a View it sits at the bottom edge. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `end` | `string \| number` | At the line's right (a branch, a folder). |
+| `action` | `Action` | A quiet link at the line's right (Task Manager). |
+| `children` | `ReactNode` | The line: words, and a Spinner or an Icon among them. |
+
+#### `IconButton`
+
+A button that is an icon alone (a row's Run, a bar's Refresh). Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `icon` (required) | `string` | An SF Symbol name. |
+| `label` (required) | `string` | Its tooltip and accessible name. |
+| `size` | `"sm" \| "md" \| "lg"` | "sm" in a row, "md" (default) elsewhere. |
+| `variant` | `"ghost" \| "default"` | "ghost" (default) for bars and rows, "default" for a filled square beside other controls. |
+| `pressed` | `boolean` | On (a mode that is active). |
+| `tone` | `"accent" \| "needs"` | Its icon in a tone: accent (something is on), needs (it needs a look). |
+| `pulse` | `boolean` | The icon pulses: something waits for an answer. |
+| `disabled` | `boolean` | Greyed out, not pressable. |
+| `onClick` | `() => void` | Pressed. |
+
+#### `LinkButton`
+
+An action inside running text or a dim line: coloured text, no box. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `tone` | `"accent" \| "dim" \| "danger"` | "accent" (default), "dim" in a footer, "danger". |
+| `disabled` | `boolean` | Greyed out, not pressable. |
+| `onClick` | `() => void` | Pressed. |
+| `children` | `ReactNode` | Its words. |
+
+#### `TextField`
+
+A text field in the body (a form, a length to type). The app keeps the caret and sends what is typed, debounced; a filter belongs in the toolbar (ToolbarSearchField). Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `value` (required) | `string` | The text in it. |
+| `placeholder` | `string` | Shown while it is empty. |
+| `label` | `string` | Its accessible name, when the placeholder doesn't say what it is. |
+| `icon` | `string` | An SF Symbol name before the text. |
+| `code` | `boolean` | Commands, paths, keys: the monospaced font. |
+| `size` | `"sm" \| "md" \| "lg"` | "sm", "md" (default) or "lg". |
+| `fill` | `boolean` | As wide as its container (default 240 px). |
+| `invalid` | `boolean` | Marked as not what it should be. |
+| `disabled` | `boolean` | Greyed out, not pressable. |
+| `onChange` | `(value: string) => void` | The text as typed (debounced by the app, which keeps the caret). |
+| `onSubmit` | `(value: string) => void` | Return pressed, with the text. |
+
+#### `TimeSeries`
+
+Lines over time buckets, filled under when there's one; the period before dashed. For rates, gauges and running totals. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `buckets` (required) | `(number \| null)[]` | Each bucket's start, in ms since the epoch. |
+| `series` (required) | `ChartSeries[]` | One series, or several (stacked bars, lines over each other). |
+| `labels` (required) | `string[]` | Each bucket's short label on the x axis ("M", "14"), in order. |
+| `longLabels` | `string[]` | Each bucket's long label, in the readout under the cursor ("Mon 14 Oct"); `labels` without. |
+| `previous` | `(number \| null)[]` | The same buckets one period earlier. |
+| `current` | `number \| null` | The bucket that matters (today), by index: in the accent. |
+| `unit` | `Unit` | How its values read: counts (the default), `ms` as durations, bytes, tokens, percent. |
+| `label` (required) | `string` | What it shows, in words: its header without a summary, and its accessible name. |
+| `summary` | `string` | Its header ("Active 3h 12m"), replaced by the bucket under the cursor. |
+| `height` | `number` | In px (default 120). |
+| `fill` | `boolean` | As tall as its pane, instead of `height`. |
+| `area` | `boolean` | Fills under a single line (default true). |
+| `onSelect` | `(value: number) => void` | A bucket was clicked: its index. |
+
+#### `TimeBars`
+
+Bars over time buckets: the current one in the accent, the period before as ticks, an average line. The chart most stats want. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `buckets` (required) | `(number \| null)[]` | Each bucket's start, in ms since the epoch. |
+| `series` (required) | `ChartSeries[]` | One series, or several (stacked bars, lines over each other). |
+| `labels` (required) | `string[]` | Each bucket's short label on the x axis ("M", "14"), in order. |
+| `longLabels` | `string[]` | Each bucket's long label, in the readout under the cursor ("Mon 14 Oct"); `labels` without. |
+| `previous` | `(number \| null)[]` | The same buckets one period earlier. |
+| `current` | `number \| null` | The bucket that matters (today), by index: in the accent. |
+| `unit` | `Unit` | How its values read: counts (the default), `ms` as durations, bytes, tokens, percent. |
+| `label` (required) | `string` | What it shows, in words: its header without a summary, and its accessible name. |
+| `summary` | `string` | Its header ("Active 3h 12m"), replaced by the bucket under the cursor. |
+| `height` | `number` | In px (default 120). |
+| `fill` | `boolean` | As tall as its pane, instead of `height`. |
+| `average` | `boolean` | A dashed line at the mean of the buckets with data. |
+| `onSelect` | `(value: number) => void` | A bucket was clicked: its index. |
+
+#### `TimeBar`
+
+A track's position (a song's, a video's): played in the accent, moving on by itself while playing. Click or drag to seek. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `duration` (required) | `number` | Its length, in seconds. |
+| `time` (required) | `number` | Where it is now, in seconds. |
+| `playing` | `boolean` | Moves on by itself from `time` (send a new `time` only when the player reports one). |
+| `rate` | `number` | How fast it moves while playing (default 1). |
+| `label` | `string` | Its accessible name (default "Position"). |
+| `onSeek` | `(value: number) => void` | Seeked: the time let go at, in seconds. |
+
+#### `Ranking`
+
+A ranked list with a bar per row (most used, slowest): label, bar, value. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `rows` (required) | `RankingRow[]` | The rows, in the order shown. |
+| `unit` | `Unit` | How its values read: counts (the default), `ms` as durations, bytes, tokens, percent. |
+| `max` | `number` | The value of a full bar (default the largest). |
+| `empty` | `string` | Shown without rows (default "Nothing yet"). |
+| `onSelect` | `(value: string) => void` | A row was pressed: its key. Rows are buttons only with it. |
+
+#### `Proportion`
+
+Shares of a whole as one bar split by part, with labels and percentages under it. Instead of a pie. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `parts` (required) | `ProportionPart[]` | The parts, in order. |
+| `unit` | `Unit` | How its values read: counts (the default), `ms` as durations, bytes, tokens, percent. |
+
+#### `PunchCard`
+
+When things happen: rows (weekdays) × the 24 hours, five levels of one hue. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `values` (required) | `number[][]` | values[row][hour]: 24 numbers per row. |
+| `rows` (required) | `string[]` | Each row's label ("Mon"), in order. |
+| `unit` | `Unit` | How its values read: counts (the default), `ms` as durations, bytes, tokens, percent. |
+| `label` (required) | `string` | What it shows, in words: its header without a summary, and its accessible name. |
+
+#### `Calendar`
+
+A run of days (a year) as weeks × weekdays, five levels of one hue, empty days still visible. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `start` (required) | `number` | The first day, in ms since the epoch. |
+| `values` (required) | `(number \| null)[]` | One per day from `start`; null for no data. |
+| `unit` | `Unit` | How its values read: counts (the default), `ms` as durations, bytes, tokens, percent. |
+| `firstDay` | `0 \| 1 \| 6` | The week's first day: 0 Sunday, 1 Monday (default), 6 Saturday. |
+| `label` (required) | `string` | What it shows, in words: its header without a summary, and its accessible name. |
+| `dayLabels` | `string[]` | Each day's name in the readout, in order (default the date). |
+| `onSelect` | `(value: number) => void` | A day with data was clicked: its start, in ms. |
+
+#### `Timeline`
+
+Entries down a rail, in the order given (newest or oldest first). Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `children` | `ReactNode` | Its TimelineEntries. |
+
+#### `TimelineEntry`
+
+One entry of a Timeline: its time, a mark in its hue on the rail, then what happened. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `time` (required) | `string \| number` | Its time ("14:05"). |
+| `hue` (required) | `number` | The mark's hue (0–360): its kind's or project's. |
+| `label` | `string` | The mark's tooltip. |
+| `picked` | `boolean` | Rings the mark (the entry picked in a Ribbon). |
+| `children` | `ReactNode` | What happened: Text, and more. |
+
+#### `Ribbon`
+
+Bars between two times on lanes (parallel work on lanes of its own), ticks under them; a click picks one. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `items` (required) | `RibbonItem[]` | The bars. |
+| `from` (required) | `number` | Its left edge, in ms since the epoch. |
+| `to` (required) | `number` | Its right edge. |
+| `ticks` (required) | `RibbonTick[]` | The ticks under it. |
+| `picked` | `string \| null` | The picked item's id. |
+| `onPick` | `(value: string) => void` | A bar was clicked: its id. |
+
+#### `DataGrid`
+
+A table: rows and columns of values, a header that sorts, columns that drop as the window narrows. For records; a list of things to open is a List. Since 1.2.
+
+| Prop | Type | What |
+|---|---|---|
+| `columns` (required) | `GridColumn[]` | The columns, in order. |
+| `rows` (required) | `GridRow[]` | The rows, in order. |
+| `sort` | `GridSort \| null` | The column it is sorted by, shown in its header. |
+| `selected` | `string \| null` | The selected row's key. |
+| `mono` | `boolean` | Values in the monospaced font (data, not labels). |
+| `numbered` | `boolean` | A row number before each row. |
+| `headless` | `boolean` | No header, where the values say what they are. |
+| `onSort` | `(value: GridSort \| null) => void` | A header was clicked: the next sort (ascending, then descending, then none). The header sorts only with it. |
+| `onRowClick` | `(value: string) => void` | A row was clicked: its key. |
+| `onRowDoubleClick` | `(value: string) => void` | A row was double-clicked: its key. |
+| `onToggle` | `(value: string) => void` | A row's disclosure was clicked: its key. |
+
+### Records
+
+What the charts' and DataGrid's props hold: plain values, a field each.
+
+#### `ChartSeries`
+
+One series of a chart: a key, its name in the legend and the readout, and a value per bucket (null: no data). Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `key` (required) | `string` | Unique among the series. |
+| `label` (required) | `string` | Its name in the legend and the readout. |
+| `values` (required) | `(number \| null)[]` | One per bucket, in order; null for no data. |
+
+#### `RankingRow`
+
+A row of a Ranking: what it is, its value, and a note after the value. Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `key` (required) | `string` | Unique among the rows; what `onSelect` says. |
+| `label` (required) | `string \| number` | What it is. |
+| `value` (required) | `number` | Its value, in the Ranking's unit. |
+| `note` | `string \| number` | A second number after the value ("9% failed"). |
+
+#### `ProportionPart`
+
+A part of a Proportion's whole. Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `key` (required) | `string` | Unique among the parts. |
+| `label` (required) | `string` | Its name. |
+| `value` (required) | `number` | Its share, in the Proportion's unit. |
+
+#### `RibbonItem`
+
+A bar of a Ribbon: from `start` to `end` (ms), in a hue. Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `id` (required) | `string` | Unique among the items; what `onPick` says. |
+| `start` (required) | `number` | When it starts, in ms since the epoch. |
+| `end` (required) | `number` | When it ends. |
+| `hue` (required) | `number` | Its colour as a hue (0–360): a kind's or a project's. |
+| `label` (required) | `string` | Its tooltip and accessible name. |
+
+#### `RibbonTick`
+
+A tick under a Ribbon: a time and its label. Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `at` (required) | `number` | When, in ms since the epoch. |
+| `label` (required) | `string` | Its label ("14:00"). |
+
+#### `GridColumn`
+
+A column of a DataGrid. Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `key` (required) | `string` | Unique among the columns; what a sort names. |
+| `label` (required) | `string` | Its header (empty for an icon column). |
+| `note` | `string` | A second line under the header (a unit, a type). |
+| `align` | `"start" \| "end"` | "end" for numbers. |
+| `grow` | `boolean` | Takes the width left over (the name column). |
+| `hide` | `"narrow" \| "regular"` | Dropped while the table is narrower than this size class: the columns that matter least. |
+| `icon` | `boolean` | Its cells are SF Symbol names, drawn as icons (with the row's `light`): as narrow as an icon. |
+| `dim` | `boolean` | Its values in the dim tone (a detail beside the name). |
+
+#### `GridRow`
+
+A row of a DataGrid: its key and a value per column. Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `key` (required) | `string` | Unique among the rows; what `selected` and the row events say. |
+| `cells` (required) | `(string \| number \| null)[]` | A value per column, in the columns' order: text, a number, or null for nothing. |
+| `light` | `Light` | A status light in place of the icon column's icon (a busy terminal). |
+| `tip` | `string` | A tooltip on the row's name. |
+| `heading` | `boolean` | A section's heading: its cells are the section's name and totals; not selectable. |
+| `depth` | `number` | Nested this deep under the row before it (1: a child). |
+| `expanded` | `boolean` | Has rows nested under it: a disclosure, open or not (`onToggle`). |
+
+#### `GridSort`
+
+A DataGrid's sort: a column's key, and whether it is descending. Since 1.2.
+
+| Field | Type | What |
+|---|---|---|
+| `key` (required) | `string` | The column's key. |
+| `desc` (required) | `boolean` | Descending. |
 
 <!-- reference:end -->

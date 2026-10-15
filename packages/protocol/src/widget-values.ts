@@ -5,7 +5,7 @@
 // in the widget and a HandlerRef on the wire are judged the same way. And what a remote
 // device gets of a tree: the same tree without handlers.
 
-import type { ApiPropType } from "./widget-elements.ts";
+import { isShape, type ApiFieldSpec, type ApiPropType } from "./widget-spec.ts";
 import type { HandlerRef, PatchOp, TreeNode, WidgetPatch, WidgetTree, WireValue } from "./widget-tree.ts";
 
 /** What a View's state can be. */
@@ -88,9 +88,48 @@ function options(v: unknown): ValueCheck {
   return ok(v as WireValue);
 }
 
+/** One record of named fields (1.2): each field present checked by its type, the required ones there; fields the spec doesn't name are left out. */
+function record(v: unknown, fields: Readonly<Record<string, ApiFieldSpec>>, what: string): { ok: true; value: { [key: string]: WireValue } } | { ok: false; why: string } {
+  if (!isObj(v)) return { ok: false, why: `${what} isn't an object` };
+  const out: { [key: string]: WireValue } = {};
+  for (const [k, f] of Object.entries(fields)) {
+    const x = v[k];
+    if (x === undefined || x === null) {
+      if (f.required) return { ok: false, why: `${what} has no ${k}` };
+      if (x === null && f.nullable) out[k] = null;
+      continue;
+    }
+    const c = checkValue(f.type, x);
+    if (!c.ok) return { ok: false, why: `${what}'s ${k}: ${c.why}` };
+    out[k] = c.value;
+  }
+  return { ok: true, value: out };
+}
+
+function cells(v: unknown): ValueCheck {
+  if (!Array.isArray(v)) return no("not a list of values");
+  for (const x of v) {
+    if (x === null) continue;
+    const c = words(x, true);
+    if (!c.ok) return c;
+  }
+  return ok(v as WireValue);
+}
+
 /** A prop's value against its ApiPropType (null aside: any prop may be null, which unsets it). */
 export function checkValue(type: ApiPropType, v: unknown, isRun: IsRun = isHandler): ValueCheck {
   if (Array.isArray(type)) return (type as readonly unknown[]).includes(v) ? ok(v as WireValue) : no(`${JSON.stringify(v)} isn't one of ${type.join(", ")}`);
+  if (isShape(type)) {
+    if ("record" in type) return record(v, type.record, `a ${type.name}`);
+    if (!Array.isArray(v)) return no(`not a list of ${type.name}`);
+    const out: WireValue[] = [];
+    for (const x of v) {
+      const r = record(x, type.list, `a ${type.name}`);
+      if (!r.ok) return r;
+      out.push(r.value);
+    }
+    return ok(out);
+  }
   switch (type) {
     case "string":
     case "option":
@@ -111,6 +150,12 @@ export function checkValue(type: ApiPropType, v: unknown, isRun: IsRun = isHandl
       return viewState(v, isRun);
     case "options":
       return options(v);
+    case "strings":
+      return Array.isArray(v) && v.every((x) => words(x, false).ok) ? ok(v as WireValue) : no("not a list of plain strings");
+    case "matrix":
+      return Array.isArray(v) && v.every((r) => Array.isArray(r) && r.every((x) => typeof x === "number" && Number.isFinite(x))) ? ok(v as WireValue) : no("not rows of numbers");
+    case "cells":
+      return cells(v);
     default:
       return no("an unknown type");
   }

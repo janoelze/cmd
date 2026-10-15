@@ -169,6 +169,19 @@ export class RenderedTree {
     return this.fire(n, "change", value);
   }
 
+  /**
+   * Picks one of an element's things by the value its event carries: a DataGrid's row by key
+   * (`onRowClick`, or `event` to name another: "onRowDoubleClick", "onToggle", "onSort"), a
+   * chart's bucket by index, a Ribbon's bar by id, a TimeBar's time. @since 1.2
+   */
+  async pick(n: TreeElement, value: WireValue, event?: string): Promise<void> {
+    if (!event) return this.fire(n, "pick", value);
+    const ref = n.props[event];
+    if (specOf(n.type)?.events[event]?.gesture !== "pick" || !isHandler(ref)) throw new Error(`${n.type} "${titleOf(n)}" has no ${event}`);
+    this.host.deliver({ kind: "interaction", handler: ref.$handler, event, value });
+    await this.settle();
+  }
+
   /** Submits a field. */
   submit(n: TreeElement, value: WireValue): Promise<void> {
     return this.fire(n, "submit", value);

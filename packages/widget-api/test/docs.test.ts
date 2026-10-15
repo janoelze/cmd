@@ -1,4 +1,4 @@
-// src/elements.ts is what `pnpm widget-api:gen` (scripts/widget-api-gen.ts) makes of the
+// src/elements.gen.ts is what `pnpm widget-api:gen` (scripts/widget-api-gen.ts) makes of the
 // protocol's element spec now, and the API reference in packages/widget-api/README.md and on
 // the website's widgets page is what `pnpm widget-api:docs` (scripts/widget-api-docs.ts)
 // makes of the d.ts now: a spec, a JSDoc, a prop or a verb changed without running them fails here.
@@ -6,11 +6,15 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import { API_ELEMENTS, API_VERBS } from "@cmd/protocol/widget-tree";
-import { ELEMENTS_FILE, generate } from "../../../scripts/widget-api-gen.ts";
+import { ELEMENTS_FILE, SINCE_FILE, generate, generateSince } from "../../../scripts/widget-api-gen.ts";
 import { README, WEBSITE, reference, websitePage, withReference } from "../../../scripts/widget-api-docs.ts";
 
-it("src/elements.ts is generated from the spec now (pnpm widget-api:gen)", () => {
-  expect(fs.readFileSync(ELEMENTS_FILE, "utf8") === generate(), "packages/widget-api/src/elements.ts is stale: run pnpm widget-api:gen").toBe(true);
+it("src/elements.gen.ts is generated from the spec now (pnpm widget-api:gen)", () => {
+  expect(fs.readFileSync(ELEMENTS_FILE, "utf8") === generate(), "packages/widget-api/src/elements.gen.ts is stale: run pnpm widget-api:gen").toBe(true);
+});
+
+it("src/elements-since.gen.ts is generated from the spec now (pnpm widget-api:gen)", () => {
+  expect(fs.readFileSync(SINCE_FILE, "utf8") === generateSince(), "packages/widget-api/src/elements-since.gen.ts is stale: run pnpm widget-api:gen").toBe(true);
 });
 
 describe("the API reference", () => {

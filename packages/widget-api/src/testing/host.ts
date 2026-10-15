@@ -7,7 +7,7 @@
 // protocol's API row (widget-verbs.ts). It runs in Node under a test runner, never in the
 // widget process, so it may take the protocol's values.
 
-import { API, API_TOPIC, API_TOPICS } from "@cmd/protocol/widget-tree";
+import { API, API_ELEMENT_NAMES, API_TOPIC, API_TOPICS } from "@cmd/protocol/widget-tree";
 import type {
   ApiAction,
   ApiAgent,
@@ -150,7 +150,7 @@ export function createHost(data: HostData = {}): FakeHost {
 
   const ws = (): ApiWorkspace => fixtureWorkspace(d.workspace);
   let started = 0;
-  const env = (): WidgetEnv => ({ version: "0.32.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: Object.keys(verbs) as ApiVerb[], theme: "dark", size: "regular", placement: "board", ...d.env });
+  const env = (): WidgetEnv => ({ version: "0.32.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: Object.keys(verbs) as ApiVerb[], elements: [...API_ELEMENT_NAMES], theme: "dark", size: "regular", placement: "board", ...d.env });
 
   const deliver = (msg: WidgetIn) => {
     inFlight++;
