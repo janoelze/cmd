@@ -162,7 +162,7 @@ cmd itself.
 
 #### `cmd.media`
 
-What the Mac is playing (any app that tells macOS: Music, Spotify, a browser tab).
+What the Mac is playing (any app that tells macOS: Music, Spotify, a browser tab). Live since 1.3: the hook `useMedia()`.
 
 | Verb | Since | Permission | What |
 |---|---|---|---|
@@ -305,6 +305,7 @@ The reads as subscriptions: each gets the current value at once and every change
 | `useEvents(query?: ApiEventQuery): LiveEvent[]` | 1.0 | Events from the log matching `query`, newest last: the query's result first, then each new one as it happens; at most `query.limit` (default 200) are kept. An event recorded again (a command as it ends: the same `key`, since 1.1) replaces the one before, and since 1.3 carries `again`, how often that happened while subscribed (LiveEvent). Needs `events: [<class>]` for each class of events it reads. `{ scope: "all" }` reads every workspace's, with `workspace: ["all"]` (live since cmd of 2026-10-15; an older cmd refuses it, and `cmd.events.query` reads them). |
 | `useGit(): ApiGitStatus \| null` | 1.0 | The workspace's git status (branch, ahead/behind, changed files), live; null outside a repository. |
 | `useJournal(query?: ApiJournalQuery): ApiJournalDay[]` | 1.3 | The journal's written days, live: what `cmd.journal.days(query)` answers, again when the Journal writes a day of it. Empty until they arrive. `{ scope: "all" }` reads the journal of everything on this Mac (with `workspace: ["all"]`). Needs `workspace: ["read"]` and `events: ["agents"]`. |
+| `useMedia(): ApiNowPlaying \| null` | 1.3 | What the Mac is playing (the track, its app, position and cover), live: a change of track, a pause or a skip from anywhere shows at once. null while nothing plays (and until the first value). The position is `elapsed` at `at`, moving on at `rate` while `playing`: draw it with `useNow`. Needs `media: ["read"]`. |
 | `useNow(every?: number): number` | 1.0 | The time now, re-rendering every `every` ms (default 1000): for ages that move. |
 | `useSize(): ApiBox \| null` | 1.3 | The window content's size in px, live: each side rounded down to 8, at most every 200 ms while the window resizes; null until cmd has measured it (and on a cmd before 1.3). For logic that needs numbers: how many rows fit, how many buckets a chart gets. A layout per size is an `Adapt` (cmd switches it without waking the widget); dropping one thing from a narrow window is `Hide below`. |
 | `useStat(query: ApiStatQuery): ApiStatResult \| null` | 1.3 | A stat, live: what `cmd.stats.query(query)` answers, counted again soon after cmd records something for it (and each minute for time spent, which grows without events). null until it arrives. Needs `events: [<class>]` for the class the stat is counted from. |
@@ -324,7 +325,7 @@ A frame widget's page (`"surface": "frame"`, its `view.html`) has a `cmd` of its
 
 | Member | What |
 |---|---|
-| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions \| stats \| journal \| workspaces \| storage \| terminalUsage \| appUsage>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
+| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions \| stats \| journal \| workspaces \| media \| storage \| terminalUsage \| appUsage>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
 | `cmd.storage.window.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
 | `cmd.storage.workspace.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
 | `cmd.storage.package.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
@@ -1075,6 +1076,21 @@ A value to read across the room, in a ring that shows how much is left (a timer,
 | `caption` | `string \| number` | A quiet line under the value ("ends 14:32"). |
 | `editable` | `boolean` | A click on the value types a new one, sent to `onSubmit`. |
 | `onSubmit` | `(value: string) => void` | Return pressed in the typed value, with the text as typed ("10", "1:30", "90s": parse it). Escape or leaving sends nothing. |
+
+#### `Picture`
+
+An image: a cover, a thumbnail, a logo. From a data: URL, or an https URL of a host in the package's `net` permission, which cmd fetches (a host outside it shows the placeholder, and the widget's log names what to add); the page never loads one. Since 1.3.
+
+| Prop | Type | What |
+|---|---|---|
+| `src` | `string \| null` | data:image/png\|jpeg\|webp\|gif;base64,… (at most 512 KB), or https://<a granted host>/… (cmd fetches it: at most 2 MB and 4096 px a side, kept an hour); null shows the placeholder. Never SVG. |
+| `alt` (required) | `string` | What it shows, in words (its accessible name; what stands in on a paired device that draws none). |
+| `fit` | `"cover" \| "contain"` | Fills its box, cropped (default), or fits inside it. |
+| `ratio` | `1 \| 1.333 \| 1.5 \| 1.778` | Width over height (default 1: square). |
+| `size` | `24 \| 32 \| 44 \| 64 \| 96 \| 128 \| "fill"` | Its width in px (default 64), or "fill": as large as the room left allows (a cover above a player). |
+| `radius` | `"sm" \| "md" \| "none"` | Its corners (default md). |
+| `icon` | `string` | An SF Symbol name. On the placeholder box (no src, loading, or failed), in the chart track colour. |
+| `onClick` | `() => void` | Pressed. |
 
 ### Records
 
