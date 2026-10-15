@@ -1,8 +1,9 @@
 // Recent Commands against the fake host (@cmd/widget-api/testing): the native Commands view's
 // job. Running first, then finished, newest first; a failure's exit status and the title bar's
 // count; a command recorded again as it ends replaces its running row; a click goes to its
-// terminal; Run Again opens a terminal with the command typed, not run, and says why when it
-// can't; Failed Only and the scope from the title menu, kept per window; the empty states.
+// terminal; Run Again (on hover and in the menu) opens a terminal with the command typed, not
+// run, and says why when it can't; Copy Command and New Terminal Here; the list runs to the
+// window's edges, the age a ListValue, as natively; Failed Only and the scope from the title menu, kept per window; the empty states.
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
@@ -54,6 +55,27 @@ describe("Recent Commands", () => {
     // Outside the workspace's folder there is nowhere for it to open.
     const menu = tree.rows()[1]!.props.menu as { label: string; disabled?: boolean }[];
     expect(menu.find((m) => m.label === "Run Again")?.disabled).toBe(true);
+    expect(tree.find("IconButton", (n) => n.props.label === "Run Again" && n.props.disabled === true)).toBeTruthy();
+  });
+
+  it("runs again from the row's hover button, copies the command and opens a terminal in its folder from its menu", async () => {
+    const host = createHost({ terminals: [pane()], events: [command({ command: "pnpm test", exitCode: 1, cwd: "/Users/me/src/app/web" })] });
+    const tree = await render(<RecentCommands />, host);
+    // Edge to edge, as the native Commands view: a Panel, no inset View.
+    expect(tree.findAll("Panel")).toHaveLength(1);
+    expect(tree.findAll("View")).toHaveLength(0);
+    expect(tree.findAll("ListValue")).toHaveLength(1);
+    expect(tree.findAll("Chip")).toHaveLength(0);
+    await tree.press(tree.find("IconButton", (n) => n.props.label === "Run Again"));
+    await tree.choose(tree.rows()[0]!, "Copy Command");
+    await tree.choose(tree.rows()[0]!, "New Terminal Here");
+    expect(host.calls).toEqual([
+      ["terminals.open", { cwd: "/Users/me/src/app/web", command: "pnpm test" }],
+      ["clipboard.write", "pnpm test"],
+      ["terminals.open", { cwd: "/Users/me/src/app/web" }],
+    ]);
+    // A press on the row's button isn't a press on the row.
+    expect(host.calls.some((c) => c[0] === "windows.select")).toBe(false);
   });
 
   it("says why when Run Again is refused, and nothing when the person said no", async () => {

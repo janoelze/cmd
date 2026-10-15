@@ -1,6 +1,6 @@
 {
   "name": "commands",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Every command your terminals ran: how long it took and whether it worked.",
   "private": true,
   "license": "AGPL-3.0-only",

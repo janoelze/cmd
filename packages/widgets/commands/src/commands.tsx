@@ -1,11 +1,12 @@
 // Recent Commands, a built-in widget package (docs/56, "Built-ins and dogfooding"; the native
 // Commands view's job): every command this workspace's terminals ran (or every workspace's),
 // from the log's command events. Running ones first, then the rest, newest first; a failed one
-// says its exit status. A click goes to its terminal; Run Again opens a terminal in its folder
-// with the command typed, not run (cmd.terminals.open, API 1.1); refused, a notification says
-// why. The title menu switches the scope and Failed Only, kept per window.
+// says its exit status. A click goes to its terminal; Run Again (on hover, and in the row's
+// menu) opens a terminal in its folder with the command typed, not run (cmd.terminals.open,
+// API 1.1); refused, a notification says why. The menu also copies the command and opens a
+// terminal in its folder. The title menu switches the scope and Failed Only, kept per window.
 
-import { ApiCallError, Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, useEvents, useTerminals, useWorkspace, useStoredState, useNow, fmt, cmd, type Event } from "@cmd/widget-api";
+import { ApiCallError, Window, Panel, PanelBody, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, ListRowActions, ListValue, IconButton, EmptyState, Chip, useEvents, useTerminals, useWorkspace, useStoredState, useNow, fmt, cmd, type Event } from "@cmd/widget-api";
 
 type Scope = "workspace" | "all";
 
@@ -42,7 +43,7 @@ export default function RecentCommands() {
   const ws = useWorkspace();
   const anyRunning = all.some((r) => r.endedAt === null);
   const now = useNow(anyRunning ? 1000 : 15_000);
-  const open = new Set(terminals.map((t) => t.id));
+  const live = new Set(terminals.map((t) => t.id));
   const runs = newestFirst(all).filter((r) => !failedOnly || r.endedAt === null || failed(r));
   const running = runs.filter((r) => r.endedAt === null);
   const done = runs.filter((r) => r.endedAt !== null);
@@ -51,12 +52,13 @@ export default function RecentCommands() {
 
   /** In a folder of this workspace's (where a terminal may open): the workspace's own commands. */
   const here = (r: Run) => !!ws?.root && r.workspaceId === ws.id && (r.cwd === ws.root || r.cwd.startsWith(ws.root + "/"));
-  const go = (r: Run) => r.terminalId && open.has(r.terminalId) && void cmd.windows.select(r.terminalId).catch(() => {});
+  const go = (r: Run) => r.terminalId && live.has(r.terminalId) && void cmd.windows.select(r.terminalId).catch(() => {});
   // A refusal says why (a folder that stays private, a command cmd won't type); the person's own no says nothing.
-  const again = (r: Run) =>
-    void cmd.terminals.open({ cwd: r.cwd, command: r.command ?? "" }).catch((e: unknown) => {
-      if (!(e instanceof ApiCallError && e.code === "denied")) void cmd.notify.send({ key: "run-again", title: "Run Again · couldn't open", body: e instanceof Error ? e.message : String(e) }).catch(() => {});
+  const open = (r: Run, command: string | null, title: string) =>
+    void cmd.terminals.open(command ? { cwd: r.cwd, command } : { cwd: r.cwd }).catch((e: unknown) => {
+      if (!(e instanceof ApiCallError && e.code === "denied")) void cmd.notify.send({ key: "run-again", title: `${title} · couldn't open`, body: e instanceof Error ? e.message : String(e) }).catch(() => {});
     });
+  const again = (r: Run) => open(r, r.command ?? "", "Run Again");
 
   const row = (r: Run) => {
     const bad = failed(r);
@@ -72,23 +74,26 @@ export default function RecentCommands() {
         tip={r.cwd}
         onClick={() => go(r)}
         menu={[
-          { label: "Show Terminal", disabled: !(r.terminalId && open.has(r.terminalId)), run: () => go(r) },
+          { label: "Show Terminal", disabled: !(r.terminalId && live.has(r.terminalId)), run: () => go(r) },
           { label: "Run Again", disabled: !r.command || !here(r), run: () => again(r) },
+          { separator: true },
+          { label: "Copy Command", disabled: !r.command, run: () => void cmd.clipboard.write(r.command ?? "").catch(() => {}) },
+          { label: "New Terminal Here", disabled: !here(r), run: () => open(r, null, "New Terminal Here") },
         ]}
       >
         <ListRowIcon icon="terminal" light={r.endedAt === null ? "working" : bad ? "danger" : undefined} />
         <ListRowContent title={r.command ?? "Command"} mono detail={state} tone={bad ? "danger" : undefined} />
         <ListRowEnd>
           {r.branch && <Chip>{r.branch}</Chip>}
-          {r.endedAt !== null && <Chip>{fmt.ago(r.endedAt, now)}</Chip>}
+          {r.endedAt !== null && <ListValue>{fmt.ago(r.endedAt, now)}</ListValue>}
         </ListRowEnd>
+        <ListRowActions>
+          <IconButton size="sm" icon="arrow.clockwise" label="Run Again" disabled={!r.command || !here(r)} onClick={() => again(r)} />
+        </ListRowActions>
       </ListRow>
     );
   };
 
-  const empty = failedOnly
-    ? { icon: "terminal", title: "Nothing failed", text: "Commands that fail show up here." }
-    : { icon: "terminal", title: "No commands yet", text: scope === "all" ? "Commands you run in terminals show up here." : "Commands you run in this workspace's terminals show up here." };
 
   return (
     <Window
@@ -100,8 +105,8 @@ export default function RecentCommands() {
         { label: "Failed Only", checked: failedOnly, run: () => setFailedOnly(!failedOnly) },
       ]}
     >
-      <View state={runs.length ? null : empty}>
-        <List>
+      <Panel>
+        <PanelBody>
           {running.length > 0 && (
             <ListSection title="Running" count={running.length}>
               {running.map(row)}
@@ -112,8 +117,16 @@ export default function RecentCommands() {
               {done.map(row)}
             </ListSection>
           )}
-        </List>
-      </View>
+          {runs.length === 0 && (
+            <EmptyState
+              compact
+              icon="terminal"
+              title={failedOnly ? "Nothing failed" : "No commands yet"}
+              text={failedOnly ? "Commands that fail show up here." : scope === "all" ? "Commands you run in terminals show up here." : "Commands you run in this workspace's terminals show up here."}
+            />
+          )}
+        </PanelBody>
+      </Panel>
     </Window>
   );
 }
