@@ -1463,6 +1463,9 @@ await scenario("magic", async () => {
     await menu("file.close");
     await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).catch(expired(".widget-library to close"));
     check(entry?.magic?.request === "git changes" && card.includes("Made with Magic"), `the Library lists the package under Your Widgets, made with Magic (${JSON.stringify(card)})`);
+    // cmd's verify drew the trees through the app's previewer (main/preview.ts): the first version keeps the first draw.
+    const first = (await call("magic.package", { windowId: m.id }))?.revisions?.[0];
+    check(!!first?.shot && fs.existsSync(first.shot) && fs.statSync(first.shot).size > 1000, `the app's previewer drew the build's trees: its first version has a screenshot (${first?.shot ? path.basename(first.shot) : "none"})`);
     // ⌘E: the edit view lists the package's versions; a hand edit becomes one, and Restore brings the first back.
     const pkgDir = path.join(home, "widget-packages-home", "git-changes");
     const main = path.join(pkgDir, "src", "changes.tsx");
