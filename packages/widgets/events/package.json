@@ -1,0 +1,35 @@
+{
+  "name": "events",
+  "version": "1.0.0",
+  "description": "Everything cmd records, live: commands, agents, git, notifications.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/events.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "events",
+        "title": "Event Log",
+        "icon": "waveform.path.ecg",
+        "description": "Everything cmd records in this workspace, live: commands, agents, git, notifications. Filter it, hide kinds, open one to see it whole.",
+        "main": "src/events.tsx",
+        "size": "m"
+      }
+    ],
+    "permissions": {
+      "workspace": ["read", "all"],
+      "events": ["output", "agents", "tools", "operator", "transcripts", "ai", "browsing", "system"]
+    }
+  }
+}
