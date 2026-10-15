@@ -1615,7 +1615,7 @@ await scenario("widget-agents", async () => {
   check(shown.length === 4 && /Tours/.test(shown[0]) && /Perf/.test(shown[1]) && /Explore/.test(shown[2]) && /Docs/.test(shown[3]), `the Agents widget lists waiting agents first, then working (a subagent under its host), then the rest (${shown.map((r) => r.slice(0, 12)).join(" | ")})`);
   const status = await until(() => tile.locator(".tile-title").textContent(), (t) => t.includes("1 waiting for you · 2 working · 1 done"));
   check(status.includes("1 waiting for you · 2 working · 1 done"), `its title bar says who waits and who works (${status})`);
-  check((await tile.locator(".ui-list-section").first().textContent()).includes("Waiting for you"), "its first section is Waiting for you");
+  check((await tile.locator(".ui-list-section").count()) === 0, "it is one ranked list, as the native Agent Activity: no section headings");
   await shot(win, "widget-agents.png");
 
   // A click on a row selects that agent's terminal.
@@ -3036,7 +3036,8 @@ await scenario("widget-actions", async () => {
 // Usage Stats (packages/widgets/stats): the native Stats window's job as a package. Added from the
 // Widget Library in a workspace of its own, it counts that workspace's commands (stats.query, API
 // 1.2): a command run in its terminal raises the Commands number live, a number opens its detail
-// and Back returns; All Workspaces from the title menu adds your active time.
+// and Back returns; your active time and cmd's own pane show in one workspace too; All
+// Workspaces from the title menu adds the projects.
 await scenario("widget-stats", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
@@ -3062,7 +3063,8 @@ await scenario("widget-stats", async () => {
     await call("pane.write", { paneId: termId, data: "echo e2e-stats-ok\r" });
     const after = await until(count, (n) => n >= before + 2, 20_000).catch(() => before);
     await shot(win, "widget-stats.png");
-    check(labels.includes("Agent time") && !labels.includes("Active time") && after >= before + 2, `it counts this workspace's commands, live (${labels.join(", ")}; Commands ${before} → ${after})`);
+    const panes = await tile.locator(".ui-pane-title").allTextContents();
+    check(labels.includes("Agent time") && labels.includes("Active time") && panes.some((t) => /^cmd$/i.test(t.trim())) && after >= before + 2, `it counts this workspace's commands, live, with your active time and cmd's own pane, which have no workspace (${labels.join(", ")}; ${panes.join(", ")}; Commands ${before} → ${after})`);
     await commands.click();
     const back = tile.locator('button[aria-label="Stats"]');
     const opened = await until(() => back.isVisible(), Boolean, 10_000).catch(() => false);
@@ -3074,8 +3076,8 @@ await scenario("widget-stats", async () => {
     await choosing("All Workspaces");
     await tile.locator(".ui-window-bar-menu").click();
     await unchoosing();
-    const all = await until(() => tile.locator(".ui-stat-label").allTextContents(), (l) => l.includes("Active time"), 15_000).catch(() => []);
-    check(all.includes("Active time"), `All Workspaces adds your active time (${all.join(", ")})`);
+    const all = await until(() => tile.locator(".ui-pane-title").allTextContents(), (l) => l.some((t) => /^projects$/i.test(t.trim())), 15_000).catch(() => []);
+    check(all.some((t) => /^projects$/i.test(t.trim())), `All Workspaces adds the projects (${all.join(", ")})`);
     await call("window.close", { id });
   } finally {
     for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
@@ -3161,11 +3163,9 @@ await scenario("widget-journal", async () => {
     }
     const stored = await call("journal.days", { workspaceId: ws.id, count: 7, write: "never" });
     check(stored.some((d) => d.headline === "Ported the Journal (e2e)"), `the day is stored for the workspace (${stored.map((d) => d.headline).join(", ") || "none"})`);
-    // The widget looks again from its title menu (and every 5 minutes by itself).
+    // The widget looks again from Read Again (its empty state's, before there is a day; and every 5 minutes by itself).
     await select(id);
-    await choosing("Read Again");
-    await tile.locator(".tile-title").click({ button: "right" });
-    await unchoosing();
+    await tile.getByRole("button", { name: "Read Again" }).first().click();
     const text = await until(() => tile.textContent(), (t) => t.includes("Ported the Journal (e2e)"), 15_000).catch(() => "");
     await shot(win, "widget-journal.png");
     check(text.includes("Today") && text.includes("Ported the Journal to a widget package") && text.includes("Merged") && /Written at \d\d:\d\d/.test(text), `it draws the written day: headline, entry, outcome and when it was written (${JSON.stringify(text.slice(0, 160))})`);
@@ -3236,7 +3236,8 @@ await scenario("widget-nowplaying", async () => {
   await tileIn(id);
   const tile = win.locator(`.tile[data-pane="${id}"]`);
   // Past "Looking for what's playing": the first answer (the core waits up to 1.5 s for the Mac's).
-  const text = await until(() => tile.textContent(), (t) => t.includes("Nothing playing") || /Playing in|Paused in/.test(t), 30_000).catch(() => "");
+  const player = tile.getByRole("button", { name: "Previous" });
+  const text = await until(async () => ((await player.count()) ? "player " : "") + (await tile.textContent()), (t) => t.includes("Nothing playing") || t.startsWith("player "), 30_000).catch(() => "");
   const np = await call("nowPlaying.get");
   await shot(win, "widget-nowplaying.png");
   check(np === null ? text.includes("Nothing playing") : text.includes(np.title), `it shows what the Mac plays, as cmd reads it (${np === null ? "nothing" : JSON.stringify(np.title)}; ${JSON.stringify(text.slice(0, 80))})`);
