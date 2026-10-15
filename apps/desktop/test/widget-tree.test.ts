@@ -165,11 +165,25 @@ describe("the allow-list", () => {
   });
 
   it("drops a URL that isn't https (or http://localhost)", () => {
-    const elements: Record<string, ApiElementSpec> = { ...API_ELEMENTS, Picture: { props: { src: { type: "string", doc: "" }, alt: { type: "string", doc: "" } }, events: {}, children: "none" } };
+    const elements: Record<string, ApiElementSpec> = { ...API_ELEMENTS, Img: { props: { src: { type: "string", doc: "" }, alt: { type: "string", doc: "" } }, events: {}, children: "none" } };
     const { s, warnings } = store({ elements });
-    s.apply(tree([el(1, "Picture" as never, { src: "http://example.com/a.png" }), el(2, "Picture" as never, { src: "javascript:alert(1)" }), el(3, "Picture" as never, { src: "https://example.com/a.png" }), el(4, "Picture" as never, { src: "http://localhost:3000/a.png" })]));
+    s.apply(tree([el(1, "Img" as never, { src: "http://example.com/a.png" }), el(2, "Img" as never, { src: "javascript:alert(1)" }), el(3, "Img" as never, { src: "https://example.com/a.png" }), el(4, "Img" as never, { src: "http://localhost:3000/a.png" })]));
     expect(s.snapshot.nodes.map((n) => (n as TreeElement).props.src)).toEqual([undefined, undefined, "https://example.com/a.png", "http://localhost:3000/a.png"]);
-    expect(warnings).toEqual(['widget: <Picture> prop "src" dropped: a URL that isn\'t https', 'widget: <Picture> prop "src" dropped: a URL that isn\'t https']);
+    expect(warnings).toEqual(['widget: <Img> prop "src" dropped: a URL that isn\'t https', 'widget: <Img> prop "src" dropped: a URL that isn\'t https']);
+  });
+
+  it("takes a Picture's src only as a data: PNG, JPEG, WebP or GIF: never a URL, never SVG", () => {
+    const { s, warnings } = store();
+    const png = "data:image/png;base64,iVBORw0KGgo=";
+    const srcs = [png, "https://img.example.com/cover.png", "http://localhost:3000/a.png", "data:image/svg+xml;base64,PHN2Zz4=", "data:image/svg+xml,<svg onload=alert(1)>", "data:text/html;base64,PGI+", "javascript:alert(1)", null];
+    s.apply(tree(srcs.map((src, i) => el(i + 1, "Picture", { src, alt: "Cover" }))));
+    expect(s.snapshot.nodes.map((n) => (n as TreeElement).props.src)).toEqual([png, undefined, undefined, undefined, undefined, undefined, undefined, null]);
+    expect(warnings).toHaveLength(6);
+    expect(warnings[0]).toBe('widget: <Picture> prop "src" dropped: not a data: PNG, JPEG, WebP or GIF (cmd fetches an https picture itself)');
+    // A patch can't slip one in either: the picture drawn stays.
+    s.apply({ kind: "patch", rev: 2, ops: [{ op: "props", id: 1, set: { src: "https://img.example.com/x.png" }, unset: [] }] });
+    expect((s.snapshot.nodes[0] as TreeElement).props.src).toBe(png);
+    expect(warnings).toHaveLength(7);
   });
 
   it("drops markup in words: texts, string props, menu labels", () => {

@@ -4,7 +4,8 @@
 // TitleBand, and Hide (what gives way as a window narrows).
 import { useState, type ReactNode } from "react";
 import { Button } from "./button.tsx";
-import { Dial, Document, Hide, Page, Picture, Stack, Stage, Text, Thumb, TitleBand, View, ViewState, Viewport, type ViewStateSpec } from "./frame.tsx";
+import { Dial, Document, Hide, Page, Stack, Stage, Text, Thumb, TitleBand, View, ViewState, Viewport, type ViewStateSpec } from "./frame.tsx";
+import { Picture } from "./picture.tsx";
 import { FormRow, FormSection } from "./layout.tsx";
 import { Switch } from "./choice.tsx";
 import { Badge } from "./status.tsx";

@@ -23,34 +23,11 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+/* Where the cover goes: the kit's Picture (size "fill") draws it, or its placeholder, as large as this allows. */
 .np-art {
   flex: 1;
   min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.np-art img {
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: var(--radius);
-}
-/* No cover: its box, in the TimeBar's track colour, with a note. */
-.np-nocover {
-  height: 100%;
-  max-width: 100%;
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius);
-  background: var(--chart-seq-0);
-  color: var(--text-dim);
-}
-.np-nocover-sm {
-  display: none;
 }
 .np-meta {
   display: flex;
@@ -98,10 +75,6 @@
     width: min(var(--np-column), calc(100cqh - 200px));
     aspect-ratio: 1;
   }
-  .np-art img {
-    width: 100%;
-    height: 100%;
-  }
   .np-meta,
   .np-progress {
     width: var(--np-column);
@@ -133,17 +106,9 @@
     width: 44px;
     height: 44px;
   }
-  .np-art img,
-  .np-nocover {
-    width: 100%;
-    height: 100%;
-    border-radius: var(--radius-sm);
-  }
-  .np-nocover-lg {
-    display: none;
-  }
-  .np-nocover-sm {
-    display: revert;
+  /* A thumbnail's corners (the Picture's radius="sm", chosen here by the room). */
+  .np-art .ui-pic {
+    --pic-radius: var(--radius-sm);
   }
   .np-meta {
     flex: 1;

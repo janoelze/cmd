@@ -578,3 +578,17 @@ export const Adapt = () => (
 
 /** A Case outside an Adapt is just its children; inside one, see Adapt. */
 export const Case = () => <W nodes={inView(e("Case", { minWidth: 400 }, e("Text", {}, "A Case's layout.")))} />;
+/** Covers as a widget's data: URLs come: PNGs (the core never passes on SVG), small gradients the box scales up. */
+const COVERS = [
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAnUlEQVR42q3Muw3CUBREwWXlDGHMg1qokioJ/cMJEgE6lwTRACtNPLv79SZa0UQT5xf7Cc1oQhM1ohGNVZPYOuqCzl/VUEONOqETjixidmQRsyNLMTuyqBZHFrE4sojFkaVYHVnE6sgiVkeWA29HlgE5sgzIkWVAjixHypHliBxZ+l/059JTjiw9cmTpnnJkqYccWdjKkYVNjixs+gAWN/TI0GD16QAAAABJRU5ErkJggg==",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAjElEQVR42q3QsRHDUAwCUCztlJkzV8awZEjxbcepxZ0KqneC7fX+sMESC7+wbj+zStiJopqo887cVBHNsChohkVBMSyK/qoNFLTCoqyNDMoDmik6FjRWtoNhURJXtaGSYliUBMOiJBgWJcGwKCmGR1kfzZW8oaGSem40Uu6NZspVzaAoPIoYHgUMk8Iv3KyflGi5WzwAAAAASUVORK5CYII=",
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAkUlEQVR42q3RsRHDUAwCUMzfKTNnrqwhGVL4n+1edDoV70A6ft8PlkxhCZSXcM33csnLOiBCh0Vcc9sllFByCYwoJTCi7ERzpWRGlDYYUUpgROl9o7FSMiNKP++fKfVUmym9q42VEhhRWmBEaYERpWVGlDvRVHluNFRaZkRpgRGlBUaU0xuaKi0zoryrjZRT+AMA21vwbeExDAAAAABJRU5ErkJggg==",
+];
+/** Pictures: a cover filling the room above a player, thumbnails at rows' starts, a 16:9 one fitted, and the placeholder where there is none (still fetching, refused, or no src). */
+export const Picture = () => (
+  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start", width: 680 }}>
+    <W size="narrow" nodes={tree(e("View", { inset: true }, e("Stack", { gap: 3, grow: true }, e("Picture", { src: COVERS[0]!, alt: "Rave Rats Volume 1", size: "fill", icon: "music.note", onClick: h() }), e("Stack", { gap: 1 }, e("Text", { size: "lg", strong: true }, "Interdimensional Life"), e("Text", { tone: "dim" }, "ooxygen")), e("TimeBar", { duration: 586, time: 132, playing: false }))))} />
+    <W size="narrow" nodes={tree(e("View", {}, e("List", {}, ...[["Interdimensional Life", 0], ["Sun Room", 1], ["Nightcall", null]].map(([t, i]) => e("ListRow", { onClick: h() }, e("Picture", { src: i === null ? null : COVERS[i as number]!, alt: `${t} cover`, size: 32, radius: "sm", icon: "music.note" }), e("ListRowContent", { title: t as string, detail: "ooxygen" }))))))} />
+    <W size="narrow" nodes={inView(e("Inline", { gap: 3, align: "start" }, e("Picture", { src: COVERS[1]!, alt: "A thumbnail", size: 128, ratio: 1.333, fit: "contain" }), e("Picture", { src: null, alt: "No thumbnail yet", size: 128, ratio: 1.778, icon: "play.rectangle" })))} />
+  </div>
+);

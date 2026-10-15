@@ -8,7 +8,6 @@
 // an inspector beside it; Panes and Pane are a dashboard's sections. The body is
 // a size container, so these adapt to the window, not to the screen.
 
-import type * as React from "react";
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
@@ -419,7 +418,3 @@ export const Viewport = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement
   );
 });
 
-/** An image in a Viewport: a checkerboard behind its transparent parts, its pixels drawn as squares when `crisp` (zoomed far in). */
-export const Picture = forwardRef<HTMLImageElement, React.ImgHTMLAttributes<HTMLImageElement> & { crisp?: boolean }>(function Picture({ crisp, ...rest }, ref) {
-  return <img ref={ref} className="ui-picture" data-crisp={crisp || undefined} {...rest} />;
-});

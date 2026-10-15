@@ -2,7 +2,7 @@
 // V3"): Magic's prompt (packages/core/src/magic/prompt/prompt.md) and the CLAUDE.md that
 // `cmd widget new` writes (packages/cli/templates/widget/CLAUDE.md) teach composition and
 // judgement in words, and name the API's lists (the live hooks, the toolbar's items, the
-// permission keys with their values, a frame page's `cmd`, storage's scopes and quotas, layout by size) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
+// permission keys with their values, a frame page's `cmd`, storage's scopes and quotas, layout by size, what a Picture's src may be) between `<!-- gen:<name> -->` and `<!-- /gen:<name> -->`
 // markers, filled from the rows the core enforces: protocol widget-verbs.ts, widget-elements.ts,
 // widget-package.ts's keys and the core's data/policy.ts. Both strip the markers where they
 // are read (magic/package/prompt.ts, cli widget-new.ts). packages/core/test/magic-prompt.test.ts
@@ -19,6 +19,8 @@ import { DATA_CLASSES, type DataClass } from "../packages/protocol/src/events.ts
 import { POLICY, declarable } from "../packages/core/src/data/policy.ts";
 import { apiExports } from "./widget-api-docs.ts";
 import { STORAGE_LIMITS } from "../packages/core/src/widgets/limits.ts";
+import { PICTURE_DATA_MAX, PICTURE_TREE_MAX, PICTURE_TYPES } from "../packages/protocol/src/widget-elements-1.3-picture.ts";
+import { PICTURE_LIMITS } from "../packages/core/src/widgets/api/picture.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 /** The files with blocks. */
@@ -162,9 +164,17 @@ function fmt(): string {
   return `${list(say)}; ${q("fmt.dur(seconds, { coarse: true })")} in the app's words ("7 min")`;
 }
 
+/** Picture (1.3): its props, what its src may be and the limits the core checks (protocol widget-elements-1.3-picture.ts, core api/picture.ts). */
+function pictures(): string {
+  const spec = API_ELEMENTS.Picture;
+  const size = (n: number) => (n >= 1024 * 1024 ? `${n / 1024 / 1024} MB` : `${n / 1024} KB`);
+  const sizes = spec.props.size.type.filter((x) => typeof x === "number");
+  return `${q(`Picture ${Object.keys(spec.props).join(" ")} ${Object.keys(spec.events).join(" ")}`)}: ${q("src")} is a ${q(`data:image/${PICTURE_TYPES.join("|")};base64,…`)} URL (at most ${size(PICTURE_DATA_MAX)}) or an ${q("https://")} address of a host in ${q("net")}, which cmd fetches (at most ${size(PICTURE_LIMITS.fetch)} and ${PICTURE_LIMITS.side} px a side, kept ${PICTURE_LIMITS.keepMs / 3_600_000} hour, counted with ${q("cmd.net.fetch")}); a host outside ${q("net")} or an SVG is refused (the widget's log says why) and the placeholder shows, as it does while one loads and for ${q("src={null}")} (its ${q("icon")}); ${q("size")} is ${list(sizes.map(String), "or")} px wide or ${q('"fill"')} (as large as the room left), ${q("ratio")} its width over height; at most ${size(PICTURE_TREE_MAX)} of pictures per window`;
+}
+
 /** Every block by name. */
 export function blocks(): Record<string, string> {
-  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame(), storage: storage(), size: size(), fmt: fmt() };
+  return { hooks: hooks(), toolbar: toolbar(), permissions: permissionLines().join("\n"), "permission-keys": permissionKeys(), frame: frame(), storage: storage(), size: size(), fmt: fmt(), pictures: pictures() };
 }
 
 /** `text` with each block filled; a block on its own lines keeps the indent of its first marker. */

@@ -281,6 +281,25 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
 .ui-picture { display: block; background: conic-gradient(var(--bg-hover) 25%, transparent 0 50%, var(--bg-hover) 0 75%, transparent 0) 0 0 / 16px 16px; }
 .ui-picture[data-crisp] { image-rendering: pixelated; }
 
+/* ── a picture in a box (Picture with a size, picture.tsx: a cover, a thumbnail, a logo) ── */
+/* --pic-w (its width) and --pic-ratio come from its props; "fill" takes its parent's room at its ratio. */
+.ui-pic { --pic-radius: var(--radius); flex: none; display: grid; place-items: center; width: var(--pic-w); min-width: 0; }
+.ui-pic[data-radius="sm"] { --pic-radius: var(--radius-sm); }
+.ui-pic[data-radius="none"] { --pic-radius: 0; }
+.ui-pic[role="button"] { outline: none; }
+.ui-pic[role="button"]:focus-visible .ui-pic-box { box-shadow: 0 0 0 2px var(--accent); border-radius: var(--pic-radius); }
+.ui-pic-box { position: relative; width: 100%; aspect-ratio: var(--pic-ratio, 1); container-type: inline-size; }
+.ui-pic[data-size="fill"] { flex: 1 1 0; align-self: stretch; width: auto; min-height: 0; container-type: size; }
+.ui-pic[data-size="fill"] > .ui-pic-box { width: min(100cqw, calc(100cqh * var(--pic-ratio, 1))); }
+.ui-pic img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; border-radius: var(--pic-radius); }
+.ui-pic[data-fit="contain"] img { object-fit: contain; }
+.ui-pic img[data-crisp] { image-rendering: pixelated; }
+/* No picture (none, loading, failed): its box in the TimeBar's track colour, with the icon that fits it. */
+.ui-pic-none { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: var(--pic-radius); background: var(--chart-seq-0); color: var(--text-dim); }
+.ui-pic-icon-md, .ui-pic-icon-sm { display: none; }
+@container (max-width: 95.5px) { .ui-pic-icon-lg { display: none; } .ui-pic-icon-md { display: revert; } }
+@container (max-width: 31.5px) { .ui-pic-icon-md { display: none; } .ui-pic-icon-sm { display: revert; } }
+
 /* ── scrubber (media.tsx) ── */
 .ui-scrub { flex: none; padding: var(--space-2) var(--inset); background: var(--bg-sidebar); box-shadow: inset 0 1px 0 var(--separator); user-select: none; }
 .ui-scrub[data-inline] { padding: 0; background: none; box-shadow: none; }

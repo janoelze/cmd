@@ -6,7 +6,7 @@
 // for the whole tree again (`resync`), the last good tree staying on screen till it comes. Everything outside API 1's allow-list (API_ELEMENTS) is dropped
 // here with a warning naming it: an unknown element, a prop the element doesn't take, a
 // handler on a prop that isn't one of its events, a URL that isn't https (a Frame's src: a
-// page of the package), markup in
+// page of the package; a Picture's: only a data: image, which the core checked or fetched), markup in
 // words, values of the wrong type (the checks are the protocol's, widget-values.ts, run
 // against the spec). Pure: no React, no core; tests feed it messages.
 
@@ -18,6 +18,7 @@ import {
   checkValue,
   isHandler,
   isPackagePage,
+  isPictureData,
   type ApiElementSpec,
   type TreeElement,
   type TreeNode,
@@ -51,7 +52,7 @@ export interface TreeStoreOptions {
   elements?: Readonly<Record<string, ApiElementSpec>>;
 }
 
-/** Props that hold a URL (none in API 1 yet; Picture's `src` when it comes). */
+/** Props that hold a URL (none in API 1 but Frame's and Picture's `src`, checked by their own rules). */
 const URL_PROPS = new Set(["src", "href", "url"]);
 const safeUrl = (s: string) => /^https:\/\/[^\s]+$/i.test(s) || /^http:\/\/localhost(:\d+)?(\/[^\s]*)?$/i.test(s);
 
@@ -85,6 +86,8 @@ export class Sanitizer {
     if (isHandler(v)) return this.drop(type, key, "a handler on a prop that isn't one of its events");
     // A Frame's page is a file of the package (main serves it from there), not a URL.
     if (type === "Frame" && key === "src") return isPackagePage(v) ? v : this.drop(type, key, "not an .html file of the package");
+    // A Picture's never loads from the network here: the core puts the data: URL of what it fetched in its place.
+    if (type === "Picture" && key === "src") return isPictureData(v) ? v : this.drop(type, key, "not a data: PNG, JPEG, WebP or GIF (cmd fetches an https picture itself)");
     if (URL_PROPS.has(key)) {
       if (typeof v !== "string" || !safeUrl(v)) return this.drop(type, key, "a URL that isn't https");
       return v;

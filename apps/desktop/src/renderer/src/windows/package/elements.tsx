@@ -7,7 +7,7 @@
 // spec (KitProps), so a kit component that stops taking an element's props, or an enum
 // value, fails tsc; an element added to API_ELEMENTS without a line in either fails too.
 // API 1.2's elements that translate are entries-1.2.tsx's (ENTRIES_1_2), each with its reason;
-// 1.3's by feature (entries-1.3-layout.tsx: Adapt; entries-1.3-display.tsx: Dial, Stat).
+// 1.3's by feature (entries-1.3-layout.tsx: Adapt; entries-1.3-display.tsx: Dial, Stat; entries-1.3-picture.tsx: Picture).
 
 import {
   Badge,
@@ -68,6 +68,7 @@ import { on, press, str, useDraft, v, type DrawContext, type Drawn } from "./dra
 import { ENTRIES_1_2, type Translated12 } from "./entries-1.2.tsx";
 import { ENTRIES_1_3_LAYOUT, type Translated13Layout } from "./entries-1.3-layout.tsx";
 import { ENTRIES_1_3_DISPLAY, type Translated13Display } from "./entries-1.3-display.tsx";
+import { ENTRIES_1_3_PICTURE, type TranslatedPicture } from "./entries-1.3-picture.tsx";
 
 export type { DrawContext, Drawn } from "./draw.ts";
 
@@ -205,7 +206,7 @@ type KitEvent<S> = S extends { gesture: "pick" } ? (value: Exclude<EventValueOf<
 export type KitProps<E extends ApiElement> = SpecPropsOf<E> & { [K in keyof ApiElementOf<E>["events"] & string]?: KitEvent<ApiElementOf<E>["events"][K]> } & (ApiElementOf<E>["children"] extends "none" ? unknown : { children: ReactNode });
 
 /** The elements that translate (ENTRIES, ENTRIES_1_2); every other one is its kit component (KIT). */
-type Translated = "Window" | "View" | "ToolbarField" | "ToolbarSearchField" | "ToolbarSegmented" | "ToolbarMenu" | "ListRow" | "EmptyState" | Translated12 | Translated13Layout | Translated13Display;
+type Translated = "Window" | "View" | "ToolbarField" | "ToolbarSearchField" | "ToolbarSegmented" | "ToolbarMenu" | "ListRow" | "EmptyState" | Translated12 | Translated13Layout | Translated13Display | TranslatedPicture;
 
 /**
  * The elements the kit component of the same name draws from the spec's props as they are.
@@ -284,7 +285,7 @@ function passThrough(name: keyof typeof KIT): ComponentType<Drawn> {
 }
 
 /** The elements that translate: the title bar, the view's toolbar and states, the toolbar's fields (a draft kept here), menus and actions. */
-const ENTRIES: { readonly [K in Exclude<Translated, Translated12 | Translated13Layout | Translated13Display>]: ComponentType<Drawn> } = {
+const ENTRIES: { readonly [K in Exclude<Translated, Translated12 | Translated13Layout | Translated13Display | TranslatedPicture>]: ComponentType<Drawn> } = {
   Window: WindowEntry,
   View: ViewEntry,
   ToolbarField: Field,
@@ -336,4 +337,5 @@ export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
   ...ENTRIES_1_2,
   ...ENTRIES_1_3_LAYOUT,
   ...ENTRIES_1_3_DISPLAY,
+  ...ENTRIES_1_3_PICTURE,
 };
