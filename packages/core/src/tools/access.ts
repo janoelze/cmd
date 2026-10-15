@@ -108,6 +108,7 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "magic.previewer": "never",
   "magic.previewResult": "never",
   "widget.list": "read",
+  "widget.rescan": "read", // reads the folder again: what it lists, sooner
   "widget.add": "act",
   "widget.delete": "never",
   // widget packages (docs/56): the app's window and the CLI; remote draws trees later (phase 1, Remote)

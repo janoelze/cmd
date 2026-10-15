@@ -129,6 +129,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "magic.previewer": "never",
   "magic.previewResult": "never",
   "widget.list": "never", // file paths (screenshots)
+  "widget.rescan": "never", // for cmd widget link on this Mac
   "widget.add": "never",
   "widget.delete": "never",
   // widget packages (docs/56): a press reaches the Mac from a control-scope device; trees reach a device that follows the window, without handlers below control scope (remoteEvent, withoutHandlers)

@@ -1,9 +1,9 @@
 // `cmd widget link|unlink|remove` (docs/56, "Developer ergonomics"): a widget package folder
 // anywhere, linked into the packages folder (~/.cmd/widgets, or $CMD_WIDGETS_HOME) under its
 // name, so the Widget Library lists it and saves in it reload its windows; and taken out again.
-// With a cmd running, link waits until the Library lists the package, asks the person for
-// what it wants (the grants sheet, when it wants anything) and prints its entry; unlink waits
-// until it's gone. A folder that isn't a link is the person's: removed only with --force.
+// With a cmd running, link has it read the folder again (widget.rescan) until the Library lists
+// the package, asks the person for what it wants (the grants sheet, when it wants anything) and
+// prints its entry; unlink does the same until it's gone. A folder that isn't a link is the person's: removed only with --force.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -137,8 +137,17 @@ async function unlink(home: string, name: string, force: boolean): Promise<numbe
   return 0;
 }
 
-/** The Library once `ok` holds for it (now, or at a widget.library event), or null after LIBRARY_WAIT_MS. */
+/**
+ * The Library once `ok` holds for it, or null after LIBRARY_WAIT_MS. The core reads the
+ * packages folder again when asked (widget.rescan), so a link shows at once; a core without
+ * that method (or one whose rescan doesn't show it yet) is waited on: its folder watch, then
+ * its widget.library event.
+ */
 export async function library(conn: Connection, ok: (list: WidgetEntry[]) => boolean): Promise<WidgetEntry[] | null> {
+  if (conn.client.has("widget.rescan")) {
+    const now = await conn.client.call("widget.rescan", {});
+    if (ok(now)) return now;
+  }
   let done: (v: WidgetEntry[] | null) => void = () => {};
   const result = new Promise<WidgetEntry[] | null>((r) => (done = r));
   const timer = setTimeout(() => done(null), LIBRARY_WAIT_MS);

@@ -15,6 +15,8 @@ import { dropOldWidgets } from "./old.ts";
 const handlers = (core: CoreContext) =>
   slice({
     "widget.list": () => core.library.entries(),
+    // cmd widget link/unlink: the folder now, not at its watch's event (late on a busy Mac, or never).
+    "widget.rescan": () => (core.library.packages.scan(), core.library.entries()),
     "widget.add": (p) => {
       const broken = p.ref.startsWith("pkg:") ? core.library.entries().find((e) => e.ref === p.ref && e.problem) : undefined;
       if (broken) throw new Error(`${broken.title} can't be added: ${broken.problem}`);

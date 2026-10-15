@@ -1,7 +1,9 @@
 // `cmd widget link|unlink|remove` (docs/56) with a throwaway CMD_WIDGETS_HOME: link checks the
 // package, links it under its name (and refuses a name another package holds), and with a core
 // running waits for the Library to list it, asks for its permissions and prints its entry;
-// unlink takes a link out and leaves a real folder alone unless --force.
+// unlink takes a link out and leaves a real folder alone unless --force. With the core's folder
+// watch off, link and unlink still show at once (widget.rescan); a core without that method is
+// waited on through its watch, as before.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -10,6 +12,18 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import type { WidgetEntry } from "@cmd/protocol";
 import { Core, type PtyFactory } from "@cmd/core";
 import { widgetCommand } from "../src/widget.ts";
+
+/** Folder watches that never fire while `off` (a busy Mac's late event, at its worst). */
+const watching = vi.hoisted(() => ({ off: false }));
+vi.mock("../../core/src/lib/watch.ts", async (original) => {
+  const m = await original<typeof import("../../core/src/lib/watch.ts")>();
+  class WatchService extends m.WatchService {
+    override watch(p: string, since?: number): boolean {
+      return watching.off ? false : super.watch(p, since);
+    }
+  }
+  return { ...m, WatchService };
+});
 
 const fixtures = path.join(import.meta.dirname, "fixtures", "widgets");
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-link-")));
@@ -106,7 +120,72 @@ const noTerminals: PtyFactory = () => {
   throw new Error("no terminals here");
 };
 
+/** A listening core for one test; `old`: one from before widget.rescan. */
+async function withCore(run: (core: Core) => Promise<void>, o: { old?: boolean } = {}): Promise<void> {
+  const socketPath = path.join(scratch, "core.sock");
+  const core = new Core({ socketPath, dbPath: null, settingsPath: null, terminals: noTerminals, pollMs: 0, stateDir: fs.mkdtempSync(path.join(scratch, "state-")) });
+  if (o.old) delete (core.handlers as Partial<typeof core.handlers>)["widget.rescan"];
+  try {
+    await core.listen();
+    core.start();
+    await core.scheduler.idle();
+    process.env.CMD_SOCKET = socketPath;
+    await run(core);
+  } finally {
+    await core.close();
+  }
+}
+
+const listed = (core: Core) => (core.handlers["widget.list"]({}) as WidgetEntry[]).some((e) => e.name === "good");
+
 describe("cmd widget link with a core", () => {
+  afterEach(() => {
+    watching.off = false;
+  });
+
+  it("lists the package at once though the folder watch never fires, and unlink takes it out at once", async () => {
+    watching.off = true;
+    await withCore(async (core) => {
+      const t0 = Date.now();
+      const r = await cli("link", pkg());
+      expect(r.code).toBe(0);
+      expect(r.out).toContain("pkg:good/main");
+      expect(Date.now() - t0).toBeLessThan(1500);
+      expect(listed(core)).toBe(true);
+      const t1 = Date.now();
+      const u = await cli("unlink", "good");
+      expect(u.code).toBe(0);
+      expect(u.err).not.toContain("still lists");
+      expect(Date.now() - t1).toBeLessThan(1500);
+      expect(listed(core)).toBe(false);
+    });
+  });
+
+  it("waits on the folder watch with a core from before widget.rescan", async () => {
+    await withCore(
+      async (core) => {
+        const r = await cli("link", pkg());
+        expect(r.code).toBe(0);
+        expect(r.out).toContain("pkg:good/main");
+        expect((await cli("unlink", "good")).err).not.toContain("still lists");
+        expect(listed(core)).toBe(false);
+      },
+      { old: true },
+    );
+  });
+
+  it("an older core whose watch never fires: link says the Library didn't list it", async () => {
+    watching.off = true;
+    await withCore(
+      async () => {
+        const r = await cli("link", pkg());
+        expect(r.code).toBe(2);
+        expect(r.err).toContain("didn't list it within 5 s");
+      },
+      { old: true },
+    );
+  }, 10_000);
+
   it("waits for the Library to list it, asks for its permissions, prints the entry; unlink takes it out", async () => {
     const socketPath = path.join(scratch, "core.sock");
     const core = new Core({ socketPath, dbPath: null, settingsPath: null, terminals: noTerminals, pollMs: 0, stateDir: fs.mkdtempSync(path.join(scratch, "state-")) });

@@ -434,6 +434,8 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
       ui: Record<string, unknown>;
     };
   };
+  /** Read the widget packages folder again now (a link made or taken out), then the Widget Library. */
+  "widget.rescan": { params: {}; result: WidgetEntry[] };
 }
 
 export type Method = keyof Methods;
