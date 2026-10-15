@@ -210,7 +210,7 @@ export const Delta = () => <W nodes={inView(e("Inline", { gap: 3 }, e("Delta", {
 /** Something happening, in a line. */
 export const Spinner = () => <W nodes={inView(e("Inline", { gap: 2 }, e("Spinner", { label: "Describing" }), e("Text", { tone: "dim" }, "Describing actions…")), e("Inline", { gap: 2 }, e("Spinner", { size: 16 }), e("Text", {}, "Larger")))} />;
 /** The view's footer: counts, and a quiet link at its end. */
-export const StatusLine = () => <W nodes={tree(e("View", {}, e("List", {}, row("dev", { light: "working" }), row("test", { light: "idle" })), e("StatusLine", { action: { label: "Task Manager", run: h() } }, "12 actions · 1 running")))} />;
+export const StatusLine = () => <W nodes={tree(e("View", {}, e("List", {}, row("dev", { light: "working" }), row("test", { light: "idle" })), e("StatusLine", { action: { label: "Show All", run: h() } }, "12 actions · 1 running")))} />;
 /** Icon buttons: ghost, filled, pressed, toned, pulsing, disabled. */
 export const IconButton = () => <W nodes={inView(e("Inline", { gap: 2 }, e("IconButton", { icon: "arrow.clockwise", label: "Refresh", onClick: h() }), e("IconButton", { icon: "play.fill", label: "Run", variant: "default", onClick: h() }), e("IconButton", { icon: "pin", label: "Pin", pressed: true, onClick: h() }), e("IconButton", { icon: "bell", label: "Waiting", tone: "needs", pulse: true, onClick: h() }), e("IconButton", { icon: "stop.fill", label: "Stop", size: "sm", disabled: true })))} />;
 /** Links in running text and in a dim line. */
@@ -240,7 +240,7 @@ export const TimelineEntry = () => <W nodes={inView(e("Timeline", {}, entry("14:
 const hour = 3_600_000;
 const t0 = Date.UTC(2026, 9, 15, 8);
 /** A day's work on lanes, one bar picked. */
-export const Ribbon = () => <W nodes={inView(e("Ribbon", { items: [{ id: "a", start: t0 + hour, end: t0 + 3.5 * hour, hue: 210, label: "Elements" }, { id: "b", start: t0 + 2 * hour, end: t0 + 4 * hour, hue: 140, label: "Event Stream" }, { id: "c", start: t0 + 5 * hour, end: t0 + 7.5 * hour, hue: 20, label: "Workspace Actions" }], from: t0, to: t0 + 9 * hour, ticks: [0, 3, 6, 9].map((i) => ({ at: t0 + i * hour, label: `${String(8 + i).padStart(2, "0")}:00` })), picked: "b", onPick: h() }))} />;
+export const Ribbon = () => <W nodes={inView(e("Ribbon", { items: [{ id: "a", start: t0 + hour, end: t0 + 3.5 * hour, hue: 210, label: "Elements" }, { id: "b", start: t0 + 2 * hour, end: t0 + 4 * hour, hue: 140, label: "Event Stream" }, { id: "c", start: t0 + 5 * hour, end: t0 + 7.5 * hour, hue: 20, label: "Run Scripts" }], from: t0, to: t0 + 9 * hour, ticks: [0, 3, 6, 9].map((i) => ({ at: t0 + i * hour, label: `${String(8 + i).padStart(2, "0")}:00` })), picked: "b", onPick: h() }))} />;
 
 const procColumns: Record<string, WireValue>[] = [
   { key: "mark", label: "", icon: true },
