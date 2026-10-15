@@ -28,8 +28,8 @@ export const Paused: HostData = { terminals: [pane()], events: log, state: { pau
 /** Two classes hidden from the title menu ("2 hidden"), as every Event Log keeps them. */
 export const Hidden: HostData = { terminals: [pane()], events: log, storage: { package: { hiddenClasses: ["output", "git"] } } };
 
-/** Every class hidden: nothing matches. */
-export const AllHidden: HostData = { terminals: [pane()], events: log, storage: { package: { hiddenClasses: ["agents", "output", "actions", "git", "notes"] } } };
+/** Every class hidden: nothing matches, the native line says why. */
+export const NothingMatches: HostData = { terminals: [pane()], events: log, storage: { package: { hiddenClasses: ["agents", "output", "actions", "git", "notes"] } } };
 
 /** In a narrow window, as in a sidebar. */
 export const Narrow: HostData & { size: "narrow" } = { terminals: [pane()], events: log, size: "narrow" };
