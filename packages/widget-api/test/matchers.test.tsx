@@ -120,7 +120,7 @@ describe("the tree and its hands", () => {
     const tree = await render(<Sample />, h);
     await tree.press(tree.rows()[1]!);
     expect(h.calls).toEqual([["windows.select", "w-web"]]);
-    await expect(tree.press(tree.rows()[2]!)).rejects.toThrow('ListRow "zsh" has no onClick or onSelect or onToggle');
+    await expect(tree.press(tree.rows()[2]!)).rejects.toThrow('ListRow "zsh" has no onClick');
   });
 
   it("change and submit: a field's value, as the app sends it", async () => {

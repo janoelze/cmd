@@ -9,6 +9,7 @@ import { Component, createContext, createElement, type ReactNode } from "react";
 import createReconciler from "react-reconciler";
 import type { PatchOp, TreeNode, WireValue } from "@cmd/protocol/widget-tree";
 import type { Connection } from "./connection.ts";
+import { Button, Callout, Text } from "./elements.ts";
 
 // react-reconciler/constants (inlined: the module is CommonJS behind a condition).
 const ConcurrentRoot = 1;
@@ -355,10 +356,10 @@ class Boundary extends Component<{ root: TreeRoot; children?: ReactNode }, Bound
     const { error } = this.state;
     if (!error) return this.props.children;
     return createElement(
-      "Callout",
+      Callout,
       { tone: "danger", title: "This widget hit an error" },
-      createElement("Text", { mono: true, select: true, size: "sm" }, error.stack ?? error.message),
-      createElement("Button", { onClick: () => this.setState({ error: null }) }, "Try Again"),
+      createElement(Text, { mono: true, select: true, size: "sm" }, error.stack ?? error.message),
+      createElement(Button, { onClick: () => this.setState({ error: null }) }, "Try Again"),
     );
   }
 }

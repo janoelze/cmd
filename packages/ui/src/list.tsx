@@ -278,7 +278,7 @@ export function Twisty({ open, onToggle }: { open: boolean; onToggle: () => void
 }
 
 /** A label in a colour of its own, from a hue (a project's, see the app's projectHue). */
-export function Chip({ hue, children, tip }: { hue: number; children: ReactNode; tip?: string }) {
+export function Chip({ hue, children, tip }: { /** Without one, the neutral tint (the CSS default). */ hue?: number; children: ReactNode; tip?: string }) {
   return (
     <span className="ui-chip" data-tip={tip} style={{ "--hue": hue } as CSSProperties}>
       {children}

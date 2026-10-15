@@ -5,14 +5,16 @@
 // again (`resync`). Everything outside API 1's allow-list (API_ELEMENTS) is dropped
 // here with a warning naming it: an unknown element, a prop the element doesn't take, a
 // handler on a prop that isn't one of its events, a URL that isn't https, markup in
-// words, values of the wrong type. Pure: no React, no core; tests feed it messages.
+// words, values of the wrong type (the checks are the protocol's, widget-values.ts, run
+// against the spec). Pure: no React, no core; tests feed it messages.
 
 import {
   API_ELEMENTS,
+  MARKUP,
   TREE_ROOT,
+  checkValue,
+  isHandler,
   type ApiElementSpec,
-  type ApiPropType,
-  type HandlerRef,
   type PatchOp,
   type TreeElement,
   type TreeNode,
@@ -46,109 +48,9 @@ export interface TreeStoreOptions {
   elements?: Readonly<Record<string, ApiElementSpec>>;
 }
 
-export const isHandler = (v: WireValue | undefined): v is HandlerRef =>
-  !!v && typeof v === "object" && !Array.isArray(v) && typeof (v as { $handler?: unknown }).$handler === "number" && Object.keys(v).length === 1;
-
-/** `<` before a letter or a slash: a tag, which no word in a widget needs. */
-const MARKUP = /<[a-zA-Z/!?]/;
 /** Props that hold a URL (none in API 1 yet; Picture's `src` when it comes). */
 const URL_PROPS = new Set(["src", "href", "url"]);
 const safeUrl = (s: string) => /^https:\/\/[^\s]+$/i.test(s) || /^http:\/\/localhost(:\d+)?(\/[^\s]*)?$/i.test(s);
-
-type Check = { ok: true; value: WireValue } | { ok: false; why: string };
-const ok = (value: WireValue): Check => ({ ok: true, value });
-const no = (why: string): Check => ({ ok: false, why });
-
-const isObj = (v: WireValue): v is { [key: string]: WireValue } => !!v && typeof v === "object" && !Array.isArray(v);
-
-function words(v: WireValue, numbers: boolean): Check {
-  if (typeof v === "number" && numbers) return Number.isFinite(v) ? ok(v) : no("not a finite number");
-  if (typeof v !== "string") return no(numbers ? "not text" : "not a string");
-  if (MARKUP.test(v)) return no("markup in text");
-  return ok(v);
-}
-
-/** Optional string fields of an object: each a string without markup when there. */
-function fields(o: { [key: string]: WireValue }, keys: readonly string[]): string | null {
-  for (const k of keys) if (o[k] !== undefined && o[k] !== null && !words(o[k]!, false).ok) return `${k} isn't plain text`;
-  return null;
-}
-
-function menu(v: WireValue, depth = 0): Check {
-  if (!Array.isArray(v)) return no("not a menu");
-  if (depth > 4) return no("menus nest too deep");
-  for (const e of v) {
-    if (!isObj(e)) return no("a menu entry isn't an object");
-    if (e.separator === true) continue;
-    if (typeof e.label !== "string") return no("a menu entry has no label");
-    const bad = fields(e, ["label"]);
-    if (bad) return no(bad);
-    if (e.run !== undefined && !isHandler(e.run)) return no("a menu entry's run isn't a handler");
-    if (e.checked !== undefined && typeof e.checked !== "boolean") return no("checked isn't true or false");
-    if (e.disabled !== undefined && typeof e.disabled !== "boolean") return no("disabled isn't true or false");
-    if (e.submenu !== undefined) {
-      const sub = menu(e.submenu, depth + 1);
-      if (!sub.ok) return sub;
-    }
-  }
-  return ok(v);
-}
-
-function action(v: WireValue): Check {
-  if (!isObj(v) || typeof v.label !== "string" || !isHandler(v.run)) return no("not an action ({ label, run })");
-  const bad = fields(v, ["label"]);
-  return bad ? no(bad) : ok(v);
-}
-
-const STATE_KINDS = ["empty", "loading", "noResults", "error"];
-function viewState(v: WireValue): Check {
-  if (!isObj(v)) return no("not a view state");
-  if (v.kind !== undefined && !STATE_KINDS.includes(v.kind as string)) return no(`kind ${JSON.stringify(v.kind)} isn't one of ${STATE_KINDS.join(", ")}`);
-  const bad = fields(v, ["icon", "title", "text"]);
-  if (bad) return no(bad);
-  if (v.action !== undefined && v.action !== null) {
-    const a = action(v.action);
-    if (!a.ok) return a;
-  }
-  return ok(v);
-}
-
-function options(v: WireValue): Check {
-  if (!Array.isArray(v)) return no("not a list of options");
-  for (const o of v) {
-    if (!isObj(o) || typeof o.value !== "string" || typeof o.label !== "string") return no("an option isn't { value, label }");
-    const bad = fields(o, ["value", "label", "icon"]);
-    if (bad) return no(bad);
-  }
-  return ok(v);
-}
-
-/** A prop's value against its ApiPropType. */
-export function checkValue(type: ApiPropType, v: WireValue): Check {
-  if (Array.isArray(type)) return (type as readonly (string | number)[]).includes(v as string | number) ? ok(v) : no(`${JSON.stringify(v)} isn't one of ${type.join(", ")}`);
-  switch (type) {
-    case "string":
-      return words(v, false);
-    case "text":
-      return words(v, true);
-    case "number":
-      return typeof v === "number" && Number.isFinite(v) ? ok(v) : no("not a number");
-    case "boolean":
-      return typeof v === "boolean" ? ok(v) : no("not true or false");
-    case "numbers":
-      return Array.isArray(v) && v.every((x) => x === null || (typeof x === "number" && Number.isFinite(x))) ? ok(v) : no("not a list of numbers");
-    case "menu":
-      return menu(v);
-    case "action":
-      return action(v);
-    case "viewState":
-      return viewState(v);
-    case "options":
-      return options(v);
-    default:
-      return no("an unknown type");
-  }
-}
 
 /** The allow-list's checks on one element's props. */
 export class Sanitizer {
@@ -174,8 +76,8 @@ export class Sanitizer {
       return this.drop(type, key, "not true or false");
     }
     if (key.startsWith("$")) return this.drop(type, key, "not a prop of the wire");
-    if (spec.events.includes(key)) return isHandler(v) ? v : this.drop(type, key, "not a handler");
-    const t = spec.props[key];
+    if (Object.hasOwn(spec.events, key)) return isHandler(v) ? v : this.drop(type, key, "not a handler");
+    const t = Object.hasOwn(spec.props, key) ? spec.props[key]!.type : undefined;
     if (t === undefined) return this.drop(type, key, isHandler(v) ? "a handler on a prop that isn't one of its events" : "not a prop it takes in API 1");
     if (isHandler(v)) return this.drop(type, key, "a handler on a prop that isn't one of its events");
     if (URL_PROPS.has(key)) {

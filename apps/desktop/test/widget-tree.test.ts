@@ -141,7 +141,7 @@ describe("the allow-list", () => {
   });
 
   it("drops a URL that isn't https (or http://localhost)", () => {
-    const elements: Record<string, ApiElementSpec> = { ...API_ELEMENTS, Picture: { props: { src: "string", alt: "string" }, events: [], children: "none" } };
+    const elements: Record<string, ApiElementSpec> = { ...API_ELEMENTS, Picture: { props: { src: { type: "string", doc: "" }, alt: { type: "string", doc: "" } }, events: {}, children: "none" } };
     const { s, warnings } = store({ elements });
     s.apply(tree([el(1, "Picture" as never, { src: "http://example.com/a.png" }), el(2, "Picture" as never, { src: "javascript:alert(1)" }), el(3, "Picture" as never, { src: "https://example.com/a.png" }), el(4, "Picture" as never, { src: "http://localhost:3000/a.png" })]));
     expect(s.snapshot.nodes.map((n) => (n as TreeElement).props.src)).toEqual([undefined, undefined, "https://example.com/a.png", "http://localhost:3000/a.png"]);

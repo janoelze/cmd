@@ -3,10 +3,9 @@
 // (register.tsx) can read it when the title bar draws or a menu opens. The status line
 // goes through setWindowStatus like every built-in widget's; the menus live here.
 
-import type { WireMenuEntry, WireValue, WindowId } from "@cmd/protocol";
+import { isHandler, type WireMenuEntry, type WireValue, type WindowId } from "@cmd/protocol";
 import type { MenuEntry } from "../../lib/context.ts";
 import { windowChromeChanged } from "../registry.ts";
-import { isHandler } from "./tree.ts";
 
 /** Sends an interaction to the widget's process. */
 export type Send = (handler: number, event: string, value?: WireValue) => void;

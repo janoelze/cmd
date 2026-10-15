@@ -1,129 +1,481 @@
-// The elements of the widget API (docs/56, "The view") and what a remote device gets of a tree:
-// split from widget-tree.ts, which re-exports all of it, so `@cmd/protocol/widget-tree` is still
-// the whole wire contract. API_ELEMENTS is the allow-list the renderer enforces.
+// The elements of the widget API (docs/56, "The view"): the one place an element's props,
+// events, children and docs are written. Everything else is read or generated from
+// API_ELEMENTS: the renderer's sanitiser and element table, @cmd/widget-api's elements.ts
+// (`pnpm widget-api:gen`), its README reference and the website (`pnpm widget-api:docs`),
+// the testing tree's gestures and titles. Split from widget-tree.ts, which re-exports all
+// of it, so `@cmd/protocol/widget-tree` is still the whole wire contract.
 
-import type { HandlerRef, PatchOp, TreeNode, WidgetPatch, WidgetTree, WireValue } from "./widget-tree.ts";
+import type { ApiLight, ApiTone, HandlerRef } from "./widget-tree.ts";
+import type { VIEW_STATE_KINDS } from "./widget-values.ts";
 
-// ── the elements ────────────────────────────────────────
+// ── the enums ───────────────────────────────────────────
+
+/** Steps of the spacing scale (`2` is 8 px), and 0. */
+export const SPACE = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12] as const;
+/** The tones: what colours are named by. */
+export const TONES = ["neutral", "accent", "success", "warning", "danger"] as const;
+/** A status light: an agent's state, or a tone. */
+export const LIGHTS = ["needs", "unseen", "working", "done", "idle", "off", ...TONES] as const;
+/** The type scale. */
+export const TEXT_SIZES = ["2xs", "xs", "sm", "md", "base", "lg", "xl", "display"] as const;
+/** How children line up across a Stack or an Inline. */
+export const ALIGN = ["start", "center", "end", "stretch", "baseline"] as const;
+/** The window's size classes (Hide). */
+export const BREAKS = ["narrow", "regular"] as const;
 
 /**
- * A prop's type on the wire. A string array is an enum. "text" is a string or a
- * number; "numbers" a number[]; "menu" a MenuEntry[] whose `run`s are handlers;
- * "action" `{ label, run }`; "viewState" View's state; "options" a Segmented's.
+ * The enums @cmd/widget-api names as types (elements.ts is generated with them): a prop
+ * whose values contain one of these runs shows its name (`Space | "inset"`, `"dim" | Tone`).
+ * `exported: false` is named in the d.ts but not exported.
  */
-export type ApiPropType = "string" | "text" | "number" | "boolean" | "numbers" | "menu" | "action" | "viewState" | "options" | readonly (string | number)[];
+export const API_ENUMS = {
+  Space: { values: SPACE, doc: "A step of the spacing scale (`2` is 8 px), or 0.", exported: true },
+  Tone: { values: TONES, doc: "Tones, never colours.", exported: true },
+  Light: { values: LIGHTS, doc: "A status light: an agent's state, or a tone.", exported: true },
+  TextSize: { values: TEXT_SIZES, doc: "The type scale.", exported: true },
+  Align: { values: ALIGN, doc: "How children line up across a Stack or an Inline.", exported: false },
+} as const;
 
-export interface ApiElementSpec {
-  props: Record<string, ApiPropType>;
-  /** The handler props it takes ("onClick"); a handler anywhere else is dropped. */
-  events: readonly string[];
-  /** What it holds: nothing, strings only, elements only, or both. */
-  children: "none" | "text" | "elements" | "any";
+// widget-tree.ts spells ApiTone and ApiLight out (Magic's prompt pastes them as declared): held to the consts here.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const sameTone: Same<ApiTone, (typeof TONES)[number]> = true;
+const sameLight: Same<ApiLight, (typeof LIGHTS)[number]> = true;
+void sameTone, sameLight;
+
+// ── the shapes inside props ─────────────────────────────
+
+/** A menu entry in a prop (`Window menu`, `ListRow menu`): data, with `run` a handler `H` (a function in the widget, a HandlerRef on the wire). */
+export type MenuEntryOf<H> = { label: string; run?: H; checked?: boolean; disabled?: boolean; submenu?: MenuEntryOf<H>[] } | { separator: true };
+/** A button as data: an empty state's or a view state's one way on. */
+export interface ActionOf<H> {
+  label: string;
+  run: H;
+}
+/** What replaces a View's body: empty (the default), loading, no results, error; one line and one action. */
+export interface ViewStateOf<H> {
+  kind?: (typeof VIEW_STATE_KINDS)[number];
+  /** An SF Symbol name. */
+  icon?: string;
+  title?: string;
+  text?: string;
+  action?: ActionOf<H>;
+}
+/** A ToolbarSegmented's option: a value, a label, an optional SF Symbol. */
+export interface OptionOf<T extends string = string> {
+  value: T;
+  label: string;
+  icon?: string;
 }
 
-const SPACE = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12] as const;
-const TONES = ["neutral", "accent", "success", "warning", "danger"] as const;
-const LIGHTS = ["needs", "unseen", "working", "done", "idle", "off", ...TONES] as const;
-const TEXT_SIZES = ["2xs", "xs", "sm", "md", "base", "lg", "xl", "display"] as const;
-const ALIGN = ["start", "center", "end", "stretch", "baseline"] as const;
-const BAR_TONES = ["accent", "danger", "needs"] as const;
-const BREAKS = ["narrow", "regular"] as const;
-const none = { props: {}, events: [], children: "none" } as const;
-/** What every toolbar item takes: its place in the ⋯ menu when room runs out, faded until hovered. */
-const ITEM = { priority: "number", secondary: "boolean" } as const;
+/** A menu entry on the wire. */
+export type WireMenuEntry = MenuEntryOf<HandlerRef>;
 
-/** API 1's elements, with each one's props and events: the allow-list the renderer enforces. */
+// ── the spec ────────────────────────────────────────────
+
+/**
+ * A prop's type on the wire. A string or number array is an enum. "text" is a string or a
+ * number; "numbers" a (number | null)[] (null is a gap); "menu" a MenuEntryOf[]; "action"
+ * an ActionOf; "viewState" a ViewStateOf; "options" OptionOf[]; "option" one option's value
+ * (a string; the element is generic over it in @cmd/widget-api).
+ */
+export type ApiPropType = "string" | "text" | "number" | "boolean" | "numbers" | "menu" | "action" | "viewState" | "options" | "option" | readonly (string | number)[];
+
+export interface ApiPropSpec {
+  type: ApiPropType;
+  /** The element needs it (the d.ts says so; the renderer draws it empty without). */
+  required?: boolean;
+  /** null is a value of its own ("none"); any prop may be null on the wire, which unsets it. */
+  nullable?: boolean;
+  /** Its JSDoc. */
+  doc: string;
+  /** What the testing tree reads as words: the element's title (`find(type, title)`), or more of its words (`text()`). */
+  shows?: "title" | "words";
+}
+
+/** What a person does to fire an event (the testing tree's press, doubleClick, change, submit). "change" and "submit" carry a value. */
+export type ApiGesture = "press" | "doubleClick" | "change" | "submit" | "dismiss";
+
+export interface ApiEventSpec {
+  gesture: ApiGesture;
+  /** Its JSDoc. */
+  doc: string;
+}
+
+export interface ApiElementSpec {
+  /** Its JSDoc. */
+  doc?: string;
+  /** The API version it came in. */
+  since?: string;
+  props: Record<string, ApiPropSpec>;
+  /** The handler props it takes ("onClick"); a handler anywhere else is dropped. */
+  events: Record<string, ApiEventSpec>;
+  /** What it holds: nothing, strings only, elements only, or both. */
+  children: "none" | "text" | "elements" | "any";
+  /** The children prop's JSDoc. */
+  childrenDoc?: string;
+}
+
+const none = { props: {}, events: {}, children: "none" } as const;
+const press = (doc: string) => ({ gesture: "press", doc }) as const;
+const typed = (doc: string) => ({ gesture: "change", doc }) as const;
+const SYMBOL = "An SF Symbol name.";
+const TIP = { type: "string", doc: "A tooltip." } as const;
+const DISABLED = { type: "boolean", doc: "Greyed out, not pressable." } as const;
+/** What every toolbar item takes (the d.ts's ToolbarItem): its place in the ⋯ menu when room runs out, faded until hovered. */
+export const TOOLBAR_ITEM = {
+  priority: { type: "number", doc: "Moves to the ⋯ menu when there is no room, lowest first; without one it stays." },
+  secondary: { type: "boolean", doc: "Faded until the window is hovered or selected." },
+} as const;
+
+/** API 1's elements, with each one's props, events, children and docs: the allow-list the renderer enforces. */
 export const API_ELEMENTS = {
-  Window: { props: { status: "string", menu: "menu", actions: "menu" }, events: [], children: "elements" },
-  View: { props: { inset: "boolean", scroll: "boolean", state: "viewState" }, events: [], children: "elements" },
-  WindowToolbar: { props: { label: "string", bottom: "boolean" }, events: [], children: "elements" },
-  ToolbarButton: { props: { label: "string", icon: "string", showLabel: "boolean", pressed: "boolean", disabled: "boolean", tone: BAR_TONES, badge: "text", tip: "string", ...ITEM }, events: ["onClick"], children: "none" },
-  ToolbarField: { props: { value: "string", placeholder: "string", icon: "string", ...ITEM }, events: ["onChange", "onSubmit"], children: "none" },
-  ToolbarSearchField: { props: { value: "string", placeholder: "string", count: "text", ...ITEM }, events: ["onChange"], children: "none" },
-  ToolbarSegmented: { props: { value: "string", options: "options", label: "string", ...ITEM }, events: ["onChange"], children: "none" },
-  ToolbarMenu: { props: { label: "string", icon: "string", menu: "menu", disabled: "boolean", ...ITEM }, events: [], children: "none" },
-  ToolbarText: { props: { ...ITEM }, events: [], children: "text" },
-  ToolbarSpacer: none,
-  Stack: { props: { gap: SPACE, pad: [...SPACE, "inset"], padY: SPACE, align: ALIGN, grow: "boolean" }, events: [], children: "elements" },
-  Inline: { props: { gap: SPACE, align: ALIGN, justify: ["start", "between", "end"], wrap: "boolean", grow: "boolean" }, events: [], children: "elements" },
-  Tiles: { props: { min: [96, 120, 160, 200, 240, 320], gap: SPACE }, events: [], children: "elements" },
-  Hide: { props: { below: BREAKS, above: BREAKS }, events: [], children: "elements" },
-  List: { props: {}, events: [], children: "elements" },
-  ListSection: { props: { title: "string", count: "number", open: "boolean", tone: ["needs", "danger"] }, events: ["onToggle"], children: "elements" },
-  ListRow: { props: { selected: "boolean", dim: "boolean", depth: "number", tip: "string", menu: "menu" }, events: ["onClick", "onDoubleClick"], children: "elements" },
-  ListRowIcon: { props: { icon: "string", light: LIGHTS, tone: [...LIGHTS, "dim"] }, events: [], children: "none" },
-  ListRowContent: { props: { title: "text", place: "text", detail: "text", tone: ["needs", "danger"], mono: "boolean" }, events: [], children: "none" },
-  ListRowEnd: { props: {}, events: [], children: "any" },
-  Chip: { props: { hue: "number", tip: "string" }, events: [], children: "text" },
-  Stat: { props: { label: "string", value: "text", unit: "string", delta: "text", deltaTone: TONES }, events: ["onSelect"], children: "none" },
-  Sparkline: { props: { values: "numbers", height: "number", area: "boolean", color: ["current", "neutral"] }, events: [], children: "none" },
-  Text: { props: { tone: ["dim", ...TONES], size: TEXT_SIZES, mono: "boolean", strong: "boolean", truncate: "boolean", select: "boolean", balance: "boolean" }, events: [], children: "text" },
-  Badge: { props: { tone: TONES, size: ["sm", "md"], solid: "boolean", tip: "string" }, events: [], children: "text" },
-  StatusDot: { props: { state: LIGHTS, size: ["sm", "md"], label: "string" }, events: [], children: "none" },
-  Button: { props: { variant: ["default", "primary", "danger", "ghost"], size: ["sm", "md", "lg"], icon: "string", pressed: "boolean", busy: "boolean", disabled: "boolean" }, events: ["onClick"], children: "text" },
-  EmptyState: { props: { icon: "string", title: "string", text: "string", action: "action", compact: "boolean" }, events: [], children: "none" },
-  Callout: { props: { tone: TONES, title: "string", icon: "string", compact: "boolean", banner: "boolean" }, events: ["onDismiss"], children: "any" },
-  Progress: { props: { value: "number", tone: TONES, label: "string" }, events: [], children: "none" },
+  Window: {
+    doc: "The widget's window, around everything: the title bar (icon and name from the manifest), its status line and menus. Optional; a widget without one gets the bare title bar.",
+    props: {
+      status: { type: "string", nullable: true, doc: 'The title bar\'s status line ("2 waiting for you · 1 working"); null for none.' },
+      menu: { type: "menu", doc: "The title menu (a scope switch: This Workspace / All Workspaces)." },
+      actions: { type: "menu", doc: "Entries added to the window's context menu." },
+    },
+    events: {},
+    children: "elements",
+    childrenDoc: "The window's content: a View.",
+  },
+  View: {
+    doc: "A window's content frame: toolbar, scrolling body, and the states that replace it.",
+    props: {
+      inset: { type: "boolean", doc: "Pads the body by the window inset." },
+      scroll: { type: "boolean", doc: "The body scrolls (default true)." },
+      state: { type: "viewState", nullable: true, doc: "Shown instead of the body: empty, loading, no results, error." },
+    },
+    events: {},
+    children: "elements",
+    childrenDoc: "The body; a WindowToolbar among them becomes the view's toolbar.",
+  },
+  WindowToolbar: {
+    doc: "A view's toolbar: buttons, fields, segmented controls. Items that don't fit move to a ⋯ menu.",
+    props: {
+      label: { type: "string", shows: "title", doc: 'Its accessible name ("Filter agents").' },
+      bottom: { type: "boolean", doc: "Under the content instead of over it." },
+    },
+    events: {},
+    children: "elements",
+    childrenDoc: "Its items: ToolbarButton, ToolbarField, ToolbarSearchField, ToolbarSegmented, ToolbarMenu, ToolbarText, ToolbarSpacer.",
+  },
+  ToolbarButton: {
+    doc: "A toolbar button.",
+    props: {
+      label: { type: "string", required: true, shows: "title", doc: "The tooltip and accessible name; shown beside the icon with `showLabel`." },
+      icon: { type: "string", doc: "An SF Symbol name; without one it is a text button." },
+      showLabel: { type: "boolean", doc: "Shows the label beside the icon while there is room." },
+      pressed: { type: "boolean", doc: "On (a toggle)." },
+      disabled: DISABLED,
+      tone: { type: ["accent", "danger", "needs"], doc: "A tone for its icon (a count of failures, a change)." },
+      badge: { type: "text", doc: "A count after the label." },
+      tip: { type: "string", doc: "A tooltip other than the label." },
+      ...TOOLBAR_ITEM,
+    },
+    events: { onClick: press("Pressed.") },
+    children: "none",
+  },
+  ToolbarField: {
+    doc: "A text field in a toolbar.",
+    props: {
+      value: { type: "string", required: true, shows: "words", doc: "The text in it." },
+      placeholder: { type: "string", doc: "Shown while it is empty; also its accessible name." },
+      icon: { type: "string", doc: "An SF Symbol name before the text." },
+      ...TOOLBAR_ITEM,
+    },
+    events: { onChange: typed("The text as typed (debounced by the app, which keeps the caret)."), onSubmit: { gesture: "submit", doc: "Return pressed, with the text." } },
+    children: "none",
+  },
+  ToolbarSearchField: {
+    doc: "A filter field: a magnifying glass, a count, a clear button.",
+    props: {
+      value: { type: "string", required: true, shows: "words", doc: "The filter text." },
+      placeholder: { type: "string", doc: 'Shown while it is empty ("Filter agents").' },
+      count: { type: "text", doc: 'What matched ("3 of 12").' },
+      ...TOOLBAR_ITEM,
+    },
+    events: { onChange: typed('The text as typed (debounced by the app); "" when cleared.') },
+    children: "none",
+  },
+  ToolbarSegmented: {
+    doc: "A choice of a few, side by side (a popup when narrow).",
+    props: {
+      value: { type: "option", required: true, shows: "words", doc: "The chosen option's value." },
+      options: { type: "options", required: true, doc: "The options, in order: a value, a label, an optional SF Symbol." },
+      label: { type: "string", required: true, shows: "title", doc: "Its accessible name." },
+      ...TOOLBAR_ITEM,
+    },
+    events: { onChange: typed("An option was chosen.") },
+    children: "none",
+  },
+  ToolbarMenu: {
+    doc: "A toolbar button that opens a menu.",
+    props: {
+      label: { type: "string", required: true, shows: "title", doc: "The tooltip and accessible name." },
+      icon: { type: "string", doc: SYMBOL },
+      menu: { type: "menu", required: true, doc: "The menu it opens." },
+      disabled: DISABLED,
+      ...TOOLBAR_ITEM,
+    },
+    events: {},
+    children: "none",
+  },
+  ToolbarText: { doc: "A little text in a toolbar (a count, a path).", props: { ...TOOLBAR_ITEM }, events: {}, children: "text", childrenDoc: "The text." },
+  ToolbarSpacer: { doc: "Pushes what follows to the toolbar's end.", ...none },
+  Stack: {
+    doc: "Children in a column, `gap` apart.",
+    props: {
+      gap: { type: SPACE, doc: "Space between children, in steps of the scale (default 2)." },
+      pad: { type: [...SPACE, "inset"], doc: "Padding on every side, or the window inset." },
+      padY: { type: SPACE, doc: "Top and bottom padding instead of `pad`'s there." },
+      align: { type: ALIGN, doc: "How children line up across the column." },
+      grow: { type: "boolean", doc: "Takes the room left." },
+    },
+    events: {},
+    children: "elements",
+    childrenDoc: "What it stacks.",
+  },
+  Inline: {
+    doc: "Children in a row, `gap` apart.",
+    props: {
+      gap: { type: SPACE, doc: "Space between children, in steps of the scale (default 1.5)." },
+      align: { type: ALIGN, doc: "How children line up across the row (default center)." },
+      justify: { type: ["start", "between", "end"], doc: "Where the children sit along the row." },
+      wrap: { type: "boolean", doc: "Wraps onto more lines when the row is full." },
+      grow: { type: "boolean", doc: "Takes the room left." },
+    },
+    events: {},
+    children: "elements",
+    childrenDoc: "What it lines up.",
+  },
+  Tiles: {
+    doc: "A grid of equal tiles (stats, cards).",
+    props: {
+      min: { type: [96, 120, 160, 200, 240, 320], doc: "A tile's least width in px: as many columns as fit." },
+      gap: { type: SPACE, doc: "Space between tiles, in steps of the scale (default 2)." },
+    },
+    events: {},
+    children: "elements",
+    childrenDoc: "The tiles.",
+  },
+  Hide: {
+    doc: "Drops what doesn't fit the window's size class.",
+    props: {
+      below: { type: BREAKS, doc: "Hidden while the window is narrower than this size class." },
+      above: { type: BREAKS, doc: "Hidden while it is wider." },
+    },
+    events: {},
+    children: "elements",
+    childrenDoc: "What it hides.",
+  },
+  List: { doc: "Rows and sections; virtualised by the app, keyed rows keep their place.", props: {}, events: {}, children: "elements", childrenDoc: "ListSections and ListRows." },
+  ListSection: {
+    doc: "A heading and its rows.",
+    props: {
+      title: { type: "string", required: true, shows: "title", doc: "The heading." },
+      count: { type: "number", doc: "A count after the title." },
+      open: { type: "boolean", doc: "false: folded, only the heading." },
+      tone: { type: ["needs", "danger"], doc: 'Colours the heading: "needs" for what waits for the person.' },
+    },
+    events: { onToggle: press("The heading was pressed (fold or unfold it).") },
+    children: "elements",
+    childrenDoc: "Its rows.",
+  },
+  ListRow: {
+    doc: "A row.",
+    props: {
+      selected: { type: "boolean", doc: "Shown as the selected row." },
+      dim: { type: "boolean", doc: "Faded." },
+      depth: { type: "number", doc: "Indent, for a row under another (a subagent)." },
+      tip: TIP,
+      menu: { type: "menu", doc: "Its context menu." },
+    },
+    events: { onClick: press("Pressed (the row's main action: open, select)."), onDoubleClick: { gesture: "doubleClick", doc: "Double-clicked." } },
+    children: "elements",
+    childrenDoc: "Its parts in order: ListRowIcon, ListRowContent, ListRowEnd.",
+  },
+  ListRowIcon: {
+    doc: "A row's icon, or its status light.",
+    props: {
+      icon: { type: "string", required: true, doc: SYMBOL },
+      light: { type: LIGHTS, doc: "A status light that takes the icon's place (an agent's state)." },
+      tone: { type: [...LIGHTS, "dim"], doc: "Colours the icon." },
+    },
+    events: {},
+    children: "none",
+  },
+  ListRowContent: {
+    doc: "A row's text.",
+    props: {
+      title: { type: "text", required: true, shows: "title", doc: "The first line." },
+      place: { type: "text", shows: "words", doc: "Dim, after the title (one-line rows); gives way first." },
+      detail: { type: "text", nullable: true, shows: "words", doc: "A second line under the title." },
+      tone: { type: ["needs", "danger"], doc: "Colours the detail line." },
+      mono: { type: "boolean", doc: "The title in the monospaced font (a path, a command)." },
+    },
+    events: {},
+    children: "none",
+  },
+  ListRowEnd: { doc: "A row's right end: a chip, an age, a badge.", props: {}, events: {}, children: "any", childrenDoc: "What sits at the end: a Chip, a Badge, Text." },
+  Chip: {
+    doc: "A small pill of text (an age, a branch).",
+    props: {
+      hue: { type: "number", doc: "A hue (0–360) for its tint; the neutral one without." },
+      tip: TIP,
+    },
+    events: {},
+    children: "text",
+    childrenDoc: "Its text.",
+  },
+  Stat: {
+    doc: "A number with its label.",
+    props: {
+      label: { type: "string", required: true, shows: "title", doc: "What it counts." },
+      value: { type: "text", required: true, shows: "words", doc: "The number, formatted (`fmt.num`)." },
+      unit: { type: "string", doc: 'After the value ("ms", "%").' },
+      delta: { type: "text", doc: 'A change beside it ("+12%").' },
+      deltaTone: { type: TONES, doc: 'The change\'s tone: "success" for better, "danger" for worse.' },
+    },
+    events: { onSelect: press("Pressed (show what it counts).") },
+    children: "none",
+  },
+  Sparkline: {
+    doc: "A small line of recent values.",
+    props: {
+      values: { type: "numbers", required: true, doc: "The values, oldest first; null is a gap." },
+      height: { type: "number", doc: "In px (default 20)." },
+      area: { type: "boolean", doc: "Fills under the line (default true)." },
+      color: { type: ["current", "neutral"], doc: 'The accent ("current") or neutral instead of the series colour.' },
+    },
+    events: {},
+    children: "none",
+  },
+  Text: {
+    doc: "Words.",
+    props: {
+      tone: { type: ["dim", ...TONES], doc: '"dim" for secondary words, or a tone.' },
+      size: { type: TEXT_SIZES, doc: "A step of the type scale." },
+      mono: { type: "boolean", doc: "The monospaced font." },
+      strong: { type: "boolean", doc: "Bold." },
+      truncate: { type: "boolean", doc: "One line, cut with an ellipsis." },
+      select: { type: "boolean", doc: "Selectable, for a value to copy." },
+      balance: { type: "boolean", doc: "Balanced line breaks (a heading)." },
+    },
+    events: {},
+    children: "text",
+    childrenDoc: "The words.",
+  },
+  Badge: {
+    doc: 'A label in a tone ("failed", "3 new").',
+    props: {
+      tone: { type: TONES, doc: "Its colour (default neutral)." },
+      size: { type: ["sm", "md"], doc: '"sm" in a row, "md" elsewhere.' },
+      solid: { type: "boolean", doc: "Filled, for what must stand out." },
+      tip: TIP,
+    },
+    events: {},
+    children: "text",
+    childrenDoc: "Its text.",
+  },
+  StatusDot: {
+    doc: "A small status light.",
+    props: {
+      state: { type: LIGHTS, doc: "An agent's state or a tone." },
+      size: { type: ["sm", "md"], doc: '"sm" or "md".' },
+      label: { type: "string", shows: "title", doc: "Its accessible name." },
+    },
+    events: {},
+    children: "none",
+  },
+  Button: {
+    doc: "A button.",
+    props: {
+      variant: { type: ["default", "primary", "danger", "ghost"], doc: '"primary" for the one main action, "danger" for a destructive one, "ghost" for a quiet one.' },
+      size: { type: ["sm", "md", "lg"], doc: '"sm", "md" (default) or "lg".' },
+      icon: { type: "string", doc: "An SF Symbol name before the label." },
+      pressed: { type: "boolean", doc: "Shown as pressed (a toggle that is on)." },
+      busy: { type: "boolean", doc: "A spinner, and disabled." },
+      disabled: DISABLED,
+    },
+    events: { onClick: press("Pressed.") },
+    children: "text",
+    childrenDoc: "Its label.",
+  },
+  EmptyState: {
+    doc: "What a view shows when it has nothing: what's missing and how to get some.",
+    props: {
+      icon: { type: "string", doc: SYMBOL },
+      title: { type: "string", shows: "title", doc: 'What\'s missing ("No agents").' },
+      text: { type: "string", shows: "words", doc: 'How to get some ("Start one with ⌥⌘N.").' },
+      action: { type: "action", doc: "One button: the way on." },
+      compact: { type: "boolean", doc: "Smaller, for a narrow pane." },
+    },
+    events: {},
+    children: "none",
+  },
+  Callout: {
+    doc: "A note in a box: a warning, an error, a tip.",
+    props: {
+      tone: { type: TONES, doc: 'Its colour and default icon: "warning", "danger" for an error, "accent" for a tip.' },
+      title: { type: "string", shows: "title", doc: "The first line, bold." },
+      icon: { type: "string", doc: "An SF Symbol name; by default the tone's." },
+      compact: { type: "boolean", doc: "One small line." },
+      banner: { type: "boolean", doc: "Full width along the view's top edge." },
+    },
+    events: { onDismiss: { gesture: "dismiss", doc: "Shows a close button." } },
+    children: "any",
+    childrenDoc: "What it says; Buttons in it are its actions.",
+  },
+  Progress: {
+    doc: "A progress bar.",
+    props: {
+      value: { type: "number", shows: "words", doc: "0–1; without one it is indeterminate." },
+      tone: { type: TONES, doc: "Its colour (default accent)." },
+      label: { type: "string", shows: "title", doc: "Its accessible name." },
+    },
+    events: {},
+    children: "none",
+  },
 } as const satisfies Record<string, ApiElementSpec>;
 
 export type ApiElement = keyof typeof API_ELEMENTS;
 export const API_ELEMENT_NAMES = Object.keys(API_ELEMENTS) as ApiElement[];
 
-/** A menu entry in a prop (`Window menu`, `ListRow menu`): data, with `run` as a handler. */
-export type WireMenuEntry = { label: string; run?: HandlerRef; checked?: boolean; disabled?: boolean; submenu?: WireMenuEntry[] } | { separator: true };
+/** An element's spec, as API_ELEMENTS has it (literal types). */
+export type ApiElementOf<E extends ApiElement> = (typeof API_ELEMENTS)[E];
 
-// ── remote ──────────────────────────────────────────────
+/** A prop type's values on the wire (null aside). */
+export type WireTypeOf<T, H = HandlerRef> = T extends "string" | "option"
+  ? string
+  : T extends "text"
+    ? string | number
+    : T extends "number"
+      ? number
+      : T extends "boolean"
+        ? boolean
+        : T extends "numbers"
+          ? (number | null)[]
+          : T extends "menu"
+            ? MenuEntryOf<H>[]
+            : T extends "action"
+              ? ActionOf<H>
+              : T extends "viewState"
+                ? ViewStateOf<H>
+                : T extends "options"
+                  ? OptionOf[]
+                  : T extends readonly (infer V)[]
+                    ? V
+                    : never;
 
-const isHandlerRef = (v: WireValue): v is HandlerRef => !!v && typeof v === "object" && !Array.isArray(v) && typeof (v as { $handler?: unknown }).$handler === "number";
+type RequiredKeys<P> = { [K in keyof P]: P[K] extends { required: true } ? K : never }[keyof P];
+type PropValue<S, H> = S extends { type: infer T } ? WireTypeOf<T, H> | (S extends { nullable: true } ? null : never) : never;
+/** An element's props (not its events or children) as values, with handlers `H` inside menus and actions. */
+export type SpecPropsOf<E extends ApiElement, H = HandlerRef> = { -readonly [K in Exclude<keyof ApiElementOf<E>["props"], RequiredKeys<ApiElementOf<E>["props"]>>]?: PropValue<ApiElementOf<E>["props"][K], H> } & {
+  -readonly [K in RequiredKeys<ApiElementOf<E>["props"]>]: PropValue<ApiElementOf<E>["props"][K], H>;
+};
+/** An element's event names. */
+export type EventsOf<E extends ApiElement> = keyof ApiElementOf<E>["events"] & string;
 
-/** A prop value without handler refs: a ref goes, and so does a menu entry's or an action's `run` with it. */
-function stripValue(v: WireValue): WireValue | undefined {
-  if (isHandlerRef(v)) return undefined;
-  if (Array.isArray(v)) return v.map(stripValue).filter((x): x is WireValue => x !== undefined);
-  if (v && typeof v === "object") {
-    const out: { [key: string]: WireValue } = {};
-    for (const [k, x] of Object.entries(v)) {
-      const s = stripValue(x);
-      if (s !== undefined) out[k] = s;
-    }
-    return out;
-  }
-  return v;
-}
-
-function stripProps(props: Record<string, WireValue>): Record<string, WireValue> {
-  const out: Record<string, WireValue> = {};
-  for (const [k, v] of Object.entries(props)) {
-    const s = stripValue(v);
-    if (s !== undefined) out[k] = s;
-  }
-  return out;
-}
-
-function stripNode(n: TreeNode): TreeNode {
-  return n.type === "#text" ? n : { ...n, props: stripProps(n.props), children: n.children.map(stripNode) };
-}
-
-/**
- * A widget's tree or patch as a view-scope device gets it (docs/56, "Remote"): no handler
- * refs anywhere, so nothing on it can be pressed. A props op's set loses its handlers and
- * unsets those props instead, so a handler sent before can't linger. Anything else passes.
- */
-export function withoutHandlers<M extends WidgetTree | WidgetPatch | { kind: string }>(m: M): M {
-  if (m.kind === "tree") {
-    const t = m as unknown as WidgetTree;
-    return { ...t, nodes: t.nodes.map(stripNode) } as unknown as M;
-  }
-  if (m.kind === "patch") {
-    const p = m as unknown as WidgetPatch;
-    const ops = p.ops.map((op): PatchOp => {
-      if (op.op === "insert") return { ...op, node: stripNode(op.node) };
-      if (op.op !== "props") return op;
-      const set = stripProps(op.set);
-      const gone = Object.keys(op.set).filter((k) => !(k in set));
-      return { ...op, set, unset: [...op.unset, ...gone] };
-    });
-    return { ...p, ops } as unknown as M;
-  }
-  return m;
-}
+export * from "./widget-values.ts";

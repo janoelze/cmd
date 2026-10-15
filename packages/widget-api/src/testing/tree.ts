@@ -1,8 +1,10 @@
 // The tree a test sees: built from the process's own `tree` and `patch` messages the way
 // the app's renderer builds it (a patch out of order fails the test), with finders, the
-// interactions a person would make (press, change, a menu entry) and the matchers.
+// interactions a person would make (press, change, a menu entry) and the matchers. Which
+// events a gesture fires and which props are an element's title and words is the
+// protocol's element spec (API_ELEMENTS).
 
-import type { HandlerRef, PatchOp, TreeElement, TreeNode, WidgetOut, WireValue } from "@cmd/protocol/widget-tree";
+import { API_ELEMENTS, isHandler, type ApiElementSpec, type ApiGesture, type HandlerRef, type PatchOp, type TreeElement, type TreeNode, type WidgetOut, type WireValue } from "@cmd/protocol/widget-tree";
 import type { FakeHost } from "./host.ts";
 
 /** A node of the rendered tree. @since 1.0 */
@@ -11,7 +13,14 @@ export type Node = TreeNode;
 export type Element = TreeElement;
 
 const isEl = (n: TreeNode | undefined): n is TreeElement => !!n && n.type !== "#text";
-const isHandler = (v: WireValue | undefined): v is HandlerRef => !!v && typeof v === "object" && !Array.isArray(v) && typeof (v as HandlerRef).$handler === "number";
+const specOf = (type: string): ApiElementSpec | undefined => (Object.hasOwn(API_ELEMENTS, type) ? (API_ELEMENTS as Record<string, ApiElementSpec>)[type] : undefined);
+/** The prop that is an element's title (`find(type, title)`). */
+const titleProp = (type: string): string | undefined => Object.entries(specOf(type)?.props ?? {}).find(([, p]) => p.shows === "title")?.[0];
+/** The props that are an element's words (`text()`), its title first. */
+const wordProps = (type: string): string[] => {
+  const props = Object.entries(specOf(type)?.props ?? {});
+  return [...props.filter(([, p]) => p.shows === "title"), ...props.filter(([, p]) => p.shows === "words")].map(([k]) => k);
+};
 
 /** Keeps a copy of the widget's tree from its messages. */
 export class Mirror {
@@ -111,7 +120,7 @@ export function textOf(n: TreeNode | TreeNode[]): string {
   const go = (x: TreeNode) => {
     if (x.type === "#text") return void (x.text && out.push(x.text));
     if (x.props.$hidden) return;
-    for (const k of ["label", "title", "value", "place", "detail", "text"]) {
+    for (const k of wordProps(x.type)) {
       const v = x.props[k];
       if (typeof v === "string" || typeof v === "number") out.push(String(v));
     }
@@ -128,7 +137,8 @@ export function titleOf(n: TreeNode): string {
     const c = n.children.find((c) => isEl(c) && c.type === "ListRowContent") as TreeElement | undefined;
     if (c) return String(c.props.title ?? "");
   }
-  for (const k of ["title", "label"]) if (typeof n.props[k] === "string" || typeof n.props[k] === "number") return String(n.props[k]);
+  const k = titleProp(n.type);
+  if (k && (typeof n.props[k] === "string" || typeof n.props[k] === "number")) return String(n.props[k]);
   return textOf(n);
 }
 
@@ -186,31 +196,35 @@ export class RenderedTree {
     await this.settle();
   }
 
-  private async fire(n: TreeElement, names: string[], value?: WireValue): Promise<void> {
+  /** Fires the first of the element's events for `gesture` that it has a handler on. */
+  private async fire(n: TreeElement, gesture: ApiGesture, value?: WireValue): Promise<void> {
+    const names = Object.entries(specOf(n.type)?.events ?? {})
+      .filter(([, e]) => e.gesture === gesture)
+      .map(([k]) => k);
     const name = names.find((k) => isHandler(n.props[k]));
-    if (!name) throw new Error(`${n.type} "${titleOf(n)}" has no ${names.join(" or ")}`);
+    if (!name) throw new Error(`${n.type} "${titleOf(n)}" has ${names.length ? `no ${names.join(" or ")}` : `nothing to ${gesture}`}`);
     this.host.deliver({ kind: "interaction", handler: (n.props[name] as HandlerRef).$handler, event: name, ...(value === undefined ? {} : { value }) });
     await this.settle();
   }
 
-  /** Presses a row, a button or a stat (its onClick, onSelect or onToggle). */
+  /** Presses a row, a button, a section's heading or a stat (its onClick, onToggle or onSelect). */
   press(n: TreeElement): Promise<void> {
-    return this.fire(n, ["onClick", "onSelect", "onToggle"]);
+    return this.fire(n, "press");
   }
 
   /** Double-clicks a row. */
   doubleClick(n: TreeElement): Promise<void> {
-    return this.fire(n, ["onDoubleClick"]);
+    return this.fire(n, "doubleClick");
   }
 
   /** Types into a field or picks a segment: its onChange with `value`. */
   change(n: TreeElement, value: WireValue): Promise<void> {
-    return this.fire(n, ["onChange"], value);
+    return this.fire(n, "change", value);
   }
 
   /** Submits a field. */
   submit(n: TreeElement, value: WireValue): Promise<void> {
-    return this.fire(n, ["onSubmit"], value);
+    return this.fire(n, "submit", value);
   }
 
   /** Chooses an entry of a node's `menu` (a row's context menu, the Window's title menu), or the action of an EmptyState or a View's state. */

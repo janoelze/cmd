@@ -1,9 +1,11 @@
 // The element table (docs/56, "The view"): each element of API 1 (protocol API_ELEMENTS)
-// and the @cmd/ui component that draws it today, with its props translated. The tree's
-// props arrive sanitised (tree.ts); a handler ref becomes a function that sends the
-// interaction to the widget's process. The API's names are the promise and the kit is
-// free to move: renaming a kit component changes a line here, not a widget. The table is
-// typed over ApiElement, so an element added to API_ELEMENTS without an entry fails tsc.
+// and the @cmd/ui component that draws it today. Most are the kit component of the same
+// name taking the spec's props as they are (KIT: the sanitised props spread, each of the
+// spec's events a function that sends the interaction to the widget's process); the rest
+// (ENTRIES) translate. The API's names are the promise and the kit is free to move:
+// renaming a kit component changes a line here, not a widget. KIT is typed against the
+// spec (KitProps), so a kit component that stops taking an element's props, or an enum
+// value, fails tsc; an element added to API_ELEMENTS without a line in either fails too.
 
 import {
   Badge,
@@ -38,11 +40,10 @@ import {
   type ViewStateSpec,
 } from "@cmd/ui";
 import { createElement, memo, startTransition, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
-import type { ApiElement, TreeElement, TreeNode, WireMenuEntry, WireValue, WindowId } from "@cmd/protocol";
+import { API_ELEMENTS, isHandler, type ApiElement, type ApiElementOf, type ApiElementSpec, type ApiPropType, type EventsOf, type OptionOf, type SpecPropsOf, type TreeElement, type TreeNode, type WireMenuEntry, type WireValue, type WindowId } from "@cmd/protocol";
 import { showContextMenu } from "../../lib/context.ts";
 import { setWindowStatus } from "../../lib/windowActions.ts";
 import { menuEntries, setChrome, type Send } from "./chrome.ts";
-import { isHandler } from "./tree.ts";
 
 /** What every element is drawn with: its window and the way back to its process. */
 export interface DrawContext {
@@ -61,7 +62,6 @@ export interface Drawn {
 /** A prop as the kit's type (the sanitiser checked it against API_ELEMENTS). */
 const v = <T,>(x: WireValue | undefined): T | undefined => (x === null || x === undefined ? undefined : (x as T));
 const str = (x: WireValue | undefined) => (typeof x === "string" ? x : undefined);
-const words = (x: WireValue | undefined) => (typeof x === "string" || typeof x === "number" ? x : undefined);
 
 /** A handler prop as a function sending its interaction; undefined without one. */
 function on(ctx: DrawContext, ref: WireValue | undefined, event: string): ((value?: WireValue) => void) | undefined {
@@ -159,7 +159,7 @@ function Field({ p, ctx }: Drawn) {
 
 function SearchField({ p, ctx }: Drawn) {
   const [draft, setDraft] = useDraft(str(p.value) ?? "", on(ctx, p.onChange, "onChange"));
-  return <ToolbarSearchField value={draft} placeholder={str(p.placeholder)} count={words(p.count)} onChange={setDraft} />;
+  return <ToolbarSearchField value={draft} placeholder={str(p.placeholder)} count={v<string | number>(p.count)} onChange={setDraft} />;
 }
 
 function Segmented({ p, ctx }: Drawn) {
@@ -168,7 +168,7 @@ function Segmented({ p, ctx }: Drawn) {
   const [chosen, setChosen] = useState<string | null>(null);
   const value = str(p.value) ?? "";
   useEffect(() => setChosen(null), [value]);
-  const options = (v<{ value: string; label: string; icon?: string }[]>(p.options) ?? []).map((o) => ({ value: o.value, label: o.label, icon: o.icon }));
+  const options = (v<OptionOf[]>(p.options) ?? []).map((o) => ({ value: o.value, label: o.label, icon: o.icon }));
   return <ToolbarSegmented value={chosen ?? value} options={options} label={str(p.label) ?? ""} onChange={(x) => (setChosen(x), change?.(x))} />;
 }
 
@@ -220,33 +220,75 @@ function ViewEntry({ p, node, ctx }: Drawn) {
   );
 }
 
-/** Every element of API 1 and what draws it. */
-export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
+/** An element's props as the kit takes them: the spec's values, each event a function without arguments, its children (drawn) when it holds any. */
+export type KitProps<E extends ApiElement> = SpecPropsOf<E> & { [K in EventsOf<E>]?: () => void } & (ApiElementOf<E>["children"] extends "none" ? unknown : { children: ReactNode });
+
+/** The elements that translate (ENTRIES); every other one is its kit component (KIT). */
+type Translated = "Window" | "View" | "ToolbarField" | "ToolbarSearchField" | "ToolbarSegmented" | "ToolbarMenu" | "ListRow" | "EmptyState";
+
+/**
+ * The elements the kit component of the same name draws from the spec's props as they are.
+ * The `satisfies` is the check that the spec and the kit agree: each element's props
+ * (KitProps, derived from API_ELEMENTS) must be props the component takes.
+ */
+const KIT = {
+  WindowToolbar,
+  ToolbarButton,
+  ToolbarText,
+  ToolbarSpacer,
+  Stack,
+  Inline,
+  Tiles,
+  Hide,
+  List,
+  ListSection,
+  ListRowIcon,
+  ListRowContent,
+  ListRowEnd,
+  Chip,
+  Stat,
+  Sparkline,
+  Text,
+  Badge,
+  StatusDot,
+  Button,
+  Callout,
+  Progress,
+} satisfies { [E in Exclude<ApiElement, Translated>]: (props: KitProps<E>) => ReactNode };
+
+/** What a required prop the sanitiser dropped is drawn as. */
+function empty(type: ApiPropType): WireValue | undefined {
+  if (type === "string" || type === "text") return "";
+  if (type === "numbers") return [];
+  return undefined;
+}
+
+/** The elements whose children are rows: drawn progressively. */
+const ROWS = new Set<ApiElement>(["List", "ListSection"]);
+
+/** A kit component drawn from the spec: the sanitised props, the spec's events as presses, the children when it holds any. */
+function passThrough(name: keyof typeof KIT): ComponentType<Drawn> {
+  const Kit = KIT[name] as ComponentType<Record<string, unknown>>;
+  const spec: ApiElementSpec = API_ELEMENTS[name];
+  function Entry({ p, node, ctx, children }: Drawn) {
+    const props: Record<string, unknown> = {};
+    for (const [k, s] of Object.entries(spec.props)) props[k] = p[k] ?? (s.required ? empty(s.type) : undefined);
+    for (const k of Object.keys(spec.events)) props[k] = press(ctx, p[k], k);
+    if (spec.children !== "none") props.children = ROWS.has(name) ? <Rows nodes={node.children} ctx={ctx} /> : children;
+    return createElement(Kit, props);
+  }
+  Entry.displayName = name;
+  return Entry;
+}
+
+/** The elements that translate: the title bar, the view's toolbar and states, the toolbar's fields (a draft kept here), menus and actions. */
+const ENTRIES: { readonly [K in Translated]: ComponentType<Drawn> } = {
   Window: WindowEntry,
   View: ViewEntry,
-  WindowToolbar: ({ p, children }) => (
-    <WindowToolbar label={str(p.label)} bottom={p.bottom === true}>
-      {children}
-    </WindowToolbar>
-  ),
-  ToolbarButton: ({ p, ctx }) => (
-    <ToolbarButton
-      label={str(p.label) ?? ""}
-      icon={str(p.icon)}
-      showLabel={p.showLabel === true}
-      pressed={v<boolean>(p.pressed)}
-      disabled={p.disabled === true}
-      tone={v<"accent" | "danger" | "needs">(p.tone)}
-      badge={words(p.badge)}
-      tip={str(p.tip)}
-      priority={v<number>(p.priority)}
-      secondary={p.secondary === true}
-      onClick={press(ctx, p.onClick, "onClick")}
-    />
-  ),
   ToolbarField: Field,
   ToolbarSearchField: SearchField,
   ToolbarSegmented: Segmented,
+  // A menu on the wire, opened as the app's.
   ToolbarMenu: ({ p, ctx }) => {
     const label = str(p.label) ?? "";
     return (
@@ -255,42 +297,7 @@ export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
       </ToolbarMenu>
     );
   },
-  ToolbarText: ({ p, children }) => (
-    <ToolbarText priority={v<number>(p.priority)} secondary={p.secondary === true}>
-      {children}
-    </ToolbarText>
-  ),
-  ToolbarSpacer: () => <ToolbarSpacer />,
-  Stack: ({ p, children }) => (
-    <Stack gap={v(p.gap)} pad={v(p.pad)} padY={v(p.padY)} align={v(p.align)} grow={p.grow === true}>
-      {children}
-    </Stack>
-  ),
-  Inline: ({ p, children }) => (
-    <Inline gap={v(p.gap)} align={v(p.align)} justify={v(p.justify)} wrap={p.wrap === true} grow={p.grow === true}>
-      {children}
-    </Inline>
-  ),
-  Tiles: ({ p, children }) => (
-    <Tiles min={v(p.min)} gap={v(p.gap)}>
-      {children}
-    </Tiles>
-  ),
-  Hide: ({ p, children }) => (
-    <Hide below={v(p.below)} above={v(p.above)}>
-      {children}
-    </Hide>
-  ),
-  List: ({ node, ctx }) => (
-    <List>
-      <Rows nodes={node.children} ctx={ctx} />
-    </List>
-  ),
-  ListSection: ({ p, node, ctx }) => (
-    <ListSection title={str(p.title) ?? ""} count={v<number>(p.count)} open={v<boolean>(p.open)} tone={v(p.tone)} onToggle={press(ctx, p.onToggle, "onToggle")}>
-      <Rows nodes={node.children} ctx={ctx} />
-    </ListSection>
-  ),
+  // Keyed for the kit's row motion, its menu the app's context menu.
   ListRow: ({ p, node, ctx, children }) => {
     const menu = v<WireMenuEntry[]>(p.menu);
     return (
@@ -308,33 +315,7 @@ export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
       </ListRow>
     );
   },
-  ListRowIcon: ({ p }) => <ListRowIcon icon={str(p.icon) ?? ""} light={v(p.light)} tone={v(p.tone)} />,
-  ListRowContent: ({ p }) => <ListRowContent title={words(p.title)} place={words(p.place)} detail={words(p.detail)} tone={v(p.tone)} mono={p.mono === true} />,
-  ListRowEnd: ({ children }) => <ListRowEnd>{children}</ListRowEnd>,
-  Chip: ({ p, children }) => (
-    // Without a hue, the kit's neutral one (its CSS default).
-    <Chip hue={v<number>(p.hue) as number} tip={str(p.tip)}>
-      {children}
-    </Chip>
-  ),
-  Stat: ({ p, ctx }) => <Stat label={str(p.label) ?? ""} value={words(p.value) ?? ""} unit={str(p.unit)} delta={words(p.delta)} deltaTone={v(p.deltaTone)} onSelect={press(ctx, p.onSelect, "onSelect")} />,
-  Sparkline: ({ p }) => <Sparkline values={v<(number | null)[]>(p.values) ?? []} height={v(p.height)} area={v(p.area)} color={v(p.color)} />,
-  Text: ({ p, children }) => (
-    <Text tone={v(p.tone)} size={v(p.size)} mono={p.mono === true} strong={p.strong === true} truncate={p.truncate === true} select={p.select === true} balance={p.balance === true}>
-      {children}
-    </Text>
-  ),
-  Badge: ({ p, children }) => (
-    <Badge tone={v(p.tone)} size={v(p.size)} solid={p.solid === true} tip={str(p.tip)}>
-      {children}
-    </Badge>
-  ),
-  StatusDot: ({ p }) => <StatusDot state={v(p.state)} size={v(p.size)} label={str(p.label)} />,
-  Button: ({ p, ctx, children }) => (
-    <Button variant={v(p.variant)} size={v(p.size)} icon={str(p.icon)} pressed={v<boolean>(p.pressed)} busy={p.busy === true} disabled={p.disabled === true} onClick={press(ctx, p.onClick, "onClick")}>
-      {children}
-    </Button>
-  ),
+  // The action is a Button; the text is the kit's children.
   EmptyState: ({ p, ctx }) => {
     const a = v<{ label: string; run: WireValue }>(p.action);
     return (
@@ -343,10 +324,10 @@ export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
       </EmptyState>
     );
   },
-  Callout: ({ p, ctx, children }) => (
-    <Callout tone={v(p.tone)} title={str(p.title)} icon={str(p.icon)} compact={p.compact === true} banner={p.banner === true} onDismiss={press(ctx, p.onDismiss, "onDismiss")}>
-      {children}
-    </Callout>
-  ),
-  Progress: ({ p }) => <Progress value={v<number>(p.value)} tone={v(p.tone)} label={str(p.label)} />,
+};
+
+/** Every element of API 1 and what draws it. */
+export const ELEMENTS: { readonly [K in ApiElement]: ComponentType<Drawn> } = {
+  ...(Object.fromEntries(Object.keys(KIT).map((k) => [k, passThrough(k as keyof typeof KIT)])) as { [K in keyof typeof KIT]: ComponentType<Drawn> }),
+  ...ENTRIES,
 };

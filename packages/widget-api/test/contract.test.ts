@@ -2,11 +2,12 @@
 // object (by type and at run time, sending its own name, which the fake host serves), its
 // JSDoc's @since and "Needs" are its API row's, every element of API_ELEMENTS
 // is exported with exactly the spec's props and events, the versions agree, and every
-// export, verb and prop has JSDoc (the README reference is generated from it).
+// export, verb and prop has JSDoc (the README reference is generated from it). elements.ts
+// is generated from that spec (docs.test.ts checks it is current); these hold it to it anyway.
 
 import ts from "typescript";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { API, API_ELEMENTS, API_VERBS, WIDGET_API, WIDGET_API_MINOR, type ApiElement, type ApiMethods, type ApiVerb } from "@cmd/protocol/widget-tree";
+import { API, API_ELEMENTS, API_VERBS, WIDGET_API, WIDGET_API_MINOR, type ApiElement, type ApiMethods, type ApiVerb, type EventsOf, type SpecPropsOf } from "@cmd/protocol/widget-tree";
 import * as api from "@cmd/widget-api";
 import { createHost, fixtures, render } from "@cmd/widget-api/testing";
 import { verbs } from "../src/cmd.ts";
@@ -20,10 +21,13 @@ type Signature<V extends ApiVerb> = (...args: ApiMethods[V]["params"]) => Promis
 type EveryVerbTyped = { [V in ApiVerb]: CmdVerb<V> extends Signature<V> ? true : V };
 
 type Spec<E extends ApiElement> = (typeof API_ELEMENTS)[E];
-type SpecKeys<E extends ApiElement> = keyof Spec<E>["props"] | Spec<E>["events"][number];
+type SpecKeys<E extends ApiElement> = keyof Spec<E>["props"] | keyof Spec<E>["events"];
 type PropKeys<E extends ApiElement> = Exclude<keyof ElementProps[E], "children" | "key">;
 /** Per element: true when its props type has exactly the spec's props and events. */
 type ElementsMatch = { [E in ApiElement]: [PropKeys<E>] extends [SpecKeys<E>] ? ([SpecKeys<E>] extends [PropKeys<E>] ? true : ["missing in elements.ts", E, Exclude<SpecKeys<E>, PropKeys<E>>]) : ["not in the spec", E, Exclude<PropKeys<E>, SpecKeys<E>>] };
+/** Per element: its props' types (events and children aside) are the spec's, with functions for handlers. */
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type TypesMatch = { [E in ApiElement]: Same<Omit<ElementProps[E], EventsOf<E> | "children">, SpecPropsOf<E, () => void>> extends true ? true : ["types differ", E] };
 /** Per element: a children prop exactly when the spec takes children. */
 type ChildrenMatch = { [E in ApiElement]: ("children" extends keyof ElementProps[E] ? true : false) extends (Spec<E>["children"] extends "none" ? false : true) ? true : ["children", E] };
 
@@ -55,6 +59,7 @@ describe("elements", () => {
   it("each element's props and events are the spec's (tsc)", () => {
     expectTypeOf<ElementsMatch>().toEqualTypeOf<{ [E in ApiElement]: true }>();
     expectTypeOf<ChildrenMatch>().toEqualTypeOf<{ [E in ApiElement]: true }>();
+    expectTypeOf<TypesMatch>().toEqualTypeOf<{ [E in ApiElement]: true }>();
   });
 
   it("every element of the allow-list is exported as its own tag", () => {
