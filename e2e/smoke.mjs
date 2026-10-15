@@ -1447,6 +1447,7 @@ await scenario("magic", async () => {
       return JSON.stringify({ ...j, name: "work-log", files: undefined, cmd: { ...j.cmd, widgets: j.cmd.widgets.map((w) => ({ ...w, title: "Magic Log" })) } }, null, 2);
     };
     const calls = files.map((f) => ({ name: "write_file", input: { why: `Writing ${f}`, path: f, content: content(f) } }));
+    fs.writeFileSync(path.join(home, "magic-script.json"), JSON.stringify({ turns: [{ calls: [{ name: "builtin", input: { why: "Reading the Work Log widget", id: "journal" } }, ...calls, { name: "check", input: { why: "Checking it" } }, { name: "test", input: { why: "Running its tests" } }], answer: "Shows this workspace's work log." }] }));
     const m = await call("window.open", { kind: "magic", input: {} });
     await tileIn(m.id);
     await call("magic.run", { id: m.id, prompt: "work log" });
