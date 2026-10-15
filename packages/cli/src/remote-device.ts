@@ -24,10 +24,13 @@ interface Saved {
   relay?: string;
   route: string;
   hostKey: string;
+  /** The pairing page's origin, sent as Origin as the browser would (a direct mode's listener checks it). */
+  origin?: string;
 }
 
-async function open(o: { socket: string; route: string; hostKey: Bytes; device: KeyPair; psk?: Bytes; name?: string }) {
-  const ws = new WebSocket(`${o.socket.replace(/\/+$/, "")}/r/${o.route}`);
+async function open(o: { socket: string; route: string; hostKey: Bytes; device: KeyPair; psk?: Bytes; name?: string; origin?: string }) {
+  // Node's WebSocket takes headers (undici); the DOM types don't know them.
+  const ws = new WebSocket(`${o.socket.replace(/\/+$/, "")}/r/${o.route}`, (o.origin ? { headers: { origin: o.origin } } : undefined) as never);
   ws.binaryType = "arraybuffer";
   await new Promise((resolve, reject) => ((ws.onopen = resolve), (ws.onerror = () => reject(new Error("can't reach the Mac")))));
   const { receive, closed, session } = openDeviceSession({
@@ -54,15 +57,16 @@ async function open(o: { socket: string; route: string; hostKey: Bytes; device: 
 
 async function saved() {
   const d = JSON.parse(fs.readFileSync(file, "utf8")) as Saved;
-  return open({ socket: d.socket ?? d.relay!, route: d.route, hostKey: fromBase64Url(d.hostKey), device: await importKeyPair(d.key) });
+  return open({ socket: d.socket ?? d.relay!, route: d.route, hostKey: fromBase64Url(d.hostKey), device: await importKeyPair(d.key), origin: d.origin });
 }
 
 if (cmd === "pair") {
-  const link = decodePairing(new URL(args[0]!).hash);
+  const url = new URL(args[0]!);
+  const link = decodePairing(url.hash);
   const device = await generateKeyPair(true);
-  const { s, ws } = await open({ ...link, device, name: args[1] });
+  const { s, ws } = await open({ ...link, device, name: args[1], origin: url.origin });
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const doc: Saved = { key: await exportKeyPair(device), socket: link.socket, route: link.route, hostKey: toBase64Url(link.hostKey) };
+  const doc: Saved = { key: await exportKeyPair(device), socket: link.socket, route: link.route, hostKey: toBase64Url(link.hostKey), origin: url.origin };
   fs.writeFileSync(file, JSON.stringify(doc), { mode: 0o600 });
   console.log(`paired: ${JSON.stringify(s.host)}`);
   ws.close();
