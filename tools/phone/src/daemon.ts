@@ -101,8 +101,11 @@ if (core.kind === "scenario") {
   log(`scenario ${core.name}: ${scenario.description}`);
   seeded = await seed(conn, scenario, ctx, log);
 } else {
-  if (!fs.existsSync(path.join(coreHome, "core.sock"))) startCore(coreHome, null);
-  conn = await connectCore(coreHome);
+  // Running already (pnpm dev, pnpm core): use it; else start it, as pnpm core would.
+  const running = await connectCore(coreHome, 1500).catch(() => null);
+  // Left running after stop, like pnpm core's (stopping it here would stop the instances inside it too).
+  if (!running) (startCore(coreHome, null), notes.push("Started the dev core. It keeps running after pnpm phone stop; pnpm core:stop stops it."));
+  conn = running ?? (await connectCore(coreHome));
   for (const [key, value] of Object.entries(relaySettings(relay.url, web.url))) await conn.client.call("settings.set", { key, value });
   log(`dev core at ${coreHome}: remote access set to this relay and web client`);
 }
@@ -176,7 +179,11 @@ if (mine) {
   const request = await requests.next(20_000);
   await call("remote.approve", { requestId: request.requestId, allow: true, scope: "control" });
   await onNow();
-  mine = await waitFor(async () => (await pairings()).find((p) => p.socket === relay.url && p.deviceId), "the pairing to be saved");
+  // This core's: the browser may be paired with other cores on the same relay (another --core).
+  mine = await waitFor(async () => {
+    const ids = (await call("remote.devices", {})).map((d) => d.id);
+    return (await pairings()).find((p) => p.socket === relay.url && ids.includes(p.deviceId));
+  }, "the pairing to be saved");
   log(`pairing: paired this browser now (device ${mine.deviceId}, words ${request.words.join(" ")})`);
 }
 const mac = mine.key;
