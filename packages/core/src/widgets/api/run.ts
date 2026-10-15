@@ -12,7 +12,7 @@ import path from "node:path";
 import type { ApiRunOptions, ApiRunResult, WidgetPermissions } from "@cmd/protocol";
 import { classifyArgs, credentialsForPrograms, ESCAPES, expandPath, redact } from "../../lib/policy.ts";
 import { isDeniedPath, magicDenyPaths } from "../../lib/paths-deny.ts";
-import { execArgv, sandboxAvailable, type ExecOptions, type ExecResult, type SandboxMode } from "../../lib/sandbox.ts";
+import { execArgv, sandboxMode, type ExecOptions, type ExecResult, type SandboxMode } from "../../lib/sandbox.ts";
 import { RateLimit, failed, invalid, missing } from "./access.ts";
 
 /** The bounds of one run (the d.ts says them: cmd.ts's `Run`). */
@@ -26,8 +26,8 @@ export interface RunScope {
   exec?: (argv: string[], o: ExecOptions) => Promise<ExecResult>;
 }
 
-/** Whether runs go through sandbox-exec: always, unless the core can't apply one and was told to run without (CMD_MAGIC_UNSANDBOXED=1, as widget processes are). */
-export const runSandbox = (): SandboxMode => (process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required");
+/** Whether runs go through sandbox-exec: lib/sandbox.ts's one rule. */
+export const runSandbox = (): SandboxMode => sandboxMode();
 
 const inside = (dir: string, p: string) => p === dir || p.startsWith(dir + path.sep);
 

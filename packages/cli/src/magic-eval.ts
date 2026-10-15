@@ -12,7 +12,7 @@ import { parseArgs } from "node:util";
 import type { WidgetPermissions } from "@cmd/protocol";
 import { cmdHome } from "@cmd/protocol/node";
 import { buildPackage, buildPackageSystem, playwrightPreviewer, promptHash, slugOf, type BuildEvent, type PackageBuildResult } from "@cmd/core/magic";
-import { pickBackend, stamp, writeRun } from "./magic.ts";
+import { labSandbox, pickBackend, stamp, writeRun } from "./magic.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CASES = path.resolve(here, "../../core/src/magic/evals/cases.json");
@@ -155,7 +155,7 @@ export async function evalCommand(argv: string[]): Promise<number> {
   const repeat = Math.max(1, Number(o.repeat ?? 1));
   const out = path.resolve(o.out ?? path.join(cmdHome(), "magic", "evals", stamp()));
   const backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort });
-  const unsandboxed = !!o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
+  const sandbox = labSandbox(o.unsandboxed);
   const previewer = await playwrightPreviewer();
   const hashes = new Map(variants.map((v) => [v.name, promptHash(buildPackageSystem(v.file))]));
 
@@ -176,7 +176,7 @@ export async function evalCommand(argv: string[]): Promise<number> {
         dir: path.join(dir, name),
         name,
         cwd: process.cwd(),
-        sandbox: unsandboxed ? "off" : "required",
+        sandbox,
         systemFile: v.file,
         previewer: async () => previewer,
         // Evals allow what a package asks for: the person's answer isn't what is judged.

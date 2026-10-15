@@ -74,7 +74,8 @@ export type PackageResult = { ok: true; pkg: WidgetPackage } | { ok: false; erro
 export const DEFAULT_ICON = "puzzlepiece.extension";
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-const NAME = /^[a-z0-9][a-z0-9._-]{0,213}$/;
+/** A package's name: its folder in the packages folder, so lower case, no slashes, no leading dot. */
+export const PACKAGE_NAME = /^[a-z0-9][a-z0-9._-]{0,213}$/;
 const WIDGET_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ICON = /^[a-z0-9]+(\.[a-z0-9]+)*$/;
 /** What `act` and `ai` may name: protocol widget-verbs.ts's acts and ai verbs. */
@@ -237,7 +238,7 @@ export function parsePackage(json: unknown, dir: string, o: ParseOptions = {}): 
   const running = o.cmdVersion === undefined ? cmdVersion() : o.cmdVersion;
 
   const name = json.name;
-  if (typeof name !== "string" || !NAME.test(name)) errors.push(name === undefined ? `name: missing; add a name like "ci-runs"` : `name: ${q(name)} isn't a package name (lowercase letters, digits, - . _)`);
+  if (typeof name !== "string" || !PACKAGE_NAME.test(name)) errors.push(name === undefined ? `name: missing; add a name like "ci-runs"` : `name: ${q(name)} isn't a package name (lowercase letters, digits, - . _)`);
   const version = json.version;
   if (typeof version !== "string" || !SEMVER.test(version)) errors.push(version === undefined ? `version: missing; add a version like "1.0.0"` : `version: ${q(version)} isn't a version like "1.0.0"`);
   const description = typeof json.description === "string" ? json.description.trim() || undefined : undefined;

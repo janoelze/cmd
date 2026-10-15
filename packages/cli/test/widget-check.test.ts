@@ -1,10 +1,17 @@
 // `cmd widget check <dir>` on widget packages (docs/56): the good fixture passes with 0,
-// each bad-* fixture fails with 2 and names the field that's wrong.
+// each bad-* fixture fails with 2 and names the field that's wrong; the CLI sandboxes the
+// toolchain by the core's own rule.
 
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { sandboxAvailable, sandboxMode } from "@cmd/core/magic";
 import { checkPackage, widgetCommand } from "../src/widget.ts";
+import { NO_SANDBOX, toolSandbox } from "../src/widget-new.ts";
+
+// Inside another sandbox (an agent's) the toolchain runs only when told to go on without one.
+if (!sandboxAvailable()) process.env.CMD_MAGIC_UNSANDBOXED = "1";
 
 const fixtures = path.join(import.meta.dirname, "fixtures", "widgets");
 
@@ -83,5 +90,44 @@ describe("cmd widget check on packages", () => {
     const bad = run("bad-run-shell");
     expect(bad.status).toBe(2);
     expect(bad.stderr).toContain("cmd.permissions.run");
+  });
+});
+
+describe("the sandbox cmd widget check and preview run in", () => {
+  const was = process.env.CMD_MAGIC_UNSANDBOXED;
+  afterEach(() => (was === undefined ? delete process.env.CMD_MAGIC_UNSANDBOXED : (process.env.CMD_MAGIC_UNSANDBOXED = was)));
+
+  it("is the core's rule: sandboxed, unless it can't be and CMD_MAGIC_UNSANDBOXED=1 says to go on", () => {
+    for (const env of [undefined, "1", "0"]) {
+      if (env === undefined) delete process.env.CMD_MAGIC_UNSANDBOXED;
+      else process.env.CMD_MAGIC_UNSANDBOXED = env;
+      expect(sandboxMode()).toBe(env === "1" && !sandboxAvailable() ? "off" : "required");
+      expect(toolSandbox()).toBe(sandboxMode() === "off" || sandboxAvailable() ? sandboxMode() : null);
+    }
+  });
+
+  it.skipIf(sandboxAvailable())("refuses to type-check unsandboxed unless told, and says how", async () => {
+    delete process.env.CMD_MAGIC_UNSANDBOXED;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await checkPackage(path.join(fixtures, "good"), false, "0.30.0")).toBe(2);
+      expect(err.mock.calls.flat().join("\n")).toContain(NO_SANDBOX);
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  it("is decided in one place: no other source in the core or the CLI reads CMD_MAGIC_UNSANDBOXED's rule", () => {
+    const root = path.join(import.meta.dirname, "../..");
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.ts$/.test(e.name) && /CMD_MAGIC_UNSANDBOXED\s*===|sandboxAvailable\(\)\s*\?\s*"required"/.test(fs.readFileSync(p, "utf8"))) hits.push(path.relative(root, p));
+      }
+    };
+    for (const pkg of ["core/src", "cli/src"]) walk(path.join(root, pkg));
+    expect(hits).toEqual(["core/src/lib/sandbox.ts"]);
   });
 });

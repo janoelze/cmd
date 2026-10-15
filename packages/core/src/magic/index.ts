@@ -1,7 +1,7 @@
 // What `cmd magic` and `cmd widget` use of the core without one running (the prompt lab, evals).
 export * from "../ai/index.ts";
 export { classify, credentialsFor, credentialsForPrograms, DEFAULT_DENY_PATHS, isDeniedPath, redact } from "../lib/policy.ts";
-export { execArgv, execCommand, sandboxAvailable, sandboxProfile, type SandboxMode } from "../lib/sandbox.ts";
+export { execArgv, execCommand, sandboxAvailable, sandboxMode, sandboxProfile, type SandboxMode } from "../lib/sandbox.ts";
 export { TOOL_SPECS, toolsFor, runTool, preview } from "./tools.ts";
 export { readSecrets, SecretsService } from "../kernel/secrets.ts";
 export { RUNTIME_DIR, DENO_VERSION, findDeno, installDeno, bundledDeno, denoVersion } from "../widgets/deno.ts";

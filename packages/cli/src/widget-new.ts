@@ -5,22 +5,40 @@
 // TypeScript (toolchain.ts's linkDevModules) and cmd-env.d.ts from package.json, so
 // `npm test`, `tsc` and an editor work in it. `test` runs the package's own `test` script
 // (vitest run) with those on the PATH: the same thing `npm test` does, not a runner of its own.
+// What every `cmd widget` command does first lives here too: read the package (loadPackage), and
+// the sandbox the toolchain runs in (toolSandbox: the core's rule).
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { linkDevModules, writeEnvTypes } from "@cmd/core/magic";
-import { cmdVersion, readPackage } from "@cmd/core/widgets/package";
+import { linkDevModules, sandboxAvailable, sandboxMode, writeEnvTypes, type SandboxMode } from "@cmd/core/magic";
+import { cmdVersion, PACKAGE_NAME, readPackage, type WidgetPackage } from "@cmd/core/widgets/package";
 import { dim, green, red } from "./magic.ts";
+import { tilde } from "./tilde.ts";
 
 export const TEMPLATE = path.resolve(import.meta.dirname, "../templates/widget");
 
-const NAME = /^[a-z0-9][a-z0-9._-]*$/;
+/** Why `check` and `preview` don't run TypeScript and Vitest here, and how to opt out. */
+export const NO_SANDBOX = "cmd can't sandbox TypeScript and Vitest here (inside another sandbox?), so it won't run them; CMD_MAGIC_UNSANDBOXED=1 runs them without one";
 
-const tilde = (p: string) => {
-  const home = process.env.HOME;
-  return home && (p === home || p.startsWith(home + "/")) ? "~" + p.slice(home.length) : p;
-};
+/** The sandbox `check` and `preview` run TypeScript and Vitest in: the core's own rule (sandboxMode); null where it can't and wasn't told to go on without (NO_SANDBOX). */
+export function toolSandbox(): SandboxMode | null {
+  const mode = sandboxMode();
+  return mode === "off" || sandboxAvailable() ? mode : null;
+}
+
+/**
+ * The package in `dir`, as every `cmd widget` command reads it first; null after printing what's
+ * wrong with its package.json (the caller exits 2). `what`: what it can't be, "can't be linked".
+ */
+export function loadPackage(dir: string, o: { cmdVersion?: string | null; what?: string } = {}): WidgetPackage | null {
+  const r = readPackage(dir, { cmdVersion: o.cmdVersion ?? null });
+  if (r.ok) return r.pkg;
+  const n = r.errors.length;
+  console.error(`${red("✗")} ${path.basename(dir)} ${dim(`· ${o.what ? `${o.what}: ` : ""}${n} ${n === 1 ? "problem" : "problems"} in package.json`)}`);
+  for (const e of r.errors) console.error(red(`  ${e}`));
+  return null;
+}
 
 /** "my-widget" → "My Widget". */
 export const titleOf = (name: string) =>
@@ -77,7 +95,7 @@ export function newPackage(name: string | undefined, parent: string): number {
     console.error(red("usage: cmd widget new <name>   (lower case: my-widget)"));
     return 1;
   }
-  if (!NAME.test(name) || name.includes("..")) {
+  if (!PACKAGE_NAME.test(name)) {
     console.error(red(`${name} can't be a package's name: use lower case letters, digits and dashes (my-widget)`));
     return 1;
   }
@@ -101,11 +119,7 @@ export function newPackage(name: string | undefined, parent: string): number {
 
 /** `cmd widget test [dir]`: the package's `test` script (vitest run), with this cmd's tools linked; its exit code. */
 export async function testPackage(dir: string, extra: string[] = []): Promise<number> {
-  const r = readPackage(dir);
-  if (!r.ok) {
-    console.error(`${red("✗")} ${path.basename(dir)} ${dim("· fix package.json first (cmd widget check)")}`);
-    return 2;
-  }
+  if (!loadPackage(dir)) return 2;
   prepare(dir);
   const bin = path.join(dir, "node_modules/.bin");
   if (!fs.existsSync(path.join(bin, "vitest"))) {

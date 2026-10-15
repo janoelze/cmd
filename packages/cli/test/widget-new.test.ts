@@ -8,12 +8,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { previewPageBuilt } from "@cmd/core/magic";
+import { previewPageBuilt, sandboxAvailable } from "@cmd/core/magic";
 import { checkPackage, WIDGET_HELP, WIDGET_SUBS, widgetCommand } from "../src/widget.ts";
 import { devLine } from "../src/widget-dev.ts";
 import { idOf, templateFiles, titleOf } from "../src/widget-new.ts";
 
 const MAIN = path.join(import.meta.dirname, "..", "src", "main.ts");
+// check and preview sandbox TypeScript and Vitest as the core does; inside another sandbox (an agent's) they can't.
+if (!sandboxAvailable()) process.env.CMD_MAGIC_UNSANDBOXED = "1";
 const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-widget-new-")));
 afterAll(() => fs.rmSync(scratch, { recursive: true, force: true }));
 

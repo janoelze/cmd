@@ -10,8 +10,10 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import type { CoreEvent, WidgetEntry } from "@cmd/protocol";
 import { connect, widgetsHome, type Connection } from "@cmd/protocol/node";
-import { cmdVersion, readPackage } from "@cmd/core/widgets/package";
+import { cmdVersion, PACKAGE_NAME } from "@cmd/core/widgets/package";
 import { dim, green, red } from "./magic.ts";
+import { tilde } from "./tilde.ts";
+import { loadPackage } from "./widget-new.ts";
 
 export const LINK_SUBS = ["link", "unlink", "remove"];
 
@@ -23,11 +25,6 @@ export const WIDGET_LINK_HELP = `       cmd widget link [dir]        add a widge
 
 /** How long to wait for the Library to list (or drop) a package. */
 const LIBRARY_MS = 5000;
-
-export const tilde = (p: string) => {
-  const home = process.env.HOME;
-  return home && (p === home || p.startsWith(home + "/")) ? "~" + p.slice(home.length) : p;
-};
 
 /** The Library's line for a package's widget, as `cmd widget list` prints it. */
 const line = (e: WidgetEntry) => `${e.ref.padEnd(32)} ${e.title}${dim(`  ${e.name} ${e.version} · API ${e.api}${e.link ? ` · from ${tilde(e.link)}` : ""}`)}`;
@@ -52,13 +49,9 @@ async function link(home: string, given: string, json: boolean): Promise<number>
     console.error(red(`${tilde(given)} doesn't exist`));
     return 1;
   }
-  const r = readPackage(dir, { cmdVersion: cmdVersion() });
-  if (!r.ok) {
-    console.error(`${red("✗")} ${path.basename(dir)} ${dim(`· can't be linked: ${r.errors.length} ${r.errors.length === 1 ? "problem" : "problems"} in package.json`)}`);
-    for (const e of r.errors) console.error(red(`  ${e}`));
-    return 2;
-  }
-  const name = r.pkg.name;
+  const pkg = loadPackage(dir, { cmdVersion: cmdVersion(), what: "can't be linked" });
+  if (!pkg) return 2;
+  const name = pkg.name;
   const at = path.join(home, name);
   const refused = ensureLink(home, dir, name);
   if (refused) {
@@ -68,7 +61,7 @@ async function link(home: string, given: string, json: boolean): Promise<number>
 
   const conn = await connect().catch(() => null);
   if (!conn) {
-    console.log(`${green("✓")} ${name} ${r.pkg.version} linked ${dim(`· ${tilde(at)} → ${tilde(dir)}`)}`);
+    console.log(`${green("✓")} ${name} ${pkg.version} linked ${dim(`· ${tilde(at)} → ${tilde(dir)}`)}`);
     process.stderr.write(dim("  cmd isn't running: the Widget Library lists it when cmd starts\n"));
     return 0;
   }
@@ -116,7 +109,7 @@ export function ensureLink(home: string, dir: string, name: string): string | nu
 }
 
 async function unlink(home: string, name: string, force: boolean): Promise<number> {
-  if (!/^[a-z0-9][a-z0-9._-]*$/.test(name) || name.includes("..")) {
+  if (!PACKAGE_NAME.test(name)) {
     console.error(red(`${name} isn't a widget package's name`));
     return 1;
   }

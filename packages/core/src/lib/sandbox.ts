@@ -64,6 +64,16 @@ export function commandsSupported(mode: SandboxMode = "required"): boolean {
   return mode === "off" || sandboxAvailable();
 }
 
+/**
+ * How cmd runs what a widget or Magic runs (Magic's toolchain, a widget's process and its
+ * cmd.run, `cmd widget check` and `preview`): sandboxed, unless this process can't apply a
+ * sandbox (inside another one) and CMD_MAGIC_UNSANDBOXED=1 says to go on without it. One rule
+ * for the core and the CLI: where it can't sandbox and wasn't told, nothing runs.
+ */
+export function sandboxMode(): SandboxMode {
+  return process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required";
+}
+
 /** Can this process apply a sandbox profile? Probed once. */
 export function sandboxAvailable(): boolean {
   if (available === undefined) {

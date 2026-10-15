@@ -21,12 +21,14 @@ import {
   playwrightPreviewer,
   SecretsService,
   sandboxAvailable,
+  sandboxMode,
   slugOf,
   stepLog,
   wantsText,
   type Backend,
   type BuildEvent,
   type PackageBuildResult,
+  type SandboxMode,
 } from "@cmd/core/magic";
 
 export const MAGIC_HELP = `cmd magic — make a widget package (or a terminal command) from a request
@@ -80,8 +82,11 @@ export function pickBackend(o: { provider?: string; model?: string; effort?: str
   return ai.backend({ tier: "smart", purpose: "magic.lab", provider: o.provider as never, model: o.model, effort });
 }
 
-export function sandboxNote(unsandboxed: boolean): void {
-  if (!unsandboxed && !sandboxAvailable()) process.stderr.write(dim("  note: sandbox-exec is unavailable here (inside another sandbox?), so commands won't run; use --unsandboxed to rely on the policy and Deno's permissions alone\n"));
+/** The lab's sandbox: --unsandboxed, else the core's rule (sandboxMode), with a note where nothing will run. */
+export function labSandbox(unsandboxed: boolean | undefined): SandboxMode {
+  const mode = unsandboxed ? "off" : sandboxMode();
+  if (mode === "required" && !sandboxAvailable()) process.stderr.write(dim("  note: sandbox-exec is unavailable here (inside another sandbox?), so commands won't run; use --unsandboxed (or CMD_MAGIC_UNSANDBOXED=1) to rely on the policy and Deno's permissions alone\n"));
+  return mode;
 }
 
 // ── trace printing ──────────────────────────────────────
@@ -160,8 +165,7 @@ export async function magicCommand(argv: string[]): Promise<number> {
       }
     }
   }
-  const unsandboxed = !!o.unsandboxed || process.env.CMD_MAGIC_UNSANDBOXED === "1";
-  sandboxNote(unsandboxed);
+  const sandbox = labSandbox(o.unsandboxed);
   let backend: Backend;
   try {
     backend = pickBackend({ provider: o.provider, model: o.model, effort: o.effort });
@@ -194,7 +198,7 @@ export async function magicCommand(argv: string[]): Promise<number> {
       explore: !o["no-explore"],
       maxSteps: o["max-steps"] ? Number(o["max-steps"]) : undefined,
       maxTokens: userSettings()["magic.maxTokens"] || undefined,
-      sandbox: unsandboxed ? "off" : "required",
+      sandbox,
       systemFile: o.system ? path.resolve(o.system) : undefined,
       previewer: async () => previewer,
       // The lab is the person at the terminal: what the package asks for is allowed (in the app, the grants sheet asks).

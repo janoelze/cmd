@@ -227,8 +227,8 @@ interface Work {
   done(): void;
 }
 
-/** A copy of the package's own files with node_modules linked to the checkout's, and the configs. */
-function workCopy(src: string, mods: Record<string, string>): Work {
+/** A copy of the package's own files with node_modules linked to the checkout's, and the configs (`pkg`: package.json as already read). */
+function workCopy(src: string, mods: Record<string, string>, pkg_?: WidgetPackage): Work {
   const dir = real(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-magic-pkg-")));
   const pkg = path.join(dir, "pkg");
   for (const f of listFiles(src)) {
@@ -242,7 +242,7 @@ function workCopy(src: string, mods: Record<string, string>): Work {
   }
   fs.writeFileSync(path.join(pkg, "tsconfig.json"), JSON.stringify(TSCONFIG));
   // The config's types as package.json says now, whatever the folder's own copy says.
-  const read = readPackage(src);
+  const read = pkg_ ? { ok: true as const, pkg: pkg_ } : readPackage(src);
   if (read.ok) writeEnvTypes(pkg, read.pkg);
   // Modules, as Deno runs them, whether or not package.json says "type": "module".
   try {
@@ -293,7 +293,7 @@ export function checkoutToolchain(repo = REPO): Toolchain | null {
       const problems: string[] = [];
       for (const w of read.pkg.widgets) if (w.surface === "frame" && !exists(path.join(dir, "view.html"))) problems.push(`cmd.widgets: "${w.id}" draws in a frame: write its view.html`);
       if (!listFiles(dir).some((f) => /^src\/.*\.tsx?$/.test(f))) return { ok: false, problems: [...problems, "src/: no TypeScript yet"], pkg: read.pkg, types: "skipped" };
-      const w = workCopy(dir, mods);
+      const w = workCopy(dir, mods, read.pkg);
       try {
         const r = await execArgv([node, tsc, "-p", path.join(w.pkg, "tsconfig.json"), "--pretty", "false"], { cwd: w.pkg, sandbox: o.sandbox, deny: o.deny, signal: o.signal, writable: [w.dir], net: [], timeoutMs: 90_000, maxBytes: 256 * 1024, env });
         if (r.code !== 0) {
@@ -333,7 +333,7 @@ export function checkoutToolchain(repo = REPO): Toolchain | null {
       const read = readPackage(dir, { cmdVersion: o.cmdVersion ?? null });
       if (!read.ok) return { ok: false, variants: [], problems: read.errors };
       if (read.pkg.widgets.every((x) => x.surface === "frame")) return { ok: true, variants: [], problems: [], skipped: "it draws in a frame (view.html), which the previewer doesn't draw" };
-      const w = workCopy(dir, mods);
+      const w = workCopy(dir, mods, read.pkg);
       try {
         fs.mkdirSync(path.join(w.pkg, "__cmd__"));
         fs.writeFileSync(path.join(w.pkg, "__cmd__", "trees.test.tsx"), TREES_HARNESS);

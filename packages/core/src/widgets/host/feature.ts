@@ -6,7 +6,7 @@
 import os from "node:os";
 import path from "node:path";
 import type { CoreContext } from "../../kernel/context.ts";
-import { sandboxAvailable } from "../../lib/sandbox.ts";
+import { sandboxMode } from "../../lib/sandbox.ts";
 import type { WidgetPackages } from "../packages.ts";
 import { WidgetHost } from "./host.ts";
 import { DenoRuntime } from "./runtime.ts";
@@ -18,7 +18,7 @@ export function createWidgetHost(core: CoreContext, packages: WidgetPackages, o:
     ? new DenoRuntime({
         deno: o.deno,
         denoDir: path.join(o.stateDir ?? os.tmpdir(), "runtime", "deno-cache"),
-        sandbox: () => (process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required"),
+        sandbox: sandboxMode,
       })
     : null;
   // Acts ask through the tools' approvals and show on the board as their calls do (made on first use).

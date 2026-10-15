@@ -22,7 +22,7 @@ import { cmdVersion, type WidgetPackage } from "../../widgets/package.ts";
 import { linkOf, listFiles, PackageRevisions } from "../../widgets/revisions.ts";
 import { DENO_VERSION } from "../../widgets/deno.ts";
 import { RELOAD_DEBOUNCE_MS } from "../../widgets/reload.ts";
-import { sandboxAvailable, type SandboxMode } from "../../lib/sandbox.ts";
+import { sandboxMode, type SandboxMode } from "../../lib/sandbox.ts";
 import { buildPackage, stepLog, type BuildEvent, type PackageBuildResult } from "./build.ts";
 import { readMark, writeMark } from "./files.ts";
 import { scriptFromEnv, scriptedBackend } from "./scripted.ts";
@@ -136,7 +136,7 @@ export class MagicPackages {
   }
 
   #sandbox(): SandboxMode {
-    return this.#o.sandbox ?? (process.env.CMD_MAGIC_UNSANDBOXED === "1" && !sandboxAvailable() ? "off" : "required");
+    return this.#o.sandbox ?? sandboxMode();
   }
 
   /** Build the window's request into a package (new, or the one it edits). */

@@ -14,6 +14,7 @@ import { STATS_HELP, statsCommand } from "./stats.ts";
 import { REMOTE_HELP, remoteCommand } from "./remote.ts";
 import { skewMessage } from "./skew.ts";
 import { exitCode } from "./exit.ts";
+import { tilde } from "./tilde.ts";
 import { hook } from "./hook.ts";
 import { TOOLS_HELP, toolsCommand } from "./tools.ts";
 
@@ -547,8 +548,6 @@ async function findWorkspace(client: Connection["client"], ref: string | undefin
   } catch {}
   throw new Error(`no such workspace: ${ref}`);
 }
-
-const tilde = (p: string) => (process.env.HOME && (p === process.env.HOME || p.startsWith(process.env.HOME + "/")) ? "~" + p.slice(process.env.HOME.length) : p);
 
 /** Where an agent or terminal is, where that differs from its workspace (docs/35): "on <branch>" for a worktree of its project, "in <project>" elsewhere. */
 function whereText(git: GitPlace | null | undefined, cwd: string, workspace: Workspace | undefined): string {

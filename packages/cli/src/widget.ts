@@ -9,11 +9,11 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { ENV, type WidgetEntry } from "@cmd/protocol";
 import { connect, defaultSocketPath } from "@cmd/protocol/node";
-import { checkoutToolchain, sandboxAvailable, writeEnvTypes } from "@cmd/core/magic";
-import { cmdVersion, readPackage } from "@cmd/core/widgets/package";
+import { checkoutToolchain, writeEnvTypes } from "@cmd/core/magic";
+import { cmdVersion, readPackage, type WidgetPackage } from "@cmd/core/widgets/package";
 import { HOST_SUBS, WIDGET_HOST_HELP, widgetHostCommand } from "./widget-host.ts";
 import { LINK_SUBS, WIDGET_LINK_HELP, widgetLinkCommand } from "./widget-link.ts";
-import { newPackage, testPackage } from "./widget-new.ts";
+import { newPackage, NO_SANDBOX, testPackage, toolSandbox } from "./widget-new.ts";
 import { dim, green, red } from "./magic.ts";
 
 export const WIDGET_HELP = `cmd widget — make, check and run widget packages
@@ -128,23 +128,27 @@ async function coreVersion(): Promise<string | null> {
 export async function checkPackage(dir: string, json: boolean, local: string | null = cmdVersion(), ask: () => Promise<string | null> = coreVersion, o: { types?: boolean } = {}): Promise<number> {
   const version = local ?? (await ask());
   if (!version) process.stderr.write(dim("engines.cmd not checked: no cmd running\n"));
-  const r = readPackage(dir, { cmdVersion: version });
-  let problems = r.ok ? [] : r.errors;
+  const tools = o.types === false ? null : checkoutToolchain();
+  const sandbox = tools ? toolSandbox() : null;
+  // package.json is read once: by the toolchain's check where there is one, else here.
+  let pkg: WidgetPackage | null;
+  let problems: string[];
   let types: "checked" | "skipped" = "skipped";
-  if (r.ok) {
-    writeEnvTypes(dir, r.pkg);
-    const tools = o.types === false ? null : checkoutToolchain();
-    if (tools) {
-      const c = await tools.check(dir, { sandbox: sandboxAvailable() ? "required" : "off", deny: [], cmdVersion: version });
-      problems = c.problems;
-      types = c.types;
-    } else if (o.types !== false) process.stderr.write(dim("types not checked: this cmd has no TypeScript to check with\n"));
+  if (tools && sandbox) {
+    const c = await tools.check(dir, { sandbox, deny: [], cmdVersion: version });
+    ({ pkg, problems, types } = c);
+  } else {
+    const r = readPackage(dir, { cmdVersion: version });
+    [pkg, problems] = r.ok ? [r.pkg, []] : [null, r.errors];
+    if (tools) problems.push(NO_SANDBOX);
+    else if (o.types !== false) process.stderr.write(dim("types not checked: this cmd has no TypeScript to check with\n"));
   }
+  if (pkg) writeEnvTypes(dir, pkg);
   const ok = !problems.length;
-  if (json) console.log(JSON.stringify(r.ok && ok ? { ok: true, name: r.pkg.name, version: r.pkg.version, api: r.pkg.api, kinds: r.pkg.widgets.map((w) => w.kind), types } : { ok: false, problems }));
-  else if (r.ok && ok) console.log(`${green("✓")} ${r.pkg.name} ${r.pkg.version} ${dim(`· API ${r.pkg.api} · ${r.pkg.widgets.map((w) => w.kind).join(", ")}${types === "checked" ? " · types" : ""}`)}`);
+  if (json) console.log(JSON.stringify(pkg && ok ? { ok: true, name: pkg.name, version: pkg.version, api: pkg.api, kinds: pkg.widgets.map((w) => w.kind), types } : { ok: false, problems }));
+  else if (pkg && ok) console.log(`${green("✓")} ${pkg.name} ${pkg.version} ${dim(`· API ${pkg.api} · ${pkg.widgets.map((w) => w.kind).join(", ")}${types === "checked" ? " · types" : ""}`)}`);
   else {
-    const where = r.ok ? "" : " in package.json";
+    const where = pkg ? "" : " in package.json";
     // TypeScript's continuation lines are indented: count the problems, not the lines.
     const n = problems.filter((p) => !/^\s/.test(p)).length;
     console.error(`${red("✗")} ${path.basename(dir)} ${dim(`· ${n} ${n === 1 ? "problem" : "problems"}${where}`)}`);

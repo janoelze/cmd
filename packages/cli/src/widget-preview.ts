@@ -9,10 +9,10 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { PREVIEW_SIZES, type PreviewSize } from "@cmd/protocol";
-import { checkoutToolchain, drawTrees, playwrightPreviewer, previewPageBuilt, sandboxAvailable, type DrawnTree } from "@cmd/core/magic";
-import { readPackage } from "@cmd/core/widgets/package";
+import { checkoutToolchain, drawTrees, playwrightPreviewer, previewPageBuilt, type DrawnTree } from "@cmd/core/magic";
 import { dim, green, red } from "./magic.ts";
-import { tilde } from "./widget-link.ts";
+import { tilde } from "./tilde.ts";
+import { loadPackage, NO_SANDBOX, toolSandbox } from "./widget-new.ts";
 
 const SIZES = Object.keys(PREVIEW_SIZES) as PreviewSize[];
 
@@ -31,11 +31,8 @@ export async function previewCommand(argv: string[]): Promise<number> {
     sizes = asked as PreviewSize[];
   }
 
-  const r = readPackage(dir);
-  if (!r.ok) {
-    console.error(`${red("✗")} ${path.basename(dir)} ${dim("· fix package.json first (cmd widget check)")}`);
-    return 2;
-  }
+  const pkg = loadPackage(dir);
+  if (!pkg) return 2;
   const tools = checkoutToolchain();
   if (!tools) {
     console.error(red("this cmd has no Vitest to render widgets with (a checkout's pnpm install has)"));
@@ -45,18 +42,23 @@ export async function previewCommand(argv: string[]): Promise<number> {
     console.error(red("the app isn't built, so there's nothing to draw with: run pnpm build in the cmd checkout"));
     return 2;
   }
-  const trees = await tools.trees(dir, { sandbox: sandboxAvailable() ? "required" : "off", deny: [] });
+  const sandbox = toolSandbox();
+  if (!sandbox) {
+    console.error(red(NO_SANDBOX));
+    return 2;
+  }
+  const trees = await tools.trees(dir, { sandbox, deny: [] });
   if (trees.skipped) {
     console.log(dim(`nothing to preview: ${trees.skipped}`));
     return 0;
   }
   if (!trees.variants.length) {
     for (const p of trees.problems) console.error(red(`  ${p}`));
-    console.error(`${red("✗")} ${r.pkg.name} ${dim("· couldn't be rendered")}`);
+    console.error(`${red("✗")} ${pkg.name} ${dim("· couldn't be rendered")}`);
     return 2;
   }
   const out = path.resolve(o.out ?? path.join(dir, ".cmd-preview"));
-  const widgets = new Map(r.pkg.widgets.map((w) => [w.id, { title: w.title, icon: w.icon }]));
+  const widgets = new Map(pkg.widgets.map((w) => [w.id, { title: w.title, icon: w.icon }]));
   const previewer = await playwrightPreviewer();
   if (!previewer) {
     console.error(red("Playwright isn't installed here, so nothing can be drawn (a checkout's pnpm install has it)"));
@@ -78,7 +80,7 @@ export async function previewCommand(argv: string[]): Promise<number> {
 
   // One line per state and size; a problem once per state with where it happened.
   let failed = 0;
-  const several = r.pkg.widgets.length > 1;
+  const several = pkg.widgets.length > 1;
   for (const v of trees.variants) {
     const label = several ? `${v.widget} · ${v.name}` : v.name;
     const mine = shots.filter((s) => s.variant === v.name && s.widget === v.widget);

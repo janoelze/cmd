@@ -14,8 +14,9 @@ import { connect, defaultSocketPath, widgetsHome } from "@cmd/protocol/node";
 import { writeEnvTypes } from "@cmd/core/magic";
 import { cmdVersion, readPackage } from "@cmd/core/widgets/package";
 import { dim, green, red, yellow } from "./magic.ts";
-import { ensureLink, library, tilde } from "./widget-link.ts";
-import { prepare } from "./widget-new.ts";
+import { tilde } from "./tilde.ts";
+import { ensureLink, library } from "./widget-link.ts";
+import { loadPackage, prepare } from "./widget-new.ts";
 
 const count = (nodes: TreeNode[]): number => nodes.reduce((n, x) => n + 1 + (x.type === "#text" ? 0 : count(x.children)), 0);
 const time = () => dim(new Date().toTimeString().slice(0, 8));
@@ -52,13 +53,9 @@ export async function devCommand(argv: string[]): Promise<number> {
     console.error(red(`${tilde(dir)} doesn't exist`));
     return 1;
   }
-  const r = readPackage(real, { cmdVersion: cmdVersion() });
-  if (!r.ok) {
-    console.error(`${red("✗")} ${path.basename(real)} ${dim(`· ${r.errors.length} ${r.errors.length === 1 ? "problem" : "problems"} in package.json`)}`);
-    for (const e of r.errors) console.error(red(`  ${e}`));
-    return 2;
-  }
-  const name = r.pkg.name;
+  const pkg = loadPackage(real, { cmdVersion: cmdVersion() });
+  if (!pkg) return 2;
+  const name = pkg.name;
   prepare(real);
 
   const conn = await connect().catch(() => null);
@@ -109,7 +106,7 @@ export async function devCommand(argv: string[]): Promise<number> {
     // The window's status and whole tree now, then each change.
     await client.call("widget.resync", { windowId: id }).catch(() => {});
   }
-  console.log(`${green("✓")} ${name} ${r.pkg.version} on the board ${dim(`· ${entries.map((e) => e.ref).join(", ")} · from ${tilde(real)}`)}`);
+  console.log(`${green("✓")} ${name} ${pkg.version} on the board ${dim(`· ${entries.map((e) => e.ref).join(", ")} · from ${tilde(real)}`)}`);
   console.log(dim("  saves reload it; Ctrl-C stops printing, the widget stays (cmd widget remove " + name + " takes it out)"));
 
   // package.json changed: its config's types follow.
