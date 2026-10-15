@@ -144,8 +144,12 @@
     if (topics.includes(type)) return subscribe(type, query, fn);
     return () => {};
   };
-  /** Opens a URL, a path or a widget in a window beside this one (cmd.windows.open): works right after a click in the frame. */
-  cmd.open = (target) => (cmd.windows?.open ? cmd.windows.open(String(target)) : Promise.reject(new ApiCallError({ code: "unknown", message: "This cmd can't open windows from a frame." })));
+  /** Opens a URL, a path or a widget in a window beside this one (cmd.windows.open): works right after a click in the frame. A refusal no one catches is a console line, as it always was. */
+  cmd.open = (target) => {
+    const p = cmd.windows?.open ? cmd.windows.open(String(target)) : Promise.reject(new ApiCallError({ code: "unknown", message: "This cmd can't open windows from a frame." }));
+    p.catch((err) => console.warn(`cmd.open: ${err.message}`));
+    return p;
+  };
   cmd.ApiCallError = ApiCallError;
   window.cmd = cmd;
 
@@ -210,14 +214,11 @@
     const a = e.target instanceof Element && e.target.closest("a[href]");
     if (!a || (a.getAttribute("href") || "").startsWith("#")) return;
     e.preventDefault();
-    if (/^https?:\/\//i.test(a.href)) cmd.open(a.href).catch((err) => console.warn(`cmd: ${err.message}`));
+    if (/^https?:\/\//i.test(a.href)) cmd.open(a.href);
   };
   window.addEventListener("click", follow);
   window.addEventListener("auxclick", follow);
-  window.open = (url) => {
-    cmd.open(url).catch((err) => console.warn(`cmd: ${err.message}`));
-    return null;
-  };
+  window.open = (url) => (cmd.open(url), null);
 
   setTheme(null);
   document.addEventListener("DOMContentLoaded", () => post({ type: "ready" }));

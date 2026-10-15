@@ -244,6 +244,7 @@ const SCENARIOS = {
   "widget-reload": [],
   "widget-config": [],
   "widget-frame": [],
+  "widget-frame-api": [],
   "widget-act": [],
   "widget-commands": [],
   "widget-timer": [],
@@ -2541,6 +2542,76 @@ document.getElementById("count").onclick = () => cmd.state.set("count", (cmd.sta
   check(/Playing/.test(jamBar), `Jam's frame plays (${JSON.stringify(jamBar)})`);
   await call("window.close", { id: jam.id });
   await call("window.close", { id: viz.id });
+});
+
+// A frame widget's page with the whole widget API (docs/56, "The frame surface"): granted
+// workspace: ["read"], it lists this workspace's agents live through cmd.agents.subscribe (an
+// agent that starts after it loaded shows up, no reload), and a refusal names its permission.
+// Its button opens a window with cmd.windows.open: on load it is refused (no press), after a
+// click exactly one window opens. None of it needs the widget's process.
+await scenario("widget-frame-api", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const homeId = (await call("workspace.list")).find((w) => w.home).id;
+  const dir = path.join(widgetSrc, "frame-agents");
+  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "frame-agents", version: "1.0.0", cmd: { api: 1, widgets: [{ id: "main", title: "Frame Agents", main: "src/main.tsx", surface: "frame" }], permissions: { workspace: ["read"] } } }, null, 2));
+  fs.writeFileSync(path.join(dir, "src", "main.tsx"), `import { Window } from "@cmd/widget-api";\nexport default function Main() {\n  return <Window />;\n}\n`);
+  fs.writeFileSync(
+    path.join(dir, "view.html"),
+    `<ul id="agents"></ul><button id="open">Open</button> <span id="onload"></span> <span id="all"></span>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+cmd.agents.subscribe((list) => {
+  $("agents").replaceChildren(...list.map((a) => Object.assign(document.createElement("li"), { textContent: a.name })));
+  document.body.dataset.updates = String(Number(document.body.dataset.updates ?? 0) + 1);
+});
+cmd.agents.list({ scope: "all" }).catch((e) => ($("all").textContent = e.permission));
+cmd.windows.open("https://example.invalid/frame-api-on-load").then(() => ($("onload").textContent = "opened"), (e) => ($("onload").textContent = e.code));
+$("open").onclick = () => cmd.windows.open("https://example.invalid/frame-api-click");
+</script>`,
+  );
+  const linked = await cmdCli("widget", "link", dir);
+  check(linked.code === 0, `cmd widget link links it (${JSON.stringify(linked.out.trim().slice(0, 200))})`);
+  await call("widget.grant", { name: "frame-agents" });
+  await gone(".ui-approval");
+  const browsers = () => call("window.list").then((l) => l.filter((w) => w.kind === "browser" && String(w.state.url ?? "").includes("frame-api")));
+  const w = await call("widget.add", { ref: "pkg:frame-agents/main", workspaceId: homeId });
+  await tileIn(w.id);
+  /** The page with the list (other frame widgets may still be on the board). */
+  const page = async () => {
+    for (const f of win.frames()) if (f.url().startsWith("cmd-widget://package/") && !f.isDetached() && (await f.evaluate(() => !!document.getElementById("agents")).catch(() => false))) return f;
+    return null;
+  };
+  const inside = await until(page, Boolean, 15_000);
+  const names = () => inside.evaluate(() => ({ agents: [...document.querySelectorAll("#agents li")].map((li) => li.textContent), updates: Number(document.body.dataset.updates ?? 0), onload: document.getElementById("onload").textContent, all: document.getElementById("all").textContent }));
+  const first = await until(names, (r) => r.updates >= 1 && r.onload && r.all, 15_000);
+  check(!first.agents.includes("Framed Agent"), `the frame lists the workspace's agents at once (${JSON.stringify(first)})`);
+  check(first.onload === "invalid" && first.all === 'workspace: ["all"]', `on load, windows.open is refused and a read beyond the grant names what to add (${first.onload}; ${first.all})`);
+
+  // An agent starts: the frame's list follows, without a reload.
+  const pane = await call("pane.create", { cwd: home, command: "sh -c 'read -r _; true' claude", workspaceId: homeId });
+  await until(() => call("identify", { paneId: pane.id }).then((r) => r.agent?.kind), (k) => k === "claude");
+  await call("hook.ingest", { paneId: pane.id, agent: "claude", event: "UserPromptSubmit", payload: { prompt: "draw a frame" } });
+  const { agent } = await call("identify", { paneId: pane.id });
+  await call("agent.rename", { agentId: agent.id, name: "Framed Agent" });
+  const live = await until(names, (r) => r.agents.includes("Framed Agent"), 15_000).catch(() => null);
+  check(!!live, `an agent started later shows up in the frame, live (${JSON.stringify(live ?? (await names()))})`);
+  await tileIn(w.id);
+  await select(w.id);
+  await still();
+  await shot(win, "widget-frame-api.png");
+
+  // A click on its button: one window.
+  const before = (await browsers()).length;
+  check(before === 0, `nothing opened before the click (${before})`);
+  await inside.locator("#open").click();
+  const opened = await until(browsers, (l) => l.length > 0, 10_000);
+  await new Promise((r) => setTimeout(r, 1200)); // any second window would be here by now
+  const after = await browsers();
+  check(opened.length === 1 && after.length === 1 && String(after[0]?.state.url).includes("frame-api-click"), `a click in the frame opens exactly one window (${after.map((b) => b.state.url).join(", ")})`);
+  for (const b of after) await call("window.close", { id: b.id });
+  await call("window.close", { id: w.id });
+  await call("pane.kill", { paneId: pane.id }).catch(() => {});
 });
 
 // A menu the app pops up (a row's or a title bar's): the entry labelled `label` is chosen, the labels kept.
