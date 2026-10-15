@@ -13,6 +13,8 @@ export interface WidgetPlace {
   /** 1.3: the window content's box in px, rounded and throttled (PackageView's useContentBox); null until measured. */
   box: ApiBox | null;
   placement: "board" | "sidebar";
+  /** The app's locale, which the widget's `fmt` writes numbers in (1.3). */
+  locale?: string;
 }
 
 /** The way back to a widget's process: the core (rpcLink), or a fake in stories and tests. */

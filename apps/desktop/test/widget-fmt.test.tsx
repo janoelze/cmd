@@ -7,7 +7,8 @@
 import { describe, expect, it, vi } from "vitest";
 import * as format from "@cmd/protocol/format";
 import { formatDelta, formatValue, type StatUnit } from "@cmd/protocol";
-import { fmt } from "@cmd/widget-api";
+import { Text, fmt } from "@cmd/widget-api";
+import { createHost, render } from "@cmd/widget-api/testing";
 
 vi.mock("../src/renderer/src/lib/bridge.ts", () => ({ cmd: new Proxy({}, { get: () => () => new Promise(() => {}) }) }));
 const { projectHue } = await import("../src/renderer/src/lib/model.ts");
@@ -50,6 +51,14 @@ describe("fmt's 1.3 helpers are the app's formatters", () => {
 
   it("fmt.hue gives a name the hue its project has in every window", () => {
     for (const name of ["cmd", "cmd-perf", "site", "agents", "", "ünïcode"]) expect(fmt.hue(name)).toBe(projectHue(name));
+  });
+
+  it("fmt.value and fmt.delta write numbers in the app's locale (env.locale), the fake host's en-US unless given", async () => {
+    const probe = () => <Text>{`${fmt.value(1.5, "percent")} ${fmt.value(12.5)} ${fmt.delta(12.5, 10, "percent")} ${fmt.value(1536, "bytes")}`}</Text>;
+    expect((await render(probe, createHost())).text()).toBe("1.5% 12.5 +2.5 pt 1.5 KB");
+    const de = await render(probe, createHost({ env: { locale: "de-DE" } }));
+    expect(de.text()).toBe("1,5% 12,5 +2,5 pt 1,5 KB");
+    expect(de.text()).toBe(`${formatValue(1.5, "percent", false, "de-DE")} ${formatValue(12.5, "count", false, "de-DE")} ${formatDelta(12.5, 10, "percent", "de-DE")} ${formatValue(1536, "bytes", false, "de-DE")}`);
   });
 
   it("fmt.dur with coarse says a duration as the app's lists do; without it, as 1.0 did", () => {

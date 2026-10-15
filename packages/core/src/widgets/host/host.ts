@@ -163,7 +163,7 @@ export class WidgetHost {
     inst.conn.send({ kind: "interaction", handler, event, ...(value === undefined ? {} : { value: value as WireValue }) });
   }
 
-  setEnv(windowId: WindowId, env: Pick<WidgetEnv, "theme" | "size" | "placement" | "box">): void {
+  setEnv(windowId: WindowId, env: Pick<WidgetEnv, "theme" | "size" | "placement" | "box" | "locale">): void {
     const inst = this.#must(windowId);
     const next = {
       theme: env.theme === "light" ? ("light" as const) : ("dark" as const),
@@ -171,6 +171,7 @@ export class WidgetHost {
       // 1.3: the content's box, rounded as the widget gets it (an older renderer sends none: the last one stays).
       box: roundBox(env.box) ?? inst.env.box ?? null,
       placement: env.placement === "sidebar" ? ("sidebar" as const) : ("board" as const),
+      locale: canonicalLocale(env.locale) ?? inst.env.locale,
     };
     if (JSON.stringify(next) === JSON.stringify(inst.env)) return;
     inst.env = next;
@@ -569,5 +570,15 @@ export class WidgetHost {
     const inst = this.#all.get(id);
     if (!inst) throw new Error(`not a package widget's window: ${id}`);
     return inst;
+  }
+}
+
+/** A locale as Intl writes it ("de-DE"), or undefined for one it doesn't know (an older view sends none). */
+function canonicalLocale(x: unknown): string | undefined {
+  if (typeof x !== "string" || !x) return undefined;
+  try {
+    return Intl.getCanonicalLocales(x)[0];
+  } catch {
+    return undefined;
   }
 }

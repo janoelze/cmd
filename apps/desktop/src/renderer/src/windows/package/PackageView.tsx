@@ -6,7 +6,7 @@
 // Configure…); a stopped process with a tree drawn before keeps it, under a banner
 // saying why (a save that didn't load: its error) with Restart;
 // an error boundary so a tree that can't be drawn shows a Callout and not a broken
-// board, and `widget.env` whenever the window's theme, size class, box (1.3) or placement changes.
+// board, and `widget.env` whenever the window's theme, size class, box (1.3) or placement changes (with the app's locale, 1.3).
 // A frame widget (`"surface": "frame"`) draws its page instead of a tree (PackageFrame.tsx); a
 // tree's Frame elements draw pages of the package in it (FrameElement.tsx, FramesContext).
 
@@ -59,6 +59,9 @@ const STARTING: ViewStateSpec = { kind: "loading", title: "Starting…" };
  * A frame widget (`frame`) draws its page instead, from its first draw, the tree giving only the title bar; each restart of
  * its process (a save) loads the page again (`reload`).
  */
+/** The locale the app writes numbers in (protocol format.ts's Intl, here): the widget's `fmt` writes in it too. */
+const LOCALE = Intl.NumberFormat().resolvedOptions().locale;
+
 export function PackageWidget({ windowId, store, link, setup = null, frame = null, frames = null }: { windowId: WindowId; store: TreeStore; link: WidgetLink; setup?: Setup | null; frame?: ((reload: number) => ReactNode) | null; frames?: ((reload: number) => Frames) | null }) {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const reload = useRestarts(snap.status);
@@ -67,7 +70,7 @@ export function PackageWidget({ windowId, store, link, setup = null, frame = nul
   const [probe, size, box] = useContentBox();
   const theme = useAppearance();
   const placement = useContext(PlacementContext);
-  useEffect(() => link.env({ theme, size, box, placement }), [link, theme, size, box, placement]);
+  useEffect(() => link.env({ theme, size, box, placement, locale: LOCALE }), [link, theme, size, box, placement]);
 
   const cover = frame ? frameCover(snap, link, setup) : coverOf(snap, link, setup);
   if (frame && !cover)

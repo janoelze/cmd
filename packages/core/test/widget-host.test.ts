@@ -164,12 +164,17 @@ describe("the widget host", () => {
     core.handlers["widget.interact"]({ windowId: w.id, handler: 7, event: "onClick" });
     expect(await rt.last.next("interaction")).toEqual({ kind: "interaction", handler: 7, event: "onClick" });
     core.handlers["widget.env"]({ windowId: w.id, theme: "light", size: "narrow", placement: "sidebar" });
-    expect((await rt.last.next("env")).env).toMatchObject({ theme: "light", size: "narrow", box: null, placement: "sidebar" });
+    expect((await rt.last.next("env")).env).toMatchObject({ theme: "light", size: "narrow", box: null, placement: "sidebar", locale: Intl.NumberFormat().resolvedOptions().locale });
     // 1.3: the content's box, rounded down to 8 as the widget gets it; a renderer that sends none keeps the last.
     core.handlers["widget.env"]({ windowId: w.id, theme: "light", size: "narrow", box: { width: 317, height: 203.5 }, placement: "sidebar" });
     expect((await rt.last.next("env", (m) => m.env.box !== null)).env).toMatchObject({ size: "narrow", box: { width: 312, height: 200 } });
     core.handlers["widget.env"]({ windowId: w.id, theme: "dark", size: "narrow", placement: "sidebar" });
     expect((await rt.last.next("env", (m) => m.env.theme === "dark")).env).toMatchObject({ theme: "dark", box: { width: 312, height: 200 } });
+    // The app's locale (1.3), canonical; one Intl doesn't know keeps the last.
+    core.handlers["widget.env"]({ windowId: w.id, theme: "light", size: "narrow", placement: "sidebar", locale: "de-de" });
+    expect((await rt.last.next("env", (m) => m.env.locale === "de-DE")).env).toMatchObject({ theme: "light", locale: "de-DE" });
+    core.handlers["widget.env"]({ windowId: w.id, theme: "dark", size: "narrow", placement: "sidebar", locale: "not a locale!" });
+    expect((await rt.last.next("env", (m) => m.env.theme === "dark" && m.env.locale !== Intl.NumberFormat().resolvedOptions().locale)).env).toMatchObject({ locale: "de-DE" });
   });
 
   it("pushes config changes, never a secret", async () => {

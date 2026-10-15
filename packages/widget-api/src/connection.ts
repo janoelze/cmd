@@ -166,6 +166,9 @@ export function connection(): Connection {
   return current;
 }
 
+/** The app's locale while a widget runs (env.locale, 1.3); undefined outside one, or from a cmd before 1.3. */
+export const runningLocale = (): string | undefined => current?.env.locale;
+
 export function setConnection(c: Connection | null): void {
   current = c;
 }

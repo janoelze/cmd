@@ -2,10 +2,12 @@
 // "12 s ago"), so a widget's text reads like a built-in's. Pure functions, no locale
 // surprises: the same output on the Mac, in the phone client and in tests. 1.3's `value`,
 // `delta`, `hue` and coarse `dur` are cmd's own formatters (protocol format.ts), the very
-// functions the Stats window and the native views call, so a port prints what they print.
+// functions the Stats window and the native views call, so a port prints what they print,
+// in the app's locale (`env.locale`: "1,5" where the app writes "1,5").
 
 import { durationText, formatDelta, formatValue, projectHue } from "@cmd/protocol/format";
 import type { Unit } from "./elements.gen.ts";
+import { runningLocale } from "./connection.ts";
 
 type When = Date | string | number;
 
@@ -103,7 +105,7 @@ export function date(t: When): string {
  * @since 1.3
  */
 export function value(v: number, unit: Unit = "count", opts?: { short?: boolean }): string {
-  return formatValue(v, unit, opts?.short === true);
+  return formatValue(v, unit, opts?.short === true, runningLocale());
 }
 
 /**
@@ -113,7 +115,7 @@ export function value(v: number, unit: Unit = "count", opts?: { short?: boolean 
  * @since 1.3
  */
 export function delta(cur: number, prev: number, unit?: Unit): string {
-  return formatDelta(cur, prev, unit);
+  return formatDelta(cur, prev, unit, runningLocale());
 }
 
 /**

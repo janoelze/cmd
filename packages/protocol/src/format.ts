@@ -6,8 +6,25 @@
 
 import type { StatUnit } from "./stats.ts";
 
-const whole = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
-const one = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+/** Number formats by locale (undefined: this process's own): whole numbers and one decimal. A widget passes the app's locale (`env.locale`), so it writes what the app writes. */
+const formats = new Map<string, { whole: Intl.NumberFormat; one: Intl.NumberFormat }>();
+function nf(locale?: string) {
+  const key = locale ?? "";
+  let f = formats.get(key);
+  if (!f) {
+    // A locale Intl doesn't know falls back to this process's own.
+    const make = (digits: number) => {
+      try {
+        return new Intl.NumberFormat(locale, { maximumFractionDigits: digits });
+      } catch {
+        return new Intl.NumberFormat(undefined, { maximumFractionDigits: digits });
+      }
+    };
+    f = { whole: make(0), one: make(1) };
+    formats.set(key, f);
+  }
+  return f;
+}
 
 /** 3h 12m, 48m, 12s, 120ms; `short`: only the largest unit ("3h"), for axis ticks. */
 export function formatDuration(ms: number, short = false): string {
@@ -23,7 +40,8 @@ export function formatDuration(ms: number, short = false): string {
   return short || h % 24 === 0 ? `${d}d` : `${d}d ${h % 24}h`;
 }
 
-export function formatBytes(b: number): string {
+export function formatBytes(b: number, locale?: string): string {
+  const { whole, one } = nf(locale);
   const units = ["B", "KB", "MB", "GB", "TB"];
   let i = 0;
   while (b >= 1024 && i < units.length - 1) (b /= 1024), i++;
@@ -31,29 +49,32 @@ export function formatBytes(b: number): string {
 }
 
 /** 1.2K, 3.4M, 2.1B: the same letters in every locale (Intl's compact notation varies: "1.7m", "1,7 Mio."). */
-export function formatCompact(v: number): string {
+export function formatCompact(v: number, locale?: string): string {
+  const { whole, one } = nf(locale);
   const a = Math.abs(v);
   const [d, s] = a >= 1e9 ? [1e9, "B"] : a >= 1e6 ? [1e6, "M"] : a >= 1e3 ? [1e3, "K"] : [1, ""];
   const x = v / d;
   return `${Math.abs(x) >= 100 || !s ? whole.format(x) : one.format(x)}${s}`;
 }
 
-/** A value in its unit; `short` for ticks and tight places (compact everywhere). */
-export function formatValue(v: number, unit: StatUnit, short = false): string {
+/** A value in its unit; `short` for ticks and tight places (compact everywhere); `locale` for numbers in another than this process's (a widget's: the app's). */
+export function formatValue(v: number, unit: StatUnit, short = false, locale?: string): string {
+  const { whole, one } = nf(locale);
   switch (unit) {
     case "ms":
       return formatDuration(v, short);
     case "bytes":
-      return formatBytes(v);
+      return formatBytes(v, locale);
     case "percent":
       return `${v < 10 && v > 0 && !short ? one.format(v) : whole.format(v)}%`;
     default:
-      return Math.abs(v) >= 10_000 || (short && Math.abs(v) >= 1000) ? formatCompact(v) : v % 1 ? one.format(v) : whole.format(v);
+      return Math.abs(v) >= 10_000 || (short && Math.abs(v) >= 1000) ? formatCompact(v, locale) : v % 1 ? one.format(v) : whole.format(v);
   }
 }
 
 /** The change from `prev` to `cur`: "+18%", "−4%", "new" (from nothing), "" (nothing either time); percentages change by points. */
-export function formatDelta(cur: number, prev: number, unit?: StatUnit): string {
+export function formatDelta(cur: number, prev: number, unit?: StatUnit, locale?: string): string {
+  const { whole, one } = nf(locale);
   if (unit === "percent") {
     if (!cur && !prev) return "";
     const d = cur - prev;

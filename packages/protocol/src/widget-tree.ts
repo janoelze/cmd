@@ -235,6 +235,8 @@ export interface WidgetEnv {
   /** 1.3: the content's px (rounded down to 8, at most every 200 ms while resizing), for logic like how many rows fit; null until measured. A layout per size is an `Adapt`. */
   box?: ApiBox | null;
   placement: "board" | "sidebar";
+  /** 1.3: the app's locale ("de-DE"), which `fmt.value` and `fmt.delta` write numbers in, so a widget prints what the app beside it prints; a cmd before 1.3 sends none. */
+  locale?: string;
 }
 
 // ── the verbs ───────────────────────────────────────────

@@ -29,7 +29,7 @@ export interface Instance {
   /** Why we're stopping it ourselves (null: an exit is a crash). */
   stopping: string | null;
   timers: { stop?: NodeJS.Timeout; restart?: NodeJS.Timeout; hello?: NodeJS.Timeout };
-  env: Pick<WidgetEnv, "theme" | "size" | "placement" | "box">;
+  env: Pick<WidgetEnv, "theme" | "size" | "placement" | "box" | "locale">;
   config: string;
   /** The person's last press (press.ts). */
   press: WindowPress;
@@ -58,7 +58,8 @@ export function newInstance(w: AppWindow, theme: "light" | "dark", log: Construc
     crashes: [],
     stopping: null,
     timers: {},
-    env: { theme, size: "regular", box: null, placement: "board" },
+    // The core's own locale until the window's view says the app's (widget.env).
+    env: { theme, size: "regular", box: null, placement: "board", locale: Intl.NumberFormat().resolvedOptions().locale },
     config: "",
     press: new WindowPress(`${w.kind} ${w.id}`),
     permissions: null,

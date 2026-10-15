@@ -211,7 +211,7 @@ export function createHost(data: HostData = {}): FakeHost {
   const env = (): WidgetEnv => {
     const size = d.env?.size ?? "regular";
     const box = d.env && "box" in d.env ? roundBox(d.env.box) : sizeEnv(size).box;
-    return { version: "0.32.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: Object.keys(verbs) as ApiVerb[], elements: [...API_ELEMENT_NAMES], theme: "dark", placement: "board", ...d.env, size, box };
+    return { version: "0.32.0", api: { major: WIDGET_API, minor: WIDGET_API_MINOR }, verbs: Object.keys(verbs) as ApiVerb[], elements: [...API_ELEMENT_NAMES], theme: "dark", placement: "board", locale: "en-US", ...d.env, size, box };
   };
 
   const deliver = (msg: WidgetIn) => {
