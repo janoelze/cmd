@@ -124,6 +124,13 @@ describe("package.json", () => {
     expect(errors(PKG({ version: "1.0.0-beta.1+abc" }))).toEqual([]);
   });
 
+  it("reads cmd.storage's version (1.3), a whole number from 1", () => {
+    const r = parsePackage(PKG({}, { storage: { version: 3 } }), pkgDir(null), { cmdVersion: null });
+    expect(r.ok && r.pkg.storage).toEqual({ version: 3 });
+    for (const bad of [{ version: 0 }, { version: 1.5 }, { version: "2" }, 2]) expect(errors(PKG({}, { storage: bad })), JSON.stringify(bad)).toEqual([expect.stringMatching(/^cmd\.storage: /)]);
+    expect(errors(PKG({}, { storage: {} }))).toEqual([]);
+  });
+
   it("refuses two widgets with one id", () => {
     const w = { id: "ci", title: "CI", main: "src/ci.tsx" };
     expect(errors(PKG({}, { widgets: [w, { ...w }] }))).toEqual(['cmd.widgets[1].id: "ci" is used twice; each widget needs its own id']);

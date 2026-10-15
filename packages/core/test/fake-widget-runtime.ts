@@ -17,6 +17,8 @@ export class FakeProcess implements RuntimeProcess {
   /** What the core sent it (pings left out). */
   readonly received: WidgetIn[] = [];
   pings = 0;
+  /** Hears each message the core sent (pings left out): a real runtime's transport (widget-storage.test.ts). */
+  onMessage: ((m: WidgetIn) => void) | null = null;
   /** A stuck event loop: pings go unanswered. */
   frozen = false;
   killed = false;
@@ -45,6 +47,7 @@ export class FakeProcess implements RuntimeProcess {
           return;
         }
         this.received.push(m);
+        this.onMessage?.(m);
         for (const w of this.#waiters.splice(0)) w();
       },
       () => this.#end(),
@@ -139,6 +142,8 @@ export interface FakePackage {
   api?: number;
   /** "frame": a frame widget, with a view.html. */
   surface?: "frame";
+  /** cmd.storage (1.3): the stored data's schema version. */
+  storage?: { version: number };
 }
 
 /** A package folder "<name>" with one widget "main" in `home`. */
@@ -146,7 +151,7 @@ export function writePackage(home: string, o: FakePackage = {}): string {
   const name = o.name ?? "demo";
   const dir = path.join(home, name);
   fs.mkdirSync(path.join(dir, "src"), { recursive: true });
-  const json = { name, version: "1.0.0", cmd: { api: o.api ?? 1, widgets: [{ id: "main", title: "Demo", main: "src/main.tsx", ...(o.config ? { config: o.config } : {}), ...(o.surface ? { surface: o.surface } : {}) }], permissions: o.permissions ?? {} } };
+  const json = { name, version: "1.0.0", cmd: { api: o.api ?? 1, widgets: [{ id: "main", title: "Demo", main: "src/main.tsx", ...(o.config ? { config: o.config } : {}), ...(o.surface ? { surface: o.surface } : {}) }], permissions: o.permissions ?? {}, ...(o.storage ? { storage: o.storage } : {}) } };
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(json, null, 2));
   if (!fs.existsSync(path.join(dir, "src", "main.tsx"))) fs.writeFileSync(path.join(dir, "src", "main.tsx"), "export default function Main() { return null; }\n");
   if (o.surface === "frame") fs.writeFileSync(path.join(dir, "view.html"), "<canvas></canvas>\n");

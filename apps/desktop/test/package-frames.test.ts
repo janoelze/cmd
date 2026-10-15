@@ -212,6 +212,22 @@ describe("a frame widget's page cmd", () => {
     expect(viaOn).toEqual([[{ id: 1 }]]);
   });
 
+  it("has storage's scopes (1.3), each the storage verbs in its scope, its keys live", () => {
+    const { cmd, posted, send } = page(init);
+    const storage = cmd.storage as unknown as Record<string, Record<string, (...a: unknown[]) => unknown>>;
+    for (const scope of ["window", "workspace", "package"]) {
+      void (storage[scope]!.set!("k", 1) as Promise<unknown>);
+      expect(posted.at(-1)).toMatchObject({ type: "call", verb: "storage.set", params: [scope, "k", 1] });
+      void (storage[scope]!.keys!() as Promise<unknown>);
+      expect(posted.at(-1)).toMatchObject({ type: "call", verb: "storage.keys", params: [scope] });
+    }
+    const got: unknown[] = [];
+    storage.package!.subscribe!("notes", (v: unknown) => got.push(v));
+    expect(posted.at(-1)).toMatchObject({ type: "subscribe", topic: "storage", query: { scope: "package", key: "notes" } });
+    send({ type: "event", sub: posted.at(-1)!.sub, data: ["a"] });
+    expect(got).toEqual([["a"]]);
+  });
+
   it("has a Frame's data at hand and on change, and posts a value to the app", () => {
     const { cmd, posted, send } = page({ ...init, data: { values: [1] } });
     expect((cmd as unknown as { data: unknown }).data).toEqual({ values: [1] });

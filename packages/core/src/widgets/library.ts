@@ -75,7 +75,9 @@ export class WidgetLibrary {
   readonly deno: DenoSetup;
   /** Packages' storage (API 1.3), in the core's SQLite file. */
   readonly storage: WidgetStorage;
-  /** Owners gone from the packages folder, purged when still gone after STORAGE_PURGE_MS. */
+  /** How long a package stays gone before its storage goes (tests shorten it). */
+  storagePurgeMs = STORAGE_PURGE_MS;
+  /** Owners gone from the packages folder, purged when still gone after storagePurgeMs. */
   #purges = new Map<string, NodeJS.Timeout>();
 
   constructor(core: CoreContext, o: LibraryOptions = {}) {
@@ -198,7 +200,7 @@ export class WidgetLibrary {
         if (this.#present().has(owner)) return;
         log.info(`widget package ${owner} is uninstalled: its storage goes`);
         this.storage.purgeOwner(owner);
-      }, STORAGE_PURGE_MS);
+      }, this.storagePurgeMs);
       t.unref?.();
       this.#purges.set(owner, t);
     }

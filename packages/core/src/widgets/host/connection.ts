@@ -6,7 +6,7 @@
 
 import type { WidgetIn, WidgetOut } from "@cmd/protocol";
 
-const KINDS = new Set(["hello", "tree", "patch", "call", "subscribe", "unsubscribe", "log", "error"]);
+const KINDS = new Set(["hello", "tree", "patch", "call", "subscribe", "unsubscribe", "log", "error", "migrated"]);
 
 export interface ConnectionTimes {
   /** How often the core pings (ms). */
