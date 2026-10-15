@@ -47,7 +47,7 @@ export const Narrow: HostData & { size: "narrow" } = { journal: week, size: "nar
 /** Many days, many entries each. */
 export const Many: HostData = {
   journal: Array.from({ length: 7 }, (_, i) =>
-    day({ date: before(i), headline: `A busy day, ${9 - (i % 3)} things done`, entries: Array.from({ length: 9 - (i % 3) }, (_, j) => ({ id: `${i}-${j}`, kind: (["feature", "fix", "review", "research", "chore"] as const)[j % 5]!, title: `Piece of work ${j + 1}`, summary: "What was done, in a line.", outcome: (["merged", "fixed", null, "answered", "dropped"] as const)[j % 5]!, start: before(i) + (6 + j * 1.5) * H, end: before(i) + (7 + j * 1.5) * H, counts: c({ commands: j + 1, commits: j % 2 }) })) }),
+    day({ date: before(i), writtenAt: before(i) + 20 * H, headline: `A busy day, ${9 - (i % 3)} things done`, entries: Array.from({ length: 9 - (i % 3) }, (_, j) => ({ id: `${i}-${j}`, kind: (["feature", "fix", "review", "research", "chore"] as const)[j % 5]!, title: `Piece of work ${j + 1}`, summary: "What was done, in a line.", outcome: (["merged", "fixed", null, "answered", "dropped"] as const)[j % 5]!, start: before(i) + (6 + j * 1.5) * H, end: before(i) + (7 + j * 1.5) * H, counts: c({ commands: j + 1, commits: j % 2 }) })) }),
   ),
 };
 

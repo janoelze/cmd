@@ -1,0 +1,37 @@
+{
+  "name": "nowplaying",
+  "version": "1.0.0",
+  "description": "What the Mac is playing, with play, pause, skips and a scrubber.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/nowplaying.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "nowplaying",
+        "title": "Media Controls",
+        "icon": "music.note",
+        "description": "Whatever the Mac is playing, from Music, Spotify or a browser tab: the track, where it is, play and pause, skips and a scrubber.",
+        "main": "src/nowplaying.tsx",
+        "size": "s"
+      }
+    ],
+    "permissions": {
+      "media": [
+        "read",
+        "control"
+      ]
+    }
+  }
+}

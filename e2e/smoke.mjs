@@ -256,6 +256,7 @@ const SCENARIOS = {
   "widget-resources": [],
   "widget-journal": [],
   "widget-notifications": [],
+  "widget-nowplaying": [],
   "app-window": [],
 };
 const failures = [];
@@ -3215,6 +3216,27 @@ await scenario("widget-notifications", async () => {
     await call("workspace.close", { id: ws.id });
     fs.rmSync(where, { recursive: true, force: true });
   }
+});
+
+// Media Controls (packages/widgets/nowplaying): the native Now Playing's job as a package. Nothing
+// can be made to play here, and its controls would reach whatever the Mac plays, so this checks
+// the live read only: added from the Widget Library, it says what cmd's own Now Playing says
+// (nothing playing, or the track), and presses nothing. The playing states are its tests and
+// story, from fixtures.
+await scenario("widget-nowplaying", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  await menu("view.grid");
+  const { id, source } = await addFromLibrary("Media Controls", "pkg:nowplaying/nowplaying");
+  check(source === "Built-in · nowplaying 1.0.0", `the Widget Library lists Media Controls under Built-in (${source})`);
+  await tileIn(id);
+  const tile = win.locator(`.tile[data-pane="${id}"]`);
+  // Past "Looking for what's playing": the first answer (the core waits up to 1.5 s for the Mac's).
+  const text = await until(() => tile.textContent(), (t) => t.includes("Nothing playing") || /Playing in|Paused in/.test(t), 30_000).catch(() => "");
+  const np = await call("nowPlaying.get");
+  await shot(win, "widget-nowplaying.png");
+  check(np === null ? text.includes("Nothing playing") : text.includes(np.title), `it shows what the Mac plays, as cmd reads it (${np === null ? "nothing" : JSON.stringify(np.title)}; ${JSON.stringify(text.slice(0, 80))})`);
+  await call("window.close", { id });
 });
 
 // The app window never leaves its page and opens no windows (it carries window.cmd): a web

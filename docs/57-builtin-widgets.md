@@ -45,7 +45,7 @@ Sixteen native window types have `role: "widget"`. Lines are the renderer's view
 | Journal | `journal` | 307 | `journal.day/days/week` | **done** (`journal`, "Work Log"); native stays. Read only on `journal.days`: the written days, no Write Again, week, All Workspaces or project chips; looks again every 5 min |
 | Notifications | `notifications` | 138 | the notification list, clear | **done** (`notifications`, "Notification Log"); native stays. On `useEvents({ types: ["notification"] })`, Clear its own "cleared at"; only notifications about a workspace; a click goes to a terminal, not to a window |
 | Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **done** (`resources`, "Terminal Usage"); native stays. On `useTerminalUsage` and `DataGrid`; its "cmd" pane (`core.processes`) and the Task Manager link stay native; other workspaces' terminals show their folder, not the workspace's name |
-| Now Playing | `nowplaying` | 93 | `nowPlaying.get/control` | **wave 2**: on `media.get` and `media.control` (built) |
+| Now Playing | `nowplaying` | 93 | `nowPlaying.get/control` | **done** (`nowplaying`, "Media Controls"); native stays. On `media.get` every 2 s and `media.control` per press; no cover (no picture element), one layout at every size |
 | Navigator | `navigator` | 335 | `search.query` (transcripts) | **stays native**: decided, no `search.query`; it is the board's sidebar for sessions, a window |
 | Visualizer | `visualizer` | 162 | a frame with presets | **wave 3**: a frame package, if the frame `cmd` (state, theme, open) is enough |
 | YouTube | `youtube` | 175 | an embedded player, the window's state | **wave 3**: a frame package with `net` to YouTube's hosts, if its embed works in the frame's CSP; else stays native |
@@ -160,6 +160,8 @@ What the wave 2 ports wanted and the API doesn't have. None is built; each port 
 | A live journal (`useJournal`, a `journal` topic pushed when a day is written) | Work Log | it reads `journal.days` every 5 minutes and from its title menu (Read Again) |
 | `journal.week`, `journal.days({ before })` and an entry's project label | Work Log | no week, no paging back past 7 days, no project chips (`ApiJournalEntry` has no `repo`, and a path would be private; a folder's name would do) |
 | `ApiEvent.windowId` (data within API 1, as `terminalId` was in 1.1): the window an event is about | Notification Log | a click goes to a notification's terminal; one about a window (a widget's) has nowhere to go |
+| A picture element (`Picture src`: a data: URL or a granted host's image, sized by the kit) | Media Controls | no cover, though `ApiNowPlaying.artwork` carries it; a music note stands in (a `Frame` could draw it, but a page for one image is the wrong tool) |
+| A live media topic (`useMedia`, pushed on the core's `nowPlaying.changed`) | Media Controls | it asks `media.get` every 2 seconds, so a change from elsewhere shows up to 2 seconds late; its own controls look again at once |
 
 ## Wave 3: frames
 
