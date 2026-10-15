@@ -2,8 +2,10 @@
 // you and your agents used cmd in this workspace (or in every one, from the title menu), as one
 // page read top to bottom. A sentence, headline numbers with their change, then a pane per area:
 // agent time per bucket, how turns ended and how long agents waited on you, the commands run
-// most and how often they failed, when work happens, tokens by model; with All Workspaces also
-// your active time, projects and cmd's model calls. Every number opens its detail: a bigger
+// most and how often they failed, when you work, tokens by model, and cmd itself (its core's
+// memory and stalls, the event log's size); with All Workspaces also projects and cmd's model
+// calls. Your active time has no workspace, so it is every workspace's in both (as the native
+// page shows it), and so is cmd's own pane. Every number opens its detail: a bigger
 // chart, split by what the stat can be split by, and its ranking. Each pane is one
 // `cmd.stats.query` (API 1.2); the page asks again when a command or an agent's turn is recorded
 // (a few seconds later, once cmd has counted it) and once a minute (time spent grows without events). A stat the widget may
@@ -56,16 +58,20 @@ export const SETTLE_MS = 2500;
 export const REFRESH_MS = 60_000;
 
 /** The page's results by name. */
-export type Page = Partial<Record<"time" | "active" | "turns" | "waiting" | "waitingMedian" | "runs" | "fail" | "tokens" | "projects" | "heat" | "ai", StatResult>>;
+export type Page = Partial<Record<"time" | "active" | "turns" | "waiting" | "waitingMedian" | "runs" | "fail" | "tokens" | "projects" | "heat" | "ai" | "memory" | "stalls" | "worst" | "size", StatResult>>;
+
+/** Stats with no workspace (yours, cmd's own): read across every workspace whatever the scope. */
+export const UNSCOPED = new Set(["you.active", "core.memory", "core.stalls", "data.size"]);
 
 /**
  * The page's queries. In one workspace: what can be told apart by workspace (or its folder's
- * project). With every workspace: also your active time (it has no workspace), projects and
- * cmd's model calls; "when you work" is then your active time, else the agents' time.
+ * project), with every workspace: also projects and cmd's model calls. What has no workspace is
+ * every workspace's in both, as on the native page: your active time and when you work
+ * (`you.active`), and cmd's own pane (core memory, stalls, the event log's size: `events: ["system"]`).
  */
 export function pageQueries(range: Range, scope: Scope): [keyof Page, StatQuery][] {
   const all = scope === "all" ? ({ scope: "all" } as const) : {};
-  const heat = scope === "all" ? "you.active" : "agents.time";
+  const heat = "you.active";
   const qs: [keyof Page, StatQuery][] = [
     ["time", { stat: "agents.time", range, by: "agent", compare: true }],
     ["turns", { stat: "agents.turns", range, by: "outcome", compare: true }],
@@ -76,8 +82,16 @@ export function pageQueries(range: Range, scope: Scope): [keyof Page, StatQuery]
     ["tokens", { stat: "agents.tokens", range, by: "model", filter: { token: ["in", "out"] }, compare: true }],
     ["heat", range === "year" ? { stat: heat, range: "365d", grain: "day" } : range === "today" ? { stat: heat, range: "today" } : { stat: heat, range: "30d", grain: "hour" }],
   ];
-  if (scope === "all") qs.push(["active", { stat: "you.active", range, compare: true }], ["projects", { stat: "agents.time", range, by: "project", top: 6 }], ["ai", { stat: "ai.calls", range, by: "purpose", top: 6 }]);
-  return qs.map(([k, q]) => [k, { ...q, ...all }]);
+  if (scope === "all") qs.push(["projects", { stat: "agents.time", range, by: "project", top: 6 }], ["ai", { stat: "ai.calls", range, by: "purpose", top: 6 }]);
+  // What has no workspace isn't this workspace's or another's: every workspace's.
+  const none: [keyof Page, StatQuery][] = [
+    ["active", { stat: "you.active", range, compare: true }],
+    ["memory", { stat: "core.memory", range }],
+    ["stalls", { stat: "core.stalls", range }],
+    ["worst", { stat: "core.stalls", range, measure: "max" }],
+    ["size", { stat: "data.size", range }],
+  ];
+  return [...qs.map(([k, q]): [keyof Page, StatQuery] => [k, UNSCOPED.has(q.stat) ? { ...q, scope: "all" } : { ...q, ...all }]), ...none.map(([k, q]): [keyof Page, StatQuery] => [k, { ...q, scope: "all" }])];
 }
 
 // ── numbers as the Stats window writes them ──
@@ -304,9 +318,9 @@ function Overview({ scope, range, onRange, onOpen }: { scope: Scope; range: Rang
         <Sparkline values={totals(r)} color={key === "time" ? "current" : "neutral"} />
       </Stack>
     );
-  const { time, turns, waiting, waitingMedian, runs, fail, tokens, projects, heat, ai } = page;
+  const { time, turns, waiting, waitingMedian, runs, fail, tokens, projects, heat, ai, memory, stalls, worst, size } = page;
   const failBy = new Map((fail?.ranking ?? []).map((x) => [x.key, x.value]));
-  const who = scope === "all" ? "Active" : "Agents";
+  const who = "Active";
   return (
     <View inset>
       {toolbar}
@@ -346,7 +360,7 @@ function Overview({ scope, range, onRange, onOpen }: { scope: Scope; range: Rang
             </Pane>
           )}
           {heat && (
-            <Pane title={scope === "all" ? "When you work" : "When agents work"} aside={range === "year" ? "per day" : range === "today" ? "per hour" : "last 30 days"} wide={range === "year"}>
+            <Pane title="When you work" aside={range === "year" ? "per day" : range === "today" ? "per hour" : "last 30 days"} wide={range === "year"}>
               {heatChart(heat, range, who, now)}
             </Pane>
           )}
@@ -363,6 +377,16 @@ function Overview({ scope, range, onRange, onOpen }: { scope: Scope; range: Rang
           {ai && (
             <Pane title="cmd's model calls" aside="by feature">
               <Ranking unit={ai.stat.unit} rows={(ai.ranking ?? []).map((x) => ({ key: x.key, label: x.label || "Other", value: x.value }))} onSelect={() => onOpen(ai.stat.id)} empty="No model calls yet" />
+            </Pane>
+          )}
+          {memory && (
+            <Pane title="cmd" aside="core memory">
+              <Stack gap={2}>
+                <TimeSeries {...bucketLabels(memory, range)} buckets={memory.buckets} series={memory.series} current={currentIndex(memory, now)} unit="bytes" label="Core memory" summary={`${value(memory.total, "bytes")} on average`} height={90} onSelect={() => onOpen(memory.stat.id)} />
+                <Text tone="dim">
+                  {`${stalls?.total ? `${stalls.total} ${stalls.total === 1 ? "stall" : "stalls"} of the core${worst?.total ? `, the worst ${value(worst.total, "ms")}` : ""}` : "No stalls of the core"}${size?.total ? ` · event log ${value(size.total, "bytes")}` : ""}.`}
+                </Text>
+              </Stack>
             </Pane>
           )}
         </Panes>
@@ -384,7 +408,7 @@ interface DetailProps {
 
 /** One stat on its own: its chart large, split by one of its dimensions, and its ranking. */
 function Detail({ scope, range, stat, by, onBy, onRange, onBack }: DetailProps) {
-  const q: StatQuery = { stat, range, compare: true, ...(by ? { by, top: 12 } : {}), ...(scope === "all" ? { scope } : {}) };
+  const q: StatQuery = { stat, range, compare: true, ...(by ? { by, top: 12 } : {}), ...(scope === "all" || UNSCOPED.has(stat) ? { scope: "all" as const } : {}) };
   const { data, error, retry } = useQueries([["r", q]], JSON.stringify(q));
   const r = data?.r;
   // In one workspace, a split by workspace (or by the one project) says nothing.

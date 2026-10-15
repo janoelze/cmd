@@ -14,8 +14,8 @@ const DAY = 24 * HOUR;
 /** A smooth-ish run of `n` values around `base`. */
 const wave = (n: number, base: number, seed: number) => Array.from({ length: n }, (_, i) => Math.max(0, Math.round(base * (1 + 0.6 * Math.sin(i * 1.3 + seed) + 0.3 * Math.cos(i * 0.7 + seed * 2)))));
 
-const UNITS: Record<string, StatResult["stat"]["unit"]> = { "agents.time": "ms", "agents.waiting": "ms", "you.active": "ms", "commands.failrate": "percent", "agents.tokens": "tokens" };
-const TITLES: Record<string, string> = { "agents.time": "Agent time", "agents.turns": "Turns", "commands.runs": "Commands", "commands.failrate": "Failed commands", "agents.tokens": "Tokens", "you.active": "Active time", "ai.calls": "Model calls" };
+const UNITS: Record<string, StatResult["stat"]["unit"]> = { "agents.time": "ms", "agents.waiting": "ms", "you.active": "ms", "commands.failrate": "percent", "agents.tokens": "tokens", "core.memory": "bytes", "data.size": "bytes", "core.stalls": "ms" };
+const TITLES: Record<string, string> = { "agents.time": "Agent time", "agents.turns": "Turns", "commands.runs": "Commands", "commands.failrate": "Failed commands", "agents.tokens": "Tokens", "you.active": "Active time", "ai.calls": "Model calls", "core.memory": "Core memory", "core.stalls": "Core stalls", "data.size": "Event log size" };
 const COMMANDS = ["pnpm test", "git status", "pnpm typecheck", "pnpm e2e", "git diff", "pnpm dev", "ls", "rg", "git log", "pnpm build", "node", "make"];
 
 /** The fake core's stats: a few plausible days, by what the query splits by. */
@@ -25,7 +25,7 @@ function stats(scale = 1, commands = 8) {
     const hourly = q.grain === "hour" || q.range === "today";
     const months = q.range === "year";
     const n = q.range === "365d" ? 365 : months ? 12 : hourly ? (q.range === "today" ? 24 : 30 * 24) : 7;
-    const base = (unit === "ms" ? 1.5 * H : unit === "tokens" ? 400_000 : unit === "percent" ? 8 : 12) * scale / (hourly && n > 24 ? 6 : 1);
+    const base = (unit === "bytes" ? 180 * 2 ** 20 : unit === "ms" ? 1.5 * H : unit === "tokens" ? 400_000 : unit === "percent" ? 8 : 12) * scale / (hourly && n > 24 ? 6 : 1);
     const split = q.by === "agent" ? [["claude", "Claude"], ["codex", "Codex"]] : q.by === "outcome" ? [["done", "Done"], ["stopped", "Stopped"], ["failed", "Failed"]] : q.by === "model" ? [["opus", "Opus"], ["sonnet", "Sonnet"]] : null;
     const series = split ? split.map(([key, label], i) => ({ key: key!, label: label!, values: wave(n, base / (i + 1.5), i + 1) })) : undefined;
     const r = stat(q, { unit, title: TITLES[q.stat] ?? q.stat, ...(series ? { series } : { values: wave(n, base, q.stat.length) }) });
@@ -47,6 +47,10 @@ function stats(scale = 1, commands = 8) {
     if (q.stat === "agents.waiting" && q.measure === "p50") r.total = 95_000;
     if (q.stat === "commands.failrate") Object.assign(r, { total: 7.5, ...(r.previous ? { previous: { ...r.previous, total: 9 } } : {}) }, { stat: { ...r.stat, good: "down" } });
     if (q.stat === "agents.time") r.stat.good = "up";
+    // cmd's own: memory an average, two stalls of the core (the worst 240 ms), the log's size.
+    if (q.stat === "core.memory") r.total = 182 * 2 ** 20;
+    if (q.stat === "core.stalls") r.total = q.measure === "max" ? 240 : 2;
+    if (q.stat === "data.size") r.total = 46 * 2 ** 20;
     return r;
   };
 }

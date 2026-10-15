@@ -3,7 +3,9 @@
 // workspace from the title menu (active time, projects, cmd's model calls); the range, kept per
 // window; a number opens its detail, split by a dimension, and Back; nothing counted yet; loading;
 // refused (no stat can be read: the page says why, Try Again asks again) and one stat refused (its
-// pane left out); many commands ranked; asked again a moment after a command is recorded.
+// pane left out); many commands ranked; asked again a moment after a command is recorded; your
+// active time and cmd's own pane (core memory, stalls, the log's size), which have no workspace,
+// read across every workspace in either scope, as on the native page.
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
@@ -17,7 +19,7 @@ const H = 3_600_000;
 function answers(over: Record<string, (q: StatQuery) => StatResult> = {}) {
   return (q: StatQuery): StatResult => {
     if (over[q.stat]) return over[q.stat]!(q);
-    const unit = q.stat === "agents.time" || q.stat === "agents.waiting" || q.stat === "you.active" ? "ms" : q.stat === "commands.failrate" ? "percent" : q.stat === "agents.tokens" ? "tokens" : "count";
+    const unit = q.stat === "core.memory" || q.stat === "data.size" ? "bytes" : q.stat === "core.stalls" ||q.stat === "agents.time" || q.stat === "agents.waiting" || q.stat === "you.active" ? "ms" : q.stat === "commands.failrate" ? "percent" : q.stat === "agents.tokens" ? "tokens" : "count";
     const series = q.by === "agent" ? [{ key: "claude", label: "Claude", values: [H, 2 * H, 0, H, 3 * H, H, 2 * H] }, { key: "codex", label: "Codex", values: [0, H, 0, 0, H, 0, 0] }] : q.by === "outcome" ? [{ key: "done", label: "Done", values: [3, 4, 1, 2, 5, 2, 3] }, { key: "stopped", label: "Stopped", values: [0, 1, 0, 0, 1, 0, 1] }] : undefined;
     const r = stat(q, { unit, title: q.stat, ...(series ? { series } : { values: unit === "ms" ? [H, H, H, H, H, H, H] : [1, 2, 3, 4, 5, 6, 7] }) });
     if (q.top && q.by === "command") r.ranking = [{ key: "pnpm test", label: "pnpm test", value: 12 }, { key: "git status", label: "git status", value: 7 }].slice(0, q.top);
@@ -41,15 +43,17 @@ describe("Usage Stats", () => {
     expect(tree).toHaveStat("Agent time", "12h");
     expect(tree).toHaveStat("Commands", "28");
     expect(tree).toHaveStat("Failed commands");
-    expect(tree.findAll("Stat").map((s) => s.props.label)).toEqual(["Agent time", "Turns", "Commands", "Failed commands", "Tokens"]);
+    expect(tree.findAll("Stat").map((s) => s.props.label)).toEqual(["Agent time", "Active time", "Turns", "Commands", "Failed commands", "Tokens"]);
     expect(tree.find("Stat", "Agent time").props.delta).toBe("+100%");
     expect(tree.find("Stat", "Failed commands").props.deltaTone).toBe("danger"); // up, where down is good
-    expect(paneTitles(tree)).toEqual([null, "Agent time", "Turns", "Commands", "When agents work", "Tokens"]);
+    expect(paneTitles(tree)).toEqual([null, "Agent time", "Turns", "Commands", "When you work", "Tokens", "cmd"]);
     expect(tree.find("Ranking").props.rows).toEqual([{ key: "pnpm test", label: "pnpm test", value: 12, note: "25% failed" }, { key: "git status", label: "git status", value: 7, note: "" }]);
     expect(tree.text()).toContain("Agents waited on you 7h, 1m 30s at a time.");
     expect(tree.find("PunchCard").props.rows).toHaveLength(7);
-    // This workspace's only: no query names a scope, and none reads what has no workspace.
-    expect(queries(host).every((q) => !q.scope && q.stat !== "you.active" && q.stat !== "ai.calls")).toBe(true);
+    // This workspace's, but for what has no workspace (yours, cmd's own), which is every workspace's.
+    const unscoped = ["you.active", "core.memory", "core.stalls", "data.size"];
+    expect(queries(host).every((q) => (unscoped.includes(q.stat) ? q.scope === "all" : !q.scope))).toBe(true);
+    expect(queries(host).some((q) => q.stat === "ai.calls")).toBe(false);
     expect(tree.find("StatusLine")).toBeTruthy();
   });
 
@@ -59,9 +63,9 @@ describe("Usage Stats", () => {
     await tree.choose(tree.find("Window"), "All Workspaces");
     expect(host.requests).toContainEqual(["state.set", "scope", "all"]);
     expect(tree.findAll("Stat").map((s) => s.props.label)).toEqual(["Agent time", "Active time", "Turns", "Commands", "Failed commands", "Tokens"]);
-    expect(paneTitles(tree)).toEqual([null, "Agent time", "Turns", "Commands", "When you work", "Projects", "Tokens", "cmd's model calls"]);
+    expect(paneTitles(tree)).toEqual([null, "Agent time", "Turns", "Commands", "When you work", "Projects", "Tokens", "cmd's model calls", "cmd"]);
     expect(tree.find("Text").children[0]).toMatchObject({ text: expect.stringContaining("across 2 projects") });
-    expect(queries(host).slice(-11).every((q) => q.scope === "all")).toBe(true);
+    expect(queries(host).slice(-15).every((q) => q.scope === "all")).toBe(true);
   });
 
   it("switches the range, kept per window, and draws a year as a calendar, today by the hour", async () => {
@@ -74,7 +78,7 @@ describe("Usage Stats", () => {
     expect(tree.findAll("Calendar")).toHaveLength(1);
     expect(tree.find("Text").children[0]).toMatchObject({ text: expect.stringMatching(/^This year:/) });
     await tree.change(tree.find("ToolbarSegmented"), "today");
-    expect(tree.find("Pane", (p) => p.props.title === "When agents work").props.aside).toBe("per hour");
+    expect(tree.find("Pane", (p) => p.props.title === "When you work").props.aside).toBe("per hour");
     expect(tree.findAll("PunchCard")).toHaveLength(0);
   });
 
@@ -92,7 +96,33 @@ describe("Usage Stats", () => {
     expect(queries(host).at(-1)).toMatchObject({ stat: "commands.runs", by: "result", top: 12, compare: true });
     expect(tree.find("Pane", (p) => p.props.title === "By result").children).toHaveLength(1);
     await tree.press(tree.find("ToolbarButton"));
-    expect(tree.findAll("Stat")).toHaveLength(5);
+    expect(tree.findAll("Stat")).toHaveLength(6);
+  });
+
+  it("shows cmd's own pane and your active time in this workspace too, read across every workspace", async () => {
+    const host = createHost({
+      stats: answers({
+        "core.memory": (q) => Object.assign(stat(q, { unit: "bytes", values: [1, 2, 3, 4, 5, 6, 7].map((n) => n * 2 ** 20) }), { total: 182 * 2 ** 20 }),
+        "core.stalls": (q) => Object.assign(stat(q, { unit: "ms" }), { total: q.measure === "max" ? 240 : 2 }),
+        "data.size": (q) => Object.assign(stat(q, { unit: "bytes" }), { total: 46 * 2 ** 20 }),
+      }),
+    });
+    const tree = await render(<UsageStats />, host);
+    expect(tree).toHaveStat("Active time", "7h");
+    const pane = tree.find("Pane", (p) => p.props.title === "cmd");
+    expect(pane.props.aside).toBe("core memory");
+    expect(tree.find("TimeSeries").props).toMatchObject({ unit: "bytes", label: "Core memory", summary: "182 MB on average", height: 90 });
+    expect(tree.text()).toContain("2 stalls of the core, the worst 240ms · event log 46 MB.");
+    for (const s of ["you.active", "core.memory", "core.stalls", "data.size"]) expect(queries(host).filter((q) => q.stat === s).every((q) => q.scope === "all")).toBe(true);
+    // Its detail reads every workspace's too: there is no other.
+    await tree.pick(tree.find("TimeSeries"), 3);
+    expect(queries(host).at(-1)).toMatchObject({ stat: "core.memory", scope: "all", compare: true });
+  });
+
+  it("leaves cmd's pane out when the system class isn't granted, and shows the rest", async () => {
+    const tree = await render(<UsageStats />, createHost({ stats: answers({ "core.memory": () => { throw new Error('Add "events: [\"system\"]"'); } }) }));
+    expect(paneTitles(tree)).not.toContain("cmd");
+    expect(tree).toHaveStat("Agent time");
   });
 
   it("says when nothing has been counted yet", async () => {
