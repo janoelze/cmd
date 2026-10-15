@@ -1,6 +1,6 @@
 {
   "name": "timer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A countdown that tells you when it's done, in any workspace.",
   "private": true,
   "license": "AGPL-3.0-only",

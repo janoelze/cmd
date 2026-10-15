@@ -4,6 +4,7 @@
 // state is the window's (cmd.state), so a reload or a restart carries on. It rings through
 // cmd.notify at the end, on time, from its own process, which runs while its window is open in
 // any workspace; one that ended while nothing ran (the Mac slept) still rings once, saying when.
+// Start or Pause, and Reset, are in the window's context menu too, as the native Timer's are.
 
 import { useEffect, useState } from "react";
 import { Window, View, Stack, Text, Progress, WindowToolbar, ToolbarButton, ToolbarField, ToolbarSegmented, ToolbarSpacer, useNow, useStoredState, cmd } from "@cmd/widget-api";
@@ -83,7 +84,7 @@ export default function Countdown() {
   return (
     <Window
       status={caption}
-      menu={[
+      actions={[
         running ? { label: "Pause", run: pause } : { label: paused ? "Resume" : "Start", run: start },
         { label: "Reset", disabled: phase === "idle", run: reset },
       ]}

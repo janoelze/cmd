@@ -1,7 +1,8 @@
 // Countdown against the fake host (@cmd/widget-api/testing), with a fake clock: the native
 // Timer's job. It starts set at 25 minutes; Start keeps when it ends in the window's state; it
 // rings through cmd.notify at the end, on time to the second, once, and says it's done; Pause
-// keeps what's left; a typed length sets it; one that ended while nothing ran rings once, late.
+// keeps what's left; a typed length sets it; Start or Pause and Reset in the window's context
+// menu, no title menu, as natively; one that ended while nothing ran rings once, late.
 // (Its process runs while its window is open in any workspace: widget-host.test.ts.)
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +21,22 @@ describe("Countdown", () => {
     expect(tree.text()).toContain("25:00");
     expect(tree.find("ToolbarSegmented").props.value).toBe("25");
     expect(tree.find("Window").props.status).toBeNull();
+  });
+
+  it("has Start or Pause and Reset in the window's context menu, and no title menu", async () => {
+    const host = createHost();
+    const tree = await render(<Countdown />, host);
+    const win = () => tree.find("Window");
+    expect(win().props.menu).toBeUndefined();
+    expect((win().props.actions as { label: string }[]).map((a) => a.label)).toEqual(["Start", "Reset"]);
+    await tree.choose(win(), "Start", "actions");
+    expect(win().props.status).toBe("ends 14:25");
+    expect((win().props.actions as { label: string }[]).map((a) => a.label)).toEqual(["Pause", "Reset"]);
+    await tree.choose(win(), "Pause", "actions");
+    expect(win().props.status).toBe("paused");
+    await tree.choose(win(), "Reset", "actions");
+    expect(win().props.status).toBeNull();
+    expect(tree.text()).toContain("25:00");
   });
 
   it("rings through cmd.notify on time, once, and says it's done", async () => {
