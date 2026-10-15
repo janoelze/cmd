@@ -169,7 +169,7 @@ const API = "@cmd/widget-api"; // named once: the harness is text, run in the pa
 const TREES_HARNESS = `import fs from "node:fs";
 import path from "node:path";
 import { it } from "vitest";
-import { render, createHost, matchers } from "${API}/testing";
+import { render, createHost, matchers, configValues } from "${API}/testing";
 
 const root = process.cwd();
 const DATA = ["agents", "terminals", "windows", "events", "fetch", "ai", "git", "diff", "worktrees", "actions"];
@@ -196,8 +196,7 @@ it("trees", async () => {
     for (const { name, data } of states.slice(0, ${STORY_STATES})) {
       const { size, ...host } = data;
       // Config as the core gives it: the fields' defaults under what the state sets.
-      const defaults = Object.fromEntries((w.config ?? []).filter((f) => !f.secret && f.default !== undefined).map((f) => [f.key, f.default]));
-      const h = createHost({ ...host, config: { ...defaults, ...(host.config ?? {}) } });
+      const h = createHost({ ...host, config: configValues(w.config, host.config) });
       const errors = [];
       let outline = "";
       let empty = false;

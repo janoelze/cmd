@@ -18,6 +18,8 @@ import { Mirror, RenderedTree, matchers, type WidgetMatchers } from "./testing/t
 
 export { createHost, type FakeHost, type HostData, type FetchFixture, type AiFixture, type RunFixture } from "./testing/host.ts";
 export { fixtures, WORKSPACE_ID } from "./testing/fixtures.ts";
+/** A window's config as the core gives it: the fields' defaults under the values set, never a secret (for a harness that reads package.json). */
+export { configValues } from "@cmd/protocol";
 export { RenderedTree, matchers, textOf, titleOf, type Node, type Element, type WidgetMatchers } from "./testing/tree.ts";
 
 expect.extend(matchers);

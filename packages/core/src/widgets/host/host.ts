@@ -12,7 +12,7 @@
 // restarts its windows once. The window sees each state as a widget.tree status. A package
 // waiting for a grant is asked once, not per window (asking(), widget.ask: the grants sheet).
 
-import { WIDGET_API, WIDGET_API_MINOR, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
+import { WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../../kernel/context.ts";
 import { ApiRefusal } from "../api/access.ts";
@@ -562,15 +562,7 @@ export class WidgetHost {
 
   /** The window's config: the manifest's defaults, then the person's values; never a secret. */
   #config(inst: Instance, w: AppWindow | undefined): Record<string, WireValue> {
-    const set = (w?.state.config as Record<string, WireValue> | undefined) ?? {};
-    const out: Record<string, WireValue> = {};
-    for (const f of inst.widget?.config ?? []) {
-      if (f.secret) continue;
-      const v = set[f.key];
-      if (v !== undefined && v !== null) out[f.key] = v;
-      else if (f.default !== undefined) out[f.key] = f.default;
-    }
-    return out;
+    return configValues(inst.widget?.config, w?.state.config as Record<string, WireValue> | undefined);
   }
 
   #must(id: WindowId): Instance {

@@ -41,6 +41,22 @@ export interface WidgetConfigField {
   host?: string;
 }
 
+/**
+ * A window's config as its widget gets it: each field's default under the person's value
+ * (`set`, the window's state; null or missing is unset), never a secret. The one rule for the
+ * core's host, the frame page, the toolchain's trees and the Workbench's stories.
+ */
+export function configValues<V, D = WidgetConfigField["default"]>(fields: readonly { key: string; default?: D; secret?: boolean }[] | null | undefined, set: Readonly<Record<string, V>> | null | undefined): Record<string, V | NonNullable<D>> {
+  const out: Record<string, V | NonNullable<D>> = {};
+  for (const f of fields ?? []) {
+    if (f.secret) continue;
+    const v = set?.[f.key];
+    if (v !== undefined && v !== null) out[f.key] = v;
+    else if (f.default !== undefined && f.default !== null) out[f.key] = f.default;
+  }
+  return out;
+}
+
 /** The window kind of a package's widget: "pkg:<package>/<widget>". */
 export const packageKind = (name: string, widget: string): string => `pkg:${name}/${widget}`;
 

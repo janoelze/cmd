@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { Window as Frame, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
-import type { WidgetOut } from "@cmd/protocol";
+import { configValues, type WidgetOut } from "@cmd/protocol";
 import { run, type WidgetModule } from "@cmd/widget-api/runtime";
 import { createHost, type HostData } from "@cmd/widget-api/testing/host";
 import { AllSizes, SIZES, type SizeName } from "../reference/RefWindow.tsx";
@@ -81,8 +81,7 @@ function Variant({ widget, data, pkg, id: widgetId, name, icon, size }: { widget
     const { size: _size, ...host } = data;
     // Config as the core gives it: the fields' defaults under what the state sets.
     const fields = pkg.cmd?.widgets?.find((w) => w.id === widgetId)?.config ?? [];
-    const defaults = Object.fromEntries(fields.filter((f) => !f.secret && f.default !== undefined).map((f) => [f.key, f.default]));
-    void still(widget, { ...host, config: { ...defaults, ...(host.config ?? {}) } as HostData["config"] }, { package: pkg.name, version: pkg.version, widget: widgetId }).then((messages) => {
+    void still(widget, { ...host, config: configValues(fields, host.config) as HostData["config"] }, { package: pkg.name, version: pkg.version, widget: widgetId }).then((messages) => {
       if (live) for (const m of messages) if (m.kind === "tree" || m.kind === "patch") store.apply(m);
     });
     return () => void (live = false);

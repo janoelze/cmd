@@ -8,7 +8,7 @@
 
 import { TOKENS, WebStage } from "@cmd/ui";
 import { useEffect, useRef, useState } from "react";
-import type { AppWindow, WidgetEntry } from "@cmd/protocol";
+import { configValues, type AppWindow, type WidgetEntry } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { useFrame } from "../../lib/frames.ts";
 
@@ -105,17 +105,7 @@ export function PackageFrame({ win, entry, active, reload }: { win: AppWindow; e
 }
 
 /** The window's config as the page sees it: the manifest's defaults, then the person's values; never a secret. */
-function configOf(entry: WidgetEntry | undefined, win: AppWindow): Record<string, unknown> {
-  const set = (win.state.config as Record<string, unknown> | undefined) ?? {};
-  const out: Record<string, unknown> = {};
-  for (const f of entry?.config ?? []) {
-    if (f.secret) continue;
-    const v = set[f.key];
-    if (v !== undefined && v !== null) out[f.key] = v;
-    else if (f.default !== undefined) out[f.key] = f.default;
-  }
-  return out;
-}
+const configOf = (entry: WidgetEntry | undefined, win: AppWindow): Record<string, unknown> => configValues(entry?.config, win.state.config as Record<string, unknown> | undefined);
 
 /** The theme where the frame is drawn: every design token's value there, and the appearance. */
 function themeOf(at: Element | null | undefined): { appearance: "dark" | "light"; vars: Record<string, string> } {
