@@ -2471,8 +2471,17 @@ await scenario("widget-frame", async () => {
     path.join(dir, "view.html"),
     `<style>body{padding:var(--inset)}a{color:var(--link)}</style>
 <p id="hello">Hello from a frame</p>
-<a id="go" href="https://example.invalid/after-click">Go</a> <button id="count">Count</button>
+<a id="go" href="https://example.invalid/after-click">Go</a> <button id="count">Count</button> <button id="capture">Capture</button>
 <script type="module">
+// What the sandbox keeps out (docs/57, wave 3): the microphone, the Mac's sound, web pages in frames.
+const probe = window.__probe = { csp: [] };
+const why = (e) => String(e?.name ?? e);
+addEventListener("securitypolicyviolation", (e) => probe.csp.push(e.violatedDirective));
+navigator.mediaDevices.getUserMedia({ audio: true }).then(() => (probe.mic = "granted"), (e) => (probe.mic = why(e)));
+document.getElementById("capture").onclick = () => navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(() => (probe.display = "granted"), (e) => (probe.display = why(e)));
+const sub = document.createElement("iframe");
+sub.src = "https://example.invalid/embed";
+document.body.append(sub);
 cmd.open("https://example.invalid/on-load");
 setTimeout(() => cmd.open("https://example.invalid/later"), 600);
 document.getElementById("count").onclick = () => cmd.state.set("count", (cmd.state.get("count") ?? 0) + 1);
@@ -2517,6 +2526,13 @@ document.getElementById("count").onclick = () => cmd.state.set("count", (cmd.sta
   await frame.locator("#count").click();
   const kv = await until(() => call("window.list").then((l) => l.find((x) => x.id === w.id)?.state.kv), (v) => v?.count === 2, 10_000);
   check(kv?.count === 2, `cmd.state.set from the frame reaches the window's state (${JSON.stringify(kv)})`);
+
+  // No microphone or system audio (opaque origin, no permissions policy for them, main refuses
+  // cmd-widget: pages) and no embedded web page (frame-src 'none'): why the Visualizer and
+  // YouTube stay native windows (docs/57, wave 3).
+  await frame.locator("#capture").click();
+  const probe = await until(() => frame.evaluate(() => window.__probe).catch(() => null), (p) => p?.mic && p?.display && p.csp.includes("frame-src"), 10_000);
+  check(probe?.mic !== "granted" && probe?.display !== "granted" && probe?.csp.includes("frame-src"), `the page gets no microphone, no system audio and no web page in a frame (${JSON.stringify(probe)})`);
   await call("window.close", { id: w.id });
 
   // Magic's radio example: its player, drawn in the frame, not a placeholder.
