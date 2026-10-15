@@ -161,10 +161,10 @@ export function linkOf(dir: string): string | null {
 
 /**
  * A reload of a package made with Magic (it has versions): files that differ from its latest
- * version were edited by hand, and become a version named so. Not while a build writes it.
+ * version were edited by hand, and become a version named so. Not while Magic writes it.
  */
-export function recordHandEdit(stateDir: string, entry: PackageEntry, building: ReadonlySet<string>): PackageRevision | null {
-  if (!entry.ok || entry.builtin || building.has(entry.folder)) return null;
+export function recordHandEdit(stateDir: string, entry: PackageEntry, writing: ReadonlySet<string>): PackageRevision | null {
+  if (!entry.ok || entry.builtin || writing.has(entry.folder)) return null;
   const revs = new PackageRevisions(stateDir, entry.pkg.name);
   const last = revs.latest();
   if (!last || !revs.differs(entry.dir)) return null;

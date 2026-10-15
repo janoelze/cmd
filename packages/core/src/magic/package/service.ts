@@ -158,8 +158,7 @@ export class MagicPackages {
     const ac = new AbortController();
     this.#runs.set(id, ac);
     const { library } = this.#c;
-    library.building.add(name);
-    library.reloader.paused.add(name);
+    library.writing.add(name);
     const pkg: MagicPackageBuild = { name, ...(editing ? { editing } : {}) };
     this.#c.windows.update(id, { title: fresh ? "Magic Widget" : w.title, state: { prompt: original, phase: "working", error: undefined, steps: [], history, pkg } });
 
@@ -306,8 +305,7 @@ export class MagicPackages {
   #end(id: WindowId, name: string, ac: AbortController, o: { fresh: boolean; keep?: boolean; error?: string }): void {
     if (this.#runs.get(id) === ac) this.#runs.delete(id);
     const { library } = this.#c;
-    library.building.delete(name);
-    library.reloader.paused.delete(name);
+    library.writing.delete(name);
     const dir = path.join(this.#home(), name);
     if (!o.keep) {
       if (o.fresh) {
@@ -362,7 +360,7 @@ export class MagicPackages {
       files: listFiles(e.dir),
       revisions: revs.list(),
       edited: revs.differs(e.dir),
-      building: this.#c.library.building.has(e.name),
+      building: this.#building(e.name),
     };
   }
 
@@ -374,15 +372,15 @@ export class MagicPackages {
   restore(windowId: WindowId, n: number): void {
     const e = this.#made(windowId);
     if (!e) throw new Error("Only a widget made with Magic has versions.");
-    if (this.#c.library.building.has(e.name)) throw new Error("Wait for the change being made to finish.");
+    const { writing, host } = this.#c.library;
+    if (this.#building(e.name)) throw new Error("Wait for the change being made to finish.");
     const link = linkOf(e.dir);
     if (link) throw new Error(`This widget is linked from ${link}, your own folder: cmd doesn't write versions into it.`);
     const revs = new PackageRevisions(this.#stateDir, e.name);
     const meta = revs.list().find((r) => r.n === n);
     if (!meta) throw new Error(`There's no version ${n}.`);
-    // One reload, now: the saves below don't reload it again a moment later.
-    const { reloader, host } = this.#c.library;
-    reloader.paused.add(e.name);
+    // One reload, now: the saves below don't reload it again a moment later, nor count as a hand edit.
+    writing.add(e.name);
     const mark = readMark(e.dir);
     revs.checkout(e.dir, n);
     const rev = revs.snapshot(e.dir, { prompt: `Back to version ${n}: ${meta.prompt}`.slice(0, 300), ok: meta.ok, ...(meta.problems ? { problems: meta.problems } : {}), ...(meta.model ? { model: meta.model } : {}), ...(meta.hand ? { hand: true } : {}) }, revs.shotOf(n));
@@ -390,8 +388,13 @@ export class MagicPackages {
     if (mark) writeMark(e.dir, { ...mark, revisions: rev.n });
     log.info(`package ${e.name} back to version ${n} (version ${rev.n})`);
     host.reload(e.name);
-    setTimeout(() => this.#c.library.building.has(e.name) || reloader.paused.delete(e.name), RELOAD_DEBOUNCE_MS).unref();
+    setTimeout(() => this.#building(e.name) || writing.delete(e.name), RELOAD_DEBOUNCE_MS).unref();
     this.#c.library.changed();
+  }
+
+  /** A build (not a Restore) is writing this package. */
+  #building(name: string): boolean {
+    return this.#c.windows.others().some((w) => this.#runs.has(w.id) && stateOf(w).pkg?.name === name);
   }
 
   /** The package entry of a window's widget, when Magic made it (not a built-in one). */

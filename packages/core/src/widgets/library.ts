@@ -48,8 +48,12 @@ export class WidgetLibrary {
   readonly host: WidgetHost;
   /** Saves in a package's sources restart its windows (hot reload, widgets/reload.ts). */
   readonly reloader: PackageReloader;
-  /** Packages a Magic build is writing (magic/package/service.ts): not listed until they are valid. */
-  readonly building = new Set<string>();
+  /**
+   * Packages Magic is writing (a build, a Restore; magic/package/service.ts): not listed until
+   * they are valid, their saves don't reload them (it reloads once at its end), and their changes
+   * aren't kept as hand edits.
+   */
+  readonly writing = new Set<string>();
   /** A Magic package's last screenshot, by name (magic/package/service.ts sets it). */
   shotOf: (name: string) => string | undefined = () => undefined;
   /** The instance's state folder ($CMD_HOME); null in tests without one. */
@@ -68,7 +72,7 @@ export class WidgetLibrary {
     });
     this.deno.onInstalled = () => this.host.packagesChanged();
     this.packages = createPackages(core, {
-      quiet: this.building,
+      quiet: this.writing,
       onChange: () => {
         this.changed();
         this.reloader?.sync(this.packages.list());
@@ -78,6 +82,7 @@ export class WidgetLibrary {
     });
     this.host = createWidgetHost(core, this.packages, { stateDir, socket: o.socket ?? null, deno: () => this.deno.find(), onAsk: () => this.changed() });
     this.reloader = new PackageReloader({
+      paused: this.writing,
       onReload: (name) => {
         this.#handEdit(name);
         this.host.reload(name);
@@ -104,7 +109,7 @@ export class WidgetLibrary {
             const magic = e.pkg.magic ? { magic: e.pkg.magic, request: e.pkg.magic.request, createdAt: Date.parse(e.pkg.magic.madeAt) || undefined, shot: this.shotOf(e.pkg.name) } : {};
             return { ref: w.kind, source: "package", kind: w.kind, title: w.title, description: w.description ?? e.pkg.description, icon: w.icon, name: e.pkg.name, version: e.pkg.version, api: e.pkg.api, dir: e.dir, ...(link ? { link } : {}), permissions: e.pkg.permissions, ...(ask ? { ask } : {}), ...(e.builtin ? { builtin: true } : {}), ...config, ...magic, ...(w.surface === "frame" ? { surface: "frame" as const } : {}), windows: others.filter((x) => x.kind === w.kind).map((x) => x.id) };
           })
-        : this.building.has(e.folder)
+        : this.writing.has(e.folder)
           ? []
           : [{ ref: `pkg:${e.folder}`, source: "package", kind: `pkg:${e.folder}`, title: e.folder, icon: DEFAULT_ICON, name: e.folder, problem: e.errors.join("; "), dir: e.dir, windows: [] }],
     );
@@ -125,7 +130,7 @@ export class WidgetLibrary {
     const entry = this.packages.list().find((e) => e.folder === name || (e.ok && e.pkg.name === name));
     if (!this.stateDir || !entry?.ok || !entry.pkg.magic) return;
     try {
-      if (recordHandEdit(this.stateDir, entry, this.building)) this.changed();
+      if (recordHandEdit(this.stateDir, entry, this.writing)) this.changed();
     } catch (e) {
       log.warn(`keeping a hand edit of ${name} as a version failed: ${(e as Error).message}`);
     }

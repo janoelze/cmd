@@ -40,6 +40,8 @@ interface Watched {
 export interface ReloaderOptions {
   /** A package's code changed: once per burst. */
   onReload: (name: string) => void;
+  /** Packages whose saves don't reload: Magic writing them (it reloads once at its end). */
+  paused?: ReadonlySet<string>;
   debounce?: number;
 }
 
@@ -48,8 +50,6 @@ export class PackageReloader {
   #pkgs = new Map<string, Watched>();
   #timers = new Map<string, NodeJS.Timeout>();
   #closed = false;
-  /** Packages whose saves don't reload: a Magic build writing them (it reloads once at its end). */
-  readonly paused = new Set<string>();
 
   constructor(o: ReloaderOptions) {
     this.#o = o;
@@ -124,7 +124,7 @@ export class PackageReloader {
   }
 
   #soon(name: string): void {
-    if (this.#closed || this.paused.has(name)) return;
+    if (this.#closed || this.#o.paused?.has(name)) return;
     clearTimeout(this.#timers.get(name));
     const t = setTimeout(() => {
       this.#timers.delete(name);
