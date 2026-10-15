@@ -208,8 +208,8 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | The title grows with the column (`clamp(--text-lg, column / chars, 0.8 × --text-display)`) | b | `Text fit` (A3) |
 | Controls: spread across the width when small, centred with a wide gap when large; the package centres three `lg` IconButtons always | b | inside each `Case`: `Inline justify="between"`, or centred |
 | A change of track or a pause from elsewhere shows at once natively, up to 2 s late here | c | `media` topic, `useMedia()` (C1) |
-| A footer "Playing in Spotify" the native doesn't have | d | drop it, or keep it as the one deliberate addition; the native says the app nowhere |
-| The `Sizes` story draws every box at the same size class (the fake host's `env.size` is "regular"), so the narrow box shows the title-bar status it would hide | d | tooling: the fake host's `Sizes` passes each box its own `env` (A2) |
+| A footer "Playing in Spotify" the native doesn't have | d | drop it, or keep it as the one deliberate addition; the native says the app nowhere. Fixed (widget-port-fixes). Dropped; a footer shows only when a control didn't go through. |
+| The `Sizes` story draws every box at the same size class (the fake host's `env.size` is "regular"), so the narrow box shows the title-bar status it would hide | d | tooling: the fake host's `Sizes` passes each box its own `env` (A2). Left for A2 (widget-port-fixes): the fake host and the Workbench's `Sizes` are `@cmd/widget-api` and renderer code, outside a package |
 
 **Timer → Countdown**
 
@@ -219,15 +219,15 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Click the time to type a length ("10", "1:30", "90s"); the package has a `ToolbarField` for it instead | a | `Dial editable` + `onSubmit` (A6); then the toolbar loses the field |
 | Done in the `needs` colour; the package's is `warning` | a | `Dial tone="needs"` (A6) |
 | The body is centred in the window; `Stack` can't centre on its main axis | a | `Stack justify` (A3); moot once it's a `Dial` |
-| A title menu "Options" (Pause, Reset) the native window doesn't have | d | move them to `Window actions` (the window's context menu), no `menu` |
+| A title menu "Options" (Pause, Reset) the native window doesn't have | d | move them to `Window actions` (the window's context menu), no `menu`. Fixed (widget-port-fixes). |
 
 **Agent Activity → Agents**
 
 | Difference | Class | Fix |
 |---|---|---|
-| One ranked list (waiting, working, finished-unseen, the rest) with no headings; the package has three headed sections and loses the "unseen" rank | d | one `List` sorted by the same rank (`bucket` is there: "needs", "unseen", "rest") |
-| A row's end is two dim lines, where it works over how long ago, right-aligned; the package puts the place after the title and the age in a `Chip` | d | `ListRowEnd` > `Stack align="end" gap={0}` > two `Text size="xs" tone="dim"` |
-| The place's tooltip (the full folder or worktree) | d | `ListRow tip={agent.cwd}` |
+| One ranked list (waiting, working, finished-unseen, the rest) with no headings; the package has three headed sections and loses the "unseen" rank | d | one `List` sorted by the same rank (`bucket` is there: "needs", "unseen", "rest"). Fixed (widget-port-fixes). |
+| A row's end is two dim lines, where it works over how long ago, right-aligned; the package puts the place after the title and the age in a `Chip` | d | `ListRowEnd` > `Stack align="end" gap={0}` > two `Text size="xs" tone="dim"`. Fixed (widget-port-fixes). |
+| The place's tooltip (the full folder or worktree) | d | `ListRow tip={agent.cwd}`. Fixed (widget-port-fixes). |
 | With All Workspaces the place says which workspace | c | `workspaces` topic (C6) |
 | A click marks the clicked agent seen (a subagent too); the package selects the host's window, which marks only the host | c | `agents.select(id)` (C9) |
 | Empty: a "New Claude Session" button | c | `agents.start` without a prompt (C10) |
@@ -236,30 +236,30 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 
 | Difference | Class | Fix |
 |---|---|---|
-| A list to the window's edges (`Panel`/`PanelBody`); the package's sits in an inset `View` | d | `Panel` > `PanelBody` (1.2) |
-| Run Again on hover (`ListRowActions`) | d | `ListRowActions` > `IconButton` (1.2) |
+| A list to the window's edges (`Panel`/`PanelBody`); the package's sits in an inset `View` | d | `Panel` > `PanelBody` (1.2). Fixed (widget-port-fixes). |
+| Run Again on hover (`ListRowActions`) | d | `ListRowActions` > `IconButton` (1.2). Fixed (widget-port-fixes). |
 | Run Again types the command into its own terminal and runs it, when that terminal is open and at a prompt; the package opens a new terminal with it typed, not run | c | `terminals.rerun(key)` (C11) |
-| Copy Command and New Terminal Here in a row's menu | d | `cmd.clipboard.write` (1.2) and `cmd.terminals.open({ cwd })` |
+| Copy Command and New Terminal Here in a row's menu | d | `cmd.clipboard.write` (1.2) and `cmd.terminals.open({ cwd })`. Fixed (widget-port-fixes). |
 | The place chip is the project's hue with the worktree or branch (`whereOf`); the package's is a neutral chip with the branch | a | `fmt.hue(name)` (A11), the app's `projectHue`; the place from the event's `git` |
-| The age is a `ListValue`; the package's is a `Chip` | d | `ListValue` |
+| The age is a `ListValue`; the package's is a `Chip` | d | `ListValue`. Fixed (widget-port-fixes). |
 | All Workspaces adds the workspace's name to the detail | c | `workspaces` topic (C6) |
-| The README has no "How it differs" section | d | write it |
+| The README has no "How it differs" section | d | write it. Fixed (widget-port-fixes). |
 
 **Event Stream → Event Log**
 
 | Difference | Class | Fix |
 |---|---|---|
-| Edge-to-edge `Panel` | d | `Panel` > `WindowToolbar` + `PanelBody` |
+| Edge-to-edge `Panel` | d | `Panel` > `WindowToolbar` + `PanelBody`. Fixed (widget-port-fixes). |
 | The classes are in the title menu, whose button says "All Events" or "3 hidden"; the package's title menu says "This Workspace" and the classes are a toolbar `Show` menu | a | `Window menuLabel` (A7); then classes and scope share the title menu as natively |
-| A chip says the class's title ("Agents") in `projectHue(class)`; the package's says the class id in its own hash's hue | d, a | `titleOf(fam)`; `fmt.hue` (A11) |
-| "recorded again ×n" in the detail | d | count the events per key before `newestFirst` drops them |
+| A chip says the class's title ("Agents") in `projectHue(class)`; the package's says the class id in its own hash's hue | d, a | `titleOf(fam)`; `fmt.hue` (A11). Fixed (widget-port-fixes). The title part (d); the hue waits for A11. |
+| "recorded again ×n" in the detail | d | count the events per key before `newestFirst` drops them. Fixed (widget-port-fixes). Counted from `cmd.events.subscribe` (`useEvents` merges them away). |
 | Events of no workspace (the data layer's own) are shown | e | a widget reads its workspace's, or every workspace's with `workspace: ["all"]`, never what belongs to none: matching would hand any widget with an events grant cmd's own records |
 
 **Notifications → Notification Log**
 
 | Difference | Class | Fix |
 |---|---|---|
-| Edge-to-edge `Panel` | d | `Panel` > `PanelBody` |
+| Edge-to-edge `Panel` | d | `Panel` > `PanelBody`. Fixed (widget-port-fixes). |
 | A click goes to the window a notification is about (a widget's), and its menu says Show Window | c | `ApiEvent.windowId` (C8) |
 | Notifications about nothing in particular (the CLI's) show in every workspace | e | the same rule as Event Log: no workspace, no widget |
 | A terminal moved since counts for the workspace it is in now, not the one it was sent in | e | the log's `workspaceId` is what was recorded; rewriting it per read would make two readers disagree |
@@ -270,7 +270,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Difference | Class | Fix |
 |---|---|---|
 | The sparkline is inside the stat's tile, in the chart palette (CPU series 0, memory series 1, green); the package's sits under the tile in accent and neutral | a | `Stat` children and `Sparkline series` (A8) |
-| A terminal's name and icon are the sidebar's (an agent's name and its kind's icon: "Codex · sqlite viewer", ✦); the package's are the terminal's title and a generic `sparkles` | d | `useAgents` by `agentId`: `agent.name`, `agent.icon` |
+| A terminal's name and icon are the sidebar's (an agent's name and its kind's icon: "Codex · sqlite viewer", ✦); the package's are the terminal's title and a generic `sparkles` | d | `useAgents` by `agentId`: `agent.name`, `agent.icon`. Fixed (widget-port-fixes). |
 | Other workspaces' terminals say the workspace's name; the package's say their folder | c | `workspaces` topic (C6) |
 | A "cmd" pane: the app and the background process | c | `app.usage` (C12) |
 | A Task Manager link in the footer | c | `app.open("taskManager")` (C13), Jan to decide |
@@ -282,8 +282,8 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 |---|---|---|
 | A tile's change is the kit's `Delta` (▲ 22%, green or red by the stat's `good`, dim when flat); the package's is "+100%" text in a tone | a | `Stat trend` + `good` (A8) |
 | The sparkline is inside the tile, as wide as it | a | `Stat` children (A8) |
-| The "cmd" pane (core memory, stalls, the log's size) | d | `stats.query` can read them today: `events: ["system"]` (a declarable class) and `workspace: ["all"]` for a stat with no workspace; add both grants and the pane |
-| In This Workspace the native page still shows your active time and when you work (they have no workspace) | d | query `you.active` with `scope: "all"` beside the workspace's stats (the package already holds `workspace: ["all"]`) |
+| The "cmd" pane (core memory, stalls, the log's size) | d | `stats.query` can read them today: `events: ["system"]` (a declarable class) and `workspace: ["all"]` for a stat with no workspace; add both grants and the pane. Fixed (widget-port-fixes). The package now declares `events: ["system"]`. |
+| In This Workspace the native page still shows your active time and when you work (they have no workspace) | d | query `you.active` with `scope: "all"` beside the workspace's stats (the package already holds `workspace: ["all"]`). Fixed (widget-port-fixes). |
 | A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | a chart's `delta` and `note` (A9); `quantiles` (C3) |
 | Counted again when the core says a stat it shows changed; the package follows `command` and `agent.stop` events and a minute's timer | c | `stats` topic, `useStat(query)` (C2) |
 | A detail ranks by the stat's "many" dimension ("By command"); `ApiStatInfo.dims` doesn't say which | c | `dims[].many` and `kind` (C3) |
@@ -299,14 +299,14 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | All Workspaces, with a project chip per entry when there is more than one | c | `journal.days({ scope: "all" })` and `ApiJournalEntry.project` (a folder's name, never a path) (C4); `fmt.hue` (A11) |
 | Reads again when something it reads is recorded, and at the day's turn; the package every 5 minutes | c | `journal` topic, `useJournal()` (C4) |
 | A picked bar in the ribbon scrolls its entry into view | a | `reveal` on `TimelineEntry` (A10) |
-| The title menu says the scope; the package's says "Options" (Read Again) | d | Read Again as the native's small `IconButton` on Today's heading; the title menu becomes the scope once C4 exists |
+| The title menu says the scope; the package's says "Options" (Read Again) | d | Read Again as the native's small `IconButton` on Today's heading; the title menu becomes the scope once C4 exists. Fixed (widget-port-fixes). Read Again on the newest day's heading; no title menu until C4. |
 
 **Workspace Actions → Run Scripts**
 
 | Difference | Class | Fix |
 |---|---|---|
 | The title menu's button names the folder (and the worktree's branch); its menu follows the selected terminal's checkout, lists the repository's worktrees with what runs in each, or uses the workspace's folder | a, c | `Window menuLabel` (A7); `useActions({ root })` for a worktree of the workspace's repository (C14), the worktrees from `cmd.git.worktrees` |
-| Sections fold (a click on the heading), packages and More start folded, kept per window | d | `ListSection open` + `onToggle`, the keys in `useStoredState` |
+| Sections fold (a click on the heading), packages and More start folded, kept per window | d | `ListSection open` + `onToggle`, the keys in `useStoredState`. Fixed (widget-port-fixes). Packages start folded; there is no More section in 1.2 (C14). |
 | From Your History ("12× in this folder", a clock icon), Suggested (from the README), and More (hidden ones) | c | `ApiAction.source`, `hidden`, `history`, and `include` (C14) |
 | A recipe that needs arguments is typed into a new terminal ("Type in Terminal", a text cursor icon) | c | `ApiAction.args`; `actions.run` types it (C14) |
 | Run in New Terminal | c | `actions.run(name, { fresh })` (C14) |
@@ -321,7 +321,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | How long a run took comes from the command events of its terminal (wrong when two runs share it) | c | `ApiAction.startedAt`, `endedAt` (C14) |
 | Enter in the filter runs the first match | a | `ToolbarSearchField onSubmit` (A7) |
 | Durations read "4 min" (the app's `durationText`); `fmt.dur` says "4m 3s" | a | `fmt.dur(s, { coarse: true })` (A11) |
-| The main action's icon is its kind's; the package's is `play.fill` | d | `kindOf(main).icon` |
+| The main action's icon is its kind's; the package's is `play.fill` | d | `kindOf(main).icon`. Fixed (widget-port-fixes). |
 
 **Counts by class**
 
