@@ -60,6 +60,19 @@ export interface ChartSeries {
   values: (number | null)[];
 }
 
+/**
+ * A change against the period before, drawn as a Delta: "▲ 18%" in green when up is good, red when it isn't, dim when flat.
+ * @since 1.3
+ */
+export interface ChartDelta {
+  /** The change ("18%", `fmt.delta`; a leading sign is dropped). */
+  text: string;
+  /** Which way it went. */
+  trend: "up" | "down" | "flat";
+  /** Which way is better; without one it stays neutral. */
+  good?: "up" | "down";
+}
+
 /** A row of a Ranking: what it is, its value, and a note after the value. @since 1.2 */
 export interface RankingRow {
   /** Unique among the rows; what `onSelect` says. */
@@ -158,6 +171,11 @@ export interface WindowProps {
   menu?: MenuEntry[];
   /** Entries added to the window's context menu. */
   actions?: MenuEntry[];
+  /**
+   * The title menu's button ("3 hidden", "cmd · main"); without one, the checked entry's label, or "Options".
+   * @since 1.3
+   */
+  menuLabel?: string;
   /** The window's content: a View. */
   children?: ReactNode;
 }
@@ -245,6 +263,8 @@ export interface ToolbarSearchFieldProps extends ToolbarItem {
   count?: string | number;
   /** The text as typed (debounced by the app); "" when cleared. */
   onChange?: (value: string) => void;
+  /** Return pressed, with the text (run the first match). @since 1.3 */
+  onSubmit?: (value: string) => void;
 }
 /** A filter field: a magnifying glass, a count, a clear button. @since 1.0 */
 export const ToolbarSearchField = el<ToolbarSearchFieldProps>("ToolbarSearchField");
@@ -393,6 +413,8 @@ export interface ListRowProps {
   tip?: string;
   /** Its context menu. */
   menu?: MenuEntry[];
+  /** Scrolled into view (to the nearest edge) when it becomes true: once per change, not on every redraw. @since 1.3 */
+  reveal?: boolean;
   /** Pressed (the row's main action: open, select). */
   onClick?: () => void;
   /** Double-clicked. */
@@ -463,8 +485,17 @@ export interface StatProps {
   delta?: string | number;
   /** The change's tone: "success" for better, "danger" for worse. */
   deltaTone?: Tone;
+  /**
+   * Which way `delta` went: draws it as a Delta (▲ 18%, coloured by `good`, dim when flat) instead of text in `deltaTone`.
+   * @since 1.3
+   */
+  trend?: "up" | "down" | "flat";
+  /** Which way is better for what it counts, with `trend`; without one the change stays neutral. @since 1.3 */
+  good?: "up" | "down";
   /** Pressed (show what it counts). */
   onSelect?: () => void;
+  /** Drawn under the value, as wide as the tile: a Sparkline. @since 1.3 */
+  children?: ReactNode;
 }
 /** A number with its label. @since 1.0 */
 export const Stat = el<StatProps>("Stat");
@@ -479,6 +510,11 @@ export interface SparklineProps {
   area?: boolean;
   /** The accent ("current") or neutral instead of the series colour. */
   color?: "current" | "neutral";
+  /**
+   * Draws in the chart palette's nth colour, as charts colour their series (a stat's own: CPU 0, memory 1); `color` wins.
+   * @since 1.3
+   */
+  series?: 0 | 1 | 2 | 3 | 4 | 5;
 }
 /** A small line of recent values. @since 1.0 */
 export const Sparkline = el<SparklineProps>("Sparkline");
@@ -844,6 +880,13 @@ export interface TimeSeriesProps {
   height?: number;
   /** As tall as its pane, instead of `height`. */
   fill?: boolean;
+  /**
+   * A change after the summary, drawn as a Delta. With it or a `note`, the summary is the chart's value, bold (a stat's detail).
+   * @since 1.3
+   */
+  delta?: ChartDelta;
+  /** Dim words after the change ("median 4m, 90% under 12m"). @since 1.3 */
+  note?: string;
   /** Fills under a single line (default true). */
   area?: boolean;
   /** A bucket was clicked: its index. */
@@ -879,6 +922,13 @@ export interface TimeBarsProps {
   height?: number;
   /** As tall as its pane, instead of `height`. */
   fill?: boolean;
+  /**
+   * A change after the summary, drawn as a Delta. With it or a `note`, the summary is the chart's value, bold (a stat's detail).
+   * @since 1.3
+   */
+  delta?: ChartDelta;
+  /** Dim words after the change ("median 4m, 90% under 12m"). @since 1.3 */
+  note?: string;
   /** A dashed line at the mean of the buckets with data. */
   average?: boolean;
   /** A bucket was clicked: its index. */
@@ -989,6 +1039,8 @@ export interface TimelineEntryProps {
   label?: string;
   /** Rings the mark (the entry picked in a Ribbon). */
   picked?: boolean;
+  /** Scrolled into view (to the nearest edge) when it becomes true: once per change, not on every redraw. @since 1.3 */
+  reveal?: boolean;
   /** What happened: Text, and more. */
   children?: ReactNode;
 }
@@ -1098,6 +1150,31 @@ export interface CaseProps {
  */
 export const Case = el<CaseProps>("Case");
 
+/** Dial's props. @since 1.3 */
+export interface DialProps {
+  /** The value, formatted ("12:30"). */
+  value: string | number;
+  /** Its steady name ("Time"): its accessible name, the value its description. */
+  label: string;
+  /** How much of the ring is drawn, 0–1 (default 0: only the track). */
+  progress?: number;
+  /** "accent" (default) while running, "needs" when done, "dim" paused or idle. */
+  tone?: "accent" | "needs" | "dim";
+  /** A quiet line under the value ("ends 14:32"). */
+  caption?: string | number;
+  /** A click on the value types a new one, sent to `onSubmit`. */
+  editable?: boolean;
+  /**
+   * Return pressed in the typed value, with the text as typed ("10", "1:30", "90s": parse it). Escape or leaving sends nothing.
+   */
+  onSubmit?: (value: string) => void;
+}
+/**
+ * A value to read across the room, in a ring that shows how much is left (a timer, a quota): as large as the view allows, so it goes alone in a View. With `editable`, a click on the value types a new one: Return sends it, Escape or leaving the field puts the value back.
+ * @since 1.3
+ */
+export const Dial = el<DialProps>("Dial");
+
 /** Each element's props type, by name (tests hold them to the protocol's allow-list). */
 export interface ElementProps {
   Window: WindowProps;
@@ -1160,4 +1237,5 @@ export interface ElementProps {
   Frame: FrameProps;
   Adapt: AdaptProps;
   Case: CaseProps;
+  Dial: DialProps;
 }

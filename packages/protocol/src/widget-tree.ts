@@ -14,7 +14,7 @@
 import type { ApiBox, ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
-import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, WidgetMigrated } from "./widget-tree-1.3.ts";
+import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, WidgetMigrated, WidgetEnvLocale } from "./widget-tree-1.3.ts";
 import type { ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWorkspaceName } from "./widget-tree-1.3.ts";
 
 // ── versions ────────────────────────────────────────────
@@ -220,7 +220,7 @@ export interface WidgetResync {
 export type WidgetIn = WidgetReady | WidgetResult | WidgetEventMessage | WidgetInteraction | WidgetConfig | WidgetEnvMessage | WidgetResync;
 
 /** `cmd.env`: what the process knows of where it runs. */
-export interface WidgetEnv {
+export interface WidgetEnv extends WidgetEnvLocale {
   /** cmd's version ("0.32.0"). */
   version: string;
   /** The API served. */
@@ -235,8 +235,6 @@ export interface WidgetEnv {
   /** 1.3: the content's px (rounded down to 8, at most every 200 ms while resizing), for logic like how many rows fit; null until measured. A layout per size is an `Adapt`. */
   box?: ApiBox | null;
   placement: "board" | "sidebar";
-  /** 1.3: the app's locale ("de-DE"), which `fmt.value` and `fmt.delta` write numbers in, so a widget prints what the app beside it prints; a cmd before 1.3 sends none. */
-  locale?: string;
 }
 
 // ── the verbs ───────────────────────────────────────────

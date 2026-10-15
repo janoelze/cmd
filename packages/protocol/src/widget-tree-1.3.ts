@@ -91,3 +91,9 @@ export interface ApiAppUsage {
 export interface ApiRerun {
   terminalId: string;
 }
+
+/** `cmd.env`'s locale (WidgetEnv, widget-tree.ts): the app's, so `fmt` writes numbers as the app beside it does. */
+export interface WidgetEnvLocale {
+  /** 1.3: the app's locale ("de-DE"), which `fmt.value` and `fmt.delta` write numbers in; a cmd before 1.3 sends none. */
+  locale?: string;
+}

@@ -63,4 +63,23 @@ export const ELEMENT_SINCE: Record<string, string> = {
   Frame: "1.2",
   Adapt: "1.3",
   Case: "1.3",
+  Dial: "1.3",
+};
+
+/** The minor each prop, event or children added to an older element came in ("Stat.trend": "1.3"), which `cmd.env.has("Stat.trend")` reads. */
+export const PROP_SINCE: Record<string, string> = {
+  "Window.menuLabel": "1.3",
+  "ToolbarSearchField.onSubmit": "1.3",
+  "Stack.justify": "1.3",
+  "ListRow.reveal": "1.3",
+  "Stat.trend": "1.3",
+  "Stat.good": "1.3",
+  "Stat.children": "1.3",
+  "Sparkline.series": "1.3",
+  "Text.fit": "1.3",
+  "TimeSeries.delta": "1.3",
+  "TimeSeries.note": "1.3",
+  "TimeBars.delta": "1.3",
+  "TimeBars.note": "1.3",
+  "TimelineEntry.reveal": "1.3",
 };

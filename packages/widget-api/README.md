@@ -269,22 +269,25 @@ Where the widget runs.
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.env.get(): WidgetEnv` | 1.0 | none | cmd's version, the API served, theme, size class and placement. |
-| `cmd.env.has(name: string): boolean` | 1.0 | none | Whether this cmd serves a verb ("agents.start", added in 1.1) or draws an element ("DataGrid", added in 1.2): for a widget that also runs on an older cmd. |
+| `cmd.env.has(name: string): boolean` | 1.0 | none | Whether this cmd serves a verb ("agents.start", added in 1.1), draws an element ("DataGrid", added in 1.2) or takes a prop added to an older element ("Stat.trend", 1.3): for a widget that also runs on an older cmd. |
 | `cmd.env.use(): WidgetEnv` | 1.0 | none | Live: the hook `useEnv()`. |
 
 #### `cmd.fmt`
 
-Formatting: `cmd.fmt.ago`, `dur`, `num`, `bytes`, `pct`, `time`, `date`.
+Formatting: `cmd.fmt.ago`, `dur`, `num`, `bytes`, `pct`, `time`, `date`; 1.3 `value`, `delta`, `hue`.
 
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.fmt.ago(t: When, now?: number): string` | 1.0 | none |  |
-| `cmd.fmt.dur(seconds: number \| null \| undefined): string` | 1.0 | none |  |
+| `cmd.fmt.dur(seconds: number \| null \| undefined, opts?: { coarse?: boolean \| undefined; } \| undefined): string` | 1.0 | none |  |
 | `cmd.fmt.num(n: number \| null \| undefined): string` | 1.0 | none |  |
 | `cmd.fmt.bytes(n: number \| null \| undefined): string` | 1.0 | none |  |
 | `cmd.fmt.pct(n: number \| null \| undefined): string` | 1.0 | none |  |
 | `cmd.fmt.time(t: When): string` | 1.0 | none |  |
 | `cmd.fmt.date(t: When): string` | 1.0 | none |  |
+| `cmd.fmt.value(v: number, unit?: Unit, opts?: { short?: boolean \| undefined; } \| undefined): string` | 1.0 | none |  |
+| `cmd.fmt.delta(cur: number, prev: number, unit?: Unit \| undefined): string` | 1.0 | none |  |
+| `cmd.fmt.hue(name: string): number` | 1.0 | none |  |
 
 ### Hooks
 
@@ -355,6 +358,7 @@ The widget's window, around everything: the title bar (icon and name from the ma
 | `status` | `string \| null` | The title bar's status line ("2 waiting for you · 1 working"); null for none. |
 | `menu` | `MenuEntry[]` | The title menu (a scope switch: This Workspace / All Workspaces). |
 | `actions` | `MenuEntry[]` | Entries added to the window's context menu. |
+| `menuLabel` | `string` | The title menu's button ("3 hidden", "cmd · main"); without one, the checked entry's label, or "Options". Since 1.3. |
 | `children` | `ReactNode` | The window's content: a View. |
 
 #### `View`
@@ -420,6 +424,7 @@ A filter field: a magnifying glass, a count, a clear button.
 | `placeholder` | `string` | Shown while it is empty ("Filter agents"). |
 | `count` | `string \| number` | What matched ("3 of 12"). |
 | `onChange` | `(value: string) => void` | The text as typed (debounced by the app); "" when cleared. |
+| `onSubmit` | `(value: string) => void` | Return pressed, with the text (run the first match). Since 1.3. |
 | `priority` | `number` | Moves to the ⋯ menu when there is no room, lowest first; without one it stays. |
 | `secondary` | `boolean` | Faded until the window is hovered or selected. |
 
@@ -544,6 +549,7 @@ A row.
 | `depth` | `number` | Indent, for a row under another (a subagent). |
 | `tip` | `string` | A tooltip. |
 | `menu` | `MenuEntry[]` | Its context menu. |
+| `reveal` | `boolean` | Scrolled into view (to the nearest edge) when it becomes true: once per change, not on every redraw. Since 1.3. |
 | `onClick` | `() => void` | Pressed (the row's main action: open, select). |
 | `onDoubleClick` | `() => void` | Double-clicked. |
 | `children` | `ReactNode` | Its parts in order: ListRowIcon, ListRowContent, ListRowEnd. |
@@ -599,7 +605,10 @@ A number with its label.
 | `unit` | `string` | After the value ("ms", "%"). |
 | `delta` | `string \| number` | A change beside it ("+12%"). |
 | `deltaTone` | `Tone` | The change's tone: "success" for better, "danger" for worse. |
+| `trend` | `"up" \| "down" \| "flat"` | Which way `delta` went: draws it as a Delta (▲ 18%, coloured by `good`, dim when flat) instead of text in `deltaTone`. Since 1.3. |
+| `good` | `"up" \| "down"` | Which way is better for what it counts, with `trend`; without one the change stays neutral. Since 1.3. |
 | `onSelect` | `() => void` | Pressed (show what it counts). |
+| `children` | `ReactNode` | Drawn under the value, as wide as the tile: a Sparkline. Since 1.3. |
 
 #### `Sparkline`
 
@@ -611,6 +620,7 @@ A small line of recent values.
 | `height` | `number` | In px (default 20). |
 | `area` | `boolean` | Fills under the line (default true). |
 | `color` | `"current" \| "neutral"` | The accent ("current") or neutral instead of the series colour. |
+| `series` | `0 \| 1 \| 2 \| 3 \| 4 \| 5` | Draws in the chart palette's nth colour, as charts colour their series (a stat's own: CPU 0, memory 1); `color` wins. Since 1.3. |
 
 #### `Text`
 
@@ -882,6 +892,8 @@ Lines over time buckets, filled under when there's one; the period before dashed
 | `summary` | `string` | Its header ("Active 3h 12m"), replaced by the bucket under the cursor. |
 | `height` | `number` | In px (default 120). |
 | `fill` | `boolean` | As tall as its pane, instead of `height`. |
+| `delta` | `ChartDelta` | A change after the summary, drawn as a Delta. With it or a `note`, the summary is the chart's value, bold (a stat's detail). Since 1.3. |
+| `note` | `string` | Dim words after the change ("median 4m, 90% under 12m"). Since 1.3. |
 | `area` | `boolean` | Fills under a single line (default true). |
 | `onSelect` | `(value: number) => void` | A bucket was clicked: its index. |
 
@@ -902,6 +914,8 @@ Bars over time buckets: the current one in the accent, the period before as tick
 | `summary` | `string` | Its header ("Active 3h 12m"), replaced by the bucket under the cursor. |
 | `height` | `number` | In px (default 120). |
 | `fill` | `boolean` | As tall as its pane, instead of `height`. |
+| `delta` | `ChartDelta` | A change after the summary, drawn as a Delta. With it or a `note`, the summary is the chart's value, bold (a stat's detail). Since 1.3. |
+| `note` | `string` | Dim words after the change ("median 4m, 90% under 12m"). Since 1.3. |
 | `average` | `boolean` | A dashed line at the mean of the buckets with data. |
 | `onSelect` | `(value: number) => void` | A bucket was clicked: its index. |
 
@@ -982,6 +996,7 @@ One entry of a Timeline: its time, a mark in its hue on the rail, then what happ
 | `hue` (required) | `number` | The mark's hue (0–360): its kind's or project's. |
 | `label` | `string` | The mark's tooltip. |
 | `picked` | `boolean` | Rings the mark (the entry picked in a Ribbon). |
+| `reveal` | `boolean` | Scrolled into view (to the nearest edge) when it becomes true: once per change, not on every redraw. Since 1.3. |
 | `children` | `ReactNode` | What happened: Text, and more. |
 
 #### `Ribbon`
@@ -1047,6 +1062,20 @@ One layout of an Adapt, drawn while the Adapt's box meets every condition given 
 | `maxHeight` | `number` | Drawn up to this height. |
 | `children` | `ReactNode` | The layout. |
 
+#### `Dial`
+
+A value to read across the room, in a ring that shows how much is left (a timer, a quota): as large as the view allows, so it goes alone in a View. With `editable`, a click on the value types a new one: Return sends it, Escape or leaving the field puts the value back. Since 1.3.
+
+| Prop | Type | What |
+|---|---|---|
+| `value` (required) | `string \| number` | The value, formatted ("12:30"). |
+| `label` (required) | `string` | Its steady name ("Time"): its accessible name, the value its description. |
+| `progress` | `number` | How much of the ring is drawn, 0–1 (default 0: only the track). |
+| `tone` | `"accent" \| "needs" \| "dim"` | "accent" (default) while running, "needs" when done, "dim" paused or idle. |
+| `caption` | `string \| number` | A quiet line under the value ("ends 14:32"). |
+| `editable` | `boolean` | A click on the value types a new one, sent to `onSubmit`. |
+| `onSubmit` | `(value: string) => void` | Return pressed in the typed value, with the text as typed ("10", "1:30", "90s": parse it). Escape or leaving sends nothing. |
+
 ### Records
 
 What the charts' and DataGrid's props hold: plain values, a field each.
@@ -1060,6 +1089,16 @@ One series of a chart: a key, its name in the legend and the readout, and a valu
 | `key` (required) | `string` | Unique among the series. |
 | `label` (required) | `string` | Its name in the legend and the readout. |
 | `values` (required) | `(number \| null)[]` | One per bucket, in order; null for no data. |
+
+#### `ChartDelta`
+
+A change against the period before, drawn as a Delta: "▲ 18%" in green when up is good, red when it isn't, dim when flat. Since 1.3.
+
+| Field | Type | What |
+|---|---|---|
+| `text` (required) | `string` | The change ("18%", `fmt.delta`; a leading sign is dropped). |
+| `trend` (required) | `"up" \| "down" \| "flat"` | Which way it went. |
+| `good` | `"up" \| "down"` | Which way is better; without one it stays neutral. |
 
 #### `RankingRow`
 
