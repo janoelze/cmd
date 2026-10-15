@@ -232,11 +232,7 @@ export interface WidgetEnv {
   theme: "dark" | "light";
   /** The window's size class. */
   size: "narrow" | "regular" | "wide";
-  /**
-   * 1.3: the window content's size in px (each side rounded down to 8; at most every 200 ms while it
-   * resizes), for logic that needs numbers (how many rows fit). Null until cmd has measured the
-   * window; a cmd before 1.3 sends none. A layout per size is an `Adapt`, not this.
-   */
+  /** 1.3: the content's px (rounded down to 8, at most every 200 ms while resizing), for logic like how many rows fit; null until measured. A layout per size is an `Adapt`. */
   box?: ApiBox | null;
   placement: "board" | "sidebar";
 }
