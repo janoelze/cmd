@@ -18,17 +18,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { chromium, devices, webkit } from "playwright";
-import { pathToFileURL } from "node:url";
-import net from "node:net";
 import { stopCore } from "../scripts/stop-core.mjs";
-import { startRelay } from "../apps/relay/src/relay.ts";
 import { connect } from "../packages/protocol/src/node.ts";
-
-const root = path.resolve(import.meta.dirname, "..");
-// vite is apps/web's dependency, not the root's.
-const { createServer } = await import(pathToFileURL(path.join(root, "apps/web/node_modules/vite/dist/node/index.js")).href);
+// Shared with the phone driver (pnpm phone): Vite, relay, cores, ports.
+import { directSettings, freePort, relaySettings, root, startCore as startCoreWith, startRelay, startWeb } from "../tools/phone/src/harness.ts";
 const home = path.join(root, ".cmd-dev", "e2e-web");
 // The second Mac: another core, so another host key and route.
 const home2 = path.join(root, ".cmd-dev", "e2e-web-2");
@@ -56,25 +51,15 @@ const until = async (fn, msg, ms = 10_000) => {
 // E2E_HOSTED=1: the deployed relay and client, with the core on its default settings.
 const hosted = !!process.env.E2E_HOSTED;
 const direct = !hosted && !!process.env.E2E_DIRECT;
-const freePort = () => new Promise((resolve) => { const s = net.createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => resolve(p)); }); });
 const port = direct ? await freePort() : 0;
 const port2 = direct ? await freePort() : 0;
 // Direct: the client as it ships, so build it (Vite is quick).
 if (direct) execFileSync(process.execPath, [path.join(root, "scripts/build-web.mjs")], { stdio: "ignore" });
 const relay = hosted || direct ? null : await startRelay({ log: () => {} });
-const web = hosted || direct ? null : await createServer({ root: path.join(root, "apps/web"), configFile: path.join(root, "apps/web/vite.config.ts"), server: { port: 0 }, logLevel: "error" });
-await web?.listen();
-const client = hosted ? "https://cmd.endtime-instruments.org" : direct ? `http://127.0.0.1:${port}` : web.resolvedUrls.local[0].replace(/\/$/, "");
-const settingsFor = (p) =>
-  hosted
-    ? { "remote.enabled": true }
-    : direct
-      ? { "remote.enabled": true, "remote.access": "url", "remote.url": `http://127.0.0.1:${p}`, "remote.port": p }
-      : { "remote.enabled": true, "remote.relay": relay.url, "remote.client": client };
-const startCore = (h, p) => {
-  fs.writeFileSync(path.join(h, "settings.json"), JSON.stringify(settingsFor(p)));
-  spawn(process.execPath, ["--no-warnings", path.join(root, "packages/core/src/main.ts"), "--instance=dev"], { env: { ...process.env, CMD_HOME: h }, stdio: "ignore", detached: true }).unref();
-};
+const web = hosted || direct ? null : await startWeb();
+const client = hosted ? "https://cmd.endtime-instruments.org" : direct ? `http://127.0.0.1:${port}` : web.url;
+const settingsFor = (p) => (hosted ? { "remote.enabled": true } : direct ? directSettings(p) : relaySettings(relay.url, client));
+const startCore = (h, p) => startCoreWith(h, settingsFor(p));
 startCore(home, port);
 startCore(home2, port2);
 

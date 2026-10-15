@@ -2,7 +2,8 @@
 // session per scenario and stays in the foreground, so cmd detects it as
 // `claude`. The matching hook events (which drive the sidebar state) are sent by
 // screenshots.mjs, from SCENARIOS[name].hooks. Uses only the 16 ANSI colours, so
-// the screenshot shows the active terminal theme.
+// the screenshot shows the active terminal theme. What's typed shows in its
+// prompt box, and Enter adds it as a prompt (the phone driver types into it).
 // usage: claude --demo=<scenario>
 
 const ESC = "\x1b[";
@@ -67,7 +68,9 @@ const tree = (items) => () =>
 const blank = () => () => [""];
 const spinner = (verb, info) => () => [`${orange("✻")} ${orange(verb + "…")} ${gray(`(${info} · esc to interrupt)`)}`];
 
-const input = (w) => [...box([`${gray(">")} `], w), gray("  ? for shortcuts")];
+// What's typed at its prompt (the phone driver types into it); Enter sends it as a prompt.
+let typed = "";
+const input = (w) => [...box([`${gray(">")} ${typed}`], w), gray("  ? for shortcuts")];
 
 export const SCENARIOS = {
   working: {
@@ -202,7 +205,18 @@ if (isMain) {
   const s = SCENARIOS[name] ?? SCENARIOS.working;
   process.stdin.setRawMode?.(true);
   process.stdin.resume();
-  process.stdin.on("data", (d) => d.includes(3) && process.exit(0)); // ⌃C
+  process.stdin.on("data", (d) => {
+    if (d.includes(3)) process.exit(0); // ⌃C
+    // Typing shows in the prompt box; Enter adds it as a prompt with a stand-in answer.
+    for (const ch of d.toString("utf8").replace(/\x1b(\[[0-9;]*[A-Za-z~]|O.)?/g, "")) {
+      if (ch === "\r" && typed) {
+        s.blocks = [...s.blocks, blank(), prompt(typed), say("(A stand-in session: it shows what you send, and does nothing.)")];
+        typed = "";
+      } else if (ch === "\x7f") typed = typed.slice(0, -1);
+      else if (ch >= " ") typed += ch;
+    }
+    draw(s);
+  });
   process.stdout.on("resize", () => draw(s));
   process.on("exit", () => process.stdout.write(`${ESC}?25h`));
   draw(s);

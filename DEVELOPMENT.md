@@ -194,6 +194,8 @@ On a real phone, `pnpm phone:serve` gives the web client one fixed HTTPS origin 
 
 The host key and route live in `$CMD_HOME/remote/host.json`, paired devices in SQLite (`remote_devices`), the audit log as `remote.audit` events in the event log, the pretend phone's identity in `$CMD_HOME/remote-device.json`.
 
+`pnpm phone` drives the web client in an emulated iPhone, paired with a seeded throwaway core or a dev core, for agents: [docs/56](docs/56-phone-development.md), "Phone driver".
+
 ## Status
 
 **Done**

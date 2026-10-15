@@ -6,6 +6,7 @@
     "tools/*/src/**/*.ts",
     "tools/*/test/**/*.ts",
     "tools/tours/tours/**/*.ts",
+    "tools/phone/scenarios/**/*.ts",
     "apps/relay/src/**/*.ts",
     "apps/relay/test/**/*.ts",
     "test/**/*.ts",

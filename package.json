@@ -20,6 +20,7 @@
     "phone:core": "node --no-warnings scripts/phone-origin/core.ts",
     "phone:pair": "node --no-warnings scripts/phone-origin/pair.ts",
     "workbench": "node scripts/workbench.mjs",
+    "phone": "node --no-warnings tools/phone/src/cli.ts",
     "tokens": "node packages/ui/tokens/build.ts",
     "design-debt": "UPDATE_DESIGN_DEBT=1 vitest run apps/desktop/test/design-css.test.ts",
     "layout-debt": "UPDATE_LAYOUT_DEBT=1 vitest run test/layout.test.ts test/imports.test.ts",
