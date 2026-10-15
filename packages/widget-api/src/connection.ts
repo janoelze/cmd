@@ -33,8 +33,8 @@ export class Connection {
   config: Record<string, WireValue> = {};
   /** The window's stored state as last known here (sets apply locally at once). */
   readonly state = new Map<string, WireValue>();
-  /** 1.3: the storage migration `ready` asked this process to run first, or null. */
-  migrate: ApiStorageMigrate | null = null;
+  /** 1.3: the places whose storage `ready` asked this process to migrate first. */
+  migrate: ApiStorageMigrate[] = [];
   /** The handlers of the tree, by id (the reconciler fills it). */
   readonly handlers = new Map<number, (value?: unknown) => unknown>();
   /** Called on `resync` (the reconciler sends the whole tree again). */
@@ -115,7 +115,7 @@ export class Connection {
         this.env = m.env;
         this.config = m.config;
         for (const [k, v] of Object.entries(m.state)) this.state.set(k, v);
-        this.migrate = m.migrate ?? null;
+        this.migrate = Array.isArray(m.migrate) ? m.migrate : [];
         this.readyResolve();
         this.changed();
         return;

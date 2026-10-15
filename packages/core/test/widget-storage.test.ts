@@ -11,12 +11,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ApiMethods, AppWindow, WidgetFrameResult, WireValue, WorkspaceId } from "@cmd/protocol";
+import type { ApiMethods, ApiStorageMigrate, AppWindow, WidgetFrameResult, WireValue, WorkspaceId } from "@cmd/protocol";
 import type { Connection } from "../src/kernel/connection.ts";
 import { Core } from "../src/kernel/core.ts";
 import { ApiRefusal } from "../src/widgets/api/access.ts";
 import { STORAGE_ERRORS } from "../src/widgets/api/storage.ts";
 import { storageOwner } from "../src/widgets/library.ts";
+import { placeKey } from "../src/widgets/storage.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { FakeWidgetRuntime, tmp, until, writePackage, type FakePackage, type FakeProcess } from "./fake-widget-runtime.ts";
 
@@ -215,92 +216,201 @@ describe("lifecycle", () => {
 });
 
 describe("migrations", () => {
-  /** Opens two windows of "mig" that start together, holding their hellos until both run; returns their processes. */
-  async function twoWindows(s: Awaited<ReturnType<typeof setup>>) {
-    const [a, b] = [await s.open("mig"), await s.open("mig")];
-    await until(() => procOf(s.rt, s.core, a) && procOf(s.rt, s.core, b), "both processes");
-    return [a, b] as const;
-  }
   /** A save of package.json also reloads the package's windows (hot reload, a moment later): past that. */
   const settled = () => new Promise((r) => setTimeout(r, 500));
-  const bump = (home: string, version: number) => {
-    const pkg = path.join(home, "mig", "package.json");
+  const bump = (home: string, name: string, version: number) => {
+    const pkg = path.join(home, name, "package.json");
     const json = JSON.parse(fs.readFileSync(pkg, "utf8"));
     fs.writeFileSync(pkg, JSON.stringify({ ...json, cmd: { ...json.cmd, storage: { version } } }));
   };
+  /**
+   * Each process runs the migrations its ready lists as a widget's runtime does: `run` for each
+   * place (through the window's API), `migrated` after it, stopping at the first that throws.
+   * Returns what ran: [window, scope, from, to].
+   */
+  function migrator(s: Awaited<ReturnType<typeof setup>>, run: (windowId: string, step: ApiStorageMigrate) => Promise<void> | void) {
+    const ran: [string, string, number, number][] = [];
+    s.rt.boot = (p) => {
+      const id = s.core.widgetTokens.check(p.spec.token)?.widgetId;
+      if (!id) return; // restarted again before it connected
+      p.connect();
+      p.onMessage = (m) => {
+        if (m.kind !== "ready" || !m.migrate) return;
+        void (async () => {
+          for (const step of m.migrate!) {
+            ran.push([id, step.scope, step.from, step.to]);
+            try {
+              await run(id, step);
+              p.send({ kind: "migrated", scope: step.scope, ok: true });
+            } catch (e) {
+              p.send({ kind: "migrated", scope: step.scope, ok: false, message: (e as Error).message });
+              return;
+            }
+          }
+        })();
+      };
+      p.hello();
+    };
+    return ran;
+  }
+  const pkgPlace = (owner: string) => ({ owner, scope: "package" as const, id: "" });
+  const wsPlace = (owner: string, id: string) => ({ owner, scope: "workspace" as const, id });
+  const stateOf = (core: Core, id: string) => core.windows.others().find((w) => w.id === id)!.state;
 
-  it("runs once across windows starting together, before any of them reads; one that throws changes nothing", async () => {
+  it("migrates the package's data once across windows starting together, before either reads", async () => {
     const s = await setup([{ name: "mig" }]);
-    const { core, rt, home, call } = s;
-    const [a, b] = await twoWindows(s);
-    await until(() => procOf(rt, core, a).got("ready").length && procOf(rt, core, b).got("ready").length, "ready");
-    expect(procOf(rt, core, a).got("ready")[0]!.migrate).toBeUndefined();
+    const { core, home, call, refusal } = s;
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const ran = migrator(s, async (id, step) => {
+      if (step.scope !== "package") return;
+      // Only the store due can be written.
+      expect((await refusal(call(id, "storage.set", "workspace", "x", 1))).message).toBe("A migration of the package storage changes only that storage.");
+      await gate;
+      const notes = (await call(id, "storage.get", "package", "notes")) as string;
+      await call(id, "storage.set", "package", "notes", notes.split(", "));
+    });
+    const [a, b] = [await s.open("mig"), await s.open("mig")];
+    await until(() => core.library.host.status(a)?.state === "running" && core.library.host.status(b)?.state === "running", "both running");
     await call(a, "storage.set", "package", "notes", "one, two");
-    await call(a, "storage.set", "window", "draft", "x");
-
-    // Version 2: both windows start again at once; one migrates, the other waits for it.
-    bump(home, 2);
+    bump(home, "mig", 2);
     core.library.packages.scan();
     await settled();
-    await until(() => core.library.storage.locked("mig"), "a migration");
-    const first = core.library.storage.locked("mig")!;
+    await until(() => ran.length, "a migration");
+    const first = ran[0]![0];
     const second = first === a ? b : a;
-    expect(procOf(rt, core, first).got("ready")[0]!.migrate).toEqual({ from: 1, to: 2 });
-    expect(procOf(rt, core, second).got("ready")).toEqual([]);
-    // The other window's frame waits too, and reads what the migration wrote.
-    const waiting = call(second, "storage.get", "package", "notes");
+    // The other window waits: its ready, and a read from its frame.
     let read: WireValue | undefined;
-    void waiting.then((v) => (read = v));
-    // The migration, as the process runs it: through the window's API.
-    const p = procOf(rt, core, first);
-    const prior = (await call(first, "storage.get", "package", "notes")) as string;
-    await call(first, "storage.set", "package", "notes", prior.split(", "));
-    await call(first, "storage.set", "window", "draft", null);
-    await new Promise((r) => setTimeout(r, 30));
-    expect(read).toBeUndefined();
-    expect(core.library.storage.get({ owner: "mig", scope: "package", id: "" }, "kv", "notes")).toBe("one, two"); // staged, not kept yet
-    p.send({ kind: "migrated", ok: true });
-    await until(() => procOf(rt, core, second).got("ready").length, "the other window's ready");
-    expect(procOf(rt, core, second).got("ready")[0]!.migrate).toBeUndefined();
-    expect(await waiting).toEqual(["one", "two"]);
-    expect(core.library.storage.version("mig")).toBe(2);
-    expect(await call(first, "storage.keys", "window")).toEqual([]);
+    void call(second, "storage.get", "package", "notes").then((v) => (read = v));
+    await new Promise((r) => setTimeout(r, 50));
+    expect([read, core.library.host.status(second)?.state]).toEqual([undefined, "starting"]);
+    release();
+    await until(() => read !== undefined, "the other window's read");
+    expect(read).toEqual(["one", "two"]);
+    await until(() => core.library.host.status(second)?.state === "running", "the other window running");
+    // Once, from the first window; the workspace had no data (straight to 2), nor had either window.
+    expect(ran).toEqual([[first, "package", 1, 2]]);
+    expect([core.library.storage.version(pkgPlace("mig")), core.library.storage.version(wsPlace("mig", core.workspaces.home().id))]).toEqual([2, 2]);
+    expect([stateOf(core, a).storageVersion, stateOf(core, b).storageVersion]).toEqual([2, 2]);
+  });
 
-    // Version 3, whose migration throws: nothing it wrote is kept, the version stays, the window says why.
-    bump(home, 3);
+  it("migrates each workspace's data from a window there, and an old window's own when it starts", async () => {
+    const s = await setup([{ name: "mig" }]);
+    const { core, home, call, ws } = s;
+    const ran = migrator(s, async (id, step) => {
+      const v = await call(id, "storage.get", step.scope, "list");
+      if (typeof v === "string") await call(id, "storage.set", step.scope, "list", v.split(","));
+    });
+    const [A, B] = [ws("a"), ws("b")];
+    const inA = await s.open("mig", A.id);
+    await call(inA, "storage.set", "workspace", "list", "a1,a2");
+    await call(inA, "storage.set", "package", "list", "p1,p2");
+    const inB = await s.open("mig", B.id);
+    await call(inB, "storage.set", "workspace", "list", "b1,b2");
+    // A window kept from before 1.3: its kv and no version.
+    core.windows.update(inA, { state: { kv: { list: "w1,w2" } } });
+    await core.handlers["window.close"]({ id: inB });
+    bump(home, "mig", 2);
     core.library.packages.scan();
     await settled();
-    await until(() => core.library.storage.locked("mig"), "the next migration");
-    const failing = core.library.storage.locked("mig")!;
-    expect(procOf(rt, core, failing).got("ready")[0]!.migrate).toEqual({ from: 2, to: 3 });
-    const other = failing === a ? b : a;
-    await call(failing, "storage.set", "package", "notes", "broken");
-    procOf(rt, core, failing).send({ kind: "migrated", ok: false, message: "notes isn't a list" });
-    await until(() => core.library.host.status(failing)?.state === "stopped", "the failed window stopped");
-    expect(core.library.host.status(failing)).toMatchObject({ reason: "couldn't update its stored data", detail: "notes isn't a list Its stored data is as it was." });
-    expect(core.library.storage.version("mig")).toBe(2);
-    expect(core.library.storage.get({ owner: "mig", scope: "package", id: "" }, "kv", "notes")).toEqual(["one", "two"]);
-    // The other window was waiting: now it runs the migration itself.
-    await until(() => procOf(rt, core, other)?.got("ready").some((r) => r.migrate?.to === 3), "the other window's turn");
-    procOf(rt, core, other).send({ kind: "migrated", ok: true });
-    await until(() => core.library.storage.version("mig") === 3, "version 3");
+    await until(() => ran.length === 3 && core.library.host.status(inA)?.state === "running", "A's migrations");
+    expect(ran).toEqual([[inA, "package", 1, 2], [inA, "workspace", 1, 2], [inA, "window", 1, 2]]);
+    expect(stateOf(core, inA)).toMatchObject({ kv: { list: ["w1", "w2"] }, storageVersion: 2 });
+    // B's data waits for a window in B.
+    expect(core.library.storage.version(wsPlace("mig", B.id))).toBe(1);
+    expect(core.library.storage.get(wsPlace("mig", B.id), "kv", "list")).toBe("b1,b2");
+    const again = await s.open("mig", B.id);
+    await until(() => core.library.host.status(again)?.state === "running", "B's window running");
+    expect(ran.slice(3)).toEqual([[again, "workspace", 1, 2]]);
+    expect(await call(again, "storage.get", "workspace", "list")).toEqual(["b1", "b2"]);
+    expect(await call(again, "storage.get", "package", "list")).toEqual(["p1", "p2"]);
+    expect(core.library.storage.version(wsPlace("mig", B.id))).toBe(2);
+  });
+
+  it("starts a window again when it moves to a workspace whose data is older, and migrates that", async () => {
+    const s = await setup([{ name: "mig" }]);
+    const { core, home, call, refusal, ws } = s;
+    const ran = migrator(s, () => {});
+    const [A, B] = [ws("a"), ws("b")];
+    const inB = await s.open("mig", B.id);
+    await call(inB, "storage.set", "workspace", "k", "old");
+    await core.handlers["window.close"]({ id: inB });
+    bump(home, "mig", 2);
+    core.library.packages.scan();
+    const inA = await s.open("mig", A.id);
+    await until(() => core.library.host.status(inA)?.state === "running", "running in A");
+    core.windows.move(inA, B.id);
+    // Until it starts again, B's older data is refused, never read in its old shape.
+    expect((await refusal(call(inA, "storage.get", "workspace", "k"))).message).toBe("This widget's data here is from an older version of it. Restart the widget to update it.");
+    await until(() => ran.some((r) => r[0] === inA && r[1] === "workspace"), "B migrated");
+    await until(() => core.library.host.status(inA)?.state === "running", "running in B");
+    expect(core.library.storage.version(wsPlace("mig", B.id))).toBe(2);
+  });
+
+  it("keeps a place migrated before one that throws; the one that threw changes nothing", async () => {
+    const s = await setup([{ name: "mig" }]);
+    const { core, home, call } = s;
+    const ran = migrator(s, async (id, step) => {
+      if (step.scope === "workspace") {
+        await call(id, "storage.set", "workspace", "list", "half done");
+        throw new Error("list isn't a list");
+      }
+      await call(id, "storage.set", step.scope, "list", ["p"]);
+    });
+    const a = await s.open("mig");
+    await call(a, "storage.set", "package", "list", "p");
+    await call(a, "storage.set", "workspace", "list", "w");
+    bump(home, "mig", 2);
+    core.library.packages.scan();
+    await settled();
+    await until(() => core.library.host.status(a)?.state === "stopped", "the window stopped");
+    expect(ran.map((r) => r[1])).toEqual(["package", "workspace"]);
+    expect(core.library.host.status(a)).toMatchObject({ reason: "couldn't update its stored data", detail: "list isn't a list Its stored data is as it was." });
+    const home_ = core.workspaces.home().id;
+    expect([core.library.storage.version(pkgPlace("mig")), core.library.storage.get(pkgPlace("mig"), "kv", "list")]).toEqual([2, ["p"]]);
+    expect([core.library.storage.version(wsPlace("mig", home_)), core.library.storage.get(wsPlace("mig", home_), "kv", "list")]).toEqual([1, "w"]);
+    expect(core.library.storage.locked(placeKey(wsPlace("mig", home_)))).toBeNull();
+    // Started again, it migrates only what is left.
+    core.library.host.restart(a);
+    await until(() => ran.length === 3, "the workspace again");
+    expect(ran[2]![1]).toBe("workspace");
+  });
+
+  it("starts a place with no data at package.json's version, without a migration", async () => {
+    const s = await setup([{ name: "fresh", storage: { version: 3 } }]);
+    const { core, call } = s;
+    const ran = migrator(s, () => {});
+    const a = await s.open("fresh");
+    await until(() => core.library.host.status(a)?.state === "running", "running");
+    expect(ran).toEqual([]);
+    expect([core.library.storage.version(pkgPlace("fresh")), core.library.storage.version(wsPlace("fresh", core.workspaces.home().id)), stateOf(core, a).storageVersion]).toEqual([3, 3, 3]);
+    // A workspace first written later is at 3 too.
+    const w = await s.open("fresh", s.ws("later").id);
+    await call(w, "storage.set", "workspace", "k", 1);
+    expect(core.library.storage.version(wsPlace("fresh", core.windows.others().find((x) => x.id === w)!.workspaceId))).toBe(3);
   });
 
   it("drops a migration whose process stops before it ends", async () => {
-    const s = await setup([{ name: "mig", storage: { version: 2 } }]);
-    const { core, rt, call } = s;
+    const s = await setup([{ name: "mig" }]);
+    const { core, rt, home, call } = s;
+    let hold = true;
+    const ran = migrator(s, async (id) => {
+      await call(id, "storage.set", "package", "k", "half");
+      while (hold) await new Promise((r) => setTimeout(r, 10));
+    });
     const a = await s.open("mig");
-    await until(() => procOf(rt, core, a)?.got("ready").length, "ready");
-    expect(procOf(rt, core, a).got("ready")[0]!.migrate).toEqual({ from: 1, to: 2 });
-    await call(a, "storage.set", "package", "k", "half");
+    await call(a, "storage.set", "package", "k", "old");
+    bump(home, "mig", 2);
+    core.library.packages.scan();
+    await settled();
+    await until(() => ran.length, "the migration");
     const crashed = procOf(rt, core, a);
     crashed.crash();
-    // It starts again (a crash restarts it) and runs the migration again, from what was kept: nothing.
-    await until(() => procOf(rt, core, a) && procOf(rt, core, a) !== crashed && procOf(rt, core, a).got("ready").length, "the restart's ready");
-    expect(procOf(rt, core, a).got("ready")[0]!.migrate).toEqual({ from: 1, to: 2 });
-    expect(await call(a, "storage.get", "package", "k")).toBeNull();
-    expect(core.library.storage.version("mig")).toBe(1);
-    expect(core.library.storage.keys({ owner: "mig", scope: "package", id: "" })).toEqual([]);
+    // It starts again (a crash restarts it) and runs the migration again, from what was kept.
+    await until(() => ran.length === 2, "the migration again");
+    hold = false;
+    expect(ran[1]).toEqual([a, "package", 1, 2]);
+    expect(core.library.storage.get(pkgPlace("mig"), "kv", "k")).toBe("old");
   });
 });
 

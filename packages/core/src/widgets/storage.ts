@@ -3,8 +3,9 @@
 // "link:<name>"), scope ("workspace" with the workspace's id, "package" with ""), kind ("kv",
 // or "series" for `history`) and key, so a set writes one row. A window's own scope isn't
 // here: it stays in the window's state (`state.kv`, `state.series`), where `cmd.state` has
-// always kept it (api/storage.ts). Each owner's stored schema version is kept beside its rows,
-// and a migration holds the owner's lock (one window at a time) until it ends. Sizes are kept
+// always kept it (api/storage.ts). Each place's schema version (the package's, each
+// workspace's) is kept beside its rows, and a migration of a place holds that place's lock (one
+// window at a time) until it ends. Sizes are kept
 // per row and summed per scope (cached) for the quotas, which api/storage.ts checks.
 // Lifecycle (library.ts): an owner's rows go on uninstall, a workspace's when it is deleted.
 
@@ -63,7 +64,7 @@ export class WidgetStorage extends EventEmitter<{ changed: [StorageChange] }> {
         PRIMARY KEY (owner, scope, scope_id, kind, key)
       ) WITHOUT ROWID;
       CREATE INDEX IF NOT EXISTS widget_storage_scope ON widget_storage (scope, scope_id);
-      CREATE TABLE IF NOT EXISTS widget_storage_versions (owner TEXT PRIMARY KEY, version INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS widget_storage_places (owner TEXT NOT NULL, scope TEXT NOT NULL, scope_id TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY (owner, scope, scope_id)) WITHOUT ROWID;
     `);
   }
 
@@ -101,13 +102,17 @@ export class WidgetStorage extends EventEmitter<{ changed: [StorageChange] }> {
     return n;
   }
 
-  /** Write rows (and an owner's new version) in one transaction; subscribers hear each key after. */
-  write(writes: Write[], version?: { owner: string; version: number }): void {
+  /**
+   * Write rows in one transaction; subscribers hear each key after. `version`: the place's new
+   * schema version (a migration's end), or with `stamp` its version only when it has none yet
+   * (a place first written at that version).
+   */
+  write(writes: Write[], version?: { place: Place; version: number; stamp?: boolean }): void {
     if (!writes.length && !version) return;
     this.#db.exec("BEGIN");
     try {
       for (const w of writes) this.#put(w);
-      if (version) this.#stmt(`INSERT OR REPLACE INTO widget_storage_versions (owner, version) VALUES (?, ?)`).run(version.owner, version.version);
+      if (version) this.#stmt(`INSERT OR ${version.stamp ? "IGNORE" : "REPLACE"} INTO widget_storage_places (owner, scope, scope_id, version) VALUES (?, ?, ?, ?)`).run(version.place.owner, version.place.scope, version.place.id, version.version);
       this.#db.exec("COMMIT");
     } catch (e) {
       this.#db.exec("ROLLBACK");
@@ -132,75 +137,71 @@ export class WidgetStorage extends EventEmitter<{ changed: [StorageChange] }> {
     if (n !== undefined) this.#usage.set(k, n - was + now);
   }
 
-  /** The schema version an owner's data has (1 when none was recorded). */
-  version(owner: string): number {
-    const row = this.#stmt(`SELECT version FROM widget_storage_versions WHERE owner = ?`).get(owner) as { version: number } | undefined;
-    return row?.version ?? 1;
+  /** The schema version a place's data has, or null when none was recorded (a place from before versions, or never written). */
+  version(p: Place): number | null {
+    const row = this.#stmt(`SELECT version FROM widget_storage_places WHERE owner = ? AND scope = ? AND scope_id = ?`).get(p.owner, p.scope, p.id) as { version: number } | undefined;
+    return row?.version ?? null;
   }
 
   /** Owners with anything kept (rows or a version). */
   owners(): string[] {
-    const rows = this.#stmt(`SELECT owner FROM widget_storage_versions UNION SELECT DISTINCT owner FROM widget_storage`).all() as { owner: string }[];
+    const rows = this.#stmt(`SELECT owner FROM widget_storage_places UNION SELECT DISTINCT owner FROM widget_storage`).all() as { owner: string }[];
     return rows.map((r) => r.owner);
   }
 
   /** Workspaces with rows. */
   workspaces(): string[] {
-    const rows = this.#stmt(`SELECT DISTINCT scope_id FROM widget_storage WHERE scope = 'workspace'`).all() as { scope_id: string }[];
+    const rows = this.#stmt(`SELECT scope_id FROM widget_storage WHERE scope = 'workspace' UNION SELECT scope_id FROM widget_storage_places WHERE scope = 'workspace'`).all() as { scope_id: string }[];
     return rows.map((r) => r.scope_id);
   }
 
   /** An owner is uninstalled: every row and its version go, in one statement each. */
   purgeOwner(owner: string): void {
     this.#stmt(`DELETE FROM widget_storage WHERE owner = ?`).run(owner);
-    this.#stmt(`DELETE FROM widget_storage_versions WHERE owner = ?`).run(owner);
+    this.#stmt(`DELETE FROM widget_storage_places WHERE owner = ?`).run(owner);
     this.#usage.clear();
   }
 
   /** A workspace is deleted: every package's data in it goes. */
   purgeWorkspace(id: string): void {
     this.#stmt(`DELETE FROM widget_storage WHERE scope = 'workspace' AND scope_id = ?`).run(id);
+    this.#stmt(`DELETE FROM widget_storage_places WHERE scope = 'workspace' AND scope_id = ?`).run(id);
     this.#usage.clear();
   }
 
-  // ── migrations ──
+  // ── migrations: a lock per place (placeKey) ──
 
-  /**
-   * A window of `owner` starts with package.json's `declared` version: null when its data is
-   * current (after waiting out another window's migration), else the migration it runs now,
-   * holding the owner's lock until `unlock`.
-   */
-  async lock(owner: string, declared: number, windowId: string): Promise<{ from: number; to: number } | null> {
+  /** Hold `key` for `windowId`, once no other window holds it (at once when it holds it already). */
+  async lock(key: string, windowId: string): Promise<void> {
     for (;;) {
-      const held = this.#locks.get(owner);
-      if (!held || held.windowId === windowId) break;
+      const held = this.#locks.get(key);
+      if (!held) break;
+      if (held.windowId === windowId) return;
       await held.done;
     }
-    const from = this.version(owner);
-    if (from >= declared) return null;
     let release = () => {};
     const done = new Promise<void>((r) => (release = r));
-    this.#locks.set(owner, { windowId, done, release });
-    return { from, to: declared };
+    this.#locks.set(key, { windowId, done, release });
   }
 
-  /** The window migrating `owner`, if one is. */
-  locked(owner: string): string | null {
-    return this.#locks.get(owner)?.windowId ?? null;
+  /** The window holding `key`, if one does. */
+  locked(key: string): string | null {
+    return this.#locks.get(key)?.windowId ?? null;
   }
 
-  /** Resolves once no migration of `owner` runs (at once when none does). */
-  async settled(owner: string): Promise<void> {
-    for (let held = this.#locks.get(owner); held; held = this.#locks.get(owner)) await held.done;
+  /** Resolves once no other window than `windowId` holds `key`. */
+  async settled(key: string, windowId: string): Promise<void> {
+    for (let held = this.#locks.get(key); held && held.windowId !== windowId; held = this.#locks.get(key)) await held.done;
   }
 
-  /** The migration by `windowId` ended (its writes are in or dropped by then): the next window may look. */
-  unlock(owner: string, windowId: string): void {
-    const held = this.#locks.get(owner);
+  /** `windowId` lets go of `key`: the next window may look. */
+  unlock(key: string, windowId: string): void {
+    const held = this.#locks.get(key);
     if (!held || held.windowId !== windowId) return;
-    this.#locks.delete(owner);
+    this.#locks.delete(key);
     held.release();
   }
 }
 
-const placeKey = (p: Place) => `${p.owner}\n${p.scope}\n${p.id}`;
+/** A place's lock and cache key. */
+export const placeKey = (p: Place) => `${p.owner}\n${p.scope}\n${p.id}`;

@@ -121,7 +121,7 @@ describe("cmd widget preview", () => {
       const ok = cli(["widget", "preview", ".", "--themes", "dark,light", "--sizes", "all"], dir);
       expect(ok.code, ok.out + ok.err).toBe(0);
       expect(ok.out).toContain("✓ Busy · narrow, regular, wide · 2 themes");
-      expect(fs.readdirSync(path.join(dir, ".cmd-preview")).filter((f) => f.endsWith(".png"))).toHaveLength(4 * 3 * 2);
+      expect(fs.readdirSync(path.join(dir, ".cmd-preview")).filter((f) => f.endsWith(".png"))).toHaveLength(5 * 3 * 2); // five states (Pinned among them)
       // A widget that ignores its terminals: Busy has data and shows the empty state.
       const main = path.join(dir, "src/shots.tsx");
       fs.writeFileSync(main, fs.readFileSync(main, "utf8").replace("const terminals = useTerminals();", "const terminals = useTerminals().slice(0, 0);"));

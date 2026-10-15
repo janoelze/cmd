@@ -13,8 +13,10 @@
 // waiting for a grant is asked once, not per window (asking(), widget.ask: the grants sheet).
 // The window's API (api/adapter.ts) is made at its start with a grant, before hello, so a frame's
 // page (frame.ts) uses the process's adapter, Deno or not; it ends with the process or the window.
-// Ready waits for the package's storage (1.3): a migration due runs in the first window to start,
-// which gets `migrate` and answers `migrated` (one that throws stops it); the others wait.
+// Ready waits for the window's storage (1.3): each of its places (package, workspace, window)
+// whose data is older than its code is migrated by it, under that place's lock: `migrate` lists
+// them, the process answers `migrated` for each (one that throws stops it); others wait. A window
+// moved to a workspace whose data is older starts again, to migrate it.
 
 import { API_ELEMENT_NAMES, WIDGET_API, WIDGET_API_MINOR, configValues, parsePackageKind, type AppWindow, type WidgetEnv, type WidgetHostStatus, type WidgetIn, type WidgetOut, type WidgetPermissions, type WindowId, type WireValue } from "@cmd/protocol";
 import { logger } from "@cmd/protocol/node";
@@ -387,15 +389,15 @@ export class WidgetHost {
       const w = this.#core.windows.others().find((x) => x.id === inst.windowId);
       const config = this.#config(inst, w);
       inst.config = JSON.stringify(config);
-      conn.send({ kind: "ready", env: this.#env(inst), config, state: (w?.state.kv as Record<string, WireValue> | undefined) ?? {}, ...(migrate ? { migrate } : {}) });
-      log.info(`widget ${pkg.name} started (api ${m.api})`, { widget: inst.widget!.id, window: inst.windowId, version: pkg.version, ...(migrate ? { migrate } : {}) });
+      conn.send({ kind: "ready", env: this.#env(inst), config, state: (w?.state.kv as Record<string, WireValue> | undefined) ?? {}, ...(migrate.length ? { migrate } : {}) });
+      log.info(`widget ${pkg.name} started (api ${m.api})`, { widget: inst.widget!.id, window: inst.windowId, version: pkg.version, ...(migrate.length ? { migrate } : {}) });
       this.#status(inst, { kind: "status", state: "running" });
     });
   }
 
-  /** The process's migration ended: kept, or it threw (or keeping it failed) and the window stops, its data as it was. */
+  /** A place's migration ended: kept, or it threw (or keeping it failed) and the window stops, that place's data as it was. */
   #migrated(inst: Instance, m: Extract<WidgetOut, { kind: "migrated" }>): void {
-    const error = inst.adapter?.migrateEnd(m.ok === true) ?? null;
+    const error = inst.adapter?.migrateEnd(m.scope, m.ok === true) ?? null;
     if (m.ok === true && !error) return;
     const detail = `${String(m.message ?? error ?? "").slice(0, 500) || "The migration failed."} Its stored data is as it was.`;
     log.warn(`widget ${inst.pkg?.name}: migrating its storage failed: ${detail}`);
@@ -485,6 +487,7 @@ export class WidgetHost {
       if (!inst.proc && inst.status.state !== "stopped") this.#launch(inst);
     }
     if (!inst.hello) return;
+    if (inst.adapter?.storageBehind()) return this.#relaunch(inst);
     const config = this.#config(inst, w);
     const text = JSON.stringify(config);
     if (text !== inst.config) {

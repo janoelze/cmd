@@ -342,10 +342,12 @@ export const cmd = {
     package: store("package"),
     /**
      * Registers the migration that reshapes stored data when package.json's `cmd.storage.version`
-     * goes up: `cmd.storage.migrate(async (from, to) => { … })`, at the top of the widget's module.
-     * It runs once per new version, in the first window to start, before any window of the package
-     * reads storage, with `cmd.storage` as usual (its window's and workspace's scopes are that
-     * window's). If it throws, nothing it wrote is kept, the version stays, and the window says why.
+     * goes up: `cmd.storage.migrate(async ({ scope, from, to }) => { … })`, at the top of the
+     * widget's module. Each place keeps its own version: the package's data, each workspace's, each
+     * window's. When a window starts, each of its places that is behind runs it once, in order
+     * package, workspace, window, with `scope` naming the store to reshape (only it can be written;
+     * a place with no data starts at the new version, no migration). If it throws, that place keeps
+     * its data and version (places migrated before it stay migrated) and the window says why.
      * @since 1.3
      */
     migrate: registerMigration,

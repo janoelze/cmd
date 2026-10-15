@@ -149,7 +149,25 @@ export function useEnv(): WidgetEnv {
  * The first render already has the stored value.
  * @since 1.0
  */
-export function useStoredState<T extends WireValue>(key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
+export function useStoredState<T extends WireValue = never, I extends WireValue = never>(key: string, initial: [T] extends [never] ? I : NoInfer<T>): Stored<StoredValue<T, I>> {
+  return storedState(key, initial as WireValue) as unknown as Stored<StoredValue<T, I>>;
+}
+
+/**
+ * A literal's type, widened: `0` is a number, `"all"` a string, `true` a boolean, `[]` a list of
+ * any value; anything else as it is. What `useStorage` and `useStoredState` keep when their
+ * value's type isn't given (`useStorage("package", "count", 0)` keeps a number).
+ * @since 1.3
+ */
+export type Widen<T> = T extends string ? string : T extends number ? number : T extends boolean ? boolean : T extends readonly (infer E)[] ? ([E] extends [never] ? WireValue[] : Widen<E>[]) : T;
+
+/** The value a stored-state hook keeps: the type given (`useStorage<Show>(…)`), else its initial value's, widened. @since 1.3 */
+export type StoredValue<T, I> = [T] extends [never] ? Widen<I> : T;
+
+/** What `useStoredState` and `useStorage` return: the value, and what sets it (a value, or a function of the last). @since 1.3 */
+export type Stored<T> = [T, (next: T | ((prev: T) => T)) => void];
+
+function storedState<T extends WireValue>(key: string, initial: T): Stored<T> {
   const c = connection();
   // The first initial, so a literal ({}) each render reads as the same value.
   const init = useRef(initial).current;
@@ -174,7 +192,11 @@ export function useStoredState<T extends WireValue>(key: string, initial: T): [T
  * stored value arrives (a window's own is there on the first render) and while none is stored.
  * @since 1.3
  */
-export function useStorage<T extends WireValue>(scope: ApiStorageScope, key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
+export function useStorage<T extends WireValue = never, I extends WireValue = never>(scope: ApiStorageScope, key: string, initial: [T] extends [never] ? I : NoInfer<T>): Stored<StoredValue<T, I>> {
+  return storage(scope, key, initial as WireValue) as unknown as Stored<StoredValue<T, I>>;
+}
+
+function storage<T extends WireValue>(scope: ApiStorageScope, key: string, initial: T): Stored<T> {
   const c = connection();
   const init = useRef(initial).current;
   const first = (): T => (scope === "window" && c.state.has(key) ? (c.state.get(key) as T) : init);

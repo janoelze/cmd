@@ -3,9 +3,9 @@
 // the migration run before the first render (kept: the widget renders; thrown: it shows why
 // and the host hears `migrated` with ok false).
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { render, createHost } from "@cmd/widget-api/testing";
-import { cmd, useStorage, Button, Text, View } from "@cmd/widget-api";
+import { cmd, useStorage, useStoredState, Button, Text, View } from "@cmd/widget-api";
 
 describe("cmd.storage", () => {
   it("keeps values per scope; the window's are cmd.state's", async () => {
@@ -28,7 +28,7 @@ describe("cmd.storage", () => {
 
 describe("useStorage", () => {
   function Count() {
-    const [n, setN] = useStorage<number>("package", "count", 0);
+    const [n, setN] = useStorage("package", "count", 0);
     return (
       <View>
         <Text>{`count ${n}`}</Text>
@@ -63,40 +63,55 @@ describe("useStorage", () => {
   });
 });
 
+describe("their types (tsc)", () => {
+  it("widen an initial literal, and keep a type given", () => {
+    type Show = "all" | "busy";
+    const typed = () => {
+      expectTypeOf(useStorage("package", "n", 0)[0]).toEqualTypeOf<number>();
+      expectTypeOf(useStorage("package", "s", "all")[0]).toEqualTypeOf<string>();
+      expectTypeOf(useStorage("package", "b", false)[0]).toEqualTypeOf<boolean>();
+      expectTypeOf(useStorage("package", "l", [1, 2])[0]).toEqualTypeOf<number[]>();
+      expectTypeOf(useStorage<string[]>("package", "e", [])[0]).toEqualTypeOf<string[]>();
+      expectTypeOf(useStorage<Show>("window", "show", "all")[0]).toEqualTypeOf<Show>();
+      expectTypeOf(useStoredState("n", 0)[0]).toEqualTypeOf<number>();
+      expectTypeOf(useStoredState<Show>("show", "busy")[0]).toEqualTypeOf<Show>();
+      const [, setN] = useStorage("package", "n", 0);
+      setN((n) => n + 1);
+      // @ts-expect-error a value outside the type given
+      useStorage<Show>("window", "show", "nope");
+    };
+    void typed;
+  });
+});
+
 describe("migrations", () => {
-  it("run before the first render, with cmd.storage", async () => {
-    const seen: [number, number][] = [];
-    cmd.storage.migrate(async (from, to) => {
-      seen.push([from, to]);
-      const notes = await cmd.storage.package.get<string>("notes");
-      await cmd.storage.package.set("notes", notes ? notes.split(",") : []);
+  it("run for each place listed, before the first render, with cmd.storage", async () => {
+    const seen: unknown[] = [];
+    cmd.storage.migrate(async ({ scope, from, to }) => {
+      seen.push([scope, from, to]);
+      const notes = await cmd.storage[scope].get<string>("notes");
+      await cmd.storage[scope].set("notes", notes ? notes.split(",") : []);
     });
     function Notes() {
       const [notes] = useStorage<string[]>("package", "notes", []);
-      return <Text>{notes.join(" / ")}</Text>;
+      const [mine] = useStorage<string[]>("window", "notes", []);
+      return <Text>{[...notes, ...mine].join(" / ")}</Text>;
     }
-    const host = createHost({ storage: { package: { notes: "a,b" }, from: 1, to: 2 } });
+    const host = createHost({ storage: { package: { notes: "a,b" }, window: { notes: "c" }, migrate: [{ scope: "package", from: 1, to: 2 }, { scope: "window", from: 1, to: 2 }] } });
     const tree = await render(<Notes />, host);
-    expect(seen).toEqual([[1, 2]]);
-    expect(host.migrated).toEqual({ ok: true });
-    expect(tree.text()).toBe("a / b");
+    expect(seen).toEqual([["package", 1, 2], ["window", 1, 2]]);
+    expect(host.migrated).toEqual([{ scope: "package", ok: true }, { scope: "window", ok: true }]);
+    expect(tree.text()).toBe("a / b / c");
   });
 
-  it("that throw show why instead of the widget", async () => {
-    cmd.storage.migrate(() => {
-      throw new Error("notes isn't a list");
+  it("that throw show why instead of the widget, and stop there", async () => {
+    cmd.storage.migrate(({ scope }) => {
+      if (scope === "workspace") throw new Error("notes isn't a list");
     });
-    const host = createHost({ storage: { from: 2, to: 3 } });
+    const host = createHost({ storage: { migrate: [{ scope: "package", from: 2, to: 3 }, { scope: "workspace", from: 2, to: 3 }, { scope: "window", from: 2, to: 3 }] } });
     const tree = await render(<Text>hello</Text>, host);
-    expect(host.migrated).toEqual({ ok: false, message: "notes isn't a list" });
+    expect(host.migrated).toEqual([{ scope: "package", ok: true }, { scope: "workspace", ok: false, message: "notes isn't a list" }]);
     expect(tree.text()).not.toContain("hello");
     expect(tree.text()).toContain("Couldn't update this widget's stored data: notes isn't a list. Its data is as it was.");
-  });
-
-  it("with none registered, says it ran", async () => {
-    cmd.storage.migrate(() => {});
-    const host = createHost({ storage: { from: 1, to: 2 } });
-    await render(<Text>hello</Text>, host);
-    expect(host.migrated).toEqual({ ok: true });
   });
 });

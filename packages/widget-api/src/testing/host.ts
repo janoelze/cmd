@@ -28,6 +28,7 @@ import type {
   ApiMethods,
   ApiRunResult,
   ApiScopeQuery,
+  ApiStorageMigrate,
   ApiStorageQuery,
   ApiStorageScope,
   ApiTerminal,
@@ -93,22 +94,21 @@ export interface HostData {
   /** What `cmd.media.get` gives: what plays, or null (the default). @since 1.2 */
   playing?: ApiNowPlaying | null;
   /**
-   * What `cmd.storage` holds at start, by scope (`window` is `state` too), and the migration due:
-   * with `from` below `to` the widget's registered migration runs before it renders
-   * (`host.migrated` says how it went). `host.set({ storage })` is another window's set: it reaches
+   * What `cmd.storage` holds at start, by scope (`window` is `state` too), and the places whose
+   * migration is due (`migrate: [{ scope: "package", from: 1, to: 2 }]`): the widget's registered
+   * migration runs for each before it renders (`host.migrated` says how each went). `host.set({ storage })` is another window's set: it reaches
    * `useStorage` at once.
    * @since 1.3
    */
   storage?: StorageFixture;
 }
 
-/** A fake storage: values by scope, and a migration due when `from` < `to`. @since 1.3 */
+/** A fake storage: values by scope, and the places to migrate, in order. @since 1.3 */
 export interface StorageFixture {
   window?: Record<string, WireValue>;
   workspace?: Record<string, WireValue>;
   package?: Record<string, WireValue>;
-  from?: number;
-  to?: number;
+  migrate?: ApiStorageMigrate[];
 }
 
 /** A fake program run: exit code 0 and nothing on stderr unless given. @since 1.1 */
@@ -158,8 +158,8 @@ export interface FakeHost {
   deliver(msg: WidgetIn): void;
   /** Messages not yet delivered either way (render waits for none). */
   readonly inFlight: number;
-  /** 1.3: what the migration said (`migrated`), or null when none ran. */
-  readonly migrated: { ok: boolean; message?: string } | null;
+  /** 1.3: what the migration said for each place (`migrated`), in order; empty when none ran. */
+  readonly migrated: { scope: ApiStorageScope; ok: boolean; message?: string }[];
   /** 1.3: what `cmd.storage` holds now, by scope (`window` is the window's state). */
   storage(scope: ApiStorageScope): Record<string, WireValue>;
 }
@@ -180,7 +180,7 @@ export function createHost(data: HostData = {}): FakeHost {
   /** A scope's values: the window's are `state`. */
   const kv = (scope: unknown): Map<string, WireValue> => (scope === "workspace" || scope === "package" ? shared[scope] : state);
   const histories = new Map<string, number[]>();
-  let migrated: { ok: boolean; message?: string } | null = null;
+  const migrated: { scope: ApiStorageScope; ok: boolean; message?: string }[] = [];
   const subs = new Map<number, { topic: ApiTopic; query: unknown }>();
   const calls: [string, ...unknown[]][] = [];
   const requests: [string, ...unknown[]][] = [];
@@ -331,13 +331,10 @@ export function createHost(data: HostData = {}): FakeHost {
     messages.push(m);
     switch (m.kind) {
       case "hello":
-        {
-          const { from = 1, to = 1 } = d.storage ?? {};
-          deliver({ kind: "ready", env: env(), config: d.config ?? {}, state: Object.fromEntries(state), ...(from < to ? { migrate: { from, to } } : {}) });
-        }
+        deliver({ kind: "ready", env: env(), config: d.config ?? {}, state: Object.fromEntries(state), ...(d.storage?.migrate?.length ? { migrate: d.storage.migrate } : {}) });
         return;
       case "migrated":
-        migrated = { ok: m.ok, ...(m.message ? { message: m.message } : {}) };
+        migrated.push({ scope: m.scope, ok: m.ok, ...(m.message ? { message: m.message } : {}) });
         return;
       case "call": {
         requests.push([m.method, ...m.params]);

@@ -11,7 +11,7 @@
 
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { API, API_VERBS, isActVerb, localOnly, mediaUse, needsPress, parsePackageKind, topicVerb, verbClass, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiStorageMigrate, type ApiStorageQuery, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
+import { API, API_VERBS, isActVerb, localOnly, mediaUse, needsPress, parsePackageKind, topicVerb, verbClass, type ApiEvent, type ApiEventQuery, type ApiMethods, type ApiNotification, type ApiActVerb, type ApiScopeQuery, type ApiStorageMigrate, type ApiStorageQuery, type ApiStorageScope, type ApiTopic, type ApiVerb, type AppWindow, type DataQuery, type WidgetPermissions, type WireValue, type Workspace } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { PolicyError } from "../../data/policy.ts";
 import { widgetRead, type WidgetIdentity } from "../../data/widgets.ts";
@@ -68,10 +68,12 @@ export interface WidgetApi {
   call(verb: string, params: WireValue[], press?: Press): Promise<WireValue>;
   /** A live topic: `push` at once with the current value, then on each change; returns what stops it. */
   subscribe(topic: string, query: unknown, push: (data: WireValue) => void): () => void;
-  /** At the start of the process (before ready): the storage migration this window runs now, or null (host.ts). */
-  migrateStart(): Promise<ApiStorageMigrate | null>;
-  /** The migration ended (the process's `migrated`): kept, or dropped; the error when keeping it failed. */
-  migrateEnd(ok: boolean): string | null;
+  /** At the start of the process (before ready): the places whose storage this window migrates now, in order (host.ts). */
+  migrateStart(): Promise<ApiStorageMigrate[]>;
+  /** A place's migration ended (the process's `migrated`): kept, or dropped with the later ones; the error when keeping it failed. */
+  migrateEnd(scope: ApiStorageScope, ok: boolean): string | null;
+  /** Its workspace's storage is older than its code and it isn't migrating it (the window moved there): start it again. */
+  storageBehind(): boolean;
   /** The process is gone: its acts waiting for the person are a no, its session's yeses go, a migration it ran is dropped. */
   dispose(): void;
 }
@@ -324,7 +326,8 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
       return ((await fn(...p)) ?? null) as WireValue;
     },
     migrateStart: () => storage.migrateStart(),
-    migrateEnd: (ok) => storage.migrateEnd(ok),
+    migrateEnd: (scope, ok) => storage.migrateEnd(scope, ok),
+    storageBehind: () => storage.behind(),
     dispose() {
       acts.dispose();
       reads.dispose();

@@ -23,18 +23,22 @@ export interface ApiStorageQuery {
 }
 
 /**
- * The core's answer to hello says a migration is due (`ready.migrate`): package.json's
- * `cmd.storage.version` (`to`) is newer than the version the package's stored data has (`from`).
- * The process runs the migration it registered (`cmd.storage.migrate`), then says `migrated`.
+ * One place of the window whose stored data is older than package.json's `cmd.storage.version`
+ * (`to`): the package's, the window's workspace's or the window's own, each with its own version
+ * (`from`). The core's answer to hello lists them (`ready.migrate`), in that order; the process
+ * runs the migration it registered (`cmd.storage.migrate`) for each and says `migrated` after each.
  */
 export interface ApiStorageMigrate {
+  /** The scope being migrated: the migration reshapes only that store. */
+  scope: ApiStorageScope;
   from: number;
   to: number;
 }
 
-/** The process ran (or had no) migration: ok, and the core keeps what it wrote and the new version; or it threw, and nothing it wrote is kept. */
+/** One place's migration ran (or there was none): ok, and the core keeps what it wrote there with the new version; or it threw, and nothing of that place changed (places migrated before it stay migrated). */
 export interface WidgetMigrated {
   kind: "migrated";
+  scope: ApiStorageScope;
   ok: boolean;
   /** What the migration threw (ok: false). */
   message?: string;

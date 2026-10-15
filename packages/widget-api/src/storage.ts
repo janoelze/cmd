@@ -3,9 +3,10 @@
 // `workspace` this package's in the window's workspace, shared by its windows there; `package`
 // this package's everywhere. cmd decides which window, workspace and package a call reaches:
 // a widget names only the scope, so it never sees another package's data or another window's.
-// The migration a widget registers (`cmd.storage.migrate`) runs once per new
-// `cmd.storage.version` in package.json, in the first window that starts, before any window
-// reads storage (runMigration, called by the runtime when `ready` says one is due).
+// The migration a widget registers (`cmd.storage.migrate`) runs for each place whose data is
+// older than package.json's `cmd.storage.version`: the package's, a workspace's, a window's, each
+// once, from the first window of it to start, before anything reads there (runMigrations, called
+// by the runtime with what `ready` lists).
 
 import type { ApiMethods, ApiStorageMigrate, ApiStorageScope, WireValue } from "@cmd/protocol/widget-tree";
 import { connection, type Connection } from "./connection.ts";
@@ -32,14 +33,22 @@ export interface Store {
   history(key: string, value?: number | null, max?: number): Promise<number[]>;
 }
 
-/** A migration: reshape what `from` stored into what `to` reads, with `cmd.storage`. @since 1.3 */
-export type Migration = (from: number, to: number) => void | Promise<void>;
+/** One place to migrate: `scope`'s store (`cmd.storage[scope]`), from the version its data has to package.json's. @since 1.3 */
+export interface MigrationStep {
+  /** The store to reshape: `"package"`, `"workspace"` (this window's workspace) or `"window"` (this window). Only it can be written. */
+  scope: StorageScope;
+  from: number;
+  to: number;
+}
+
+/** A migration: reshape what `from` stored in `cmd.storage[scope]` into what `to` reads. @since 1.3 */
+export type Migration = (step: MigrationStep) => void | Promise<void>;
 
 let registered: Migration | null = null;
 
 /** Registers the migration (the last one registered wins). @since 1.3 */
 export function registerMigration(fn: Migration): void {
-  if (typeof fn !== "function") throw new TypeError("cmd.storage.migrate: give it a function (from, to) => …");
+  if (typeof fn !== "function") throw new TypeError("cmd.storage.migrate: give it a function ({ from, to, scope }) => …");
   registered = fn;
 }
 
@@ -65,15 +74,17 @@ export function store(scope: ApiStorageScope): Store {
 /** The words a failed migration shows in the window (the core also stops the window, saying so). */
 export const migrationFailed = (message: string): string => `Couldn't update this widget's stored data: ${message.replace(/([^.!?])$/, "$1.")} Its data is as it was.`;
 
-/** The migration `ready` asked for runs here, then the core hears how it went (`migrated`). Returns the error, or null. */
-export async function runMigration(conn: Connection, m: ApiStorageMigrate): Promise<string | null> {
-  try {
-    await registered?.(m.from, m.to);
-    conn.send({ kind: "migrated", ok: true });
-    return null;
-  } catch (e) {
-    const message = (e instanceof Error ? e.message : String(e)).slice(0, 500) || "the migration failed.";
-    conn.send({ kind: "migrated", ok: false, message });
-    return message;
+/** The places `ready` listed are migrated here, in order, the core hearing after each (`migrated`); the first that throws ends it. Returns its error, or null. */
+export async function runMigrations(conn: Connection, steps: ApiStorageMigrate[]): Promise<string | null> {
+  for (const step of steps) {
+    try {
+      await registered?.({ scope: step.scope, from: step.from, to: step.to });
+      conn.send({ kind: "migrated", scope: step.scope, ok: true });
+    } catch (e) {
+      const message = (e instanceof Error ? e.message : String(e)).slice(0, 500) || "the migration failed.";
+      conn.send({ kind: "migrated", scope: step.scope, ok: false, message });
+      return message;
+    }
   }
+  return null;
 }

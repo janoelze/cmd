@@ -17,8 +17,8 @@ export * from "./elements.gen.ts";
 export { cmd } from "./cmd.ts";
 export { fmt } from "./fmt.ts";
 export { ApiCallError } from "./connection.ts";
-export type { Store, StorageScope, Migration } from "./storage.ts";
-export { useWorkspace, useAgents, useTerminals, useTerminalUsage, useWindows, useEvents, useGit, useActions, useConfig, useEnv, type WidgetConfig, type ConfigValues, type ConfigShape, useData, useStoredState, useStorage, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
+export type { Store, StorageScope, Migration, MigrationStep } from "./storage.ts";
+export { useWorkspace, useAgents, useTerminals, useTerminalUsage, useWindows, useEvents, useGit, useActions, useConfig, useEnv, type WidgetConfig, type ConfigValues, type ConfigShape, useData, useStoredState, useStorage, type Widen, type Stored, type StoredValue, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
 export { WIDGET_API, WIDGET_API_MINOR } from "./version.ts";
 export type {
   ApiAgent as Agent,

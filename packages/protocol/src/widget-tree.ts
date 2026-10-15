@@ -166,8 +166,8 @@ export interface WidgetReady {
   config: Record<string, WireValue>;
   /** This window's stored state (`cmd.state`, `useStoredState`), so the first render has it. */
   state: Record<string, WireValue>;
-  /** 1.3: the package's stored data is older than package.json's `cmd.storage.version`: run the migration, then say `migrated`, before anything reads storage. */
-  migrate?: ApiStorageMigrate;
+  /** 1.3: the places whose stored data is older than package.json's `cmd.storage.version`, in order (package, workspace, window): run the migration for each and say `migrated` after each, before anything reads storage. */
+  migrate?: ApiStorageMigrate[];
 }
 
 /** A call's answer. A refused call (no permission, a verb this core lacks) is `ok: false` and the process lives on. */

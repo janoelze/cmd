@@ -9,7 +9,7 @@ import { createElement, isValidElement, type ComponentType, type ReactNode } fro
 import { WIDGET_API, WIDGET_API_MINOR } from "./version.ts";
 import { Connection, setConnection, type Transport } from "./connection.ts";
 import { TreeRoot } from "./reconciler.ts";
-import { migrationFailed, runMigration } from "./storage.ts";
+import { migrationFailed, runMigrations } from "./storage.ts";
 
 /** Who is running: package.json's name and version, and the widget's id in `cmd.widgets[]`. */
 export interface WidgetInfo {
@@ -50,7 +50,7 @@ export async function run(transport: Transport, widget: WidgetModule, opts: RunO
   const restore = opts.captureConsole ? captureConsole(conn) : null;
   setConnection(conn);
   // A migration due runs before anything renders (and reads storage); one that throws shows why instead of the widget.
-  const failed = conn.migrate ? await runMigration(conn, conn.migrate) : null;
+  const failed = conn.migrate.length ? await runMigrations(conn, conn.migrate) : null;
   const root = mount(conn, failed === null ? widget : createElement(Failed, { message: migrationFailed(failed) }));
   return {
     connection: conn,
