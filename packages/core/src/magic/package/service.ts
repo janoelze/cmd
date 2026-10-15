@@ -21,7 +21,7 @@ import { magicDenyPaths } from "../../lib/paths-deny.ts";
 import { cmdVersion, type WidgetPackage } from "../../widgets/package.ts";
 import { linkOf, listFiles, PackageRevisions } from "../../widgets/revisions.ts";
 import { DENO_VERSION } from "../../widgets/deno.ts";
-import { RELOAD_DEBOUNCE_MS } from "../../widgets/reload.ts";
+import { RELOAD_DEBOUNCE_MS } from "../../widgets/limits.ts";
 import { sandboxMode, type SandboxMode } from "../../lib/sandbox.ts";
 import { buildPackage, stepLog, type BuildEvent, type PackageBuildResult } from "./build.ts";
 import { readMark, writeMark } from "./files.ts";

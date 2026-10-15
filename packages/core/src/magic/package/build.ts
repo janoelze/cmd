@@ -20,6 +20,7 @@ import { magicDenyPaths } from "../../lib/paths-deny.ts";
 import type { Previewer } from "../previewer.ts";
 import type { WidgetPackage } from "../../widgets/package.ts";
 import { commandsSupported, type SandboxMode } from "../../lib/sandbox.ts";
+import { BUILD_REPAIRS, BUILD_STEPS, REPAIR_STEPS } from "../../widgets/limits.ts";
 import { runTool, toolsFor, type ToolContext, type ToolOutput } from "../tools.ts";
 import { snapshotFiles } from "./files.ts";
 import { buildPackageRequest, buildPackageSystem, promptHash, type Workspace } from "./prompt.ts";
@@ -283,19 +284,19 @@ export async function buildPackage(o: PackageBuildOptions): Promise<PackageBuild
   const ended = (): PackageEnding | null => state.ending;
   const endingVerdict = (e: PackageEnding): PackageVerdict => (e.kind === "terminal" ? { ...EMPTY_VERDICT, ok: true, usable: true } : { ...EMPTY_VERDICT, problems: [e.reason] });
 
-  let summary = await turn(o.maxSteps ?? 40);
+  let summary = await turn(o.maxSteps ?? BUILD_STEPS);
   if (stopped) return finish({ ...EMPTY_VERDICT, problems: [stopped] }, summary, []);
   const first = ended();
   if (first) return finish(endingVerdict(first), summary, []);
   emit({ type: "verify", at: at() });
   let verdict = await verifyPackage(pc, state);
   const repairs: string[] = [];
-  for (let i = 0; !verdict.ok && i < (o.maxRepairs ?? 2) && !ac.signal.aborted; i++) {
+  for (let i = 0; !verdict.ok && i < (o.maxRepairs ?? BUILD_REPAIRS) && !ac.signal.aborted; i++) {
     const reason = `cmd checked the package and found problems. Fix them in the files, run check, test and preview again, then finish with one short sentence.\n\n${verdictText(verdict)}`;
     repairs.push(reason);
     emit({ type: "repair", reason: verdict.problems[0] ?? "problems", at: at() });
     messages.push({ role: "assistant", content: summary || "(done)" }, { role: "user", content: reason });
-    summary = await turn(15);
+    summary = await turn(REPAIR_STEPS);
     if (stopped) return finish({ ...verdict, ok: false, problems: [stopped, ...verdict.problems] }, summary, repairs);
     const e = ended();
     if (e) return finish(endingVerdict(e), summary, repairs);

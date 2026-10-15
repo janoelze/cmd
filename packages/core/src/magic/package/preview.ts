@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PREVIEW_SIZES, type MagicPreviewShot, type PreviewSize } from "@cmd/protocol";
+import { PREVIEW_STATES } from "../../widgets/limits.ts";
 import type { Previewer } from "../previewer.ts";
 import type { TreeVariant } from "./toolchain.ts";
 
@@ -94,12 +95,12 @@ export interface TreePreview {
   skipped?: string;
 }
 
-/** What Magic's agent looks at: the first state narrow (dark) and wide (light), each other state at its own size (dark); at most five. */
+/** What Magic's agent looks at: the first state narrow (dark) and wide (light), each other state at its own size (dark). */
 export async function previewTrees(previewer: Previewer | null, variants: TreeVariant[], widgets: Map<string, { title: string; icon: string }>): Promise<TreePreview> {
   if (!previewer) return { ok: true, problems: [], warnings: [], shots: [], skipped: "no previewer (open the cmd app, or build it for the CLI: pnpm build)" };
   const [first, ...rest] = variants;
   if (!first) return { ok: true, problems: [], warnings: [], shots: [], skipped: "nothing to draw" };
-  const draws: Draw[] = [{ variant: first, theme: "dark", size: "narrow" }, { variant: first, theme: "light", size: "wide" }, ...rest.slice(0, 3).map((v): Draw => ({ variant: v, theme: "dark", size: ownSize(v) }))];
+  const draws: Draw[] = [{ variant: first, theme: "dark", size: "narrow" }, { variant: first, theme: "light", size: "wide" }, ...rest.slice(0, PREVIEW_STATES).map((v): Draw => ({ variant: v, theme: "dark", size: ownSize(v) }))];
   let drawn: DrawnTree[];
   try {
     drawn = await draw(previewer, draws, widgets);

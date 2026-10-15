@@ -10,11 +10,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { logger } from "@cmd/protocol/node";
 import type { PackageEntry } from "./packages.ts";
+import { RELOAD_DEBOUNCE_MS } from "./limits.ts";
 
 const log = logger("widgets");
 
-/** After a save, how long to wait for the rest of its burst (ms). */
-export const RELOAD_DEBOUNCE_MS = 250;
 /** The folders whose files are the widget's code. */
 const SOURCES = ["src", "dist"];
 /** Files at the package's top that are code too. */

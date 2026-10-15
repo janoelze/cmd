@@ -17,6 +17,7 @@ import type { CoreContext } from "../kernel/context.ts";
 import { createWidgetHost } from "./host/feature.ts";
 import type { WidgetHost } from "./host/host.ts";
 import { PackageReloader } from "./reload.ts";
+import { LIBRARY_DEBOUNCE_MS } from "./limits.ts";
 import { linkOf, recordHandEdit } from "./revisions.ts";
 
 const log = logger("widgets");
@@ -122,7 +123,7 @@ export class WidgetLibrary {
     this.#timer = setTimeout(() => {
       this.#timer = null;
       this.#core.broadcast({ type: "widget.library", entries: this.entries() });
-    }, 50);
+    }, LIBRARY_DEBOUNCE_MS);
   }
 
   /** A package Magic made, changed outside a build: its files become a version ("Edited by hand"). */

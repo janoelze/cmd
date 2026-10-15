@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENV, type CoreEvent, type TreeNode, type WidgetEntry } from "@cmd/protocol";
 import { connect, defaultSocketPath, widgetsHome } from "@cmd/protocol/node";
-import { writeEnvTypes } from "@cmd/core/magic";
+import { RELOAD_DEBOUNCE_MS, writeEnvTypes } from "@cmd/core/magic";
 import { cmdVersion, readPackage } from "@cmd/core/widgets/package";
 import { dim, green, red, yellow } from "./magic.ts";
 import { tilde } from "./tilde.ts";
@@ -116,7 +116,7 @@ export async function devCommand(argv: string[]): Promise<number> {
     timer = setTimeout(() => {
       const again = readPackage(real);
       if (again.ok && writeEnvTypes(real, again.pkg)) console.log(`${time()} ${dim("package.json changed: cmd-env.d.ts written again")}`);
-    }, 250);
+    }, RELOAD_DEBOUNCE_MS);
   });
 
   return new Promise<number>((resolve) => {

@@ -11,6 +11,7 @@ import path from "node:path";
 import type { WidgetPermissions } from "@cmd/protocol";
 import { redact } from "../../lib/policy.ts";
 import { needsGrant } from "../../widgets/grants.ts";
+import { AGENT_SHOTS } from "../../widgets/limits.ts";
 import type { ToolOutput, ToolSpec } from "../tools.ts";
 import type { Previewer } from "../previewer.ts";
 import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
@@ -212,7 +213,7 @@ export async function runPackageTool(name: string, input: Record<string, unknown
       const head = problems.length ? `Problems:\n- ${problems.join("\n- ")}` : "Renders cleanly in every state.";
       const warn = drawn.warnings.length ? `\nWarnings:\n- ${drawn.warnings.join("\n- ")}` : "";
       const pics = drawn.skipped ? `\n(Not drawn: ${drawn.skipped}.)` : `\nScreenshots: ${t.variants[0]!.name} narrow (dark) and wide (light)${t.variants.length > 1 ? ", then the other states" : ""}.`;
-      return { output: redact(`${head}${warn}${pics}\n\nThe trees:\n${outlines}`), isError: problems.length > 0, images: drawn.shots.slice(0, 4) };
+      return { output: redact(`${head}${warn}${pics}\n\nThe trees:\n${outlines}`), isError: problems.length > 0, images: drawn.shots.slice(0, AGENT_SHOTS) };
     }
     case "terminal": {
       const command = str(input.command)?.trim();

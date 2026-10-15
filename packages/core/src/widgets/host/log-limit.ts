@@ -6,6 +6,7 @@
 // takes the same lines (host.ts), so a flood doesn't fill core.log either.
 
 import type { WidgetHostLog } from "@cmd/protocol";
+import { LOG_LIMIT } from "../limits.ts";
 
 export interface LogLimitOptions {
   /** Lines a second, kept up. */
@@ -16,7 +17,6 @@ export interface LogLimitOptions {
   reportMs: number;
 }
 
-export const LOG_LIMIT: LogLimitOptions = { rate: 50, burst: 100, reportMs: 1000 };
 
 export class LogLimit {
   #emit: (l: WidgetHostLog) => void;

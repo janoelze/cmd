@@ -16,6 +16,7 @@ import type { WidgetPatch, WidgetTree } from "@cmd/protocol";
 import { execArgv, type SandboxMode } from "../../lib/sandbox.ts";
 import { writeEnvTypes } from "../../widgets/env-types.ts";
 import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
+import { STORY_STATES, TOOLCHAIN_TIMEOUT_MS } from "../../widgets/limits.ts";
 import { listFiles } from "./files.ts";
 
 /** The checkout this core runs from. */
@@ -192,7 +193,7 @@ it("trees", async () => {
     }
     if (!states.length) states = fixtures();
     if (!states.length) states = [{ name: "Empty", data: {} }];
-    for (const { name, data } of states.slice(0, 6)) {
+    for (const { name, data } of states.slice(0, ${STORY_STATES})) {
       const { size, ...host } = data;
       // Config as the core gives it: the fields' defaults under what the state sets.
       const defaults = Object.fromEntries((w.config ?? []).filter((f) => !f.secret && f.default !== undefined).map((f) => [f.key, f.default]));
@@ -276,7 +277,7 @@ export function checkoutToolchain(repo = REPO): Toolchain | null {
     const config = path.join(w.pkg, "vitest.config.mjs");
     fs.writeFileSync(config, `export default { test: { include: [${JSON.stringify(include)}], testTimeout: 10000, pool: "threads", maxWorkers: 1, cache: false } };\n`);
     const report = path.join(w.dir, "report.json");
-    const r = await execArgv([node, vitest, "run", "--root", w.pkg, "--config", config, "--reporter=json", `--outputFile=${report}`], { cwd: w.pkg, sandbox: o.sandbox, deny: o.deny, signal: o.signal, writable: [w.dir], net: [], timeoutMs: 90_000, env: { ...env, ...extraEnv } });
+    const r = await execArgv([node, vitest, "run", "--root", w.pkg, "--config", config, "--reporter=json", `--outputFile=${report}`], { cwd: w.pkg, sandbox: o.sandbox, deny: o.deny, signal: o.signal, writable: [w.dir], net: [], timeoutMs: TOOLCHAIN_TIMEOUT_MS, env: { ...env, ...extraEnv } });
     let json: { numPassedTests?: number; testResults?: { name: string; message?: string; assertionResults?: { fullName: string; status: string; failureMessages?: string[] }[] }[] } | null = null;
     try {
       json = JSON.parse(fs.readFileSync(report, "utf8"));
@@ -295,7 +296,7 @@ export function checkoutToolchain(repo = REPO): Toolchain | null {
       if (!listFiles(dir).some((f) => /^src\/.*\.tsx?$/.test(f))) return { ok: false, problems: [...problems, "src/: no TypeScript yet"], pkg: read.pkg, types: "skipped" };
       const w = workCopy(dir, mods, read.pkg);
       try {
-        const r = await execArgv([node, tsc, "-p", path.join(w.pkg, "tsconfig.json"), "--pretty", "false"], { cwd: w.pkg, sandbox: o.sandbox, deny: o.deny, signal: o.signal, writable: [w.dir], net: [], timeoutMs: 90_000, maxBytes: 256 * 1024, env });
+        const r = await execArgv([node, tsc, "-p", path.join(w.pkg, "tsconfig.json"), "--pretty", "false"], { cwd: w.pkg, sandbox: o.sandbox, deny: o.deny, signal: o.signal, writable: [w.dir], net: [], timeoutMs: TOOLCHAIN_TIMEOUT_MS, maxBytes: 256 * 1024, env });
         if (r.code !== 0) {
           const lines = tidy(r.stdout + r.stderr, w.pkg)
             .split("\n")

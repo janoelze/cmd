@@ -10,10 +10,10 @@ import path from "node:path";
 import type { MagicMark } from "@cmd/protocol";
 import { markOf } from "../../widgets/package.ts";
 import { listFiles } from "../../widgets/revisions.ts";
+import { MAX_FILE } from "../../widgets/limits.ts";
 
 export { listFiles };
 
-const MAX_FILE = 256 * 1024;
 const SEGMENT = /^[\w][\w.-]*$/;
 
 /** What the agent may write, in words (for tool descriptions and refusals). */

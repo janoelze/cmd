@@ -13,6 +13,7 @@ import { WatchService } from "../lib/watch.ts";
 import type { WindowTypes } from "../windows/types.ts";
 import type { Grants } from "./grants.ts";
 import { readPackage, type ParseOptions, type WidgetPackage } from "./package.ts";
+import { PACKAGES_DEBOUNCE_MS } from "./limits.ts";
 
 const log = logger("widgets");
 
@@ -161,7 +162,7 @@ export class WidgetPackages {
       } catch (e) {
         log.error("reading the widget packages failed", e);
       }
-    }, this.#o.debounce ?? 100);
+    }, this.#o.debounce ?? PACKAGES_DEBOUNCE_MS);
     this.#timer.unref();
   }
 

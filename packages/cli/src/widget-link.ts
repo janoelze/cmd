@@ -10,6 +10,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import type { CoreEvent, WidgetEntry } from "@cmd/protocol";
 import { connect, widgetsHome, type Connection } from "@cmd/protocol/node";
+import { LIBRARY_WAIT_MS } from "@cmd/core/magic";
 import { cmdVersion, PACKAGE_NAME } from "@cmd/core/widgets/package";
 import { dim, green, red } from "./magic.ts";
 import { tilde } from "./tilde.ts";
@@ -22,9 +23,6 @@ export const WIDGET_LINK_HELP = `       cmd widget link [dir]        add a widge
        cmd widget unlink <name>     take a linked package out of the Widget Library
        cmd widget remove <name>     the same; --force removes a package that isn't a link,
                                    folder and all`;
-
-/** How long to wait for the Library to list (or drop) a package. */
-const LIBRARY_MS = 5000;
 
 /** The Library's line for a package's widget, as `cmd widget list` prints it. */
 const line = (e: WidgetEntry) => `${e.ref.padEnd(32)} ${e.title}${dim(`  ${e.name} ${e.version} · API ${e.api}${e.link ? ` · from ${tilde(e.link)}` : ""}`)}`;
@@ -69,7 +67,7 @@ async function link(home: string, given: string, json: boolean): Promise<number>
     const entries = await library(conn, (list) => list.some((e) => e.name === name && e.source === "package"));
     const mine = entries?.filter((e) => e.name === name && e.source === "package") ?? [];
     if (!mine.length) {
-      console.error(red(`linked ${tilde(at)}, but the Widget Library didn't list it within ${LIBRARY_MS / 1000} s`));
+      console.error(red(`linked ${tilde(at)}, but the Widget Library didn't list it within ${LIBRARY_WAIT_MS / 1000} s`));
       return 2;
     }
     if (mine[0]!.problem) {
@@ -139,11 +137,11 @@ async function unlink(home: string, name: string, force: boolean): Promise<numbe
   return 0;
 }
 
-/** The Library once `ok` holds for it (now, or at a widget.library event), or null after LIBRARY_MS. */
+/** The Library once `ok` holds for it (now, or at a widget.library event), or null after LIBRARY_WAIT_MS. */
 export async function library(conn: Connection, ok: (list: WidgetEntry[]) => boolean): Promise<WidgetEntry[] | null> {
   let done: (v: WidgetEntry[] | null) => void = () => {};
   const result = new Promise<WidgetEntry[] | null>((r) => (done = r));
-  const timer = setTimeout(() => done(null), LIBRARY_MS);
+  const timer = setTimeout(() => done(null), LIBRARY_WAIT_MS);
   conn.client.onEvent((e: CoreEvent) => {
     if (e.type === "widget.library" && ok(e.entries)) done(e.entries);
   });

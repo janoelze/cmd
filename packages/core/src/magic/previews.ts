@@ -4,6 +4,7 @@
 
 import type { CoreEvent, MagicPreviewRequest, MagicPreviewShot, Params } from "@cmd/protocol";
 import type { Connection } from "../kernel/connection.ts";
+import { PREVIEW_TIMEOUT_MS } from "../widgets/limits.ts";
 import { playwrightPreviewer, type Previewer } from "./previewer.ts";
 
 export class PreviewBroker {
@@ -40,7 +41,7 @@ export class PreviewBroker {
             const timer = setTimeout(() => {
               this.#waits.delete(reqId);
               reject(new Error("the preview took too long"));
-            }, 60_000);
+            }, PREVIEW_TIMEOUT_MS);
             this.#waits.set(reqId, { resolve, reject, timer });
             conn.send(JSON.stringify({ jsonrpc: "2.0", method: "event", params: { type: "magic.previewRequest", reqId, requests } satisfies CoreEvent }) + "\n");
           }),

@@ -25,6 +25,7 @@ import { PackageConfig } from "../config.ts";
 import { HostConnection, type ConnectionTimes } from "./connection.ts";
 import type { ExitInfo, RuntimeProcess, WidgetRuntime } from "./runtime.ts";
 import { LogLimit } from "./log-limit.ts";
+import { HOST_TIMES, WIDGET_MEMORY_MB } from "../limits.ts";
 import { loadError, realDir } from "./load-error.ts";
 import type { ActDeps } from "../api/act.ts";
 import { TreeState } from "./tree.ts";
@@ -43,9 +44,6 @@ export interface HostTimes extends ConnectionTimes {
   restartMs: number;
 }
 
-export const HOST_TIMES: HostTimes = { pingMs: 5000, stallMs: 20_000, stopAfterMs: 60_000, helloMs: 20_000, crashWindowMs: 5 * 60_000, maxCrashes: 3, restartMs: 1000 };
-/** The heap limit of a widget process (MB). */
-export const WIDGET_MEMORY_MB = 256;
 
 type HostCore = Pick<CoreContext, "windows" | "windowTypes" | "workspaces" | "widgetTokens" | "broadcast" | "settings" | "agents" | "panes" | "data" | "actions" | "notifications" | "ai" | "opened" | "call">;
 
