@@ -1,7 +1,8 @@
 // Run Scripts, a built-in widget package (docs/57; the native Workspace Actions' job for listing,
 // running and stopping): how to run the project in this workspace's folder, from its own files
 // (useActions, live), the main one on its own, the rest in sections by kind (Dev, Test, Build…)
-// and a monorepo's packages each in their own.
+// and a monorepo's packages each in their own. A section folds with a click on its heading, as
+// natively: a package's start folded, the rest open; what was toggled is kept per window.
 // A click runs one in its own terminal (cmd.actions.run, which asks or follows the permission
 // levels); while it runs, a click goes to its terminal, and Stop (cmd.actions.stop) and Restart
 // (cmd.actions.run with restart, API 1.2) are on its row. Whether it runs, failed or finished,
@@ -33,6 +34,7 @@ import {
   useActions,
   useEvents,
   useWorkspace,
+  useStoredState,
   useNow,
   fmt,
   cmd,
@@ -86,6 +88,9 @@ export default function RunScripts() {
   const actions = useActions();
   const commands = useEvents({ types: ["command"], limit: 200 });
   const [query, setQuery] = useState("");
+  // Sections toggled from how they start (open, or folded for a package's), kept per window as the native view keeps them.
+  const [toggled, setToggled] = useStoredState<string[]>("toggled", []);
+  const toggle = (key: string) => setToggled(toggled.includes(key) ? toggled.filter((k) => k !== key) : [...toggled, key]);
   const states = new Map(actions.map((a) => [a.name, runState(a, commands)]));
   const running = [...states.values()].filter((s) => s?.kind === "running").length;
   const failed = [...states.values()].filter((s) => s?.kind === "failed").length;
@@ -123,7 +128,7 @@ export default function RunScripts() {
           ...(a.command ? [{ separator: true as const }, { label: "Copy Command", run: () => copy(a) }] : []),
         ]}
       >
-        <ListRowIcon icon={main ? "play.fill" : a.risky ? "exclamationmark.triangle" : kindOf(a).icon} light={on ? "working" : s?.kind === "failed" ? "danger" : undefined} />
+        <ListRowIcon icon={a.risky ? "exclamationmark.triangle" : kindOf(a).icon} light={on ? "working" : s?.kind === "failed" ? "danger" : undefined} />
         <ListRowContent title={a.name} mono detail={a.title !== a.name ? a.title : null} tone={s?.kind === "failed" ? "danger" : undefined} />
         <ListRowEnd>
           {a.risky && <Badge size="sm" tone="warning">risky</Badge>}
@@ -167,6 +172,14 @@ export default function RunScripts() {
   const byKind = KINDS.map((k) => ({ ...k, rows: rest.filter((a) => !a.pinned && !a.package && kindOf(a) === k) })).filter((k) => k.rows.length);
   const packages = [...new Set(rest.filter((a) => !a.pinned && a.package).map((a) => a.package!))].sort();
 
+  /** A section that folds: open unless toggled, or (`closed`) folded unless toggled. */
+  const section = (key: string, title: string, rows: WorkspaceAction[], closed = false) =>
+    rows.length > 0 && (
+      <ListSection key={key} title={title} count={rows.length} open={closed ? toggled.includes(key) : !toggled.includes(key)} onToggle={() => toggle(key)}>
+        {rows.map((a) => row(a))}
+      </ListSection>
+    );
+
   const state =
     ws && !ws.root ? { icon: "play.rectangle", title: "No folder", text: "This workspace has no folder." }
     : actions.length === 0 ? { icon: "play.rectangle", title: "No scripts here", text: "Scripts in package.json, a Makefile, a justfile and similar files show up here." }
@@ -189,29 +202,10 @@ export default function RunScripts() {
           ) : (
             <>
               {main && <ListGroup>{row(main, true)}</ListGroup>}
-              {pinned.length > 0 && (
-                <ListSection title="Pinned" count={pinned.length}>
-                  {pinned.map((a) => row(a))}
-                </ListSection>
-              )}
-              {byKind.map((k) => (
-                <ListSection key={k.kind} title={k.title} count={k.rows.length}>
-                  {k.rows.map((a) => row(a))}
-                </ListSection>
-              ))}
-              {packages.map((pk) => {
-                const rows = rest.filter((a) => !a.pinned && a.package === pk);
-                return (
-                  <ListSection key={`pkg:${pk}`} title={pk} count={rows.length}>
-                    {rows.map((a) => row(a))}
-                  </ListSection>
-                );
-              })}
-              {risky.length > 0 && (
-                <ListSection title="Run From a Terminal" count={risky.length}>
-                  {risky.map((a) => row(a))}
-                </ListSection>
-              )}
+              {section("pinned", "Pinned", pinned)}
+              {byKind.map((k) => section(`kind:${k.kind}`, k.title, k.rows))}
+              {packages.map((pk) => section(`pkg:${pk}`, pk, rest.filter((a) => !a.pinned && a.package === pk), true))}
+              {section("risky", "Run From a Terminal", risky)}
             </>
           )}
         </List>

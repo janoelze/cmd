@@ -34,6 +34,9 @@ export const Many: HostData = { actions: [...actions, ...Array.from({ length: 12
 /** In a narrow window, as in a sidebar. */
 export const Narrow: HostData & { size: "narrow" } = { ...Running, size: "narrow" };
 
+/** A monorepo: the root's scripts by kind, each package's in a section that starts folded. */
+export const Packages: HostData = { actions: [...actions, act({ name: "dev", title: "Starts the site", kind: "dev", package: "site" }), act({ name: "build", title: "Builds the site", kind: "build", package: "site" }), act({ name: "test", title: "Runs the CLI's tests", kind: "test", package: "cli" })] };
+
 /** A folder with nothing to run. */
 export const Empty: HostData = { actions: [] };
 

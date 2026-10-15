@@ -4,7 +4,9 @@
 // cmd.actions.run; its state is the action's own (running, then failed or done, from wherever it
 // started), how long from its terminal's command events; a click on a running one goes to its
 // terminal, Stop and Restart are on its row; a dev server's address opens; Copy Command; the
-// filter past a dozen; a refusal says why, the person's no says nothing; no folder, no scripts.
+// filter past a dozen; a refusal says why, the person's no says nothing; no folder, no scripts;
+// sections fold from their heading (a package's start folded), kept per window; the main
+// action's icon is its kind's, as natively.
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
@@ -37,6 +39,26 @@ describe("Run Scripts", () => {
     expect(deploy.props.onClick).toBeUndefined();
     expect(tree.text()).toContain("4 actions");
     expect(tree.find("Window").props.status).toBeNull();
+  });
+
+  it("draws the main action with its kind's icon, as every row", async () => {
+    const tree = await render(<RunScripts />, createHost({ actions }));
+    expect(tree.findAll("ListRowIcon").map((i) => i.props.icon)).toEqual(["play", "checkmark.circle", "checklist", "exclamationmark.triangle"]);
+  });
+
+  it("folds a section from its heading, a package's from the start, and keeps what was toggled per window", async () => {
+    const host = createHost({ actions: [...actions, act({ name: "dev", kind: "dev", package: "web" })] });
+    const tree = await render(<RunScripts />, host);
+    const open = () => Object.fromEntries(tree.sections().map((s) => [s.props.title, s.props.open]));
+    expect(open()).toEqual({ Test: true, Check: true, web: false, "Run From a Terminal": true });
+    await tree.press(tree.sections()[0]!);
+    await tree.press(tree.sections()[2]!);
+    expect(open()).toEqual({ Test: false, Check: true, web: true, "Run From a Terminal": true });
+    expect(host.requests).toContainEqual(["state.set", "toggled", ["kind:test", "pkg:web"]]);
+    tree.unmount();
+    const again = await render(<RunScripts />, host);
+    expect(Object.fromEntries(again.sections().map((s) => [s.props.title, s.props.open]))).toEqual({ Test: false, Check: true, web: true, "Run From a Terminal": true });
+    again.unmount();
   });
 
   it("lists pinned ones first; on an older cmd (no run fields) the first that isn't risky is the main one", async () => {
