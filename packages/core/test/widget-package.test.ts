@@ -153,6 +153,7 @@ describe("package.json", () => {
   it("asks for cmd's AI only as complete", () => {
     expect(errors(PKG({}, { permissions: { net: ["api.github.com"], ai: ["complete"] } }))).toEqual([]);
     expect(errors(PKG({}, { permissions: { net: ["api.github.com"], ai: ["complete", "chat"] } }))).toEqual(['cmd.permissions.ai: "chat" isn\'t something widgets may ask of cmd\'s AI (complete)']);
+    expect(errors(PKG({}, { permissions: { media: ["read", "control", "volume"] } }))).toEqual(['cmd.permissions.media: "volume" should be "read" (see what\'s playing) or "control" (play, pause, skip)']);
   });
 
   it("names the field of every other problem", () => {

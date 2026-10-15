@@ -20,7 +20,7 @@ import type { PackageWidget, WidgetPackage } from "../package.ts";
 import { ApiRefusal, RateLimit, failed, invalid, missing, workspaceScope } from "./access.ts";
 import { widgetComplete, type AiUsage } from "./ai.ts";
 import { apiAction, apiAgent, apiEvent, apiTerminal, apiWindow, apiWorkspace, selectedIn } from "./model.ts";
-import { CLIPBOARD_MAX, widgetReads } from "./reads.ts";
+import { CLIPBOARD_MAX, widgetReads, type ReadsScope } from "./reads.ts";
 import { writeClipboard } from "./clipboard.ts";
 import { brokeredFetch } from "./net.ts";
 import { subscribeTopic } from "./topics.ts";
@@ -46,6 +46,8 @@ export interface WidgetScope {
   exec?: RunScope["exec"];
   /** Tests: what clipboard.write writes to instead of the Mac's clipboard. */
   clipboard?: (text: string) => Promise<void>;
+  /** Tests: what media.get and media.control reach instead of the Mac's Now Playing. */
+  media?: ReadsScope["media"];
   /** A secret config field's value. */
   secret(key: string): string | null;
   aiUsage: AiUsage;
@@ -157,7 +159,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     deps: () => scope.acts?.() ?? null,
   });
   const run = widgetRunner({ permissions: perms, root: () => core.workspaces.get(own())?.root ?? null, exec: scope.exec });
-  const reads = widgetReads(core, { own, level, perms });
+  const reads = widgetReads(core, { own, level, perms, media: scope.media });
 
   /** The press a verb that needs one came after (not the acts: act.ts takes theirs): right before it, from this Mac when `local`; taken, one verb per press. */
   const pressed = (v: ApiVerb, press: Press) => {
@@ -298,7 +300,7 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     "stats.query": (q) => reads.stat(q),
     "journal.days": (q) => reads.days(q),
     "media.get": () => reads.media(),
-    "media.control": async (command, opts) => (await core.call("nowPlaying.control", reads.control(command, opts)), null),
+    "media.control": (command, opts) => reads.control(command, opts),
     "clipboard.write": async (text) => {
       if (typeof text !== "string") throw invalid("clipboard.write: give it text");
       await (scope.clipboard ?? writeClipboard)(text.slice(0, CLIPBOARD_MAX)).catch((e: Error) => {

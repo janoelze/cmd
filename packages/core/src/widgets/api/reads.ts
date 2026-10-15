@@ -20,6 +20,8 @@ export interface ReadsScope {
   /** What the grant lets it see: its workspace or every one ("none" is refused by the adapter first). */
   level: "none" | "workspace" | "all";
   perms: WidgetPermissions;
+  /** Tests: what plays and the controls, instead of the Mac's (nowplaying/). */
+  media?: { get(): Promise<NowPlaying | null>; control(o: { command?: NowPlayingCommand; seek?: number }): Promise<void> };
 }
 
 /** Journal days are read from the whole log: at most this many reads a minute per process. */
@@ -129,20 +131,29 @@ export function widgetReads(core: ReadsCore, s: ReadsScope) {
   };
 
   const media = async (): Promise<ApiNowPlaying | null> => {
-    playing ??= holdNowPlaying(core);
-    const n = await playing.read();
+    let n: NowPlaying | null;
+    if (s.media) n = await s.media.get();
+    else {
+      playing ??= holdNowPlaying(core);
+      n = await playing.read();
+    }
     return n && apiNowPlaying(n);
   };
 
-  /** media.control's arguments, as the Now Playing window sends them: a command, or a seek in seconds. */
-  const control = (command: unknown, opts: unknown): { command?: NowPlayingCommand; seek?: number } => {
+  /** media.control, as the Now Playing window sends it: a command, or a seek in seconds. */
+  const control = async (command: unknown, opts: unknown): Promise<null> => {
     const seek = opts && typeof opts === "object" ? (opts as { seek?: unknown }).seek : undefined;
+    let o: { command?: NowPlayingCommand; seek?: number };
     if (seek !== undefined && seek !== null) {
       if (typeof seek !== "number" || !Number.isFinite(seek) || seek < 0) throw invalid("media.control: seek is a position in seconds");
-      return { seek };
+      o = { seek };
+    } else {
+      if (typeof command !== "string" || !(NOW_PLAYING_COMMANDS as readonly string[]).includes(command)) throw invalid(`media.control: the command is one of ${NOW_PLAYING_COMMANDS.join(", ")}, or { seek }`);
+      o = { command: command as NowPlayingCommand };
     }
-    if (typeof command !== "string" || !(NOW_PLAYING_COMMANDS as readonly string[]).includes(command)) throw invalid(`media.control: the command is one of ${NOW_PLAYING_COMMANDS.join(", ")}, or { seek }`);
-    return { command: command as NowPlayingCommand };
+    if (s.media) await s.media.control(o);
+    else await core.call("nowPlaying.control", o);
+    return null;
   };
 
   return {

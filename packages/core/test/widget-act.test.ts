@@ -385,6 +385,8 @@ describe("acting widgets (API 1.1)", () => {
     const env = t.proc.got("ready")[0]!.env;
     expect(env).toMatchObject({ api: { major: 1, minor: 2 }, verbs: expect.arrayContaining(["terminals.open", "run.exec"]) });
     expect(env.elements).toEqual(expect.arrayContaining(["Button", "ListRow", "DataGrid", "TimeBars", "StatusLine"]));
+    // It's told of 1.2's verbs too (cmd.env.has), and needs none of them.
+    expect(env.verbs).toEqual(expect.arrayContaining(["actions.stop", "terminals.usage", "clipboard.write"]));
     // Its 1.1 tree (a Button) is drawn and pressed as before; its act asks as before.
     t.press();
     const opened = t.call("terminals.open", {});

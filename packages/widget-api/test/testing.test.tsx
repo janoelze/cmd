@@ -3,7 +3,7 @@
 
 import { describe, expect, it, test } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
-import { Stat, Inline, useData, useCompletion, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
+import { Stat, Inline, useData, useCompletion, useTerminalUsage, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
 import Widget from "../examples/v1/agents.tsx";
 
 test("waiting agents come first", async () => {
@@ -198,5 +198,42 @@ describe("cmd.env.has (1.2: elements too)", () => {
   it("on a cmd before 1.2, which lists no elements, answers by its minor", async () => {
     const tree = await render(probe(names), createHost({ env: { api: { major: 1, minor: 1 }, elements: undefined } }));
     expect(tree.text()).toBe("agents.start:true ListRow:true DataGrid:false TimeBars:false Nothing:false");
+  });
+});
+
+describe("API 1.2's verbs in the fake host", () => {
+  it("answers cmd.env.has for them, and an older cmd's list doesn't have them", async () => {
+    const probe = () => <Text>{["actions.stop", "clipboard.write", "terminals.usage"].map((n) => `${n}:${cmd.env.has(n)}`).join(" ")}</Text>;
+    expect((await render(probe, createHost())).text()).toBe("actions.stop:true clipboard.write:true terminals.usage:true");
+    const older = createHost({ env: { api: { major: 1, minor: 1 }, verbs: ["agents.start", "actions.run"], elements: undefined } });
+    expect((await render(probe, older)).text()).toBe("actions.stop:false clipboard.write:false terminals.usage:false");
+  });
+
+  it("serves the reads from fixtures and useTerminalUsage live", async () => {
+    function Usage() {
+      const usage = useTerminalUsage();
+      return <Text>{usage.map((u) => `${u.id} ${u.cpu}%`).join(", ") || "none"}</Text>;
+    }
+    const host = createHost({ terminalUsage: [fixtures.usage({ cpu: 3 })], journal: [fixtures.day({ headline: "Shipped" })], playing: fixtures.playing({ title: "Blue" }) });
+    const tree = await render(<Usage />, host);
+    expect(tree.text()).toBe("t-zsh 3%");
+    host.set({ terminalUsage: [fixtures.usage({ cpu: 80 }), fixtures.usage({ id: "t-other", workspaceId: "ws-2" })] });
+    await tree.idle();
+    expect(tree.text()).toBe("t-zsh 80%"); // the other workspace's isn't this widget's
+    expect((await cmd.events.classes()).map((c) => c.class)).toContain("agents");
+    expect(await cmd.stats.query({ stat: "agents.time", compare: true })).toMatchObject({ stat: { id: "agents.time" }, total: 28, previous: { total: 14 } });
+    expect((await cmd.journal.days())[0]!.headline).toBe("Shipped");
+    expect((await cmd.media.get())?.title).toBe("Blue");
+  });
+
+  it("records the acts: stop, control, clipboard", async () => {
+    const host = createHost({ actions: [{ name: "dev", title: "vite", risky: false }] });
+    await render(() => null, host);
+    await cmd.actions.stop("dev");
+    await cmd.actions.run("dev", { restart: true });
+    await cmd.media.control("toggle");
+    await cmd.clipboard.write("pnpm dev");
+    expect(host.calls).toEqual([["actions.stop", "dev"], ["actions.run", "dev", { restart: true }], ["media.control", "toggle"], ["clipboard.write", "pnpm dev"]]);
+    await expect(cmd.actions.stop("nope")).rejects.toThrow(/No action nope/);
   });
 });
