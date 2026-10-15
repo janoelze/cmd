@@ -1,80 +1,117 @@
 // Usage Stats' states for the UI Workbench (`pnpm workbench widgets/stats`): the widget against
-// the fake host, one variant per state, each the host's data (a week of stand-in numbers).
+// the fake host, one variant per state. The numbers are the native Stats window's story's
+// (windows/stats/Stats.story.tsx: the same seeds, scales and splits, on a Wednesday afternoon),
+// so the two can be compared side by side. `cmd widget preview` draws the first six.
 
 import type { HostData } from "@cmd/widget-api/testing/host";
-import { stat } from "@cmd/widget-api/testing/fixtures";
 import type { StatQuery, StatResult } from "@cmd/widget-api";
 import UsageStats from "./stats.tsx";
 
 export default UsageStats;
 
-const H = 3_600_000;
+/** A state in a wide window, the native story's size, in a British locale (24-hour times, weeks from Monday) as on the machine the two were compared on. */
+type State = HostData & { size?: "narrow" | "regular" | "wide" };
+const wide = (data: HostData): State => ({ ...data, env: { locale: "en-GB" }, size: "wide" });
+
+type Info = StatResult["stat"];
+type Range = "today" | "week" | "month" | "year";
+
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-/** A smooth-ish run of `n` values around `base`. */
-const wave = (n: number, base: number, seed: number) => Array.from({ length: n }, (_, i) => Math.max(0, Math.round(base * (1 + 0.6 * Math.sin(i * 1.3 + seed) + 0.3 * Math.cos(i * 0.7 + seed * 2)))));
+const NOW = new Date(2026, 9, 14, 15, 20).getTime(); // the native story's Wednesday afternoon
+const noise = (i: number) => Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
 
-const UNITS: Record<string, StatResult["stat"]["unit"]> = { "agents.time": "ms", "agents.waiting": "ms", "you.active": "ms", "commands.failrate": "percent", "agents.tokens": "tokens", "core.memory": "bytes", "data.size": "bytes", "core.stalls": "ms" };
-const TITLES: Record<string, string> = { "agents.time": "Agent time", "agents.turns": "Turns", "commands.runs": "Commands", "commands.failrate": "Failed commands", "agents.tokens": "Tokens", "you.active": "Active time", "ai.calls": "Model calls", "core.memory": "Core memory", "core.stalls": "Core stalls", "data.size": "Event log size" };
-const COMMANDS = ["pnpm test", "git status", "pnpm typecheck", "pnpm e2e", "git diff", "pnpm dev", "ls", "rg", "git log", "pnpm build", "node", "make"];
+const info = (id: string, title: string, unit: Info["unit"], kind: Info["kind"], dims: string[] = [], good?: "up" | "down"): Info => ({ id, title, description: `${title}, made up for the story.`, kind, unit, dims: dims.map((d) => ({ id: d, title: d[0]!.toUpperCase() + d.slice(1), ...(d === "command" ? { many: true } : {}) })), class: "agents", ...(good ? { good } : {}) });
 
-/** The fake core's stats: a few plausible days, by what the query splits by. */
-function stats(scale = 1, commands = 8) {
+/** The native story's result(): a run of buckets ending now, a series per split, the range before. */
+function result(stat: Info, o: { range?: Range; series?: [string, string, number][]; scale: number; seed: number; ranking?: [string, number][]; empty?: boolean; partialDays?: number; grain?: StatResult["grain"]; n?: number; measure?: StatResult["measure"] }): StatResult {
+  const grain = o.grain ?? (o.range === "today" ? "hour" : o.range === "year" ? "week" : "day");
+  const n = o.n ?? (grain === "hour" ? 24 : o.range === "month" ? 31 : o.range === "year" ? 53 : 7);
+  const step = grain === "hour" ? HOUR : grain === "week" ? 7 * DAY : DAY;
+  const start = grain === "hour" && n > 24 ? new Date(NOW).setHours(0, 0, 0, 0) - (n / 24 - 1) * DAY : grain === "day" && n > 31 ? new Date(NOW).setHours(0, 0, 0, 0) - (n - 1) * DAY : grain === "hour" ? new Date(NOW).setHours(0, 0, 0, 0) : grain === "week" ? NOW - 52 * 7 * DAY : o.range === "month" ? new Date(2026, 9, 1).getTime() : new Date(NOW).setHours(0, 0, 0, 0) - 2 * DAY;
+  const buckets = Array.from({ length: n }, (_, i) => start + i * step);
+  const since = o.partialDays ? NOW - o.partialDays * DAY : null;
+  const value = (k: number, i: number, share: number) => (buckets[i]! > NOW || (since && buckets[i]! + step <= since) ? null : o.empty ? 0 : Math.round(share * o.scale * (0.3 + noise(o.seed + i * 7 + k))));
+  const series = (o.series ?? [["total", "Total", 1]]).map(([key, label, share], k) => {
+    const values = buckets.map((_, i) => value(k, i, share));
+    return { key, label, values, total: values.reduce<number>((a, v) => a + (v ?? 0), 0) };
+  });
+  const total = series.reduce((a, s) => a + s.total, 0);
+  return { stat, from: buckets[0]!, to: buckets[n - 1]! + step, grain, measure: o.measure ?? (stat.kind === "count" ? "n" : "sum"), buckets, series, total, asOf: NOW, ...(since ? { partial: { since } } : { previous: { total: Math.round(total * (0.8 + 0.4 * noise(o.seed))), values: buckets.map((_, i) => Math.round(o.scale * (0.3 + noise(o.seed + 99 + i)))) } }), ...(o.ranking ? { ranking: o.ranking.map(([key, value]) => ({ key, label: key.replace(/^dir:.*\//, ""), value })) } : {}) };
+}
+
+/** The native story's week(), by what a query asks for. */
+function stats(o: { empty?: boolean; partialDays?: number; refuse?: string } = {}) {
+  const empty = !!o.empty;
   return (q: StatQuery): StatResult => {
-    const unit = UNITS[q.stat] ?? "count";
-    const hourly = q.grain === "hour" || q.range === "today";
-    const months = q.range === "year";
-    const n = q.range === "365d" ? 365 : months ? 12 : hourly ? (q.range === "today" ? 24 : 30 * 24) : 7;
-    const base = (unit === "bytes" ? 180 * 2 ** 20 : unit === "ms" ? 1.5 * H : unit === "tokens" ? 400_000 : unit === "percent" ? 8 : 12) * scale / (hourly && n > 24 ? 6 : 1);
-    const split = q.by === "agent" ? [["claude", "Claude"], ["codex", "Codex"]] : q.by === "outcome" ? [["done", "Done"], ["stopped", "Stopped"], ["failed", "Failed"]] : q.by === "model" ? [["opus", "Opus"], ["sonnet", "Sonnet"]] : null;
-    const series = split ? split.map(([key, label], i) => ({ key: key!, label: label!, values: wave(n, base / (i + 1.5), i + 1) })) : undefined;
-    const r = stat(q, { unit, title: TITLES[q.stat] ?? q.stat, ...(series ? { series } : { values: wave(n, base, q.stat.length) }) });
-    if (months) {
-      const y = new Date().getFullYear();
-      r.buckets = Array.from({ length: 12 }, (_, i) => new Date(y, i, 1).getTime());
-      r.grain = "month";
-      r.from = r.buckets[0]!;
-    } else if (hourly || n > 7) {
-      const start = q.range === "today" ? new Date().setHours(0, 0, 0, 0) : new Date().setHours(0, 0, 0, 0) - (n / (hourly ? 24 : 1) - 1) * DAY;
-      r.buckets = Array.from({ length: n }, (_, i) => start + i * (hourly ? HOUR : DAY));
-      r.grain = hourly ? "hour" : "day";
-      r.from = r.buckets[0]!;
+    const range: Range = q.range === "today" || q.range === "month" || q.range === "year" ? q.range : "week";
+    const r = { range, empty, partialDays: o.partialDays };
+    const scale = (today: number, year: number, other: number) => (range === "today" ? today : range === "year" ? year : other) * HOUR;
+    switch (q.stat) {
+      case "agents.time": {
+        if (q.by === "project") return result(info("agents.time", "Agent time", "ms", "count", ["agent", "project"]), { ...r, seed: 8, scale: 9 * HOUR, ranking: empty ? [] : [["dir:/src/cmd", 61 * HOUR], ["dir:/src/site", 9 * HOUR], ["dir:/src/notes", 2 * HOUR]] });
+        const t = result(info("agents.time", "Agent time", "ms", "count", ["agent", "project", "workspace"]), { ...r, seed: 1, scale: scale(0.6, 40, 9), series: q.by === "agent" || !q.by ? [["claude", "Claude", 0.8], ["codex", "Codex", 0.15], ["gemini", "Gemini", 0.05]] : undefined });
+        // The detail: the whole without a split, and a split's ranking (the native story ranks its projects).
+        if (q.quantiles && !q.by) t.series = [{ key: "total", label: "Total", values: t.buckets.map((_, i) => t.series.reduce<number | null>((a, s) => (s.values[i] === null ? a : (a ?? 0) + s.values[i]!), null)), total: t.total }];
+        if (q.quantiles && q.by) t.ranking = [["cmd", 61 * HOUR], ["site", 9 * HOUR], ["notes", 2 * HOUR]].map(([key, value]) => ({ key: String(key), label: String(key), value: Number(value) }));
+        return t;
+      }
+      case "you.active":
+        if (q.range === "365d") return result(info("you.active", "Active time", "ms", "count"), { seed: 9, scale: 6 * HOUR, grain: "day", n: 365, empty });
+        if (q.range === "30d") return result(info("you.active", "Active time", "ms", "count"), { seed: 9, scale: 0.4 * HOUR, grain: "hour", n: 30 * 24, empty });
+        if (!q.compare) return result(info("you.active", "Active time", "ms", "count"), { range: "today", seed: 9, scale: 0.6 * HOUR, empty });
+        return result(info("you.active", "Active time", "ms", "count"), { ...r, seed: 2, scale: scale(0.5, 20, 5) });
+      case "agents.turns":
+        return result(info("agents.turns", "Turns", "count", "count", ["agent", "outcome"]), { ...r, seed: 3, scale: 60, series: [["done", "Done", 0.9], ["interrupted", "Interrupted", 0.06], ["failed", "Failed", 0.04]] });
+      case "agents.waiting":
+        return { ...result(info("agents.waiting", "Waiting on you", "ms", "distribution", ["agent"], "down"), { ...r, seed: 4, scale: 0.4 * HOUR }), ...(q.quantiles ? { quantiles: { p50: 95_000, p90: 14 * 60_000 } } : {}) };
+      case "commands.runs":
+        return result(info("commands.runs", "Commands", "count", "count", ["result", "command"]), { ...r, seed: 5, scale: 120, ranking: empty ? [] : [["pnpm test", 212], ["git status", 148], ["pnpm typecheck", 91], ["pnpm e2e", 40], ["git log", 22], ["make", 12]] });
+      case "commands.failrate":
+        return result(info("commands.failrate", "Failed commands", "percent", "gauge", ["command"], "down"), { ...r, seed: 6, scale: 9, ranking: [["pnpm test", 9], ["pnpm e2e", 15], ["pnpm typecheck", 3]] });
+      case "agents.tokens":
+        return result(info("agents.tokens", "Tokens", "tokens", "count", ["token", "model", "project"]), { ...r, seed: 7, scale: 900_000, series: [["claude-opus-5-5", "claude-opus-5-5", 0.85], ["claude-haiku-5-5", "claude-haiku-5-5", 0.15]] });
+      case "ai.calls":
+        return result(info("ai.calls", "Model calls", "count", "count", ["purpose", "model"]), { ...r, seed: 10, scale: 30, ranking: empty ? [] : [["notify.done", 812], ["session.name", 410], ["journal.day", 64], ["summary", 12]] });
+      case "core.memory":
+        return result(info("core.memory", "Core memory", "bytes", "gauge"), { ...r, seed: 11, scale: 380e6, measure: "mean" });
+      case "core.stalls":
+        if (q.measure === "max") return { ...result(info("core.stalls", "Core stalls", "ms", "distribution"), { ...r, seed: 12, scale: 1, measure: "max" }), total: empty ? 0 : 412 };
+        return result(info("core.stalls", "Core stalls", "count", "distribution"), { ...r, seed: 12, scale: 2, measure: "n" });
+      case "data.size":
+        return { ...result(info("data.size", "Event log size", "bytes", "gauge"), { ...r, seed: 13, scale: 1 }), total: 2.9e9 };
+      default:
+        throw new Error(`No stat “${q.stat}” in the story`);
     }
-    if (q.top && q.by === "command") r.ranking = COMMANDS.slice(0, Math.min(q.top, commands)).map((c, i) => ({ key: c, label: c, value: Math.round((40 - i * 3) * scale) }));
-    if (q.stat === "commands.failrate") r.ranking = [{ key: "pnpm test", label: "pnpm test", value: 18 }, { key: "pnpm e2e", label: "pnpm e2e", value: 9 }];
-    if (q.top && q.by === "project") r.ranking = [["cmd", 21 * H], ["fl-studio-web", 6 * H], ["dotfiles", H]].map(([k, v]) => ({ key: String(k), label: String(k), value: Number(v) * scale }));
-    if (q.top && q.by === "purpose") r.ranking = [["Summaries", 42], ["Notifications", 30], ["Journal", 7]].map(([k, v]) => ({ key: String(k), label: String(k), value: Number(v) }));
-    if (q.stat === "agents.waiting" && q.measure === "p50") r.total = 95_000;
-    if (q.stat === "commands.failrate") Object.assign(r, { total: 7.5, ...(r.previous ? { previous: { ...r.previous, total: 9 } } : {}) }, { stat: { ...r.stat, good: "down" } });
-    if (q.stat === "agents.time") r.stat.good = "up";
-    // cmd's own: memory an average, two stalls of the core (the worst 240 ms), the log's size.
-    if (q.stat === "core.memory") r.total = 182 * 2 ** 20;
-    if (q.stat === "core.stalls") r.total = q.measure === "max" ? 240 : 2;
-    if (q.stat === "data.size") r.total = 46 * 2 ** 20;
-    return r;
   };
 }
 
-/** A week of work in this workspace. */
-export const Week: HostData = { stats: stats() };
+/** A busy week: the overview, every section. A number opens its detail. */
+export const Week: State = wide({ stats: stats() });
 
-/** Every workspace, from the title menu: active time, projects, cmd's model calls. */
-export const AllWorkspaces: HostData = { stats: stats(2.5), state: { scope: "all" } };
+/** A stat on its own, split by agent, with its ranking, as the native story's detail. */
+export const Detail: State = wide({ stats: stats(), state: { open: { stat: "agents.time", by: "agent" } } });
 
-/** A year, as a calendar of when you work. */
-export const Year: HostData = { stats: stats(30), state: { range: "year", scope: "all" } };
+/** Every workspace, from the title menu: the same panes, counted everywhere. */
+export const AllWorkspaces: State = wide({ stats: stats(), state: { scope: "all" } });
 
-/** In a narrow window, as in a sidebar. */
-export const Narrow: HostData & { size: "narrow" } = { stats: stats(), size: "narrow" };
+/** Nothing recorded yet. */
+export const Nothing: State = wide({ stats: stats({ empty: true }) });
 
-/** Nothing counted in this workspace yet. */
-export const Empty: HostData = { stats: (q) => stat(q, { values: [0, 0, 0, 0, 0, 0, 0], unit: UNITS[q.stat] ?? "count" }) };
+/** The log is younger than the range: numbers start on its first day, the footer says so, no comparison. */
+export const Counting: State = wide({ stats: stats({ partialDays: 3 }) });
 
-/** The widget may read none of the stats. */
-export const Refused: HostData = { deny: { "stats.query": 'events: ["agents"]' } };
+/** cmd refuses the stats: the page says why, with Try Again. */
+export const Failed: State = wide({ deny: { "stats.query": 'events: ["agents"]' } });
 
-/** Today, by the hour. */
-export const Today: HostData = { stats: stats(0.2), state: { range: "today" } };
+/** Today, by hour: the open hour in the accent, the rest of the day still to come. */
+export const Today: State = wide({ stats: stats(), state: { range: "today" } });
 
-/** Many commands ranked. */
-export const Many: HostData = { stats: stats(1, 12), state: { range: "month" } };
+/** A year: weeks along the bars, active time as a calendar. */
+export const Year: State = wide({ stats: stats(), state: { range: "year" } });
+
+/** Until every number is in. */
+export const Loading: State = wide({ stats: (q) => (q.stat === "data.size" ? (null as unknown as StatResult) : stats()(q)) });
+
+/** A month, every day a bar. */
+export const Month: State = wide({ stats: stats(), state: { range: "month" } });

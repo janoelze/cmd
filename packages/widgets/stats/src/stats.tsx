@@ -1,15 +1,16 @@
 // Usage Stats, a built-in widget package (docs/57; the native Stats window's job, docs/49): how
 // you and your agents used cmd in this workspace (or in every one, from the title menu), as one
-// page read top to bottom. A sentence, headline numbers with their change, then a pane per area:
-// agent time per bucket, how turns ended and how long agents waited on you, the commands run
-// most and how often they failed, when you work, tokens by model, and cmd itself (its core's
-// memory and stalls, the event log's size); with All Workspaces also projects and cmd's model
-// calls. Your active time has no workspace, so it is every workspace's in both (as the native
-// page shows it), and so is cmd's own pane. Every number opens its detail: a bigger
-// chart, split by what the stat can be split by, and its ranking. Each pane is one
-// `cmd.stats.query` (API 1.2); the page asks again when a command or an agent's turn is recorded
-// (a few seconds later, once cmd has counted it) and once a minute (time spent grows without events). A stat the widget may
-// not read leaves its pane out; when none can be read, the page says why.
+// page read top to bottom. A sentence, headline numbers with their change and a sparkline, then
+// a pane per area: agent time per bucket, how turns ended and how long agents waited on you, the
+// commands run most and how often they failed, when you work, where agent time went (projects),
+// tokens by model, cmd's own model calls, and cmd itself (its core's memory and stalls, the event
+// log's size). Every number opens its detail: a bigger chart with its change and spread, split by
+// what the stat can be split by, and its ranking.
+//
+// Each number is a live stat (`useStat`, API 1.3): cmd counts it again soon after it records
+// something for it, and each minute for time spent, so nothing here polls. What has no workspace
+// (your active time, cmd's model calls, cmd's own pane) is every workspace's in both scopes, as
+// on the native page. When cmd refuses a stat, the page says why, with Try Again.
 
 import {
   Window,
@@ -32,18 +33,17 @@ import {
   PunchCard,
   Calendar,
   StatusLine,
-  useEvents,
+  useStat,
+  useEnv,
   useStoredState,
-  cmd,
+  fmt,
   type StatQuery,
   type StatResult,
-  type Tone,
 } from "@cmd/widget-api";
-import { useEffect, useRef, useState } from "react";
+import { Component, type ReactNode } from "react";
 
 export type Range = "today" | "week" | "month" | "year";
 type Scope = "workspace" | "all";
-type Unit = StatResult["stat"]["unit"];
 
 export const RANGES: { value: Range; label: string }[] = [
   { value: "today", label: "Today" },
@@ -53,111 +53,53 @@ export const RANGES: { value: Range; label: string }[] = [
 ];
 const PERIOD: Record<Range, [string, string]> = { today: ["Today", "yesterday"], week: ["This week", "last week"], month: ["This month", "last month"], year: ["This year", "last year"] };
 
-/** Asked again this long after a command or an agent's turn is recorded (cmd counts a second or two later), and this often anyway. */
-export const SETTLE_MS = 2500;
-export const REFRESH_MS = 60_000;
-
 /** The page's results by name. */
-export type Page = Partial<Record<"time" | "active" | "turns" | "waiting" | "waitingMedian" | "runs" | "fail" | "tokens" | "projects" | "heat" | "ai" | "memory" | "stalls" | "worst" | "size", StatResult>>;
+export type Page = Partial<Record<"time" | "active" | "turns" | "waiting" | "runs" | "fail" | "tokens" | "projects" | "heat" | "ai" | "memory" | "stalls" | "worst" | "size", StatResult>>;
 
-/** Stats with no workspace (yours, cmd's own): read across every workspace whatever the scope. */
-export const UNSCOPED = new Set(["you.active", "core.memory", "core.stalls", "data.size"]);
+/** Stats with no workspace (yours, cmd's model calls, cmd's own): every workspace's, whatever the scope. */
+export const UNSCOPED = new Set(["you.active", "ai.calls", "core.memory", "core.stalls", "data.size"]);
 
-/**
- * The page's queries. In one workspace: what can be told apart by workspace (or its folder's
- * project), with every workspace: also projects and cmd's model calls. What has no workspace is
- * every workspace's in both, as on the native page: your active time and when you work
- * (`you.active`), and cmd's own pane (core memory, stalls, the event log's size: `events: ["system"]`).
- */
+/** A query in the window's scope: this workspace's, or every one's; what has no workspace is every one's. */
+export const scoped = (q: StatQuery, scope: Scope): StatQuery => (scope === "all" || UNSCOPED.has(q.stat) ? { ...q, scope: "all" } : q);
+
+/** The page's queries, the native page's: the same in both scopes, but for what they count. */
 export function pageQueries(range: Range, scope: Scope): [keyof Page, StatQuery][] {
-  const all = scope === "all" ? ({ scope: "all" } as const) : {};
   const heat = "you.active";
   const qs: [keyof Page, StatQuery][] = [
     ["time", { stat: "agents.time", range, by: "agent", compare: true }],
-    ["turns", { stat: "agents.turns", range, by: "outcome", compare: true }],
-    ["waiting", { stat: "agents.waiting", range, measure: "sum" }],
-    ["waitingMedian", { stat: "agents.waiting", range, measure: "p50" }],
-    ["runs", { stat: "commands.runs", range, by: "command", top: 8, compare: true }],
-    ["fail", { stat: "commands.failrate", range, by: "command", top: 100, compare: true }],
-    ["tokens", { stat: "agents.tokens", range, by: "model", filter: { token: ["in", "out"] }, compare: true }],
-    ["heat", range === "year" ? { stat: heat, range: "365d", grain: "day" } : range === "today" ? { stat: heat, range: "today" } : { stat: heat, range: "30d", grain: "hour" }],
-  ];
-  if (scope === "all") qs.push(["projects", { stat: "agents.time", range, by: "project", top: 6 }], ["ai", { stat: "ai.calls", range, by: "purpose", top: 6 }]);
-  // What has no workspace isn't this workspace's or another's: every workspace's.
-  const none: [keyof Page, StatQuery][] = [
     ["active", { stat: "you.active", range, compare: true }],
+    ["turns", { stat: "agents.turns", range, by: "outcome", compare: true }],
+    ["waiting", { stat: "agents.waiting", range, measure: "sum", quantiles: true }],
+    ["runs", { stat: "commands.runs", range, by: "command", top: 8, compare: true }],
+    ["fail", { stat: "commands.failrate", range, by: "command", top: 50, compare: true }],
+    ["tokens", { stat: "agents.tokens", range, by: "model", filter: { token: ["in", "out"] }, compare: true }],
+    ["projects", { stat: "agents.time", range, by: "project", top: 6 }],
+    ["heat", range === "year" ? { stat: heat, range: "365d", grain: "day" } : range === "today" ? { stat: heat, range: "today" } : { stat: heat, range: "30d", grain: "hour" }],
+    ["ai", { stat: "ai.calls", range, by: "purpose", top: 6 }],
     ["memory", { stat: "core.memory", range }],
     ["stalls", { stat: "core.stalls", range }],
     ["worst", { stat: "core.stalls", range, measure: "max" }],
     ["size", { stat: "data.size", range }],
   ];
-  return [...qs.map(([k, q]): [keyof Page, StatQuery] => [k, UNSCOPED.has(q.stat) ? { ...q, scope: "all" } : { ...q, ...all }]), ...none.map(([k, q]): [keyof Page, StatQuery] => [k, { ...q, scope: "all" }])];
+  return qs.map(([k, q]) => [k, scoped(q, scope)]);
 }
 
-// ── numbers as the Stats window writes them ──
+// ── numbers and words as the Stats window writes them ──
 
-const one = (n: number) => (Math.round(n * 10) / 10).toString();
-const whole = (n: number) => Math.round(n).toLocaleString("en-US");
+const val = (r: StatResult, v = r.total) => fmt.value(v, r.stat.unit);
 
-/** 3h 12m, 48m, 12s; `short`: the largest unit only. */
-export function duration(ms: number, short = false): string {
-  if (!Number.isFinite(ms) || ms <= 0) return "0";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.round(ms / 60_000);
-  if (m < 60) return short || s % 60 === 0 || m >= 10 ? `${m}m` : `${Math.floor(s / 60)}m ${s % 60}s`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return short || m % 60 === 0 ? `${h}h` : `${h}h ${m % 60}m`;
-  const d = Math.floor(h / 24);
-  return short || h % 24 === 0 ? `${d}d` : `${d}d ${h % 24}h`;
+/** Which way a change went. */
+export const trendOf = (cur: number, prev: number) => (Math.abs(cur - prev) <= Math.abs(prev) * 0.005 ? "flat" : cur > prev ? "up" : "down");
+
+/** A stat's change against the range before, as a Delta: its text, which way, and which way is good. */
+export function change(r: StatResult | undefined): { text: string; trend: "up" | "down" | "flat"; good?: "up" | "down" } | null {
+  if (!r?.previous) return null;
+  const text = fmt.delta(r.total, r.previous.total, r.stat.unit);
+  return text ? { text, trend: trendOf(r.total, r.previous.total), ...(r.stat.good ? { good: r.stat.good } : {}) } : null;
 }
 
-const compact = (v: number) => {
-  const a = Math.abs(v);
-  const [d, s] = a >= 1e9 ? [1e9, "B"] : a >= 1e6 ? [1e6, "M"] : a >= 1e3 ? [1e3, "K"] : [1, ""];
-  return `${Math.abs(v / d) >= 100 || !s ? whole(v / d) : one(v / d)}${s}`;
-};
-
-/** A value in its stat's unit. */
-export function value(v: number, unit: Unit): string {
-  if (unit === "ms") return duration(v);
-  if (unit === "bytes") {
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let i = 0;
-    while (v >= 1024 && i < units.length - 1) (v /= 1024), i++;
-    return `${i ? one(v) : whole(v)} ${units[i]}`;
-  }
-  if (unit === "percent") return `${v < 10 && v > 0 ? one(v) : whole(v)}%`;
-  return Math.abs(v) >= 10_000 ? compact(v) : v % 1 ? one(v) : whole(v);
-}
-
-/** The change from `prev` to `cur`: "+18%", "−4%", "new", "" (nothing either time); percentages by points. */
-export function change(cur: number, prev: number, unit?: Unit): string {
-  if (unit === "percent") {
-    if (!cur && !prev) return "";
-    const d = cur - prev;
-    return Math.abs(d) < 0.05 ? "±0" : `${d > 0 ? "+" : "−"}${one(Math.abs(d))} pt`;
-  }
-  if (!prev) return cur ? "new" : "";
-  const p = ((cur - prev) / prev) * 100;
-  if (Math.abs(p) < 0.5) return "±0%";
-  return `${p > 0 ? "+" : "−"}${Math.abs(p) >= 10 ? whole(Math.abs(p)) : one(Math.abs(p))}%`;
-}
-
-const trendOf = (cur: number, prev: number) => (Math.abs(cur - prev) <= Math.abs(prev) * 0.005 ? "flat" : cur > prev ? "up" : "down");
-
-/** A stat's change against the range before, and its tone: green when it went the good way, red when not. */
-export function delta(r: StatResult | undefined): { delta?: string; deltaTone?: Tone } {
-  if (!r?.previous) return {};
-  const text = change(r.total, r.previous.total, r.stat.unit);
-  if (!text) return {};
-  const trend = trendOf(r.total, r.previous.total);
-  return { delta: text, ...(r.stat.good && trend !== "flat" ? { deltaTone: trend === r.stat.good ? "success" : "danger" } : {}) };
-}
-
-/** Each bucket's short label (x axis) and long one (readout), by grain and range. */
-export function bucketLabels(r: StatResult, range: Range | "detail"): { labels: string[]; longLabels: string[] } {
+/** Each bucket's short label (x axis) and long one (readout), by grain and range, in the app's locale. */
+export function bucketLabels(r: StatResult, range: Range | "detail", locale?: string): { labels: string[]; longLabels: string[] } {
   const d = (t: number) => new Date(t);
   const g = r.grain;
   const labels = r.buckets.map((t, i) =>
@@ -165,22 +107,22 @@ export function bucketLabels(r: StatResult, range: Range | "detail"): { labels: 
       ? String(d(t).getHours()).padStart(2, "0")
       : g === "day"
         ? range === "week" || r.buckets.length <= 7
-          ? d(t).toLocaleDateString(undefined, { weekday: "narrow" })
+          ? d(t).toLocaleDateString(locale, { weekday: "narrow" })
           : String(d(t).getDate())
         : g === "week"
           ? i === 0 || d(t).getMonth() !== d(r.buckets[i - 1]!).getMonth()
-            ? d(t).toLocaleDateString(undefined, { month: "short" })
+            ? d(t).toLocaleDateString(locale, { month: "short" })
             : ""
-          : d(t).toLocaleDateString(undefined, { month: "short" }),
+          : d(t).toLocaleDateString(locale, { month: "short" }),
   );
   const longLabels = r.buckets.map((t) =>
     g === "hour"
-      ? d(t).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })
+      ? d(t).toLocaleString(locale, { weekday: "short", hour: "2-digit", minute: "2-digit" })
       : g === "week"
-        ? `Week of ${d(t).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
+        ? `Week of ${d(t).toLocaleDateString(locale, { day: "numeric", month: "short" })}`
         : g === "month"
-          ? d(t).toLocaleDateString(undefined, { month: "long", year: "numeric" })
-          : d(t).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }),
+          ? d(t).toLocaleDateString(locale, { month: "long", year: "numeric" })
+          : d(t).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" }),
   );
   return { labels, longLabels };
 }
@@ -201,77 +143,64 @@ export function sentence(page: Page, range: Range): string {
   if (!t) return "";
   if (!t.total) return `${when}: no agent work yet.`;
   const projects = page.projects?.ranking?.length ?? 0;
-  const d = t.previous ? change(t.total, t.previous.total) : "";
+  const d = t.previous ? fmt.delta(t.total, t.previous.total) : "";
   const more = d && d !== "new" && d !== "±0%" ? `, ${d.replace(/^[+−]/, "")} ${trendOf(t.total, t.previous!.total) === "up" ? "more" : "less"} than ${before}` : "";
-  return `${when}: agents worked ${duration(t.total)}${projects > 1 ? ` across ${projects} projects` : ""}${more}.`;
+  return `${when}: agents worked ${val(t)}${projects > 1 ? ` across ${projects} projects` : ""}${more}.`;
 }
 
-/** The week's first day where the runtime knows it (Monday otherwise). */
-function firstDay(): 0 | 1 | 6 {
+/** The week's first day in a locale (Monday where the runtime can't tell). */
+export function firstDay(locale?: string): 0 | 1 | 6 {
   try {
-    const d = (new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale) as Intl.Locale & { getWeekInfo?(): { firstDay: number } }).getWeekInfo?.().firstDay ?? 1;
+    const d = (new Intl.Locale(locale ?? Intl.DateTimeFormat().resolvedOptions().locale) as Intl.Locale & { getWeekInfo?(): { firstDay: number } }).getWeekInfo?.().firstDay ?? 1;
     return d === 7 ? 0 : d === 6 ? 6 : 1;
   } catch {
     return 1;
   }
 }
 
-/** When work happens: today by hour, a week or month as weekday × hour over 30 days, a year as a calendar. */
-function heatChart(r: StatResult, range: Range, who: string, now: number) {
+/** When you work: today by hour, a week or month as weekday × hour over the last 30 days, a year as a calendar. */
+function heatChart(r: StatResult, range: Range, locale: string | undefined, now: number) {
   const values = r.series[0]?.values ?? [];
-  if (range === "year") return <Calendar start={r.buckets[0] ?? r.from} values={values} unit="ms" firstDay={firstDay()} label={`${who} ${value(r.total, "ms")} this year`} />;
-  if (range === "today") return <TimeBars {...bucketLabels(r, "today")} buckets={r.buckets} series={r.series} current={currentIndex(r, now)} unit="ms" label={`${who} per hour`} summary={`${who} ${value(r.total, "ms")}`} />;
-  const first = firstDay();
+  if (range === "year") {
+    const start = r.buckets[0] ?? r.from;
+    const dayLabels = values.map((_, i) => new Date(new Date(start).setDate(new Date(start).getDate() + i)).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" }));
+    return <Calendar start={start} values={values} unit="ms" label={`Active ${val(r)} this year`} dayLabels={dayLabels} />;
+  }
+  if (range === "today") return <TimeBars {...bucketLabels(r, "today", locale)} buckets={r.buckets} series={r.series} current={currentIndex(r, now)} unit="ms" label="Active time per hour" summary={`Active ${val(r)}`} />;
+  // Hours of the last 30 days, folded into the week: rows from the locale's first day of the week.
+  const first = firstDay(locale);
   const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
   r.buckets.forEach((b, i) => {
     const d = new Date(b);
     grid[(d.getDay() - first + 7) % 7]![d.getHours()]! += values[i] ?? 0;
   });
-  const rows = Array.from({ length: 7 }, (_, k) => new Date(2024, 0, 7 + first + k).toLocaleDateString(undefined, { weekday: "short" }));
-  return <PunchCard values={grid} rows={rows} unit="ms" label={`${who} ${value(r.total, "ms")} in 30 days`} />;
+  const rows = Array.from({ length: 7 }, (_, k) => new Date(2024, 0, 7 + first + k).toLocaleDateString(locale, { weekday: "short" }));
+  return <PunchCard values={grid} rows={rows} unit="ms" label={`Active ${val(r)} in 30 days`} />;
 }
 
-type Loaded<T> = { data: T | null; error: string | null; at?: number };
+/** Live stats by name, one `useStat` each. The list is the same length every render (`pageQueries`), so the hooks keep their order. */
+function useStats<K extends string>(queries: [K, StatQuery][]): Partial<Record<K, StatResult>> {
+  const out: Partial<Record<K, StatResult>> = {};
+  for (const [k, q] of queries) {
+    const r = useStat(q);
+    if (r) out[k] = r;
+  }
+  return out;
+}
 
 /**
- * Runs the queries now, again a second after a command or an agent's turn is recorded, and once a
- * minute. A query that fails leaves its result out; when every one fails, the first error is the page's.
+ * What a stat cmd refused (or couldn't count) leaves: the page in its error state, saying why,
+ * with Try Again, which subscribes again. A change of range, scope or stat starts over (`key`).
  */
-function useQueries<K extends string>(queries: [K, StatQuery][], key: string): Loaded<Partial<Record<K, StatResult>>> & { retry: () => void } {
-  const [state, setState] = useState<Loaded<Partial<Record<K, StatResult>>>>({ data: null, error: null });
-  const [tick, setTick] = useState(0);
-  const gen = useRef(0);
-  const shown = useRef(key);
-  const latest = useEvents({ types: ["command", "agent.stop"], limit: 1 }).at(-1);
-  const recorded = latest ? `${latest.id}:${latest.until ?? ""}` : "";
-  const seen = useRef(recorded);
-
-  useEffect(() => {
-    const g = ++gen.current;
-    if (shown.current !== key) setState({ data: null, error: null });
-    shown.current = key;
-    void Promise.allSettled(queries.map(([, q]) => cmd.stats.query(q))).then((rs) => {
-      if (g !== gen.current) return;
-      const data: Partial<Record<K, StatResult>> = {};
-      rs.forEach((r, i) => r.status === "fulfilled" && (data[queries[i]![0]] = r.value));
-      const failed = rs.find((r): r is PromiseRejectedResult => r.status === "rejected");
-      if (Object.keys(data).length || !failed) setState({ data, error: null, at: Date.now() });
-      else setState({ data: null, error: failed.reason instanceof Error ? failed.reason.message : String(failed.reason) });
-    });
-    const every = setInterval(() => setTick((n) => n + 1), REFRESH_MS);
-    return () => clearInterval(every);
-    // The queries by value: `key` names them.
-  }, [key, tick]);
-
-  // Something was counted: ask again once it has settled.
-  useEffect(() => {
-    if (recorded === seen.current) return;
-    seen.current = recorded;
-    const t = setTimeout(() => setTick((n) => n + 1), SETTLE_MS);
-    return () => clearTimeout(t);
-  }, [recorded]);
-
-  return { ...state, retry: () => setTick((n) => n + 1) };
+class Counted extends Component<{ toolbar: ReactNode; children: ReactNode }, { error: string | null }> {
+  override state = { error: null as string | null };
+  static getDerivedStateFromError(e: unknown) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+  override render() {
+    if (this.state.error === null) return this.props.children;
+    return <View state={{ kind: "error", title: "Couldn't count", text: this.state.error, action: { label: "Try Again", run: () => this.setState({ error: null }) } }}>{this.props.toolbar}</View>;
+  }
 }
 
 const scopeMenu = (scope: Scope, setScope: (s: Scope) => void) => [
@@ -282,50 +211,50 @@ const scopeMenu = (scope: Scope, setScope: (s: Scope) => void) => [
 export default function UsageStats() {
   const [scope, setScope] = useStoredState<Scope>("scope", "workspace");
   const [range, setRange] = useStoredState<Range>("range", "week");
-  const [open, setOpen] = useState<{ stat: string; by: string | null } | null>(null);
+  // The open detail is the window's, so it is still open after a reload.
+  const [open, setOpen] = useStoredState<{ stat: string; by: string | null } | null>("open", null);
+  const ranges = <ToolbarSegmented label="Range" value={range} onChange={(v) => setRange(v as Range)} options={RANGES} />;
+  const back = <ToolbarButton icon="chevron.left" label="Stats" showLabel secondary onClick={() => setOpen(null)} />;
   return (
     <Window menu={scopeMenu(scope, setScope)}>
       {open ? (
-        <Detail scope={scope} range={range} stat={open.stat} by={open.by} onBy={(by) => setOpen({ ...open, by })} onRange={setRange} onBack={() => setOpen(null)} />
+        <Counted key={`${scope}:${range}:${open.stat}:${open.by}`} toolbar={<WindowToolbar label="Stat">{back}{ranges}</WindowToolbar>}>
+          <Detail scope={scope} range={range} stat={open.stat} by={open.by} onBy={(by) => setOpen({ ...open, by })} ranges={ranges} back={back} />
+        </Counted>
       ) : (
-        <Overview scope={scope} range={range} onRange={setRange} onOpen={(stat) => setOpen({ stat, by: null })} />
+        <Counted key={`${scope}:${range}`} toolbar={<WindowToolbar label="Stats">{ranges}</WindowToolbar>}>
+          <Overview scope={scope} range={range} ranges={ranges} onOpen={(stat) => setOpen({ stat, by: null })} />
+        </Counted>
       )}
     </Window>
   );
 }
 
-function Overview({ scope, range, onRange, onOpen }: { scope: Scope; range: Range; onRange: (r: Range) => void; onOpen: (stat: string) => void }) {
+function Overview({ scope, range, ranges, onOpen }: { scope: Scope; range: Range; ranges: ReactNode; onOpen: (stat: string) => void }) {
   const queries = pageQueries(range, scope);
-  const { data: page, error, at, retry } = useQueries(queries, `${scope}:${range}`);
+  const page = useStats(queries);
+  const { locale } = useEnv();
   const now = Date.now();
-  const toolbar = (
-    <WindowToolbar label="Stats">
-      <ToolbarSegmented label="Range" value={range} onChange={(v) => onRange(v as Range)} options={RANGES} />
-    </WindowToolbar>
-  );
-  const state = error
-    ? { kind: "error" as const, title: "Couldn't count", text: error, action: { label: "Try Again", run: retry } }
-    : !page
-      ? { kind: "loading" as const }
-      : null;
-  if (!page) return <View state={state}>{toolbar}</View>;
+  const toolbar = <WindowToolbar label="Stats">{ranges}</WindowToolbar>;
+  // As the native page: loading until every number is in.
+  if (queries.some(([k]) => !page[k])) return <View state={{ kind: "loading" }}>{toolbar}</View>;
 
+  const { time, turns, waiting, runs, fail, tokens, projects, heat, ai, memory, stalls, worst, size } = page as Required<Page>;
   const partial = Object.values(page).find((r) => r?.partial)?.partial;
-  const tile = (key: keyof Page, label: string, r = page[key]) =>
-    r && (
-      <Stack key={key} gap={1}>
-        <Stat label={label} value={value(r.total, r.stat.unit)} {...delta(r)} onSelect={() => onOpen(r.stat.id)} />
+  const tile = (key: keyof Page, label: string, r = page[key]!) => {
+    const d = change(r);
+    return (
+      <Stat key={key} label={label} value={val(r)} {...(d ? { delta: d.text, trend: d.trend, good: d.good } : {})} onSelect={() => onOpen(r.stat.id)}>
         <Sparkline values={totals(r)} color={key === "time" ? "current" : "neutral"} />
-      </Stack>
+      </Stat>
     );
-  const { time, turns, waiting, waitingMedian, runs, fail, tokens, projects, heat, ai, memory, stalls, worst, size } = page;
-  const failBy = new Map((fail?.ranking ?? []).map((x) => [x.key, x.value]));
-  const who = "Active";
+  };
+  const failBy = new Map((fail.ranking ?? []).map((x) => [x.key, x.value]));
   return (
     <View inset>
       {toolbar}
       <Stack gap={6}>
-        {time && <Text>{sentence(page, range)}</Text>}
+        <Text>{sentence(page, range)}</Text>
         <Panes>
           <Pane wide>
             <Tiles min={120} gap={4}>
@@ -337,61 +266,39 @@ function Overview({ scope, range, onRange, onOpen }: { scope: Scope; range: Rang
               {tile("tokens", "Tokens")}
             </Tiles>
           </Pane>
-          {time && (
-            <Pane title="Agent time" aside={`per ${time.grain}`}>
-              <TimeBars {...bucketLabels(time, range)} buckets={time.buckets} series={time.series} previous={time.series.length === 1 ? time.previous?.values : undefined} current={currentIndex(time, now)} unit="ms" average label="Agent time" summary={time.series.length > 1 ? `${time.series[0]!.label} ${Math.round((100 * time.series[0]!.total) / (time.total || 1))}%` : "All agents"} onSelect={() => onOpen(time.stat.id)} />
-            </Pane>
-          )}
-          {turns && (
-            <Pane title="Turns" aside="how they ended">
-              <Stack gap={4}>
-                <Proportion unit={turns.stat.unit} parts={turns.series.map((s) => ({ key: s.key, label: s.label, value: s.total }))} />
-                {waiting && waiting.total > 0 && (
-                  <Text tone="dim">
-                    {`Agents waited on you ${duration(waiting.total)}${waitingMedian?.total ? `, ${duration(waitingMedian.total)} at a time` : ""}.`}
-                  </Text>
-                )}
-              </Stack>
-            </Pane>
-          )}
-          {runs && (
-            <Pane title="Commands" aside="runs">
-              <Ranking unit={runs.stat.unit} rows={(runs.ranking ?? []).map((x) => ({ key: x.key, label: x.label || "Other", value: x.value, note: failBy.get(x.key) ? `${value(failBy.get(x.key)!, "percent")} failed` : "" }))} onSelect={() => onOpen(runs.stat.id)} empty="No commands yet" />
-            </Pane>
-          )}
-          {heat && (
-            <Pane title="When you work" aside={range === "year" ? "per day" : range === "today" ? "per hour" : "last 30 days"} wide={range === "year"}>
-              {heatChart(heat, range, who, now)}
-            </Pane>
-          )}
-          {projects && (
-            <Pane title="Projects" aside="agent time">
-              <Ranking unit="ms" rows={(projects.ranking ?? []).map((x) => ({ key: x.key, label: x.label || "Other", value: x.value }))} empty="No agent work yet" />
-            </Pane>
-          )}
-          {tokens && (
-            <Pane title="Tokens" aside="by model">
-              <TimeBars {...bucketLabels(tokens, range)} buckets={tokens.buckets} series={tokens.series} current={currentIndex(tokens, now)} unit="tokens" label="Tokens by model" summary={`${value(tokens.total, "tokens")} in and out`} onSelect={() => onOpen(tokens.stat.id)} />
-            </Pane>
-          )}
-          {ai && (
-            <Pane title="cmd's model calls" aside="by feature">
-              <Ranking unit={ai.stat.unit} rows={(ai.ranking ?? []).map((x) => ({ key: x.key, label: x.label || "Other", value: x.value }))} onSelect={() => onOpen(ai.stat.id)} empty="No model calls yet" />
-            </Pane>
-          )}
-          {memory && (
-            <Pane title="cmd" aside="core memory">
-              <Stack gap={2}>
-                <TimeSeries {...bucketLabels(memory, range)} buckets={memory.buckets} series={memory.series} current={currentIndex(memory, now)} unit="bytes" label="Core memory" summary={`${value(memory.total, "bytes")} on average`} height={90} onSelect={() => onOpen(memory.stat.id)} />
-                <Text tone="dim">
-                  {`${stalls?.total ? `${stalls.total} ${stalls.total === 1 ? "stall" : "stalls"} of the core${worst?.total ? `, the worst ${value(worst.total, "ms")}` : ""}` : "No stalls of the core"}${size?.total ? ` · event log ${value(size.total, "bytes")}` : ""}.`}
-                </Text>
-              </Stack>
-            </Pane>
-          )}
+          <Pane title="Agent time" aside={`per ${time.grain}`}>
+            <TimeBars {...bucketLabels(time, range, locale)} buckets={time.buckets} series={time.series} previous={time.series.length === 1 ? time.previous?.values : undefined} current={currentIndex(time, now)} unit="ms" average label="Agent time" summary={time.series.length > 1 ? `${time.series[0]!.label} ${Math.round((100 * time.series[0]!.total) / (time.total || 1))}%` : "All agents"} onSelect={() => onOpen(time.stat.id)} />
+          </Pane>
+          <Pane title="Turns" aside="how they ended">
+            <Stack gap={4}>
+              <Proportion unit={turns.stat.unit} parts={turns.series.map((s) => ({ key: s.key, label: s.label, value: s.total }))} />
+              {waiting.total > 0 && <Text tone="dim">{`Agents waited on you ${val(waiting)}${waiting.quantiles ? `, ${val(waiting, waiting.quantiles.p50)} at a time` : ""}.`}</Text>}
+            </Stack>
+          </Pane>
+          <Pane title="Commands" aside="runs">
+            <Ranking unit={runs.stat.unit} rows={(runs.ranking ?? []).map((x) => ({ key: x.key, label: x.label || "Other", value: x.value, note: failBy.get(x.key) ? `${fmt.value(failBy.get(x.key)!, "percent")} failed` : "" }))} onSelect={() => onOpen(runs.stat.id)} empty="No commands yet" />
+          </Pane>
+          <Pane title="When you work" aside={range === "year" ? "per day" : range === "today" ? "per hour" : "last 30 days"} wide={range === "year"}>
+            {heatChart(heat, range, locale, now)}
+          </Pane>
+          <Pane title="Projects" aside="agent time">
+            <Ranking unit="ms" rows={(projects.ranking ?? []).map((x) => ({ key: x.key, label: x.label || "Other", value: x.value }))} empty="No agent work yet" />
+          </Pane>
+          <Pane title="Tokens" aside="by model">
+            <TimeBars {...bucketLabels(tokens, range, locale)} buckets={tokens.buckets} series={tokens.series} current={currentIndex(tokens, now)} unit="tokens" label="Tokens by model" summary={`${val(tokens)} in and out`} onSelect={() => onOpen(tokens.stat.id)} />
+          </Pane>
+          <Pane title="cmd's model calls" aside="by feature">
+            <Ranking unit={ai.stat.unit} rows={(ai.ranking ?? []).map((x) => ({ key: x.key, label: x.label || "Other", value: x.value }))} onSelect={() => onOpen(ai.stat.id)} empty="No model calls yet" />
+          </Pane>
+          <Pane title="cmd" aside="core memory">
+            <Stack gap={2}>
+              <TimeSeries {...bucketLabels(memory, range, locale)} buckets={memory.buckets} series={memory.series} current={currentIndex(memory, now)} unit="bytes" label="Core memory" summary={`${val(memory)} on average`} height={90} onSelect={() => onOpen(memory.stat.id)} />
+              <Text tone="dim">{`${stalls.total ? `${stalls.total} ${stalls.total === 1 ? "stall" : "stalls"} of the core${worst.total ? `, the worst ${val(worst)}` : ""}` : "No stalls of the core"}${size.total ? ` · event log ${val(size)}` : ""}.`}</Text>
+            </Stack>
+          </Pane>
         </Panes>
       </Stack>
-      <StatusLine>{partial ? `Counting since ${new Date(partial.since).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : `Updated ${new Date(at ?? now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}</StatusLine>
+      <StatusLine>{partial ? `Counting since ${new Date(partial.since).toLocaleDateString(locale, { day: "numeric", month: "short" })}` : `Updated ${new Date(time.asOf ?? now).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}`}</StatusLine>
     </View>
   );
 }
@@ -402,30 +309,44 @@ interface DetailProps {
   stat: string;
   by: string | null;
   onBy: (by: string | null) => void;
-  onRange: (r: Range) => void;
-  onBack: () => void;
+  ranges: ReactNode;
+  back: ReactNode;
 }
 
-/** One stat on its own: its chart large, split by one of its dimensions, and its ranking. */
-function Detail({ scope, range, stat, by, onBy, onRange, onBack }: DetailProps) {
-  const q: StatQuery = { stat, range, compare: true, ...(by ? { by, top: 12 } : {}), ...(scope === "all" || UNSCOPED.has(stat) ? { scope: "all" as const } : {}) };
-  const { data, error, retry } = useQueries([["r", q]], JSON.stringify(q));
-  const r = data?.r;
-  // In one workspace, a split by workspace (or by the one project) says nothing.
-  const dims = (r?.stat.dims ?? []).filter((d) => scope === "all" || (d.id !== "workspace" && d.id !== "project")).slice(0, 3);
+/** The detail's query: the whole range compared, its spread, and with a split its ranking. */
+export const detailQuery = (stat: string, range: Range, by: string | null, scope: Scope): StatQuery => scoped({ stat, range, compare: true, quantiles: true, ...(by ? { by, top: 12 } : {}) }, scope);
+
+/** One stat on its own: its chart large with its change and spread, split by one of its dimensions, and its ranking. */
+function Detail({ scope, range, stat, by, onBy, ranges, back }: DetailProps) {
+  const r = useStat(detailQuery(stat, range, by, scope));
+  const { locale } = useEnv();
+  // Split by what has few values (a ranking is for the many); in one workspace, never by workspace.
+  const dims = (r?.stat.dims ?? []).filter((d) => !d.many && (scope === "all" || UNSCOPED.has(stat) || d.id !== "workspace")).slice(0, 3);
   const toolbar = (
     <WindowToolbar label="Stat">
-      <ToolbarButton icon="chevron.left" label="Stats" showLabel secondary onClick={onBack} />
-      <ToolbarSegmented label="Range" value={range} onChange={(v) => onRange(v as Range)} options={RANGES} />
+      {back}
+      {ranges}
       <ToolbarSpacer />
       {dims.length > 0 && <ToolbarSegmented label="Split by" value={by ?? ""} onChange={(v) => onBy(v || null)} options={[{ value: "", label: "Total" }, ...dims.map((d) => ({ value: d.id, label: d.title }))]} />}
     </WindowToolbar>
   );
-  if (!r) return <View state={error ? { kind: "error", title: "Couldn't count", text: error, action: { label: "Try Again", run: retry } } : { kind: "loading" }}>{toolbar}</View>;
-  const line = r.stat.unit === "percent" || r.measure === "p50" || r.measure === "p90" || r.measure === "max";
-  const d = delta(r);
-  const props = { ...bucketLabels(r, "detail"), buckets: r.buckets, series: r.series, previous: r.series.length === 1 ? r.previous?.values : undefined, current: currentIndex(r), unit: r.stat.unit, label: r.stat.title, height: 200, summary: [value(r.total, r.stat.unit), d.delta].filter(Boolean).join(" · ") };
-  const split = r.stat.dims.find((x) => x.id === by);
+  if (!r) return <View state={{ kind: "loading" }}>{toolbar}</View>;
+  const line = r.stat.kind === "gauge" || r.stat.kind === "distribution" || r.stat.unit === "percent";
+  const d = change(r);
+  const props = {
+    ...bucketLabels(r, "detail", locale),
+    buckets: r.buckets,
+    series: r.series,
+    previous: r.series.length === 1 ? r.previous?.values : undefined,
+    current: currentIndex(r),
+    unit: r.stat.unit,
+    label: r.stat.title,
+    height: 200,
+    summary: val(r),
+    ...(d ? { delta: d } : {}),
+    ...(r.quantiles ? { note: `median ${val(r, r.quantiles.p50)}, 90% under ${val(r, r.quantiles.p90)}` } : {}),
+  };
+  const ranked = r.stat.dims.find((x) => x.id === by) ?? r.stat.dims.find((x) => x.many);
   return (
     <View inset>
       {toolbar}
@@ -434,12 +355,12 @@ function Detail({ scope, range, stat, by, onBy, onRange, onBack }: DetailProps) 
           {line ? <TimeSeries {...props} /> : <TimeBars {...props} average />}
         </Pane>
         {r.ranking && r.ranking.length > 0 && (
-          <Pane title={`By ${split?.title.toLowerCase() ?? "value"}`} aside={r.stat.unit === "ms" ? "time" : r.stat.unit}>
+          <Pane title={`By ${ranked?.title.toLowerCase() ?? "value"}`} aside={r.stat.unit === "ms" ? "time" : r.stat.unit}>
             <Ranking unit={r.stat.unit} rows={r.ranking.map((x) => ({ key: x.key, label: x.label || "Other", value: x.value }))} />
           </Pane>
         )}
       </Panes>
-      {r.stat.description ? <StatusLine>{r.stat.description}</StatusLine> : null}
+      <StatusLine>{r.stat.description}</StatusLine>
     </View>
   );
 }

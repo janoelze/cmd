@@ -41,7 +41,7 @@ Sixteen native window types have `role: "widget"`. Lines are the renderer's view
 | Timer | `timer` | 123 | a countdown, rings | **done** (`timer`, "Countdown"); native stays; re-ported on 1.3 (reports-a): the `Dial` |
 | Event Stream | `events` | 240 | `events.query`, live events; `data.explain` | **done** (`events`, "Event Log"); native stays. No AI explain existed to rebuild (`data.explain` is the class list, now `events.classes`); on 1.2: the log's text, its classes, Copy; re-ported on 1.3 (reports-a): classes in the title menu, chips in `fmt.hue`, `again` |
 | Workspace Actions | `actions` | 522 | `actions.list`, `actions.run`; pin, stop, settings | **done** (`actions`, "Run Scripts"); native stays. On 1.2: Stop, Restart, run state, kinds and the address from cmd, Copy Command; no Pin (not a verb), no settings link |
-| Stats | `stats` | 324 | `stats.query`, `stats.queryMany` | **done** (`stats`, "Usage Stats"); native stays. One `stats.query` per pane; This Workspace by default, All Workspaces adds active time, projects and cmd's model calls; no "cmd" pane (core memory, stalls: the `system` class), no quantiles, counts again after a recorded command or turn (no stats topic) |
+| Stats | `stats` | 324 | `stats.query`, `stats.queryMany` | **done** (`stats`, "Usage Stats"); native stays. Re-ported on 1.3 (reports-b): one `useStat` per number, no polling; the native page's panes in either scope (projects and cmd's model calls in This Workspace too), `Stat` with a `Delta` and a sparkline inside, a detail with its change and spread; what is left is in the audit's table |
 | Journal | `journal` | 307 | `journal.day/days/week` | **done** (`journal`, "Work Log"); native stays. Read only on `journal.days`: the written days, no Write Again, week, All Workspaces or project chips; looks again every 5 min |
 | Notifications | `notifications` | 138 | the notification list, clear | **done** (`notifications`, "Notification Log"); native stays. On `useEvents({ types: ["notification"] })`; Clear in the package's storage (every Notification Log); only notifications about a workspace; a click goes to its terminal or window (re-ported on 1.3, reports-a) |
 | Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **done** (`resources`, "Terminal Usage"); native stays. On `useTerminalUsage` and `DataGrid`; its "cmd" pane (`core.processes`) and the Task Manager link stay native; other workspaces' terminals show their folder, not the workspace's name |
@@ -297,17 +297,26 @@ Re-ported on 1.3 (reports-media, 2026-10-16): shots side by side, the same media
 
 **Stats → Usage Stats**
 
+Re-ported (reports-b, 2026-10-16), compared side by side with the native story's numbers (the package's story replays them) in `.cmd-dev/shots/reports/stats/` of that worktree.
+
 | Difference | Class | Fix |
 |---|---|---|
-| A tile's change is the kit's `Delta` (▲ 22%, green or red by the stat's `good`, dim when flat); the package's is "+100%" text in a tone | a | `Stat trend` + `good` (A8): built (widget-display) |
-| The sparkline is inside the tile, as wide as it | a | `Stat` children (A8): built (widget-display) |
-| The "cmd" pane (core memory, stalls, the log's size) | d | `stats.query` can read them today: `events: ["system"]` (a declarable class) and `workspace: ["all"]` for a stat with no workspace; add both grants and the pane. Fixed (widget-port-fixes). The package now declares `events: ["system"]`. |
-| In This Workspace the native page still shows your active time and when you work (they have no workspace) | d | query `you.active` with `scope: "all"` beside the workspace's stats (the package already holds `workspace: ["all"]`). Fixed (widget-port-fixes). |
-| A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | a chart's `delta` and `note` (A9): built (widget-display); `quantiles` (C3): built (widget-data) |
-| Counted again when the core says a stat it shows changed; the package follows `command` and `agent.stop` events and a minute's timer | c | `stats` topic, `useStat(query)` (C2): built (widget-data) |
-| A detail ranks by the stat's "many" dimension ("By command"); `ApiStatInfo.dims` doesn't say which | c | `dims[].many` and `kind` (C3): built (widget-data) |
-| "Updated" is when cmd counted (`asOf`); the package's is when it asked | c | `asOf` (C3): built (widget-data) |
-| The package keeps its own copy of the Stats window's formatters | a | `fmt.value`, `fmt.delta` (A11): built (widget-display) |
+| A tile's change is the kit's `Delta` (▲ 22%, green or red by the stat's `good`, dim when flat); the package's is "+100%" text in a tone | a | `Stat trend` + `good` (A8): built (widget-display). Re-ported: `Stat delta trend good`, `fmt.delta` |
+| The sparkline is inside the tile, as wide as it | a | `Stat` children (A8): built (widget-display). Re-ported: the `Sparkline` is the `Stat`'s child |
+| The "cmd" pane (core memory, stalls, the log's size) | d | Fixed (widget-port-fixes): `events: ["system"]`, read with `scope: "all"` |
+| In This Workspace the native page still shows your active time and when you work (they have no workspace) | d | Fixed (widget-port-fixes) |
+| In This Workspace the native page also shows Projects (agent time by project, in that workspace) and cmd's model calls (every workspace's: they have none); the package showed both only with All Workspaces | d | Fixed (reports-b): the same fourteen stats in both scopes; `ai.calls` joins what is read with `scope: "all"` |
+| A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | built (widget-display, widget-data). Re-ported: the detail asks `quantiles: true` and gives the chart `summary`, `delta` and `note`; the waiting line's "at a time" is the `p50` of the same query (no second query) |
+| Counted again when the core says a stat it shows changed; the package followed `command` and `agent.stop` events and a minute's timer | c | `useStat` (C2): built (widget-data). Re-ported: every number is a subscription; the events, the timer and `SETTLE_MS` are gone |
+| A detail splits by the stat's few-valued dimensions and ranks by its "many" one; its chart is a line for a gauge, a spread or a percentage | c | `dims[].many` and `kind` (C3): built (widget-data). Re-ported: as the native |
+| "Updated" is when cmd counted (`asOf`); the package's was when it asked | c | `asOf` (C3): built (widget-data). Re-ported: the agent time's `asOf` |
+| The package kept its own copy of the Stats window's formatters | a | `fmt.value`, `fmt.delta` (A11): built (widget-display). Re-ported: its copies are gone; dates and the week's first day follow `env.locale` |
+| The native page shows its error when any stat fails; the package left a refused stat's pane out | d | Fixed (reports-b): a refused stat throws from `useStat`, and one boundary shows the page's error ("Couldn't count", the reason, Try Again, which subscribes again), as the native |
+| A ranking's, the turns', the punch card's and the calendar's values are whole ("2d 13h", "2,372"); the package's are short ("2d", "2.4K") | a | open: the renderer formats every value of a `unit` short (`entries-1.2.tsx`'s `fmt`), which suits ticks, not readouts. Needs: the renderer to write `Ranking`, `Proportion`, `PunchCard` and `Calendar` values whole (`formatValue(v, unit)`), or a `short` prop; no change to a package |
+| No split by Workspace in a detail in This Workspace | e | inside one workspace it says nothing, and `stats.query` refuses `by: "workspace"` without `scope: "all"` |
+| An open detail is kept per window (`useStoredState("open")`), so it survives a reload of the widget | e | a widget's process restarts on reload; keeping the page it was on is what a window should do, and it lets the Workbench and `cmd widget preview` show the detail |
+| The heat chart in a narrow window | e | the native page draws the same punch card at every width (no switch to match); `useSize` stays unused |
+| In the stories only: the current bucket is today's, not the native story's fixed Wednesday | e | a widget reads the clock (`Date.now()`); the fake host can't set it. Everything else in the stories is the native story's numbers |
 
 **Journal → Work Log**
 

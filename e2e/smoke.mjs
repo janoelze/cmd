@@ -3037,10 +3037,10 @@ await scenario("widget-actions", async () => {
 });
 
 // Usage Stats (packages/widgets/stats): the native Stats window's job as a package. Added from the
-// Widget Library in a workspace of its own, it counts that workspace's commands (stats.query, API
-// 1.2): a command run in its terminal raises the Commands number live, a number opens its detail
-// and Back returns; your active time and cmd's own pane show in one workspace too; All
-// Workspaces from the title menu adds the projects.
+// Widget Library in a workspace of its own, it counts that workspace's commands (useStat, API 1.3:
+// live stats, no polling): a command run in its terminal raises the Commands number live, a number
+// opens its detail and Back returns; as on the native page, one workspace shows your active time,
+// projects, cmd's model calls and cmd's own pane too; All Workspaces from the title menu keeps them.
 await scenario("widget-stats", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
@@ -3067,7 +3067,8 @@ await scenario("widget-stats", async () => {
     const after = await until(count, (n) => n >= before + 2, 20_000).catch(() => before);
     await shot(win, "widget-stats.png");
     const panes = await tile.locator(".ui-pane-title").allTextContents();
-    check(labels.includes("Agent time") && labels.includes("Active time") && panes.some((t) => /^cmd$/i.test(t.trim())) && after >= before + 2, `it counts this workspace's commands, live, with your active time and cmd's own pane, which have no workspace (${labels.join(", ")}; ${panes.join(", ")}; Commands ${before} → ${after})`);
+    const has = (l, re) => l.some((t) => re.test(t.trim()));
+    check(labels.includes("Agent time") && labels.includes("Active time") && has(panes, /^cmd$/i) && has(panes, /^projects$/i) && has(panes, /^cmd's model calls$/i) && after >= before + 2, `it counts this workspace's commands, live, with your active time, projects, cmd's model calls and cmd's own pane, as the native page (${labels.join(", ")}; ${panes.join(", ")}; Commands ${before} → ${after})`);
     await commands.click();
     const back = tile.locator('button[aria-label="Stats"]');
     const opened = await until(() => back.isVisible(), Boolean, 10_000).catch(() => false);
@@ -3079,8 +3080,9 @@ await scenario("widget-stats", async () => {
     await choosing("All Workspaces");
     await tile.locator(".ui-window-bar-menu").click();
     await unchoosing();
-    const all = await until(() => tile.locator(".ui-pane-title").allTextContents(), (l) => l.some((t) => /^projects$/i.test(t.trim())), 15_000).catch(() => []);
-    check(all.some((t) => /^projects$/i.test(t.trim())), `All Workspaces adds the projects (${all.join(", ")})`);
+    const scoped = await until(() => tile.locator(".ui-window-bar-menu").textContent(), (t) => /All Workspaces/.test(t ?? ""), 10_000).catch(() => "");
+    const all = await until(() => tile.locator(".ui-pane-title").allTextContents(), (l) => has(l, /^projects$/i) && has(l, /^cmd$/i), 15_000).catch(() => []);
+    check(/All Workspaces/.test(scoped ?? "") && has(all, /^projects$/i), `All Workspaces counts every workspace, with the same panes (${scoped}; ${all.join(", ")})`);
     await call("window.close", { id });
   } finally {
     for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
