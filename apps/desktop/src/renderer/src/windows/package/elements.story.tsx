@@ -586,9 +586,9 @@ const COVERS = [
 ];
 /** Pictures: a cover filling the room above a player, thumbnails at rows' starts, a 16:9 one fitted, and the placeholder where there is none (still fetching, refused, or no src). */
 export const Picture = () => (
-  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start", width: 680 }}>
-    <W size="narrow" nodes={tree(e("View", { inset: true }, e("Stack", { gap: 3, grow: true }, e("Picture", { src: COVERS[0]!, alt: "Rave Rats Volume 1", size: "fill", icon: "music.note", onClick: h() }), e("Stack", { gap: 1 }, e("Text", { size: "lg", strong: true }, "Interdimensional Life"), e("Text", { tone: "dim" }, "ooxygen")), e("TimeBar", { duration: 586, time: 132, playing: false }))))} />
+  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start", width: 920 }}>
+    <W nodes={tree(e("View", { inset: true }, e("Stack", { gap: 3, grow: true }, e("Picture", { src: COVERS[0]!, alt: "Rave Rats Volume 1", size: "fill", icon: "music.note", onClick: h() }), e("Stack", { gap: 1 }, e("Text", { size: "lg", strong: true }, "Interdimensional Life"), e("Text", { tone: "dim" }, "ooxygen")), e("Stack", { gap: 1 }, e("TimeBar", { duration: 586, time: 132, playing: false }), e("Inline", { justify: "between" }, e("Text", { tone: "dim", size: "sm", mono: true }, "2:12"), e("Text", { tone: "dim", size: "sm", mono: true }, "−7:34"))))))} />
     <W size="narrow" nodes={tree(e("View", {}, e("List", {}, ...[["Interdimensional Life", 0], ["Sun Room", 1], ["Nightcall", null]].map(([t, i]) => e("ListRow", { onClick: h() }, e("Picture", { src: i === null ? null : COVERS[i as number]!, alt: `${t} cover`, size: 32, radius: "sm", icon: "music.note" }), e("ListRowContent", { title: t as string, detail: "ooxygen" }))))))} />
-    <W size="narrow" nodes={inView(e("Inline", { gap: 3, align: "start" }, e("Picture", { src: COVERS[1]!, alt: "A thumbnail", size: 128, ratio: 1.333, fit: "contain" }), e("Picture", { src: null, alt: "No thumbnail yet", size: 128, ratio: 1.778, icon: "play.rectangle" })))} />
+    <W size="narrow" nodes={inView(e("Inline", { gap: 3, align: "start", justify: "between" }, e("Picture", { src: COVERS[1]!, alt: "A thumbnail", size: 128, ratio: 1.778 }), e("Picture", { src: COVERS[2]!, alt: "Another thumbnail", size: 128, ratio: 1.778, fit: "contain", icon: "play.rectangle" })))} />
   </div>
 );
