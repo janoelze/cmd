@@ -276,6 +276,25 @@ describe("Pictures in a widget's tree", () => {
     expect(s.asked.map((a) => a.url)).toEqual(["https://img.example.com/a.png"]);
   });
 
+  it("shows the placeholder, not the last picture, when a patch sets a src that is refused or fails", async () => {
+    const { rt, sent, logs } = await setup({ "https://img.example.com/next.png": image(SVG, "image/png"), "https://img.example.com/gone.png": () => new Response("no", { status: 404 }) });
+    const good = dataUrl("png", png(8, 8));
+    rt.last.send({ kind: "tree", rev: 1, nodes: [pic(1, good), pic(2, good)] });
+    await until(() => sent().length > 0, "the tree");
+    // The next track: an SVG as a data: src, an SVG fetched, a cover that isn't there.
+    rt.last.send({ kind: "patch", rev: 2, ops: [{ op: "props", id: 1, set: { src: dataUrl("png", SVG) }, unset: [] }, { op: "props", id: 2, set: { src: "https://img.example.com/next.png" }, unset: [] }] });
+    await until(() => sent().some((m) => m.kind === "patch"), "the patch");
+    expect(srcs(sent().filter((m) => m.kind === "patch"))).toEqual([null, null]);
+    await until(() => logs().length >= 2, "the log lines");
+    rt.last.send({ kind: "patch", rev: 3, ops: [{ op: "props", id: 2, set: { src: "https://img.example.com/gone.png" }, unset: [] }] });
+    await until(() => logs().some((l) => /answered 404/.test(l)), "the 404");
+    expect(srcs(sent()).slice(-1)).toEqual([null]);
+    // Each reason once, however often the tree sends it again.
+    rt.last.send({ kind: "patch", rev: 4, ops: [{ op: "props", id: 1, set: { src: dataUrl("png", SVG), alt: "Again" }, unset: [] }] });
+    await until(() => sent().filter((m) => m.kind === "patch").length === 3, "the last patch");
+    expect(logs().filter((l) => /its data: src is an SVG/.test(l))).toHaveLength(1);
+  });
+
   it("holds at most 4 MB of pictures per tree: one past it shows its placeholder", async () => {
     const { rt, sent, logs } = await setup({});
     const each = dataUrl("png", png(2, 2, 370 * 1024));

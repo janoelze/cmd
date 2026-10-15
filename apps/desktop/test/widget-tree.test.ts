@@ -177,12 +177,12 @@ describe("the allow-list", () => {
     const png = "data:image/png;base64,iVBORw0KGgo=";
     const srcs = [png, "https://img.example.com/cover.png", "http://localhost:3000/a.png", "data:image/svg+xml;base64,PHN2Zz4=", "data:image/svg+xml,<svg onload=alert(1)>", "data:text/html;base64,PGI+", "javascript:alert(1)", null];
     s.apply(tree(srcs.map((src, i) => el(i + 1, "Picture", { src, alt: "Cover" }))));
-    expect(s.snapshot.nodes.map((n) => (n as TreeElement).props.src)).toEqual([png, undefined, undefined, undefined, undefined, undefined, undefined, null]);
+    expect(s.snapshot.nodes.map((n) => (n as TreeElement).props.src)).toEqual([png, null, null, null, null, null, null, null]);
     expect(warnings).toHaveLength(6);
     expect(warnings[0]).toBe('widget: <Picture> prop "src" dropped: not a data: PNG, JPEG, WebP or GIF (cmd fetches an https picture itself)');
-    // A patch can't slip one in either: the picture drawn stays.
+    // A patch can't slip one in either, nor leave the last picture showing (the next track's cover isn't the last one's): the placeholder.
     s.apply({ kind: "patch", rev: 2, ops: [{ op: "props", id: 1, set: { src: "https://img.example.com/x.png" }, unset: [] }] });
-    expect((s.snapshot.nodes[0] as TreeElement).props.src).toBe(png);
+    expect((s.snapshot.nodes[0] as TreeElement).props.src).toBeNull();
     expect(warnings).toHaveLength(7);
   });
 

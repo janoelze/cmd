@@ -87,7 +87,8 @@ export class Sanitizer {
     // A Frame's page is a file of the package (main serves it from there), not a URL.
     if (type === "Frame" && key === "src") return isPackagePage(v) ? v : this.drop(type, key, "not an .html file of the package");
     // A Picture's never loads from the network here: the core puts the data: URL of what it fetched in its place.
-    if (type === "Picture" && key === "src") return isPictureData(v) ? v : this.drop(type, key, "not a data: PNG, JPEG, WebP or GIF (cmd fetches an https picture itself)");
+    // One that may not be drawn is null (the placeholder), not dropped: a patch must not leave the last picture showing.
+    if (type === "Picture" && key === "src") return isPictureData(v) ? v : (this.drop(type, key, "not a data: PNG, JPEG, WebP or GIF (cmd fetches an https picture itself)") ?? null);
     if (URL_PROPS.has(key)) {
       if (typeof v !== "string" || !safeUrl(v)) return this.drop(type, key, "a URL that isn't https");
       return v;
