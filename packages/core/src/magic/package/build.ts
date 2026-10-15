@@ -52,7 +52,7 @@ export type BuildEvent =
   | { type: "repair"; reason: string; at: number };
 
 /** What a step is about, for the person: its command, path or URL, else the tool's name. */
-export const stepDetail = (tool: string, input: Record<string, unknown>): string => String(input.command ?? input.path ?? input.url ?? "").replace(/\s+/g, " ").slice(0, 160) || tool;
+export const stepDetail = (tool: string, input: Record<string, unknown>): string => String(input.command ?? input.path ?? input.url ?? (input.id ? [input.id, input.file].filter(Boolean).join("/") : "")).replace(/\s+/g, " ").slice(0, 160) || tool;
 
 /**
  * A build's tool calls as the steps a Magic window shows (MagicStep; the window, `cmd magic`'s
@@ -114,6 +114,8 @@ export interface PackageBuildOptions {
   ask?: PackageToolContext["ask"];
   granted?: () => WidgetPermissions | null;
   cmdVersion?: string | null;
+  /** The built-in packages the agent reads as references; default: the core's (widgets/packages.ts), null: none. */
+  builtins?: string | null;
   signal?: AbortSignal;
   onEvent?: (e: BuildEvent) => void;
 }
@@ -191,7 +193,7 @@ export async function buildPackage(o: PackageBuildOptions): Promise<PackageBuild
   const t0 = Date.now();
   const at = () => Date.now() - t0;
   const emit = (e: BuildEvent) => o.onEvent?.(e);
-  const system = buildPackageSystem(o.systemFile);
+  const system = buildPackageSystem(o.systemFile, o.builtins);
   const base = { usage: { ...EMPTY_USAGE }, model: o.backend.model, backend: o.backend.name, trace: [] as TraceStep[], repairs: [] as string[], summary: "", promptHash: promptHash(system), ending: null };
 
   const command = o.noFast ? null : fastCommand(o.prompt);
@@ -222,7 +224,7 @@ export async function buildPackage(o: PackageBuildOptions): Promise<PackageBuild
   const deny = o.deny ?? magicDenyPaths();
   const ctx: ToolContext = { cwd: o.cwd, home: os.homedir(), deny, sandbox, signal: ac.signal };
   const run: RunOptions = { sandbox, deny, signal: ac.signal, cmdVersion: o.cmdVersion ?? null };
-  const pc: PackageToolContext = { dir: o.dir, toolchain: o.toolchain ?? defaultToolchain(), run, previewer: o.previewer ?? (async () => null), ask: o.ask, granted: o.granted, runs: new Map() };
+  const pc: PackageToolContext = { dir: o.dir, toolchain: o.toolchain ?? defaultToolchain(), run, previewer: o.previewer ?? (async () => null), ask: o.ask, granted: o.granted, runs: new Map(), builtins: o.builtins };
   const state: PackageToolState = { ending: null, declined: null, onPackage: (title, icon) => emit({ type: "title", title, icon, at: at() }) };
   const trace: TraceStep[] = [];
   const timings: PackageBuildResult["timings"] = { done: 0 };

@@ -106,7 +106,7 @@ For text, measure ink, not boxes: a `Range` over a text node gives its line box;
 
 Widgets made with Magic are packages (docs/56): their views are trees of the kit's own components, drawn by the app through the element table (`windows/package/elements.tsx`), so they follow these rules and every token change at once. There are no kit versions any more: the CSS kit (`k-*` classes), its versions (`kits/1.css`, `kits/2.css`, kit 3) and the frame's generated `tokens.css` were deleted with the cmd:2 runtime in phase 2b; a person's old widgets were moved to `$CMD_HOME/widgets-old`.
 
-- What the model is told about how widgets look is the prompt (`packages/core/src/magic/prompt/prompt.md`, "Writing the UI") and the example packages (`prompt/examples/`): when a rule here changes, change it there.
+- What the model is told about how widgets look is the prompt (`packages/core/src/magic/prompt/prompt.md`, "Writing the UI") and the built-in packages (`packages/widgets`), which the agent reads as references through its `builtin` tool: when a rule here changes, change it there.
 - A widget gets a component the kit lacks only through the kit: add it to `@cmd/ui`, then to the element table and protocol's `widget-tree.ts` (docs/56, "Elements": a minor of the API).
 - A frame widget (`"surface": "frame"`, pixels only) draws its own page in the one frame host; it reads the theme's variables, never a kit.
 - Check a widget's look with the edit view's screenshots, `pnpm cmd magic` (the lab writes `preview.png`), or the Workbench (`pnpm workbench widgets/elements`).

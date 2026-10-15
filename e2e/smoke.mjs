@@ -1433,19 +1433,23 @@ await scenario("magic", async () => {
   const rt = await call("magic.runtime");
   check(rt.previewer === "app", `the app renders widget previews for the core (${rt.previewer})`);
 
-  // Magic makes a package (docs/56, "Magic on V3"): a scripted model writes the prompt's repo example as
-  // "git-changes" (the name cmd gives the request "git changes"), checks and tests it; the build asks for
-  // its permission through the grants sheet, and after Allow the window is the package's widget, drawn
-  // by the kit (no frame), listed in the Library as made with Magic.
+  // Magic makes a package (docs/56, "Magic on V3"): a scripted model writes the built-in Work Log
+  // (packages/widgets/journal) as "work-log" (the name cmd gives the request "work log"), titled
+  // "Magic Log", checks and tests it; the build asks for its permission through the grants sheet,
+  // and after Allow the window is the package's widget, drawn by the kit (no frame), listed in the
+  // Library as made with Magic.
   {
-    const ex = path.join(root, "packages/core/src/magic/prompt/examples/7-repo");
-    const walk = (d, rel = "") => fs.readdirSync(path.join(d, rel), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(d, path.join(rel, e.name)) : e.name === "request.md" ? [] : [path.join(rel, e.name)]));
-    const content = (f) => (f === "package.json" ? JSON.stringify({ ...JSON.parse(fs.readFileSync(path.join(ex, f), "utf8")), name: "git-changes" }, null, 2) : fs.readFileSync(path.join(ex, f), "utf8"));
-    const calls = walk(ex).map((f) => ({ name: "write_file", input: { why: `Writing ${f}`, path: f, content: content(f) } }));
-    fs.writeFileSync(path.join(home, "magic-script.json"), JSON.stringify({ turns: [{ calls: [...calls, { name: "check", input: { why: "Checking it" } }, { name: "test", input: { why: "Running its tests" } }], answer: "Shows this workspace's changes." }] }));
+    const ex = path.join(root, "packages/widgets/journal");
+    const files = ["package.json", ...fs.readdirSync(path.join(ex, "src")).map((f) => `src/${f}`)];
+    const content = (f) => {
+      if (f !== "package.json") return fs.readFileSync(path.join(ex, f), "utf8");
+      const j = JSON.parse(fs.readFileSync(path.join(ex, f), "utf8"));
+      return JSON.stringify({ ...j, name: "work-log", files: undefined, cmd: { ...j.cmd, widgets: j.cmd.widgets.map((w) => ({ ...w, title: "Magic Log" })) } }, null, 2);
+    };
+    const calls = files.map((f) => ({ name: "write_file", input: { why: `Writing ${f}`, path: f, content: content(f) } }));
     const m = await call("window.open", { kind: "magic", input: {} });
     await tileIn(m.id);
-    await call("magic.run", { id: m.id, prompt: "git changes" });
+    await call("magic.run", { id: m.id, prompt: "work log" });
     const sheet = win.locator(".ui-approval:not([data-closing])");
     await sheet.waitFor({ timeout: 60_000 }).catch(expired("the build's grants sheet"));
     const shownAt = Date.now();
@@ -1456,30 +1460,30 @@ await scenario("magic", async () => {
     await until(() => Date.now() - shownAt > 400);
     await win.keyboard.press("Enter");
     await gone(".ui-approval");
-    const made = await until(async () => (await call("window.list")).find((x) => x.id === m.id), (x) => x?.kind === "pkg:git-changes/changes", 120_000);
-    const grants = path.join(home, "widget-packages", "git-changes", "grants.json");
+    const made = await until(async () => (await call("window.list")).find((x) => x.id === m.id), (x) => x?.kind === "pkg:work-log/journal", 120_000);
+    const grants = path.join(home, "widget-packages", "work-log", "grants.json");
     const tile = win.locator(`.tile[data-pane="${m.id}"]`);
     const kit = await until(() => tile.locator(".ui-view").count(), (n) => n > 0, 20_000);
     const frames = await tile.locator("iframe").count();
-    const drawn = rt.deno ? await until(() => tile.textContent().catch(() => ""), (t) => /Not a git repository|Nothing to commit|Changed|Added/.test(t), 30_000) : "(no Deno: not run)";
+    const drawn = rt.deno ? await until(() => tile.textContent().catch(() => ""), (t) => /Nothing written yet|Needs a newer cmd|Reading the journal|journal/.test(t), 30_000) : "(no Deno: not run)";
     // The build's "Working…" leaves the title bar once the package's widget is there.
     const bar = await until(() => tile.locator(".tile-status").textContent().catch(() => ""), (t) => !t.includes("Working…") && !t.includes("Checking…"), 10_000);
     await shot(win, "magic-package.png");
     check(!bar.includes("Working…") && !bar.includes("Checking…"), `the package window's title bar drops the build's status (${JSON.stringify(bar)})`);
-    check(made?.kind === "pkg:git-changes/changes" && fs.existsSync(grants) && kit > 0 && frames === 0, `Allow writes the grant and the window becomes the package's widget, drawn by the kit with no iframe (${made?.kind}, ${frames} frames; ${JSON.stringify(String(drawn).slice(0, 80))})`);
-    const entry = (await call("widget.list")).find((e) => e.ref === "pkg:git-changes/changes");
+    check(made?.kind === "pkg:work-log/journal" && fs.existsSync(grants) && kit > 0 && frames === 0, `Allow writes the grant and the window becomes the package's widget, drawn by the kit with no iframe (${made?.kind}, ${frames} frames; ${JSON.stringify(String(drawn).slice(0, 80))})`);
+    const entry = (await call("widget.list")).find((e) => e.ref === "pkg:work-log/journal");
     await menu("widget.library");
     await win.waitForSelector(".widget-library .wl-card", { timeout: 10_000 });
-    const card = await until(() => win.locator(".widget-library .wl-card", { hasText: "shop · changes" }).textContent().catch(() => ""), (t) => t.includes("Made with Magic"), 5000);
+    const card = await until(() => win.locator(".widget-library .wl-card", { hasText: "Magic Log" }).textContent().catch(() => ""), (t) => t.includes("Made with Magic"), 5000);
     await menu("file.close");
     await win.waitForSelector(".widget-library", { state: "detached", timeout: 10_000 }).catch(expired(".widget-library to close"));
-    check(entry?.magic?.request === "git changes" && card.includes("Made with Magic"), `the Library lists the package under Your Widgets, made with Magic (${JSON.stringify(card)})`);
+    check(entry?.magic?.request === "work log" && card.includes("Made with Magic"), `the Library lists the package under Your Widgets, made with Magic (${JSON.stringify(card)})`);
     // cmd's verify drew the trees through the app's previewer (main/preview.ts): the first version keeps the first draw.
     const first = (await call("magic.package", { windowId: m.id }))?.revisions?.[0];
     check(!!first?.shot && fs.existsSync(first.shot) && fs.statSync(first.shot).size > 1000, `the app's previewer drew the build's trees: its first version has a screenshot (${first?.shot ? path.basename(first.shot) : "none"})`);
     // ⌘E: the edit view lists the package's versions; a hand edit becomes one, and Restore brings the first back.
-    const pkgDir = path.join(home, "widget-packages-home", "git-changes");
-    const main = path.join(pkgDir, "src", "changes.tsx");
+    const pkgDir = path.join(home, "widget-packages-home", "work-log");
+    const main = path.join(pkgDir, "src", "journal.tsx");
     const v1 = fs.readFileSync(main, "utf8");
     await tile.click({ position: { x: 20, y: 10 } });
     await until(() => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane), (s) => s === m.id, 5000);
@@ -1488,7 +1492,7 @@ await scenario("magic", async () => {
     const tabs = await tile.locator(".ui-tb-seg [role=radio]").allTextContents();
     fs.writeFileSync(main, v1 + "\n// edited by hand\n");
     const versions = await until(() => tile.locator(".magic-revision").allTextContents(), (v) => v.length === 2 && v[0].includes("Edited by hand"), 15_000);
-    await tile.locator(".magic-revision", { hasText: "git changes" }).locator("button", { hasText: "Restore" }).click();
+    await tile.locator(".magic-revision", { hasText: "work log" }).locator("button", { hasText: "Restore" }).click();
     const restored = await until(() => tile.locator(".magic-revision").allTextContents(), (v) => v.length === 3 && v[0].includes("Back to version 1"), 10_000);
     await shot(win, "magic-edit.png");
     const back = fs.readFileSync(main, "utf8");
@@ -1497,7 +1501,7 @@ await scenario("magic", async () => {
     check(firstVersions === 1 && (tabs.length === 0 || tabs.join(",") === "Changes,Files") && versions[0].includes("Edited by hand") && restored[0].includes("Back to version 1") && back === v1, `⌘E lists a package's versions: a hand edit is one, Restore brings the first back (${restored.length} versions)`);
 
     // Deleted from the Library: its window and its folder go.
-    await call("widget.delete", { ref: "pkg:git-changes/changes" });
+    await call("widget.delete", { ref: "pkg:work-log/journal" });
     const left = await until(async () => (await call("window.list")).some((x) => x.id === m.id), (open) => !open, 5000);
     check(!left && !fs.existsSync(pkgDir), "deleting a package made with Magic closes its window and removes its folder");
   }
@@ -2460,7 +2464,7 @@ export default function Demo() {
 // host, a single sandboxed iframe (allow-scripts, no allow-same-origin: an opaque origin) on
 // cmd-widget://package/, with the theme's variables. It posts open() on load and a moment later:
 // nothing opens; a click on its link opens exactly one browser window, and only one. Its state goes
-// to the window through the widget API. Then Magic's radio example draws its player the same way.
+// to the window through the widget API.
 await scenario("widget-frame", async () => {
   const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
   const dir = path.join(widgetSrc, "frame-demo");
@@ -2534,23 +2538,6 @@ document.getElementById("count").onclick = () => cmd.state.set("count", (cmd.sta
   const probe = await until(() => frame.evaluate(() => window.__probe).catch(() => null), (p) => p?.mic && p?.display && p.csp.includes("frame-src"), 10_000);
   check(probe?.mic !== "granted" && probe?.display !== "granted" && probe?.csp.includes("frame-src"), `the page gets no microphone, no system audio and no web page in a frame (${JSON.stringify(probe)})`);
   await call("window.close", { id: w.id });
-
-  // Magic's radio example: its player, drawn in the frame, not a placeholder.
-  const radio = path.join(root, "packages/core/src/magic/prompt/examples/9-radio");
-  const r = await cmdCli("widget", "link", radio);
-  check(r.code === 0, `the radio example links (${JSON.stringify(r.out.trim().slice(0, 200))})`);
-  await call("widget.grant", { name: "bassdrive" });
-  await gone(".ui-approval");
-  const rw = await call("widget.add", { ref: "pkg:bassdrive/radio" });
-  await tileIn(rw.id);
-  const radioFrame = await until(() => win.frames().find((f) => f.url().startsWith("cmd-widget://package/") && f !== frame && !f.isDetached()), Boolean, 15_000);
-  const player = await until(() => radioFrame.evaluate(() => document.querySelector(".name b")?.textContent + " · " + document.getElementById("detail")?.textContent).catch(() => ""), (t) => t.includes("Bassdrive"));
-  const radioTile = await win.locator(`.tile[data-pane="${rw.id}"]`).textContent();
-  await select(rw.id);
-  await still();
-  await shot(win, "widget-frame-radio.png");
-  check(player.includes("Bassdrive · Press play to tune in") && !radioTile.includes("can't show"), `the radio example draws its player in the window (${JSON.stringify(player)})`);
-  await call("window.close", { id: rw.id });
 
   // The Visualizer and Jam talk to their frames through the same host: a preset in the title bar; Play plays.
   const viz = await call("window.open", { kind: "visualizer", input: {} });

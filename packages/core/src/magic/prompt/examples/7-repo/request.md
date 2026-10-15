@@ -1,2 +1,0 @@
-Request: show local git changes, hot spots against remote
-Notes: the workspace ~/src/shop is a git repository tracking origin/main, and cmd knows its status (useGit: the branch, ahead and behind, the changed files) live, with `workspace: ["read"]`. Hot spots by lines changed would need `git diff --numstat` and `git log`, programs widgets can't run yet, so it shows what is changed and how far from the remote, grouped by kind of change, and says how to see the rest. The repository was clean, so fixtures/busy.json has changes for the view to be tested with.

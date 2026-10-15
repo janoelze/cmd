@@ -1,2 +1,0 @@
-Request: a drum and bass web radio player
-Notes: a player needs an audio element and a level meter: pixels and media, which the kit doesn't draw. So it is a frame widget ("surface": "frame"): view.html is the player (markup and a script, the kit's classes), and src/radio.tsx is the widget process, which only puts the station in the title bar. Bassdrive streams 24/7 at https://bassdrive.radioca.st/stream; `fetch` showed an audio/mpeg stream with CORS headers, so the meter can read it. net names the stream's host, which the frame asks to play.

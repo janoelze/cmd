@@ -99,7 +99,7 @@ The window's state keeps only what it needs to draw: `widgetId`, `revision`, the
   - `check`: the manifest, and types for both files;
   - `run_data`: data.ts exactly as cmd will run it, saved as `fixtures/live.json`;
   - `preview`: renders and returns a screenshot.
-- **The prompt** (`prompt/prompt.md`, plus whole example widgets in `prompt/examples/<name>/`) asks for one way of working: find out first, write the files, check, run_data and read the data, preview and look at it, finish with one sentence. It also asks for:
+- **The prompt** (`prompt/prompt.md`, plus whole example widgets in the prompt folder; V3 replaced them with the built-in packages, docs/56) asks for one way of working: find out first, write the files, check, run_data and read the data, preview and look at it, finish with one sentence. It also asks for:
   - logged-in CLIs before raw APIs;
   - slow refreshes for rate-limited services;
   - a fixture for the case the live data doesn't show (a clean repo gets `fixtures/busy.json`);

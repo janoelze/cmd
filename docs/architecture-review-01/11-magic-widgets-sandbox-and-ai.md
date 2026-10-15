@@ -166,7 +166,7 @@ Built: e2e `widget-frame` and `apps/desktop/test/package-frames.test.ts` (the ge
 **Success criteria.**
 - [ ] Two consecutive `jam.change` calls add less than 20 KB of content to the log in total (test with a fake backend and an in-memory data service).
 - [ ] Every `ai.call` event has `data.promptHash` (test).
-- [ ] A CI test runs `verifyWidget` on every `prompt/examples/*` folder (skipIf no Deno, with Deno pinned per AR1-11-04).
+- [ ] A CI test runs `verifyWidget` on every prompt example (skipIf no Deno, with Deno pinned per AR1-11-04). Moot since docs/56: Magic reads the built-in packages, which run their own tests.
 - [ ] `cmd magic eval` writes the prompt hash into its report.
 
 ### AR1-11-08 · Split `MagicService` and delete the v1 path

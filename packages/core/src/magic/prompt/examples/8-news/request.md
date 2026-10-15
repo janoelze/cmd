@@ -1,2 +1,0 @@
-Request: live news from berlin
-Notes: Google News has an RSS search feed; `fetch` showed <item>s with title, link, pubDate and source. There is no DOMParser in a widget, so the feed is read with a few regular expressions in TypeScript, entities decoded; the view gets clean rows. The search is a config field; a click opens the story in a browser window beside it. Every ten minutes is plenty for news.

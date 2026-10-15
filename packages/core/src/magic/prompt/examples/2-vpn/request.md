@@ -1,2 +1,0 @@
-Request: show my vpn connection status
-Notes: the tunnel itself (`ifconfig`'s utun interfaces, `scutil --nc list`) needs programs, which widgets can't run yet; what the rest of the internet sees can be fetched. `fetch https://ipinfo.io/json` showed the address traffic leaves from and its network ("AS9009 M247 Europe SRL", a hosting network: a VPN's exit). Without the VPN it is the person's provider, a config field ("Your provider"), so the widget says whether traffic goes through the VPN. Checked every minute: one request, well within ipinfo.io's free limit.

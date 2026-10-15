@@ -1,1 +1,0 @@
-{ "tool": "terminal", "input": { "why": "Following the system log", "command": "log stream --predicate 'messageType == error' --style compact", "title": "System errors", "icon": "exclamationmark.triangle" } }

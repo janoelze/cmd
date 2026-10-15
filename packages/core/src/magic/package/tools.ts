@@ -3,7 +3,9 @@
 // it with the fake host, and preview its trees drawn by the app. Two more end the build
 // without a package: `terminal` (an existing program shows it best) and `needs_program`
 // (it needs a program a widget can't run: cmd.run runs read-only commands only). They work on
-// one package folder; nothing else is reachable, grants.json least of all.
+// one package folder; nothing else is reachable, grants.json least of all. One reads cmd's own
+// built-in packages as references (`builtin`, builtins.ts): cmd's code, not the machine, so it
+// works with exploring off.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -15,6 +17,7 @@ import { AGENT_SHOTS } from "../../widgets/limits.ts";
 import type { ToolOutput, ToolSpec } from "../tools.ts";
 import type { Previewer } from "../previewer.ts";
 import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
+import { readBuiltin } from "./builtins.ts";
 import { WRITABLE, listFiles, readFile, writeFile } from "./files.ts";
 import { previewTrees, type TreePreview } from "./preview.ts";
 import type { CheckResult, RunOptions, TestResult, Toolchain, TreesResult } from "./toolchain.ts";
@@ -40,6 +43,12 @@ export const PACKAGE_TOOL_SPECS: ToolSpec[] = [
     explores: false,
     description: "Read one of the package's files.",
     schema: obj({ path: { type: "string" } }, ["path"]),
+  },
+  {
+    name: "builtin",
+    explores: false,
+    description: "Open one of cmd's built-in widget packages (listed under Built-in widgets) to see how cmd writes one. Without `file`: its files, package.json and README. With `file` (a path it lists, like src/timer.tsx): that file.",
+    schema: obj({ id: { type: "string", description: "The package's id, e.g. timer." }, file: { type: "string" } }, ["id"]),
   },
   {
     name: "check",
@@ -91,6 +100,8 @@ export interface PackageToolContext {
   granted?: () => WidgetPermissions | null;
   /** Results by the state of the package's files (once()): the agent's tools and cmd's verify share a run of the same files. */
   runs: Map<string, Promise<unknown>>;
+  /** The built-in packages' folder (`builtin`); undefined: the core's (widgets/packages.ts), null: none. */
+  builtins?: string | null;
 }
 
 export interface PackageToolState {
@@ -186,6 +197,15 @@ export async function runPackageTool(name: string, input: Record<string, unknown
       try {
         const t = readFile(c.dir, p);
         return t === null ? err(`${p} doesn't exist (the package has: ${listFiles(c.dir).join(", ") || "no files yet"})`) : { output: t, isError: false };
+      } catch (e) {
+        return err((e as Error).message);
+      }
+    }
+    case "builtin": {
+      const id = str(input.id);
+      if (!id) return err("id is required");
+      try {
+        return { output: readBuiltin(id, str(input.file), c.builtins), isError: false };
       } catch (e) {
         return err((e as Error).message);
       }

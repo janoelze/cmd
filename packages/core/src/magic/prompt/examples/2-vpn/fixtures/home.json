@@ -1,4 +1,0 @@
-{
-  "config": { "provider": "Deutsche Telekom" },
-  "fetch": { "https://ipinfo.io/json": { "body": { "ip": "93.204.10.7", "city": "Berlin", "country": "DE", "org": "AS3320 Deutsche Telekom AG" } } }
-}

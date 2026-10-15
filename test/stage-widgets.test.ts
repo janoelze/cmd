@@ -1,10 +1,13 @@
 // scripts/stage-widgets.mjs: a built-in widget package ships what its package.json's `files` lists
 // (a frame widget's root view.html too), plus package.json, README and LICENSE, never node_modules
 // or a dot-folder, and staging fails loudly on a listed file that isn't there or a main left out.
+// Magic reads the staged built-ins as references through the core's built-in root.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { readBuiltin, builtinListing } from "../packages/core/src/magic/package/builtins.ts";
+import { builtinWidgets } from "../packages/core/src/widgets/packages.ts";
 // @ts-expect-error: a plain .mjs script, no types
 import { stageWidgetPackage, widgetShipFiles } from "../scripts/stage-widgets.mjs";
 
@@ -77,6 +80,26 @@ describe("stage-widgets", () => {
       const files = widgetShipFiles(path.join(root, name)) as string[];
       expect(files, name).toContain("package.json");
       expect(files.some((f) => f.includes("node_modules") || f.split("/").some((s) => s.startsWith("."))), name).toBe(false);
+    }
+  });
+
+  it("Magic's builtin tool reads the built-ins staged as stage-runtime.mjs lays them out", () => {
+    const root = path.resolve(import.meta.dirname, "../packages/widgets");
+    const out = path.join(dir, "runtime");
+    for (const name of fs.readdirSync(root)) if (fs.existsSync(path.join(root, name, "package.json"))) stageWidgetPackage(path.join(root, name), path.join(out, "packages/widgets", name));
+    // widgets/packages.ts resolves the root as ../../../widgets from packages/core/src/widgets: in the runtime too.
+    const staged = path.resolve(out, "packages/core/src/widgets", "../../../widgets");
+    const before = process.env.CMD_BUILTIN_WIDGETS;
+    process.env.CMD_BUILTIN_WIDGETS = staged;
+    try {
+      expect(builtinWidgets()).toBe(staged);
+      expect(builtinListing()).toContain("- `timer`: A countdown");
+      expect(readBuiltin("timer", undefined)).toMatch(/^timer's files: LICENSE, README\.md, package\.json, src\/timer\.tsx\n/);
+      expect(readBuiltin("timer", "src/timer.tsx")).toBe(fs.readFileSync(path.join(root, "timer/src/timer.tsx"), "utf8"));
+      expect(fs.existsSync(path.join(staged, "timer/src/timer.test.tsx"))).toBe(false);
+      expect(() => readBuiltin("timer", "src/timer.test.tsx")).toThrow(/doesn't ship/);
+    } finally {
+      process.env.CMD_BUILTIN_WIDGETS = before;
     }
   });
 });
