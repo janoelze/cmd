@@ -36,7 +36,7 @@ describe("Notification Log", () => {
     expect(tree.findAll("ListRowIcon").map((i) => i.props.icon)).toEqual(["terminal", "person.crop.circle.badge.questionmark", "person.crop.circle.badge.checkmark"]);
     expect(tree.findAll("ListRowContent").map((c) => c.props.tone ?? null)).toEqual([null, "needs", null]);
     expect(tree.findAll("ListValue")[0]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d\d:\d\d$/) });
-    expect(tree.findAll("ListValue")[2]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d+ (min|h|d)$/) });
+    expect(tree.findAll("ListValue")[2]!.children[0]).toMatchObject({ text: expect.stringMatching(/^\d+ (min|h)$/) });
   });
 
   it("shows a notification as it is sent", async () => {

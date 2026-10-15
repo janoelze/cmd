@@ -6,9 +6,17 @@
 // be written; loading, empty, refused, failed (and failed after a good read), many days, and a
 // cmd before API 1.2.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, createHost, fixtures, type FakeHost } from "@cmd/widget-api/testing";
 import WorkLog, { DAYS, EVERY, countsText, dayName, ribbonOf, span } from "./journal.tsx";
+
+// A fixed clock (only Date, and the timers a test asks for): today at noon, so "Today", the
+// hours written and the journal's 04:00 day turn read the same at any hour the tests run.
+const NOON = new Date(2026, 9, 15, 12, 0, 0);
+const fixedClock = (...timers: ("setInterval" | "clearInterval")[]) => vi.useFakeTimers({ now: NOON, toFake: ["Date", ...timers] });
+fixedClock();
+beforeEach(() => void fixedClock());
+afterAll(() => void vi.useRealTimers());
 
 const { day } = fixtures;
 const H = 3_600_000;
@@ -71,7 +79,7 @@ describe("Work Log", () => {
   });
 
   it("reads again every few minutes and from Read Again on the newest day's heading, and never asks for a day to be written", async () => {
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    fixedClock("setInterval", "clearInterval");
     const host = createHost({ journal: [] });
     const tree = await render(<WorkLog />, host);
     expect(tree).toShowState("empty", "Nothing written yet");
