@@ -255,6 +255,7 @@ const SCENARIOS = {
   "widget-stats": [],
   "widget-resources": [],
   "widget-journal": [],
+  "widget-notifications": [],
   "app-window": [],
 };
 const failures = [];
@@ -3165,6 +3166,52 @@ await scenario("widget-journal", async () => {
     check(text.includes("Today") && text.includes("Ported the Journal to a widget package") && text.includes("Merged") && /Written at \d\d:\d\d/.test(text), `it draws the written day: headline, entry, outcome and when it was written (${JSON.stringify(text.slice(0, 160))})`);
     await call("window.close", { id });
   } finally {
+    await call("workspace.close", { id: ws.id });
+    fs.rmSync(where, { recursive: true, force: true });
+  }
+});
+
+// Notification Log (packages/widgets/notifications): the native Notifications' job as a package.
+// Added from the Widget Library, it shows a notification about a terminal of its workspace as it
+// is sent, a click goes to that terminal, and Clear Notifications empties its own list.
+await scenario("widget-notifications", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const where = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-e2e-notifications-")));
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === ws.name);
+  const terminals = () => call("pane.list").then((l) => l.filter((p) => p.workspaceId === ws.id).map((p) => p.id));
+  const selected = () => call("workspace.list").then((l) => l.find((w) => w.id === ws.id)?.view["selection.pane"] ?? null);
+  try {
+    await menu("file.newTerminal");
+    const [termId] = await until(terminals, (l) => l.length === 1);
+    await menu("view.grid");
+    const { id, source } = await addFromLibrary("Notification Log", "pkg:notifications/notifications");
+    check(source === "Built-in · notifications 1.0.0", `the Widget Library lists Notification Log under Built-in (${source})`);
+    await tileIn(id);
+    const tile = win.locator(`.tile[data-pane="${id}"]`);
+    await until(() => tile.textContent(), (t) => t.includes("No notifications"), 30_000);
+    await call("notify.send", { paneId: termId, title: "e2e-notify · done", body: "Sent from the e2e run." });
+    const rows = () => tile.locator(".ui-list-row").allTextContents();
+    const shown = await until(rows, (r) => r.some((t) => t.includes("e2e-notify · done")), 15_000).catch(() => []);
+    await shot(win, "widget-notifications.png");
+    check(shown.some((t) => t.includes("e2e-notify · done") && t.includes("Sent from the e2e run.") && /\d\d:\d\d/.test(t)), `it shows a notification about its workspace's terminal as it is sent (${shown.map((t) => t.slice(0, 50)).join(" | ")})`);
+    await select(id);
+    await until(selected, (s) => s === id);
+    await tile.locator(".ui-list-row", { hasText: "e2e-notify · done" }).first().click();
+    const went = await until(selected, (s) => s === termId, 10_000).catch(() => null);
+    check(went === termId, `a click goes to the terminal it is about (${went})`);
+    await select(id);
+    await choosing("Clear Notifications");
+    await tile.locator(".tile-title").click({ button: "right" });
+    await unchoosing();
+    const cleared = await until(() => tile.textContent(), (t) => t.includes("No notifications"), 10_000).catch(() => "");
+    const still = await call("data.query", { query: { types: ["notification"], at: [0, Date.now() + 60_000], order: "desc", limit: 50 } });
+    check(cleared.includes("No notifications") && still.some((e) => e.data?.title === "e2e-notify · done"), "Clear Notifications empties its own list, and the notification stays in the log");
+    await call("window.close", { id });
+  } finally {
+    for (const t of await terminals()) await call("pane.kill", { paneId: t }).catch(() => {});
     await call("workspace.close", { id: ws.id });
     fs.rmSync(where, { recursive: true, force: true });
   }

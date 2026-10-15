@@ -92,6 +92,16 @@ describe("the fake host", () => {
     expect(tree.text()).toBe("none");
   });
 
+  it("refuses a live hook over a verb the grant lacks, as the core does: the widget's boundary shows it", async () => {
+    function Live() {
+      const events = cmd.events.use({ scope: "all" });
+      return <Text>{String(events.length)}</Text>;
+    }
+    const tree = await render(<Live />, createHost({ deny: { "events.query": 'workspace: ["all"]' } }));
+    expect(tree).toShowState("error", "This widget hit an error");
+    expect(tree.text()).toContain('workspace: ["all"]');
+  });
+
   it("pushes events as they happen", async () => {
     function Log() {
       const events = cmd.events.use({ types: ["command"] });

@@ -1,0 +1,34 @@
+{
+  "name": "notifications",
+  "version": "1.0.0",
+  "description": "The notifications cmd sent, shown or not, so one missed while away is still here.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/notifications.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "notifications",
+        "title": "Notification Log",
+        "icon": "bell",
+        "description": "The notifications cmd sent in this workspace, shown or not: an agent that needed you, a long command that finished. A click goes to its terminal.",
+        "main": "src/notifications.tsx",
+        "size": "s"
+      }
+    ],
+    "permissions": {
+      "workspace": ["read", "all"]
+    }
+  }
+}

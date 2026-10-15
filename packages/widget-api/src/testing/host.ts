@@ -66,7 +66,7 @@ export interface HostData {
   worktrees?: ApiGitWorktree[];
   actions?: ApiAction[];
   env?: Partial<WidgetEnv>;
-  /** Verbs refused as a grant without them would be, with the permission they need (`'net: ["api.github.com"]'`). */
+  /** Verbs refused as a grant without them would be, with the permission they need (`'net: ["api.github.com"]'`); a live hook over one (`useEvents` for `events.query`) is refused too. */
   deny?: Partial<Record<ApiVerb, string>>;
   /**
    * What `cmd.run` prints, by the command line (`"gh run list --json name"`: the program and
@@ -305,10 +305,14 @@ export function createHost(data: HostData = {}): FakeHost {
           .finally(() => pending--);
         return;
       }
-      case "subscribe":
+      case "subscribe": {
+        // A live read of a refused verb is refused as the core refuses it: a failed result under its id.
+        const denied = d.deny?.[API_TOPIC[m.topic].verb];
+        if (denied) return deliver({ kind: "result", id: m.id, ok: false, error: { code: "permission", permission: denied, message: `Add "${denied}" to the widget's permissions to use ${API_TOPIC[m.topic].verb}.` } });
         subs.set(m.id, { topic: m.topic, query: m.query });
         deliver({ kind: "event", sub: m.id, data: topicData(m.topic, m.query) });
         return;
+      }
       case "unsubscribe":
         subs.delete(m.id);
         return;

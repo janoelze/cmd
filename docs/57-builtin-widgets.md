@@ -43,7 +43,7 @@ Sixteen native window types have `role: "widget"`. Lines are the renderer's view
 | Workspace Actions | `actions` | 522 | `actions.list`, `actions.run`; pin, stop, settings | **done** (`actions`, "Run Scripts"); native stays. On 1.2: Stop, Restart, run state, kinds and the address from cmd, Copy Command; no Pin (not a verb), no settings link |
 | Stats | `stats` | 324 | `stats.query`, `stats.queryMany` | **done** (`stats`, "Usage Stats"); native stays. One `stats.query` per pane; This Workspace by default, All Workspaces adds active time, projects and cmd's model calls; no "cmd" pane (core memory, stalls: the `system` class), no quantiles, counts again after a recorded command or turn (no stats topic) |
 | Journal | `journal` | 307 | `journal.day/days/week` | **done** (`journal`, "Work Log"); native stays. Read only on `journal.days`: the written days, no Write Again, week, All Workspaces or project chips; looks again every 5 min |
-| Notifications | `notifications` | 138 | the notification list, clear | **wave 2**: needs no verb (decided: no `notify.list` or `notify.clear`; the list is `useEvents`, Clear its own) |
+| Notifications | `notifications` | 138 | the notification list, clear | **done** (`notifications`, "Notification Log"); native stays. On `useEvents({ types: ["notification"] })`, Clear its own "cleared at"; only notifications about a workspace; a click goes to a terminal, not to a window |
 | Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **done** (`resources`, "Terminal Usage"); native stays. On `useTerminalUsage` and `DataGrid`; its "cmd" pane (`core.processes`) and the Task Manager link stay native; other workspaces' terminals show their folder, not the workspace's name |
 | Now Playing | `nowplaying` | 93 | `nowPlaying.get/control` | **wave 2**: on `media.get` and `media.control` (built) |
 | Navigator | `navigator` | 335 | `search.query` (transcripts) | **stays native**: decided, no `search.query`; it is the board's sidebar for sessions, a window |
@@ -156,9 +156,10 @@ What the wave 2 ports wanted and the API doesn't have. None is built; each port 
 | Quantiles in `ApiStatResult` (`p50`, `p90` beside `total`) | Usage Stats | the waiting line's "at a time" is a second query with `measure: "p50"`; a stat's detail has no "median …, 90% under …" |
 | `fmt.value(v, unit)` and `fmt.delta(cur, prev, unit)`: a number in a chart `unit`, as the charts write it | Usage Stats | the package keeps its own copy of the Stats window's formatters |
 | Other workspaces' names (`workspaces.list`, or `workspaceName` on a terminal) | Terminal Usage (All Workspaces) | a terminal of another workspace shows its folder's name |
-| The fake host refusing a topic (`deny` covers calls only) | Terminal Usage's refused test | the test delivers the core's refusal of the subscription by hand (`host.deliver`) |
+| ~~The fake host refusing a topic (`deny` covers calls only)~~ built with Notification Log (testing only, no API change): `deny` on a verb refuses its live hook too | Terminal Usage's refused test, Notification Log | Terminal Usage's test still delivers the refusal by hand (`host.deliver`); it could use `deny` now |
 | A live journal (`useJournal`, a `journal` topic pushed when a day is written) | Work Log | it reads `journal.days` every 5 minutes and from its title menu (Read Again) |
 | `journal.week`, `journal.days({ before })` and an entry's project label | Work Log | no week, no paging back past 7 days, no project chips (`ApiJournalEntry` has no `repo`, and a path would be private; a folder's name would do) |
+| `ApiEvent.windowId` (data within API 1, as `terminalId` was in 1.1): the window an event is about | Notification Log | a click goes to a notification's terminal; one about a window (a widget's) has nowhere to go |
 
 ## Wave 3: frames
 
