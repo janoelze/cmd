@@ -12,7 +12,7 @@ import type { AppWindow, CoreEvent, MagicPackageInfo, WidgetEntry } from "@cmd/p
 import { initLog } from "@cmd/protocol/node";
 import { Core } from "../src/kernel/core.ts";
 import { WidgetPackages } from "../src/widgets/packages.ts";
-import { PackageRevisions } from "../src/widgets/revisions.ts";
+import { PackageRevisions, listFiles } from "../src/widgets/revisions.ts";
 import { WindowTypes } from "../src/windows/types.ts";
 import { fakeFactory } from "./fake-pty.ts";
 import { FakeWidgetRuntime, tmp, until, writePackage } from "./fake-widget-runtime.ts";
@@ -161,6 +161,15 @@ describe("versions of a package made with Magic", () => {
     expect(fs.readFileSync(main, "utf8")).toContain("mine");
     expect(() => c.handlers["widget.delete"]({ ref: "pkg:demo/main" })).toThrow(/isn't a widget made with Magic/);
     expect(fs.existsSync(dir)).toBe(true);
+  });
+
+  it("counts the package's own files only: no node_modules, links or dot-folders (`cmd widget preview`'s .cmd-preview)", () => {
+    const dir = tmp("files");
+    for (const f of ["package.json", "src/w.tsx", "node_modules/x/index.js", ".cmd-preview/Busy-wide-dark.png", ".git/HEAD"]) {
+      fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+      fs.writeFileSync(path.join(dir, f), "");
+    }
+    expect(listFiles(dir)).toEqual(["package.json", "src/w.tsx"]);
   });
 
   it("has no versions for a package Magic didn't make", async () => {

@@ -16,3 +16,5 @@ website/public/shots/
 website/public/_lib/CHANGELOG.md
 # written by cmd widget check and dev into widget packages (fixtures, built-ins)
 cmd-env.d.ts
+# written by cmd widget preview into a package (its shots)
+packages/widgets/**/.cmd-preview/
