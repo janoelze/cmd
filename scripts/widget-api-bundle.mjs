@@ -24,6 +24,9 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = path.join(root, "packages/widget-api");
 const require = createRequire(path.join(pkg, "package.json"));
 
+/** The protocol files bundled with the API (its `@cmd/protocol/widget-events` import). */
+const PROTOCOL_MODULES = ["packages/protocol/src/widget-events.ts"];
+
 /** The default output folder. */
 export const BUNDLE_DIR = path.join(pkg, "dist/deno");
 
@@ -61,6 +64,8 @@ function sourceHash() {
     }
   };
   walk(path.join(pkg, "src"));
+  // The protocol files the API takes values from (test/imports.test.ts, `modules`): no imports of their own.
+  for (const f of PROTOCOL_MODULES) h.update(f).update(fs.readFileSync(path.join(root, f)));
   const fromReconciler = createRequire(require.resolve("react-reconciler/package.json"));
   for (const [dep, req] of [["react", require], ["react-reconciler", require], ["scheduler", fromReconciler]]) h.update(`${dep}@${req(`${dep}/package.json`).version}`);
   h.update(fs.readFileSync(fileURLToPath(import.meta.url)));

@@ -48,12 +48,13 @@ const PACKAGES: Record<string, string> = { "@cmd/protocol": "packages/protocol",
  * "electron" where they run. `types`: parts it may import types from (erased at build).
  * Tests and dev tooling are held only to the rules that apply everywhere.
  */
-const ALLOWED: Record<string, { value: string[]; types?: string[] }> = {
+const ALLOWED: Record<string, { value: string[]; types?: string[]; modules?: string[] }> = {
   protocol: { value: ["node:"] },
   "remote-crypto": { value: [] },
   ui: { value: [] },
   // Runs in the widget process (Deno, sandboxed): protocol's wire types only, nothing at run time.
-  "widget-api": { value: [], types: ["protocol"] },
+  // `modules`: values from these alone, protocol files with no imports (the bundle hashes them, scripts/widget-api-bundle.mjs).
+  "widget-api": { value: [], types: ["protocol"], modules: ["@cmd/protocol/widget-events"] },
   // Its tests' side (@cmd/widget-api/testing): the API's own code, and the protocol's tables (the verbs' rows, agents' lights), so a fake can't drift from the core.
   "widget-api/testing": { value: ["widget-api", "protocol"] },
   // Widget packages that ship with cmd (packages/widgets/<name>): the widget API, as any package's (and react, from npm: WIDGET_NPM).
@@ -127,7 +128,7 @@ function breaks(): string[] {
       if (pkg && spec.startsWith(".") && target && packageOf(target) && packageOf(target) !== pkg) out.push(`${f}: ${spec}, into another package by its path`);
       if (!shipped(f) || !from || !ALLOWED[from]) continue;
       const rule = ALLOWED[from];
-      if (rule.value.includes(to) || (type && rule.types?.includes(to))) continue;
+      if (rule.value.includes(to) || (type && rule.types?.includes(to)) || rule.modules?.includes(spec)) continue;
       out.push(`${f}: ${spec}, ${from} may not import ${type ? "types from " : ""}${to}`);
     }
   }

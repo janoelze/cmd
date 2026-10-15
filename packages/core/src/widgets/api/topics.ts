@@ -6,7 +6,7 @@
 // API_TOPIC names its verb); TOPICS below says what it listens to. `events` sends only the
 // events that are new, within data/policy.ts.
 
-import { API_TOPIC, topicVerb, type ApiEvent, type ApiEventQuery, type ApiTopic, type ApiVerb, type DataEvent, type WidgetPermissions, type WireValue } from "@cmd/protocol";
+import { API_TOPIC, mergeEvents, topicVerb, type ApiEvent, type ApiEventQuery, type ApiTopic, type ApiVerb, type DataEvent, type WidgetPermissions, type WireValue } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { matchesQuery } from "../../data/match.ts";
 import { clampRows, clampQuery, type Reader } from "../../data/policy.ts";
@@ -142,7 +142,7 @@ function subscribeEvents(core: TopicCore, s: TopicScope, push: (data: WireValue)
   const take = (events: DataEvent[]) => {
     if (closed) return;
     // An event recorded again within the burst (a command's start, then its end) goes once, as it is now.
-    for (const e of events) if (e.workspaceId === s.own() && matchesQuery({ ...clamped, workspaceId: s.own() }, e)) pending = [...pending.filter((x) => x.id !== e.id), e];
+    pending = mergeEvents(pending, events.filter((e) => e.workspaceId === s.own() && matchesQuery({ ...clamped, workspaceId: s.own() }, e)), (e) => e.id);
     if (!pending.length || timer) return;
     timer = setTimeout(() => {
       timer = null;

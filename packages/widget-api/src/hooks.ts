@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ApiCompletion, ApiCompletionRequest, ApiAction, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import { mergeEvents } from "@cmd/protocol/widget-events";
 import { connection, type ApiCallError } from "./connection.ts";
 
 /** A topic's current value, live; `initial` until the core's first event. */
@@ -73,13 +74,8 @@ export function useWindows(query: ApiScopeQuery = {}): ApiWindow[] {
  */
 export function useEvents(query: ApiEventQuery = {}): ApiEvent[] {
   const limit = query.limit ?? 200;
-  return useTopic("events", query, [], (prev, next) => {
-    // The last of each key wins, within the new ones too (a command's start and end in one burst).
-    const latest = new Map<string, number>();
-    next.forEach((e, i) => e.key && latest.set(e.key, i));
-    const fresh = latest.size ? next.filter((e, i) => !e.key || latest.get(e.key) === i) : next;
-    return [...(latest.size ? prev.filter((e) => !e.key || !latest.has(e.key)) : prev), ...fresh].slice(-limit);
-  });
+  // The last of each key wins, within the new ones too (a command's start and end in one burst).
+  return useTopic("events", query, [], (prev, next) => mergeEvents(prev, next).slice(-limit));
 }
 
 /**

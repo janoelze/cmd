@@ -6,7 +6,7 @@
 import { Chip, EmptyState, IconButton, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Panel, PanelBody } from "@cmd/ui";
 import { useEffect, useMemo, useState } from "react";
 import type { CommandRun } from "@cmd/protocol";
-import { commandRunOf } from "@cmd/protocol";
+import { commandRunOf, mergeEvents } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { copy, newTerminalIn } from "../../lib/actions.ts";
 import { showContextMenu } from "../../lib/context.ts";
@@ -27,9 +27,8 @@ function useCommands(): CommandRun[] {
     () =>
       subscribeData({ types: ["command"], by: "time", order: "desc", limit: 300 }, (events, initial) =>
         setRuns((rs) => {
-          const incoming = events.map(commandRunOf);
-          const base = initial ? [] : rs;
-          return [...incoming, ...base.filter((r) => !incoming.some((x) => x.id === r.id))].sort((a, b) => b.startedAt - a.startedAt).slice(0, 300);
+          // A run recorded again (as it ends) replaces the one before (protocol widget-events.ts).
+          return mergeEvents(initial ? [] : rs, events.map(commandRunOf), (r) => r.id).sort((a, b) => b.startedAt - a.startedAt).slice(0, 300);
         }),
       ),
     [],
