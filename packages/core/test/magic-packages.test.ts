@@ -360,3 +360,19 @@ describe("names and words", () => {
     expect(wantsText({ net: ["api.github.com"], run: [], read: [], workspace: ["read"], events: [], act: [], ai: [], media: [] })).toBe("Wants to reach api.github.com and see this workspace");
   });
 });
+
+describe("drawTrees", () => {
+  it("draws each size with the tree rendered at that size (1.3: its env's size class and box), else the state's one tree", async () => {
+    const { drawTrees } = await import("../src/magic/package/preview.ts");
+    const tree = (text: string) => [{ kind: "tree" as const, rev: 1, nodes: [{ id: 1, type: "#text" as const, text }] }];
+    const drawn: MagicPreviewRequest[] = [];
+    const previewer: Previewer = { name: "fake", render: async (rs) => (drawn.push(...rs), rs.map((r) => ({ errors: [], text: 40, nodes: 20, drawn: true, scrollW: r.width, scrollH: r.height }))) };
+    const variants = [
+      { widget: "w", name: "Sized", messages: tree("one"), sized: { narrow: tree("narrow"), wide: tree("wide") }, outline: "", errors: [] },
+      { widget: "w", name: "Old", messages: tree("one"), outline: "", errors: [] },
+    ];
+    await drawTrees(previewer, variants, new Map(), { themes: ["dark"], sizes: ["narrow", "regular", "wide"] });
+    const words = drawn.map((r) => (r.tree.messages[0]!.kind === "tree" ? (r.tree.messages[0]!.nodes[0] as { text: string }).text : ""));
+    expect(words).toEqual(["narrow", "one", "wide", "one", "one", "one"]);
+  });
+});

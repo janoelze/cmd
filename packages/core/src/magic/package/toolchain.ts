@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { WidgetPatch, WidgetTree } from "@cmd/protocol";
+import type { PreviewSize, WidgetPatch, WidgetTree } from "@cmd/protocol";
 import { execArgv, type SandboxMode } from "../../lib/sandbox.ts";
 import { writeEnvTypes } from "../../widgets/env-types.ts";
 import { readPackage, type WidgetPackage } from "../../widgets/package.ts";
@@ -63,6 +63,8 @@ export interface TreeVariant {
   data?: boolean;
   /** The story's size for it ("narrow"), if it says one. */
   size?: string;
+  /** 1.3: its tree rendered in each reference window's env (size class and box), what a preview at that size draws. */
+  sized?: Partial<Record<PreviewSize, (WidgetTree | WidgetPatch)[]>>;
 }
 
 export interface TreesResult {
@@ -169,9 +171,13 @@ const API = "@cmd/widget-api"; // named once: the harness is text, run in the pa
 const TREES_HARNESS = `import fs from "node:fs";
 import path from "node:path";
 import { it } from "vitest";
-import { render, createHost, matchers, configValues } from "${API}/testing";
+import * as testing from "${API}/testing";
+const { render, createHost, matchers, configValues } = testing;
+// 1.3: a reference window's env; an older @cmd/widget-api has none, and its trees get the host's default.
+const sizeEnv = testing.sizeEnv ?? (() => ({}));
 
 const root = process.cwd();
+const SIZES = { narrow: 1, regular: 1, wide: 1 };
 const DATA = ["agents", "terminals", "windows", "events", "fetch", "ai", "git", "diff", "worktrees", "actions"];
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const fixtures = () => {
@@ -196,7 +202,9 @@ it("trees", async () => {
     for (const { name, data } of states.slice(0, ${STORY_STATES})) {
       const { size, ...host } = data;
       // Config as the core gives it: the fields' defaults under what the state sets.
-      const h = createHost({ ...host, config: configValues(w.config, host.config) });
+      // The env of its window (1.3: size class and box), the state's own over its size's.
+      const at = (s) => createHost({ ...host, env: { ...sizeEnv(s), ...host.env }, config: configValues(w.config, host.config) });
+      const h = at(typeof size === "string" && size in SIZES ? size : "regular");
       const errors = [];
       let outline = "";
       let empty = false;
@@ -214,7 +222,17 @@ it("trees", async () => {
         if (m.kind === "error") errors.push(m.message + (m.stack ? "\\n" + String(m.stack).split("\\n").slice(0, 3).join("\\n") : ""));
         if (m.kind === "log" && (m.level === "error" || m.level === "warn")) errors.push(m.level + ": " + m.message);
       }
-      out.push({ widget: w.id, name, messages: h.messages.filter((m) => m.kind === "tree" || m.kind === "patch"), outline, errors, empty, data: given, ...(typeof size === "string" ? { size } : {}) });
+      const drawn = (host) => host.messages.filter((m) => m.kind === "tree" || m.kind === "patch");
+      // Each reference size's own tree too: what useSize() and useEnv() give it there (a preview draws each at its size).
+      const sized = {};
+      for (const s of Object.keys(SIZES)) {
+        const hs = at(s);
+        try {
+          (await render(mod.default, hs)).unmount();
+          sized[s] = drawn(hs);
+        } catch {}
+      }
+      out.push({ widget: w.id, name, messages: drawn(h), sized, outline, errors, empty, data: given, ...(typeof size === "string" ? { size } : {}) });
     }
   }
   fs.writeFileSync(process.env.CMD_TREES_OUT, JSON.stringify(out));

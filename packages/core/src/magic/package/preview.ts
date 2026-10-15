@@ -70,7 +70,8 @@ async function draw(previewer: Previewer, draws: Draw[], widgets: Map<string, { 
     draws.map((d) => {
       const w = widgets.get(d.variant.widget) ?? { title: d.variant.widget, icon: "puzzlepiece.extension" };
       const [width, height] = PREVIEW_SIZES[d.size];
-      return { tree: { messages: d.variant.messages, title: w.title, icon: w.icon, theme: d.theme }, width, height, shot: true };
+      // The tree it rendered at that size (1.3: its env's size and box), else its one tree.
+      return { tree: { messages: d.variant.sized?.[d.size] ?? d.variant.messages, title: w.title, icon: w.icon, theme: d.theme }, width, height, shot: true };
     }),
   );
   if (out) fs.mkdirSync(out, { recursive: true });

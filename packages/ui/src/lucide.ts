@@ -13,6 +13,9 @@ import {
   LockOpen,
   Database,
   Play,
+  Pause,
+  Rewind,
+  FastForward,
   Table,
   AppWindow,
   Bell,
@@ -169,6 +172,10 @@ const LUCIDE: Record<string, string> = {
   "cylinder.split.1x2": Database,
   tablecells: Table,
   "play.fill": Play,
+  // A player's controls (Media Controls, the layout-by-size example widget).
+  "pause.fill": Pause,
+  "backward.fill": Rewind,
+  "forward.fill": FastForward,
   // The web client (apps/web), where there are no SF Symbols.
   "arrow.up": ArrowUp,
   "arrow.up.left.and.arrow.down.right": Maximize2,

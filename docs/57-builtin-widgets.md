@@ -204,12 +204,12 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Difference | Class | Fix |
 |---|---|---|
 | No cover: a music note stands in, though `ApiNowPlaying.artwork` carries it | a | `Picture` (A5), with its `icon` placeholder for the native "no cover" box in the track's colour |
-| Three layouts by size: short (< 280 px tall) puts a 44 px thumbnail in front of the title with the player at the bottom; medium lets the cover fill the room above the track; large (≥ 340×440) is an iPod column (cover at 80% of the width up to 360 px, centred title, controls spread with `--space-6`). The package has one layout, a stack at the top, empty below | b | `Adapt`/`Case` (A1) for the three layouts; `Picture size="fill"` (A5) for "the cover takes what's left" |
-| The title grows with the column (`clamp(--text-lg, column / chars, 0.8 × --text-display)`) | b | `Text fit` (A3) |
+| Three layouts by size: short (< 280 px tall) puts a 44 px thumbnail in front of the title with the player at the bottom; medium lets the cover fill the room above the track; large (≥ 340×440) is an iPod column (cover at 80% of the width up to 360 px, centred title, controls spread with `--space-6`). The package has one layout, a stack at the top, empty below | b | `Adapt`/`Case` (A1, built (widget-size)) for the three layouts; `Picture size="fill"` (A5) for "the cover takes what's left" |
+| The title grows with the column (`clamp(--text-lg, column / chars, 0.8 × --text-display)`) | b | `Text fit` (A3, built (widget-size)) |
 | Controls: spread across the width when small, centred with a wide gap when large; the package centres three `lg` IconButtons always | b | inside each `Case`: `Inline justify="between"`, or centred |
 | A change of track or a pause from elsewhere shows at once natively, up to 2 s late here | c | `media` topic, `useMedia()` (C1) |
 | A footer "Playing in Spotify" the native doesn't have | d | drop it, or keep it as the one deliberate addition; the native says the app nowhere. Fixed (widget-port-fixes). Dropped; a footer shows only when a control didn't go through. |
-| The `Sizes` story draws every box at the same size class (the fake host's `env.size` is "regular"), so the narrow box shows the title-bar status it would hide | d | tooling: the fake host's `Sizes` passes each box its own `env` (A2). Left for A2 (widget-port-fixes): the fake host and the Workbench's `Sizes` are `@cmd/widget-api` and renderer code, outside a package |
+| The `Sizes` story draws every box at the same size class (the fake host's `env.size` is "regular"), so the narrow box shows the title-bar status it would hide | d | tooling: the fake host's `Sizes` passes each box its own `env` (A2, built (widget-size)). Left for A2 (widget-port-fixes): the fake host and the Workbench's `Sizes` are `@cmd/widget-api` and renderer code, outside a package |
 
 **Timer → Countdown**
 
@@ -218,7 +218,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | A ring (`Dial`) that empties as it runs and fills the window, the time inside sized to it (`min(15cqw, 15cqh)`); the package has display text and a `Progress` bar at the top of the body, with the room below empty | a, b | `Dial` (A6) |
 | Click the time to type a length ("10", "1:30", "90s"); the package has a `ToolbarField` for it instead | a | `Dial editable` + `onSubmit` (A6); then the toolbar loses the field |
 | Done in the `needs` colour; the package's is `warning` | a | `Dial tone="needs"` (A6) |
-| The body is centred in the window; `Stack` can't centre on its main axis | a | `Stack justify` (A3); moot once it's a `Dial` |
+| The body is centred in the window; `Stack` can't centre on its main axis | a | `Stack justify` (A3, built (widget-size)); moot once it's a `Dial` |
 | A title menu "Options" (Pause, Reset) the native window doesn't have | d | move them to `Window actions` (the window's context menu), no `menu`. Fixed (widget-port-fixes). |
 
 **Agent Activity → Agents**
@@ -347,7 +347,7 @@ General primitives first; one-off elements only where the native view is a kit p
 
 **A. Elements and size** (A1–A11)
 
-1. **`Adapt` and `Case`**: a layout that switches by the room it has, decided in the renderer.
+1. **`Adapt` and `Case`** (built: widget-size): a layout that switches by the room it has, decided in the renderer.
    ```ts
    Adapt: { doc: "Draws the first Case that fits its own box: a layout per size, switched without the widget's process.", since, props: {}, events: {}, children: "elements", childrenDoc: "Cases, the most demanding first; one without conditions is the fallback." },
    Case: { doc: "One layout of an Adapt, drawn while its box meets every condition given.", since, props: {
@@ -355,8 +355,9 @@ General primitives first; one-off elements only where the native view is a kit p
      minHeight: { type: "number", doc: "In px." }, maxHeight: { type: "number", doc: "In px." } }, events: {}, children: "elements", childrenDoc: "The layout." },
    ```
    Why in the renderer and not `useEnv`: a switch the process makes round-trips (the renderer measures, tells the core, the process re-renders, the patch comes back), so a resize shows the wrong layout for frames and wakes the process on every class change. The cases are in the tree; the renderer measures the `Adapt` (a `ResizeObserver`, as `useSizeClass` does) and mounts one. Its box, not the window's: an `Adapt` in a `Pane` adapts to the pane. Cost: the tree carries every case (small); a field's draft inside a case is lost when the case changes (said in the doc). Security: none. Kit: a new `Adapt` in `@cmd/ui` (`frame.tsx` neighbours), which the native Now Playing can use too, replacing its container queries. Used by: Media Controls; any widget with a small and a large face.
-2. **`env.box` and `useSize()`**: `WidgetEnv.box: { width: number; height: number }` (the window content's px, rounded to 8, sent at most every 200 ms while resizing) and `size` unchanged; `useSize()` returns the box. For logic that needs numbers (how many rows fit, a chart's bucket count), not for layouts (that's `Adapt`). The fake host sends each `Sizes` box its own `env` (`size` and `box`), so stories show what a window of that size gets. Cost: none (the renderer already measures). Used by: Media Controls' title-bar status (hidden when short), Usage Stats (heat chart choice in a narrow window).
-3. **`Stack justify` and `Text fit`**: `justify: { type: ["start", "center", "end", "between"], doc: "Where the children sit along the column (with grow: centred in the window)." }`; `Text fit: { type: "boolean", doc: "Grows with its container's width, one line, from its size up to display: a title that fills a column." }` (the native title's clamp, in the kit's `Text`). Used by: Media Controls, Countdown.
+2. **`env.box` and `useSize()`** (built: widget-size): `WidgetEnv.box: { width: number; height: number } | null` (the window content's px, rounded down to 8 so it never claims more room than there is, sent at most every 200 ms while resizing; null until measured) and `size` unchanged; `useSize()` returns the box. For logic that needs numbers (how many rows fit, a chart's bucket count), not for layouts (that's `Adapt`). The fake host sends each `Sizes` box its own `env` (`size` and `box`), so stories show what a window of that size gets. Cost: none (the renderer already measures). Used by: Media Controls' title-bar status (hidden when short), Usage Stats (heat chart choice in a narrow window).
+3. **`Stack justify` and `Text fit`** (built: widget-size): `justify: { type: ["start", "center", "end", "between"], doc: "Where the children sit along the column (with grow: centred in the window)." }`; `Text fit: { type: "boolean", doc: "Grows with its container's width, one line, from its size up to display: a title that fills a column." }` (the native title's clamp, in the kit's `Text`). Used by: Media Controls, Countdown.
+   Built in `widget-size` (A1–A3): specs in protocol `widget-elements-1.3-layout.ts` (Stack's and Text's props spread into their 1.0 rows, each prop with `since: "1.3"`), the kit's `Adapt`/`Case` in `adapt.tsx` (story `ui/adapt`), the renderer's `entries-1.3-layout.tsx`, `useSize()`, and `sizeEnv(size)` for the fake host, the Workbench's `Sizes` and `cmd widget preview` (which now renders each state once per reference size, so `useSize`/`useEnv` logic shows per size too). Example: `packages/widget-api/examples/v1/faces.tsx` (story `widgets/faces`). Open: the native Now Playing still uses its container queries; moving it to the kit's `Adapt` (and its title to `Text fit`) belongs with the Media Controls re-port. `Text fit` grows up to `--text-display` (20 px), as specced; Now Playing's title stops at 0.8 of it.
 4. ~~More size classes~~: rejected. Classes are a coarse guess at what a layout needs; `Adapt` takes the numbers the layout actually breaks at (Now Playing's 280, 340×440), and `Hide below` stays for the simple case.
 5. **`Picture`**: an image from the widget's data or a host it is granted.
    ```ts
