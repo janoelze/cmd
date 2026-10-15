@@ -1,6 +1,6 @@
 # Built-in widgets as packages
 
-**Status:** proposal: a brief for porting cmd's native widgets to widget packages (docs/56) and shipping them as cmd's standard set. Agents, Recent Commands and Countdown are ported; the rest is the plan below.
+**Status:** partly built: a brief for porting cmd's native widgets to widget packages (docs/56) and shipping them as cmd's standard set. Agents, Recent Commands and Countdown are ported; API 1.2's elements are built, and wave 1 (Event Log, Run Scripts) is ported on them; the 1.2 verb proposal waits for Jan; the rest is the plan below.
 
 Date: 2026-10-15. Read first: [56-widgets-v3.md](56-widgets-v3.md) (the package format, the API, "Built-ins and dogfooding", the decisions table, and the as-built notes of phases 1–4), [16-widgets.md](16-widgets.md) (the Widget Library), [40-window-design.md](40-window-design.md) and the `window-design` skill.
 
@@ -39,12 +39,12 @@ Sixteen native window types have `role: "widget"`. Lines are the renderer's view
 | Agent Activity | `agents` | 167 | agents, mark seen | **done** (`packages/widgets/agents`); native stays |
 | Commands | `commands` | 144 | command events, Run Again | **done** (`commands`, "Recent Commands"); native stays |
 | Timer | `timer` | 123 | a countdown, rings | **done** (`timer`, "Countdown"); native stays |
-| Event Stream | `events` | 240 | `events.query`, live events; `data.explain` | **wave 1**; "explain" is left out or waits for 1.2 |
-| Workspace Actions | `actions` | 522 | `actions.list`, `actions.run`; pin, stop, settings | **wave 1** for list and run; pin and stop wait for 1.2 |
+| Event Stream | `events` | 240 | `events.query`, live events; `data.explain` | **done** (`events`, "Event Log"); native stays. No AI explain existed to rebuild (`data.explain` is the class list); kinds instead of classes, see Wave 1 |
+| Workspace Actions | `actions` | 522 | `actions.list`, `actions.run`; pin, stop, settings | **done** for list and run (`actions`, "Run Scripts"); native stays. Pin and Stop wait for 1.2's verbs, see Wave 1 |
 | Stats | `stats` | 324 | `stats.query`, `stats.queryMany` | **wave 2**: `events.stats` covers part; the rest needs a `stats` verb |
 | Journal | `journal` | 307 | `journal.day/days/week` | **wave 2**: needs `journal.*` read verbs |
-| Notifications | `notifications` | 138 | the notification list, clear | **wave 2**: needs `notify.list` and `notify.clear` |
-| Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **wave 2**: needs a `terminals.resources` read verb |
+| Notifications | `notifications` | 138 | the notification list, clear | **wave 2**: needs `notify.list` and `notify.clear`; the proposal below finds it needs neither (the list is `useEvents`, Clear its own) |
+| Resources | `resources` | 218 | `core.processes`, panes' CPU and memory | **wave 2**: needs a `terminals.resources` read verb (proposed below as `terminals.usage`); its "cmd" pane stays native |
 | Now Playing | `nowplaying` | 93 | `nowPlaying.get/control` | **wave 2**: needs `media.get` and a `media.control` act |
 | Navigator | `navigator` | 335 | `search.query` (transcripts) | **wave 2**: needs a `search.query` read verb; check first that it is a widget and not a window |
 | Visualizer | `visualizer` | 162 | a frame with presets | **wave 3**: a frame package, if the frame `cmd` (state, theme, open) is enough |
@@ -74,6 +74,16 @@ Not elements, on purpose:
 
 Each new element: its spec row with docs and `since: "1.2"`, its story in every theme, its kit assignability check, the generated reference, and a line in Magic's prompt only if Magic should reach for it (charts yes, `DataGrid` yes, `StatusLine` yes). `cmd.env.has()` answers for elements as for verbs, so a 1.2 widget can tell an older cmd.
 
+**As built (2026-10-15).** The 27 elements are protocol `widget-elements-1.2.ts` (`since: "1.2"`), merged into `API_ELEMENTS` by `widget-elements.ts`; the vocabulary they share moved to `widget-spec.ts`. `WIDGET_API_MINOR` is 2; `ready.env.elements` lists what this cmd draws and `cmd.env.has("DataGrid")` reads it (a cmd before 1.2 sends none, so `has` answers by its minor from the generated `elements-since.gen.ts`); a 1.0 and a 1.1 process run unchanged (`widget-act.test.ts`: "serves a process built for 1.1 unchanged, and tells it the elements this cmd draws"). New prop types, because charts and tables take data the 1.0 types couldn't say: records (`ApiShape`: a list of named fields, or one, named in the d.ts as `ChartSeries`, `RankingRow`, `ProportionPart`, `RibbonItem`, `RibbonTick`, `GridColumn`, `GridRow`, `GridSort`), `strings`, `matrix`, `cells`; the sanitiser checks each field and leaves out fields the spec doesn't name. A `pick` gesture carries a value (a row's key, a bucket's index, a bar's id, a time; the testing tree's `pick(node, value, event?)`), and an event says when it is `typing` (ToolbarField, ToolbarSearchField and TextField's `onChange`: not a press, so no act after it; the core reads it from the spec instead of a list of names). Charts take a `unit` (protocol format.ts's, as the Stats window formats) and labels as strings, never a function. `elements.ts` is now `elements.gen.ts` (generated, so not counted against the 600-line rule), and the reference lists the records under "Records".
+
+| Element | Drawn by | Why |
+|---|---|---|
+| `Panes`, `Pane`, `Panel`, `PanelBody`, `ListGroup`, `ListRowActions`, `ListValue`, `CodeBlock`, `Icon`, `Mark`, `Delta`, `Spinner`, `IconButton`, `LinkButton`, `Timeline`, `TimelineEntry`, `Ribbon`, `TimeBar` | pass-through (`KIT`, checked against the kit's props) | the kit takes plain data; a pick event passes its value through (`Ribbon onPick`, `TimeBar onSeek`). `ListRowActions` needed no override: the kit's already stops a press on its buttons from pressing the row |
+| `StatusLine` | override | its `action` is data, drawn as a dim `LinkButton` at its end; a `View` puts it in its footer |
+| `TextField` | override | the caret and draft stay in the renderer, the value goes debounced (`useDraft`, as `ToolbarField`) |
+| `TimeSeries`, `TimeBars`, `Ranking`, `Proportion`, `PunchCard`, `Calendar` | override | the kit takes `format`, `xLabel`, `dayLabel` functions: the API's `unit` and string labels become them |
+| `DataGrid` | override | columns, rows, sort and selection are data (a row by its key); an icon column's cell is a `Mark` with the row's `light`; rows aren't virtualised (the kit's grid isn't), and rows have no context menu in 1.2 |
+
 ## Wave 1: no new verbs
 
 Port **Event Stream** and **Workspace Actions** as `packages/widgets/events` and `packages/widgets/actions`.
@@ -83,15 +93,38 @@ Port **Event Stream** and **Workspace Actions** as `packages/widgets/events` and
 
 Acceptance, per widget: the rules above, plus a line in this doc's table saying it's done and what differs.
 
+**As built (2026-10-15).** Both are packages titled apart from the native views, as the earlier ports are: **Event Log** (`packages/widgets/events`) and **Run Scripts** (`packages/widgets/actions`). Each has tests for its states (`events.test.tsx`, 10; `actions.test.tsx`, 7), a story per state (Busy, Paused, Hidden, AllHidden, Narrow, Many, Empty; Scripts, Running, Many, Narrow, Empty, NoFolder), `cmd widget check` and `cmd widget preview --themes all --sizes all` exiting 0 (522 shots each), and an e2e scenario that adds it from the Widget Library: `widget-events` (a command typed in its workspace shows as recorded, the filter, an event opened whole; `.cmd-dev/shots/widget-events*.png`) and `widget-actions` (a folder's scripts, the risky one apart, Run, the row from running to done; `.cmd-dev/shots/widget-actions*.png`). What each does differently is in its README:
+
+- **Event Log.** "Explain this event" isn't in the native view: its `data.explain` call reads the log's classes (their titles and types) for the class menu and chips. So there is nothing to rebuild on `cmd.ai.complete`; the package filters by the *kinds* of type it has seen (`agent`, `command`, `git`) instead of the classes, and `events.classes` is proposed below. It reads its workspace's events, or every workspace's from the title menu, never those of no workspace; a row's title is the event's type (the log's one-line text isn't in `ApiEvent`); Pause holds by time, so it holds across a reload; no Copy Event or Copy ID.
+- **Run Scripts.** List and Run only: no Pin, Stop or Restart (`actions.pin`, `actions.stop` below), so no "Stop?" confirmation either (it becomes Stop's own sheet); risky actions are listed but not run (cmd refuses them from widgets). `ApiAction` is a name, a description and `risky`, so no sections by kind, no history or suggestions, no dev server address or "in <branch>", no Copy Command or Open <file>; the first action that isn't risky is the main one. The run state follows the terminal a run from this window went to (its command events, kept in the window's state), so a server started elsewhere doesn't show as running. No Settings link.
+
 ## Wave 2: API 1.2, proposed then built
 
 The port agent writes the 1.2 proposal into this doc first, one row per verb:
 
-| Verb | Signature | Mode | Permission | For |
-|---|---|---|---|---|
-| … | | read / act / confirm | | |
+**Proposed (2026-10-15), for Jan to decide; nothing here is built.** Each row against the bar below: product words, the widget's workspace, an access row (its `API` row: mode and permission) and a remote row (`remote/policy.ts`: a paired device), no private path or secret, and a widget other than the built-in would plausibly want it. "Remote" says what a press from a paired device does: reads never cross (the device gets the tree); acts confirm on the Mac for control scope, and nothing for view scope, as 1.1's do.
 
-Candidates from the inventory: `notify.list`, `notify.clear`, `journal.day/days/week`, `stats.query`, `terminals.resources`, `media.get`, `media.control`, `search.query`, `actions.pin`, `actions.stop`. Each has to pass docs/56's bar: it is in product words, it is scoped to the widget's workspace, it has an access row and a remote row, it doesn't expose a private path or a secret, and a widget other than the built-in would plausibly want it. A verb only one built-in will ever use is a sign that widget should stay native.
+| Verb | Signature | Mode | Permission | Remote | For | Against the bar |
+|---|---|---|---|---|---|---|
+| `actions.stop` | `stop(name): null` | confirm, ask `stop` | `act: ["actions"]` | confirm on the Mac | Run Scripts' Stop on a running action (and Restart: stop, then run) | passes: product words, the workspace's own actions, a CI or dev-server widget would want it. Its sheet replaces the native "Stop?" dialog |
+| `actions.pin` | `pin(name, pinned): null` | act, right after a press | `workspace: ["read"]` | control scope only, no sheet | Pin to Top | weak: it changes cmd's ranking for the folder, which only an actions list shows. Recommend: leave out, keep Pin in the native view |
+| `events.classes` | `classes(): { class, title, types }[]` | read | none (it says what exists, not what happened) | n/a | Event Log's class menu and chips, as `data.explain` gives the native view; a widget can then say which class a refused query needs | passes: product words (the log's classes, as Settings names them), no data, useful to any log viewer |
+| `terminals.usage` | `usage({ scope }): { id, cpu, memory, processes, top }[]` | read, live as a topic | `workspace: ["read"]` (`"all"` for every workspace) | n/a | Resources' table and stats | passes: the workspace's own terminals; a "what's busy" widget would want it. cmd's own processes (`core.processes`: app, background) are left out: only a built-in wants them, so that part of Resources stays native |
+| `stats.query` | `query({ stat, range, grain, by, compare }): StatResult` | read | `events: [<class>]` for the classes the stat reads (`readsClass`); the workspace forced as a filter | n/a | Stats' charts | passes, with care: the stats are product words (Agent time, Commands, Tokens); scoped like `events.stats`; Stats' cross-workspace and AI-cost panes need `workspace: ["all"]` and `events: ["ai"]` |
+| `journal.days` / `journal.day` / `journal.week` | `days({ count }) / day(date) / week(date): JournalDay[] / JournalDay \| null / JournalWeek \| null` | read; never writes (no AI run from a widget) | `workspace: ["read"]` and `events: ["agents"]` (a day is written from agents' prompts and work) | n/a | Journal | passes if the days read are this workspace's only; one verb with a `range` may be enough |
+| `notify.clear` | `clear(): null` | act, right after a press | none | control scope only | Notifications' Clear | fails the workspace bar: it clears every workspace's list. Recommend: a widget keeps its own "cleared at" in `useStoredState`, as Event Log does; no verb. The list needs none either: `useEvents({ types: ["notification"] })` reads a workspace's notifications already (notes need no class); the native Clear (`notification.clear`) is recorded with no workspace, so a widget never sees it, which is one more reason for its own |
+| `media.get` / `media.control` | `get(): NowPlaying \| null` / `control(command, { seek }): null` | read / act, right after a press | a new `media: ["read", "control"]` | control scope only | Now Playing | passes for other widgets (a lyrics or a focus widget), but isn't workspace data: it needs a permission of its own and a grants line ("See and control what's playing") |
+| `search.query` | `query(text, { limit }): { session, title, snippet, at }[]` | read | `events: ["transcripts"]`, the workspace's sessions | n/a | Navigator | doubtful: Navigator is the board's sidebar for opening and resuming sessions, a window, not a widget. Recommend: Navigator stays native; no verb |
+| `clipboard.write` | `write(text): null` | act, right after a press | none (as `notify.send`) | never for a device | Copy Event, Copy Command, Copy ID in both natives | passes: every list widget wants Copy; one write per press, text only, clipped |
+
+Not verbs, but what the ports found missing from the API's data (additions within API 1, as 1.1 added `key`, `until` and `terminalId` to events):
+
+- **`ApiEvent.text`**: the log's one-line text for an event, so a log viewer's row reads like the native one.
+- **`ApiAction`**: `command`, `kind` (dev, test, build…), `package`, `pinned`, `primary`, and its run (`running`, `terminalId`, `url`, `exitCode`), so an actions widget can group, show the address and know a run it didn't start. With these, Run Scripts' run state would come from cmd, not from following a terminal.
+
+Considered and left out: a way to open Settings (`windows.open("settings:…")`): a widget never opens the app's own windows; Run Scripts' "Set up AI" link stays in the native view.
+
+Candidates from the inventory (each answered in the table above): `notify.list`, `notify.clear`, `journal.day/days/week`, `stats.query`, `terminals.resources`, `media.get`, `media.control`, `search.query`, `actions.pin`, `actions.stop`. Each has to pass docs/56's bar: it is in product words, it is scoped to the widget's workspace, it has an access row and a remote row, it doesn't expose a private path or a secret, and a widget other than the built-in would plausibly want it. A verb only one built-in will ever use is a sign that widget should stay native.
 
 After Jan approves the list: build 1.2 (`@since 1.2` in the d.ts, `cmd.env.has`, the minor reported by the core, a 1.1 package unchanged, the reference regenerated), then port the wave 2 widgets on it.
 
