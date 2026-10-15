@@ -313,9 +313,7 @@ export function readEvents(id: WidgetIdentity, q: DataQuery, core: Pick<CoreCont
     return widgetRead(id, q, (x) => core.data.query(x));
   } catch (e) {
     if (!(e instanceof PolicyError)) throw e;
-    const type = /^events: "([^"]+)"/.exec(e.message)?.[1];
-    const cls = /add "(\w+)" to cmd\.permissions\.events/.exec(e.message)?.[1];
-    if (cls) throw missing("events", cls, `Reading ${type ? `"${type}"` : "these"} events`);
+    if (e.class) throw missing("events", e.class, `Reading ${e.type ? `"${e.type}"` : "these"} events`);
     throw invalid(e.message.replace(/^events: /, "events.query: "));
   }
 }

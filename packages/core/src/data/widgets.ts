@@ -74,7 +74,7 @@ export function widgetRead(id: WidgetIdentity, q: DataQuery, run: (q: DataQuery)
 export function widgetStats(id: WidgetIdentity, q: StatQuery, classOf: (stat: string) => DataClass, run: (q: StatQuery) => StatResult): StatResult {
   if (!q || typeof q !== "object" || typeof q.stat !== "string") throw new PolicyError("stats(): name a stat ({ stat: \"commands.runs\" })");
   const c = classOf(q.stat);
-  if (!readsClass(reader(id), c)) throw new PolicyError(`stats(): "${q.stat}" is ${c} data: add "${c}" to permissions.events in the manifest`);
+  if (!readsClass(reader(id), c)) throw new PolicyError(`stats(): "${q.stat}" is ${c} data: add "${c}" to permissions.events in the manifest`, { type: q.stat, class: c });
   const { workspaceId: _ignored, ...rest } = q;
   return run({ ...rest, ...(id.workspaceId ? { workspaceId: id.workspaceId } : {}), ...(q.top ? { top: Math.min(q.top, 50) } : {}) });
 }

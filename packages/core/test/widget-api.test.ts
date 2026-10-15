@@ -191,6 +191,9 @@ describe("API 1", () => {
     expect(await perm(api.call("agents.get", ["x"]))).toBe('workspace: ["read"]');
     expect(await perm(api.call("terminals.read", [paneA]))).toBe('workspace: ["read"]');
     expect(await perm(api.call("events.query", [{ types: ["agent.hook"] }]))).toBe('events: ["agents"]');
+    // The refusal names the class from the policy's error, and the type asked for; a class widgets can't declare is no permission to ask for.
+    expect((await refusal(api.call("events.query", [{ types: ["agent.hook"] }]))).message).toMatch(/"agent\.hook"/);
+    expect(await refusal(api.call("events.query", [{ types: ["remote.audit"] }]))).toMatchObject({ code: "invalid", message: expect.stringMatching(/remote data, which widgets can't read/) });
     expect(await perm(api.call("net.fetch", [`http://localhost:${port}/`]))).toBe(`net: ["localhost:${port}"]`);
     expect(await perm(api.call("ai.complete", [{ prompt: "hi" }]))).toBe('ai: ["complete"]');
     expect(await perm(adapter({ ...noPermissions(), workspace: ["read"] }).call("agents.list", [{ scope: "all" }]))).toBe('workspace: ["all"]');

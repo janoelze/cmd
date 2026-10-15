@@ -60,14 +60,21 @@ function reached(t: string): DataClass[] {
 /** Whether a reader sees anything of a class (an aggregate of it, a stat, docs/49). */
 export const readsClass = (r: Reader, c: DataClass): boolean => access(r, c) !== "none";
 
-export class PolicyError extends Error {}
+/** A read the policy refuses: what was asked (`type`) and the class that, declared, would allow it (`class`; null when none would). */
+export class PolicyError extends Error {
+  type: string | null;
+  class: DataClass | null;
+  constructor(message: string, o: { type?: string; class?: DataClass } = {}) {
+    super(message);
+    this.type = o.type ?? null;
+    this.class = o.class ?? null;
+  }
+}
 
 const denied = (r: Reader, t: string, c: DataClass, why = "") =>
-  new PolicyError(
-    POLICY[r.kind][c] === "deny"
-      ? `events: "${t}" is ${c} data, which widgets can't read`
-      : `events: "${t}" ${why || `is ${c} data`}; to read it, add "${c}" to cmd.permissions.events in package.json`,
-  );
+  POLICY[r.kind][c] === "deny"
+    ? new PolicyError(`events: "${t}" is ${c} data, which widgets can't read`, { type: t })
+    : new PolicyError(`events: "${t}" ${why || `is ${c} data`}; to read it, add "${c}" to cmd.permissions.events in package.json`, { type: t, class: c });
 
 /**
  * The query a reader may run for the one it asked: its workspace, whatever it
