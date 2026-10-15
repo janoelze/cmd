@@ -215,9 +215,9 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 
 | Difference | Class | Fix |
 |---|---|---|
-| A ring (`Dial`) that empties as it runs and fills the window, the time inside sized to it (`min(15cqw, 15cqh)`); the package has display text and a `Progress` bar at the top of the body, with the room below empty | a, b | `Dial` (A6) |
-| Click the time to type a length ("10", "1:30", "90s"); the package has a `ToolbarField` for it instead | a | `Dial editable` + `onSubmit` (A6); then the toolbar loses the field |
-| Done in the `needs` colour; the package's is `warning` | a | `Dial tone="needs"` (A6) |
+| A ring (`Dial`) that empties as it runs and fills the window, the time inside sized to it (`min(15cqw, 15cqh)`); the package has display text and a `Progress` bar at the top of the body, with the room below empty | a, b | `Dial` (A6): built (widget-display) |
+| Click the time to type a length ("10", "1:30", "90s"); the package has a `ToolbarField` for it instead | a | `Dial editable` + `onSubmit` (A6): built (widget-display); then the toolbar loses the field |
+| Done in the `needs` colour; the package's is `warning` | a | `Dial tone="needs"` (A6): built (widget-display) |
 | The body is centred in the window; `Stack` can't centre on its main axis | a | `Stack justify` (A3, built (widget-size)); moot once it's a `Dial` |
 | A title menu "Options" (Pause, Reset) the native window doesn't have | d | move them to `Window actions` (the window's context menu), no `menu`. Fixed (widget-port-fixes). |
 
@@ -240,7 +240,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Run Again on hover (`ListRowActions`) | d | `ListRowActions` > `IconButton` (1.2). Fixed (widget-port-fixes). |
 | Run Again types the command into its own terminal and runs it, when that terminal is open and at a prompt; the package opens a new terminal with it typed, not run | c | `terminals.rerun(key)` (C11): built (widget-data) |
 | Copy Command and New Terminal Here in a row's menu | d | `cmd.clipboard.write` (1.2) and `cmd.terminals.open({ cwd })`. Fixed (widget-port-fixes). |
-| The place chip is the project's hue with the worktree or branch (`whereOf`); the package's is a neutral chip with the branch | a | `fmt.hue(name)` (A11), the app's `projectHue`; the place from the event's `git` |
+| The place chip is the project's hue with the worktree or branch (`whereOf`); the package's is a neutral chip with the branch | a | `fmt.hue(name)` (A11): built (widget-display), the app's `projectHue`; the place from the event's `git` |
 | The age is a `ListValue`; the package's is a `Chip` | d | `ListValue`. Fixed (widget-port-fixes). |
 | All Workspaces adds the workspace's name to the detail | c | `workspaces` topic (C6): built (widget-data) |
 | The README has no "How it differs" section | d | write it. Fixed (widget-port-fixes). |
@@ -250,8 +250,8 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | Difference | Class | Fix |
 |---|---|---|
 | Edge-to-edge `Panel` | d | `Panel` > `WindowToolbar` + `PanelBody`. Fixed (widget-port-fixes). |
-| The classes are in the title menu, whose button says "All Events" or "3 hidden"; the package's title menu says "This Workspace" and the classes are a toolbar `Show` menu | a | `Window menuLabel` (A7); then classes and scope share the title menu as natively |
-| A chip says the class's title ("Agents") in `projectHue(class)`; the package's says the class id in its own hash's hue | d, a | `titleOf(fam)`; `fmt.hue` (A11). Fixed (widget-port-fixes). The title part (d); the hue waits for A11. |
+| The classes are in the title menu, whose button says "All Events" or "3 hidden"; the package's title menu says "This Workspace" and the classes are a toolbar `Show` menu | a | `Window menuLabel` (A7): built (widget-display); then classes and scope share the title menu as natively |
+| A chip says the class's title ("Agents") in `projectHue(class)`; the package's says the class id in its own hash's hue | d, a | `titleOf(fam)`; `fmt.hue` (A11): built (widget-display). Fixed (widget-port-fixes). The title part (d); the hue waits for A11. |
 | "recorded again ×n" in the detail | d | count the events per key before `newestFirst` drops them. Fixed (widget-port-fixes). Counted from `cmd.events.subscribe` (`useEvents` merges them away). Since API 1.3 `useEvents`' events carry `again` (`LiveEvent`): how often the key was recorded again while subscribed; built (widget-data), the re-port drops its own count (`useLog`) for it. |
 | Events of no workspace (the data layer's own) are shown | e | a widget reads its workspace's, or every workspace's with `workspace: ["all"]`, never what belongs to none: matching would hand any widget with an events grant cmd's own records |
 
@@ -269,7 +269,7 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 
 | Difference | Class | Fix |
 |---|---|---|
-| The sparkline is inside the stat's tile, in the chart palette (CPU series 0, memory series 1, green); the package's sits under the tile in accent and neutral | a | `Stat` children and `Sparkline series` (A8) |
+| The sparkline is inside the stat's tile, in the chart palette (CPU series 0, memory series 1, green); the package's sits under the tile in accent and neutral | a | `Stat` children and `Sparkline series` (A8): built (widget-display) |
 | A terminal's name and icon are the sidebar's (an agent's name and its kind's icon: "Codex · sqlite viewer", ✦); the package's are the terminal's title and a generic `sparkles` | d | `useAgents` by `agentId`: `agent.name`, `agent.icon`. Fixed (widget-port-fixes). |
 | Other workspaces' terminals say the workspace's name; the package's say their folder | c | `workspaces` topic (C6): built (widget-data) |
 | A "cmd" pane: the app and the background process | c | `app.usage` (C12): built (widget-data) |
@@ -280,15 +280,15 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 
 | Difference | Class | Fix |
 |---|---|---|
-| A tile's change is the kit's `Delta` (▲ 22%, green or red by the stat's `good`, dim when flat); the package's is "+100%" text in a tone | a | `Stat trend` + `good` (A8) |
-| The sparkline is inside the tile, as wide as it | a | `Stat` children (A8) |
+| A tile's change is the kit's `Delta` (▲ 22%, green or red by the stat's `good`, dim when flat); the package's is "+100%" text in a tone | a | `Stat trend` + `good` (A8): built (widget-display) |
+| The sparkline is inside the tile, as wide as it | a | `Stat` children (A8): built (widget-display) |
 | The "cmd" pane (core memory, stalls, the log's size) | d | `stats.query` can read them today: `events: ["system"]` (a declarable class) and `workspace: ["all"]` for a stat with no workspace; add both grants and the pane. Fixed (widget-port-fixes). The package now declares `events: ["system"]`. |
 | In This Workspace the native page still shows your active time and when you work (they have no workspace) | d | query `you.active` with `scope: "all"` beside the workspace's stats (the package already holds `workspace: ["all"]`). Fixed (widget-port-fixes). |
-| A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | a chart's `delta` and `note` (A9); `quantiles` (C3): built (widget-data) |
+| A detail's header: the value bold, a `Delta`, "median 4m, 90% under 12m" | a, c | a chart's `delta` and `note` (A9): built (widget-display); `quantiles` (C3): built (widget-data) |
 | Counted again when the core says a stat it shows changed; the package follows `command` and `agent.stop` events and a minute's timer | c | `stats` topic, `useStat(query)` (C2): built (widget-data) |
 | A detail ranks by the stat's "many" dimension ("By command"); `ApiStatInfo.dims` doesn't say which | c | `dims[].many` and `kind` (C3): built (widget-data) |
 | "Updated" is when cmd counted (`asOf`); the package's is when it asked | c | `asOf` (C3): built (widget-data) |
-| The package keeps its own copy of the Stats window's formatters | a | `fmt.value`, `fmt.delta` (A11) |
+| The package keeps its own copy of the Stats window's formatters | a | `fmt.value`, `fmt.delta` (A11): built (widget-display) |
 
 **Journal → Work Log**
 
@@ -296,16 +296,16 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 |---|---|---|
 | Writes the days that are stale when it opens ("Writing up what happened…"), Write Again on today's heading, and an empty state that sets up AI | c | `journal.write` (C5) and `app.open("settings:ai")` (C13): both rejected by Jan (2026-10-15), Work Log stays read-only and widgets never open cmd's own windows; the package stays a reader that points at the Journal |
 | "This week" above the days: the week's headline and threads | c | `journal.week()` (C4): built (widget-data) |
-| All Workspaces, with a project chip per entry when there is more than one | c | `journal.days({ scope: "all" })` and `ApiJournalEntry.project` (a folder's name, never a path) (C4): built (widget-data); `fmt.hue` (A11) |
+| All Workspaces, with a project chip per entry when there is more than one | c | `journal.days({ scope: "all" })` and `ApiJournalEntry.project` (a folder's name, never a path) (C4): built (widget-data); `fmt.hue` (A11): built (widget-display) |
 | Reads again when something it reads is recorded, and at the day's turn; the package every 5 minutes | c | `journal` topic, `useJournal()` (C4): built (widget-data) |
-| A picked bar in the ribbon scrolls its entry into view | a | `reveal` on `TimelineEntry` (A10) |
+| A picked bar in the ribbon scrolls its entry into view | a | `reveal` on `TimelineEntry` (A10): built (widget-display) |
 | The title menu says the scope; the package's says "Options" (Read Again) | d | Read Again as the native's small `IconButton` on Today's heading; the title menu becomes the scope once C4 exists. Fixed (widget-port-fixes). Read Again on the newest day's heading; no title menu until C4. |
 
 **Workspace Actions → Run Scripts**
 
 | Difference | Class | Fix |
 |---|---|---|
-| The title menu's button names the folder (and the worktree's branch); its menu follows the selected terminal's checkout, lists the repository's worktrees with what runs in each, or uses the workspace's folder | a, c | `Window menuLabel` (A7); `useActions({ root })` for a worktree of the workspace's repository (C14), the worktrees from `cmd.git.worktrees` |
+| The title menu's button names the folder (and the worktree's branch); its menu follows the selected terminal's checkout, lists the repository's worktrees with what runs in each, or uses the workspace's folder | a, c | `Window menuLabel` (A7): built (widget-display); `useActions({ root })` for a worktree of the workspace's repository (C14), the worktrees from `cmd.git.worktrees` |
 | Sections fold (a click on the heading), packages and More start folded, kept per window | d | `ListSection open` + `onToggle`, the keys in `useStoredState`. Fixed (widget-port-fixes). Packages start folded; there is no More section in 1.2 (C14). |
 | From Your History ("12× in this folder", a clock icon), Suggested (from the README), and More (hidden ones) | c | `ApiAction.source`, `hidden`, `history`, and `include` (C14) |
 | A recipe that needs arguments is typed into a new terminal ("Type in Terminal", a text cursor icon) | c | `ApiAction.args`; `actions.run` types it (C14) |
@@ -319,8 +319,8 @@ Each difference has a class: **(a)** an element or element prop is missing, **(b
 | A callout for a source file that can't be read; "Describing actions…" with a spinner, or "Set up AI" in the footer | c | `useActionsInfo()` (C14); `app.open("settings:ai")` (C13): rejected by Jan (2026-10-15), widgets never open cmd's own windows |
 | The footer names the branch and folder when they aren't the workspace's | c | `useActionsInfo()` (C14) |
 | How long a run took comes from the command events of its terminal (wrong when two runs share it) | c | `ApiAction.startedAt`, `endedAt` (C14) |
-| Enter in the filter runs the first match | a | `ToolbarSearchField onSubmit` (A7) |
-| Durations read "4 min" (the app's `durationText`); `fmt.dur` says "4m 3s" | a | `fmt.dur(s, { coarse: true })` (A11) |
+| Enter in the filter runs the first match | a | `ToolbarSearchField onSubmit` (A7): built (widget-display) |
+| Durations read "4 min" (the app's `durationText`); `fmt.dur` says "4m 3s" | a | `fmt.dur(s, { coarse: true })` (A11): built (widget-display) |
 | The main action's icon is its kind's; the package's is `play.fill` | d | `kindOf(main).icon`. Fixed (widget-port-fixes). |
 
 **Counts by class**
@@ -372,12 +372,12 @@ General primitives first; one-off elements only where the native view is a kit p
      events: { onClick: press("Pressed.") }, children: "none" },
    ```
    How the host draws it without a leak: the renderer never gets a remote URL. The app page's CSP allows `img-src https:` (the browser windows' favicons), so an `<img src>` from a widget would load with the app session's cookies and tell a host when the window redraws: a tracking pixel. Instead the sanitiser keeps only `data:image/(png|jpeg|webp|gif)` (no SVG: it can carry script and external references) and `https:` URLs; for an `https:` src the core fetches it the way `net.fetch` does (the host checked against the grant per URL, no cookies, no Referer, cmd's user agent, counted against the widget's net budget), checks the type by its magic bytes, refuses more than 2 MB or a side over 4096 px, and hands the renderer a `data:` URL. Fetched pictures are cached by URL for an hour (32 MB, least recently used), so a widget that redraws can't make one beacon per redraw, and one that adds a nonce per URL spends its fetch budget. A paired device gets the same `data:` URL in the tree and fetches nothing. Cost: the granted host learns the widget asked, which `net.fetch` already allows; memory, capped at 4 MB of pictures per tree. Kit: `Picture` (frame.tsx) gains `fit`, `ratio`, `fill` and the placeholder, from Now Playing's `np-art`/`np-nocover` CSS, so the native view draws through it too. Used by: Media Controls (the artwork); YouTube's thumbnail when a player exists (docs/57 above); any widget with a logo or avatar.
-6. **`Dial`**: the kit's `Dial` as an element. Props `value` (text, required), `progress` (0–1), `tone` (`["accent", "needs", "dim"]`), `caption`, `label` (required), `editable` (boolean); events `onSubmit` (`submit`: the typed text; Escape or leaving cancels, the draft stays in the renderer as `TextField`'s does). An override, for the draft. Used by: Countdown; a pomodoro, a quota, any "one value across the room".
-7. **`Window menuLabel`** (`string`: the title menu's button, default the checked entry or "Options") and **`ToolbarSearchField onSubmit`** (`submit`, Return with the text). Used by: Event Log ("3 hidden"), Run Scripts (the folder · branch), Work Log; Run Scripts' Enter.
-8. **`Stat` children, `trend`, `good`; `Sparkline series`**: `Stat` takes elements (a `Sparkline`, drawn inside the tile as wide as it), and `trend: ["up", "down", "flat"]` with `good: ["up", "down"]` draws `delta` as the kit's `Delta` (the 1.0 `deltaTone` stays for text). `Sparkline series: { type: [0, 1, 2, 3, 4, 5, 6, 7], doc: "Draws in the chart palette's nth colour (a stat's own colour)." }`. Folds in the 1.3 candidate "Stat with children". Used by: Usage Stats, Terminal Usage.
-9. **A chart header's `delta` and `note`** on `TimeSeries` and `TimeBars`: `delta` a record `{ text, trend, good? }` drawn as a `Delta` after the summary, `note` a dim string after it ("median 4m, 90% under 12m"). Used by: Usage Stats' detail.
-10. **`reveal`** on `ListRow` and `TimelineEntry`: `{ type: "boolean", doc: "Scrolled into view (nearest edge) when it becomes true." }` (the renderer's `scrollIntoView`, once per change). Used by: Work Log's ribbon; Event Log opening a row near the bottom.
-11. **`fmt` additions** (`@cmd/widget-api`, no wire change): `fmt.value(v, unit)` and `fmt.delta(cur, prev, unit)` (protocol `formatValue`/`formatDelta`, as the charts write them), `fmt.hue(name)` (the app's `projectHue`, so a project's chip has the colour it has in every window), `fmt.dur(s, { coarse: true })` (the app's `durationText`: "4 min"). Folds in the `fmt.value`/`fmt.delta` candidate. Used by: Usage Stats, Recent Commands, Event Log, Work Log, Run Scripts.
+6. **`Dial`**: the kit's `Dial` as an element. Props `value` (text, required), `progress` (0–1), `tone` (`["accent", "needs", "dim"]`), `caption`, `label` (required), `editable` (boolean); events `onSubmit` (`submit`: the typed text; Escape or leaving cancels, the draft stays in the renderer as `TextField`'s does). An override, for the draft. Used by: Countdown; a pomodoro, a quota, any "one value across the room". **Built (widget-display):** protocol `widget-elements-1.3-display.ts`, renderer `entries-1.3-display.tsx`; the kit's `Dial` gained `edit.blur: "cancel"` (the Timer still commits on leaving, as it did), so a widget's draft never reaches its process; tests `apps/desktop/test/widget-display.test.tsx`.
+7. **`Window menuLabel`** (`string`: the title menu's button, default the checked entry or "Options") and **`ToolbarSearchField onSubmit`** (`submit`, Return with the text). Used by: Event Log ("3 hidden"), Run Scripts (the folder · branch), Work Log; Run Scripts' Enter. **Built (widget-display):** `chrome.ts` keeps it beside the menu, `register.tsx` labels the title menu with it; Return in the filter sends the text (`onChange`) and then `onSubmit`.
+8. **`Stat` children, `trend`, `good`; `Sparkline series`**: `Stat` takes elements (a `Sparkline`, drawn inside the tile as wide as it), and `trend: ["up", "down", "flat"]` with `good: ["up", "down"]` draws `delta` as the kit's `Delta` (the 1.0 `deltaTone` stays for text). `Sparkline series: { type: [0, 1, 2, 3, 4, 5, 6, 7], doc: "Draws in the chart palette's nth colour (a stat's own colour)." }`. Folds in the 1.3 candidate "Stat with children". Used by: Usage Stats, Terminal Usage. **Built (widget-display):** `Stat` translates in `entries-1.3-display.tsx` (the kit's `Stat` already took children and a node as `delta`); `series` takes 0–5, the six colours the chart palette has (`--chart-1…6`), not 0–7.
+9. **A chart header's `delta` and `note`** on `TimeSeries` and `TimeBars`: `delta` a record `{ text, trend, good? }` drawn as a `Delta` after the summary, `note` a dim string after it ("median 4m, 90% under 12m"). Used by: Usage Stats' detail. **Built (widget-display):** with a `delta` or a `note` the summary is the value, bold, through the kit's new `ChartSummary`, which the Stats window's detail now draws with too (the record is `ChartDelta` in the d.ts).
+10. **`reveal`** on `ListRow` and `TimelineEntry`: `{ type: "boolean", doc: "Scrolled into view (nearest edge) when it becomes true." }` (the renderer's `scrollIntoView`, once per change). Used by: Work Log's ribbon; Event Log opening a row near the bottom. **Built (widget-display):** the kit's `useReveal` (motion.ts; at once with reduced motion), taken by `ListRow` and `TimelineEntry`.
+11. **`fmt` additions** (`@cmd/widget-api`, no wire change): `fmt.value(v, unit)` and `fmt.delta(cur, prev, unit)` (protocol `formatValue`/`formatDelta`, as the charts write them), `fmt.hue(name)` (the app's `projectHue`, so a project's chip has the colour it has in every window), `fmt.dur(s, { coarse: true })` (the app's `durationText`: "4 min"). Folds in the `fmt.value`/`fmt.delta` candidate. Used by: Usage Stats, Recent Commands, Event Log, Work Log, Run Scripts. **Built (widget-display):** `durationText` and `projectHue` moved to protocol `format.ts` (the app re-exports them), which @cmd/widget-api imports as `@cmd/protocol/format` (bundled like `widget-events`); `fmt.value(v, unit = "count", { short })`, and `value`/`delta` write numbers in the app's locale (`env.locale`: the view sends it with `widget.env`, the core keeps its own until then; the fake host pins "en-US"). Props, events and children added to older elements carry their own `since` (`childrenSince` for children), the d.ts and reference say it per prop, and `cmd.env.has("Stat.trend")` answers from the generated `PROP_SINCE`.
 
 **C. Data: topics, verbs and fields** (C1–C15)
 

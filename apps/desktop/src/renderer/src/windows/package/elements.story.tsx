@@ -8,7 +8,7 @@
 // widgets countdown.tsx and usage.tsx, each beside the native view it matches (the Timer, Stats).
 
 import { Window as KitWindow, WindowBar, WindowBarMenu, WindowBody, WindowFrame } from "@cmd/ui";
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { TreeNode, WidgetOut, WireValue } from "@cmd/protocol";
 import { run } from "@cmd/widget-api/runtime";
@@ -390,33 +390,23 @@ const COUNTDOWN = {
   done: { endsAt: 1 },
 } as const;
 
-/** packages/widget-api/examples/v1/countdown.tsx (Dial, menuLabel) beside the native Timer, set and paused: click the time to type a length. */
-export const CountdownBesideTimer = () => (
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: "auto auto",
-      gap: 16,
-      justifyContent: "start",
-    }}
-  >
-    {(["set", "paused", "done"] as const).map((k) => (
-      <Fragment key={k}>
-        <RefWindow icon="timer" name="Timer" size="regular">
-          <Timer
-            phase={k === "set" ? "idle" : k}
-            duration={25 * 60}
-            remaining={k === "paused" ? 17 * 60 + 42 : k === "done" ? 0 : 25 * 60}
-            caption={k === "paused" ? "paused" : k === "done" ? "done at 01:00" : undefined}
-            onAction={() => {}}
-            onDuration={() => {}}
-          />
-        </RefWindow>
-        <Running id="countdown" name="Countdown" widget={Countdown} data={{ state: COUNTDOWN[k] }} />
-      </Fragment>
-    ))}
-  </div>
-);
+/** The native Timer and countdown.tsx side by side in one state (one widget per variant: the runtime's `cmd` is one per page). */
+function CountdownPair({ k }: { k: keyof typeof COUNTDOWN }) {
+  return (
+    <div style={{ display: "flex", gap: 16 }}>
+      <RefWindow icon="timer" name="Timer" size="regular">
+        <Timer phase={k === "set" ? "idle" : k} duration={25 * 60} remaining={k === "paused" ? 17 * 60 + 42 : k === "done" ? 0 : 25 * 60} caption={k === "paused" ? "paused" : k === "done" ? `done at ${new Date(1).toTimeString().slice(0, 5)}` : undefined} onAction={() => {}} onDuration={() => {}} />
+      </RefWindow>
+      <Running id="countdown" name="Countdown" widget={Countdown} data={{ state: COUNTDOWN[k] }} />
+    </div>
+  );
+}
+/** packages/widget-api/examples/v1/countdown.tsx (Dial, menuLabel) beside the native Timer, set: click the time to type a length. */
+export const CountdownSet = () => <CountdownPair k="set" />;
+/** Paused: the ring dim. */
+export const CountdownPaused = () => <CountdownPair k="paused" />;
+/** Done: the ring full, in the needs tone. */
+export const CountdownDone = () => <CountdownPair k="done" />;
 
 const DAY = 86_400_000;
 const TODAY = new Date(2026, 9, 14).getTime();
@@ -457,41 +447,23 @@ const WEEK = {
   runs: statWeek("commands.runs", "Commands", "count", [120, 160, 40, 210, 260, 140, 180], 1110),
 };
 
-/** packages/widget-api/examples/v1/usage.tsx (Stat trend and children, chart delta and note, fmt) beside the native Stats window: the tiles, and a stat's detail. */
+const USAGE_STATS = Object.fromEntries(Object.values(WEEK).map((r) => [r.stat.id, r]));
+/** packages/widget-api/examples/v1/usage.tsx (Stat trend and children, fmt.value and fmt.delta) beside the native Stats window's tiles. */
 export const UsageBesideStats = () => (
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: "auto auto",
-      gap: 16,
-      justifyContent: "start",
-    }}
-  >
+  <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
     <RefWindow icon="chart.bar" name="Stats" size="wide">
       <Stats range="week" data={WEEK} onRange={() => {}} onOpen={() => {}} now={WEEK.time.asOf} />
     </RefWindow>
-    <Running
-      id="usage"
-      name="Usage"
-      size="wide"
-      widget={Usage}
-      data={{
-        stats: Object.fromEntries(Object.values(WEEK).map((r) => [r.stat.id, r])),
-      }}
-    />
+    <Running id="usage" name="Usage" size="wide" widget={Usage} data={{ stats: USAGE_STATS }} />
+  </div>
+);
+/** usage.tsx with a stat open (a chart's delta and note, a row revealed) beside the native Stats window's detail. */
+export const UsageDetailBesideStats = () => (
+  <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
     <RefWindow icon="chart.bar" name="Stats" size="wide">
       <StatDetail result={WEEK.time} range="week" by={null} onBy={() => {}} onRange={() => {}} onBack={() => {}} now={WEEK.time.asOf} />
     </RefWindow>
-    <Running
-      id="usage"
-      name="Usage"
-      size="wide"
-      widget={Usage}
-      data={{
-        state: { open: "agents.time" },
-        stats: Object.fromEntries(Object.values(WEEK).map((r) => [r.stat.id, r])),
-      }}
-    />
+    <Running id="usage" name="Usage" size="wide" widget={Usage} data={{ state: { open: "agents.time" }, stats: USAGE_STATS }} />
   </div>
 );
 
