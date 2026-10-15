@@ -2,7 +2,7 @@
 // whole API objects from a few fields, with ids derived from the name (agent "Tours" is
 // a-tours in window w-tours, terminal t-tours) so a test can name what it expects.
 
-import { agentIcon, agentLight, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiEventClass, type ApiJournalDay, type ApiJournalEntry, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminal, type ApiTerminalUsage, type ApiWindow, type ApiWorkspace } from "@cmd/protocol/widget-tree";
+import { agentIcon, agentLight, type ApiAppUsage, type ApiJournalWeek, type ApiAgent, type ApiAgentState, type ApiEvent, type ApiEventClass, type ApiJournalDay, type ApiJournalEntry, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminal, type ApiTerminalUsage, type ApiWindow, type ApiWorkspace } from "@cmd/protocol/widget-tree";
 
 /** The workspace fixtures live in unless told otherwise. */
 export const WORKSPACE_ID = "ws-1";
@@ -113,7 +113,7 @@ export function stat(q: Partial<ApiStatQuery> = {}, over: { values?: (number | n
   const total = series.reduce((a, x) => a + x.total, 0);
   const id = q.stat || "commands.runs";
   return {
-    stat: { id, title: over.title ?? id, description: "", unit: over.unit ?? "count", dims: [], class: "output" },
+    stat: { id, title: over.title ?? id, description: "", unit: over.unit ?? "count", dims: [], class: "output", kind: "count" },
     from: buckets[0] ?? today,
     to: today + day,
     grain: "day",
@@ -122,13 +122,14 @@ export function stat(q: Partial<ApiStatQuery> = {}, over: { values?: (number | n
     series,
     total,
     ...(q.compare ? { previous: { total: Math.round(total / 2), values: values.map((v) => (v === null ? null : Math.round(v / 2))) } } : {}),
+    asOf: Date.now(),
   };
 }
 
 /** A work day as the journal wrote it (`journal.days`): today, one entry unless given. @since 1.2 */
 export function day(over: Partial<Omit<ApiJournalDay, "entries">> & { entries?: Partial<ApiJournalEntry>[] } = {}): ApiJournalDay {
   const date = over.date ?? new Date(new Date().setHours(0, 0, 0, 0)).getTime();
-  const entries = (over.entries ?? [{}]).map((e, i): ApiJournalEntry => ({ id: `e-${date}-${i}`, kind: "feature", title: "Built the thing", summary: "What was done and why.", outcome: "merged", start: date + 9 * 3_600_000, end: date + 11 * 3_600_000, counts: { agents: 1, prompts: 3, commands: 4, commits: 2, pages: 0, files: 5 }, ...e }));
+  const entries = (over.entries ?? [{}]).map((e, i): ApiJournalEntry => ({ id: `e-${date}-${i}`, kind: "feature", title: "Built the thing", summary: "What was done and why.", outcome: "merged", start: date + 9 * 3_600_000, end: date + 11 * 3_600_000, counts: { agents: 1, prompts: 3, commands: 4, commits: 2, pages: 0, files: 5 }, project: "app", ...e }));
   return { date, headline: over.headline ?? "A day of work", writtenAt: over.writtenAt ?? date + 86_400_000, entries };
 }
 
@@ -137,5 +138,17 @@ export function playing(over: Partial<ApiNowPlaying> = {}): ApiNowPlaying {
   return { app: "com.apple.Music", title: "Song", artist: "Artist", album: "Album", playing: true, duration: 240, elapsed: 60, at: Date.now(), rate: 1, artwork: null, ...over };
 }
 
-/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `command()` (1.1), `workspace()`; `usage()`, `classes()`, `stat()`, `day()`, `playing()` (1.2). @since 1.0 */
-export const fixtures = { agent, pane, window, event, command, workspace, usage, classes, stat, day, playing };
+/** This week as the Journal rolled it up (`journal.week`): two threads unless given. @since 1.3 */
+export function week(over: Partial<ApiJournalWeek> = {}): ApiJournalWeek {
+  const today = new Date(new Date().setHours(0, 0, 0, 0));
+  const start = new Date(today).setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  return { start, headline: "A week of building", themes: [{ title: "The thing", summary: "Built and shipped it." }, { title: "Fixes", summary: "Smaller fixes along the way." }], writtenAt: Date.now(), ...over };
+}
+
+/** What cmd itself uses (`app.usage`): a quiet app and background unless given. @since 1.3 */
+export function appUsage(over: Partial<ApiAppUsage> = {}): ApiAppUsage {
+  return { app: { cpu: 3.2, memory: 640 * 2 ** 20 }, background: { cpu: 0.8, memory: 120 * 2 ** 20 }, at: Date.now(), ...over };
+}
+
+/** The fixtures: `fixtures.agent()`, `pane()`, `window()`, `event()`, `command()` (1.1), `workspace()`; `usage()`, `classes()`, `stat()`, `day()`, `playing()` (1.2); `week()`, `appUsage()` (1.3). @since 1.0 */
+export const fixtures = { agent, pane, window, event, command, workspace, usage, classes, stat, day, playing, week, appUsage };

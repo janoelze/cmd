@@ -5,7 +5,7 @@
 // useCompletion asks the person's AI (`cmd.ai.complete`) once per request.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
+import type { ApiAppUsage, ApiJournalDay, ApiJournalQuery, ApiStatQuery, ApiStatResult, ApiWorkspaceName, ApiStorageScope, ApiCompletion, ApiCompletionRequest, ApiAction, ApiTerminalUsage, ApiUsageQuery, ApiAgent, ApiAgentQuery, ApiEvent, ApiEventQuery, ApiGitStatus, ApiScopeQuery, ApiTerminal, ApiTopic, ApiWindow, ApiWorkspace, TopicData, TopicQuery, WidgetEnv, WireValue } from "@cmd/protocol/widget-tree";
 import { mergeEvents } from "@cmd/protocol/widget-events";
 import { connection, type ApiCallError } from "./connection.ts";
 
@@ -104,6 +104,47 @@ export function useGit(): ApiGitStatus | null {
  */
 export function useActions(): ApiAction[] {
   return useTopic("actions", null, []);
+}
+
+/**
+ * A stat, live: what `cmd.stats.query(query)` answers, counted again soon after cmd records
+ * something for it (and each minute for time spent, which grows without events). null until it
+ * arrives. Needs `events: [<class>]` for the class the stat is counted from.
+ * @since 1.3
+ */
+export function useStat(query: ApiStatQuery): ApiStatResult | null {
+  return useTopic("stats", query, null as unknown as ApiStatResult);
+}
+
+/**
+ * The journal's written days, live: what `cmd.journal.days(query)` answers, again when the
+ * Journal writes a day of it. Empty until they arrive. `{ scope: "all" }` reads the journal of
+ * everything on this Mac (with `workspace: ["all"]`). Needs `workspace: ["read"]` and
+ * `events: ["agents"]`.
+ * @since 1.3
+ */
+export function useJournal(query: ApiJournalQuery = {}): ApiJournalDay[] {
+  return useTopic("journal", query, []);
+}
+
+/**
+ * Every workspace by id and name, live, in the switcher's order: what says where an agent or
+ * terminal of another workspace is. Never their folders. Empty until they arrive. Needs
+ * `workspace: ["all"]`.
+ * @since 1.3
+ */
+export function useWorkspaces(): ApiWorkspaceName[] {
+  return useTopic("workspaces", null, []);
+}
+
+/**
+ * What cmd itself uses, live: the app's processes and the background one, CPU and memory,
+ * sampled every 2 seconds while the widget shows it. null until the first sample. Needs
+ * `events: ["system"]`.
+ * @since 1.3
+ */
+export function useAppUsage(): ApiAppUsage | null {
+  return useTopic("appUsage", null, null as unknown as ApiAppUsage);
 }
 
 function usePushed<T>(read: () => T): T {

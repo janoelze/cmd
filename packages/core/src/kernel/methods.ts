@@ -28,6 +28,7 @@ export const kernelHandlers = (core: CoreContext) => {
     "secrets.status": () => core.secrets.status(),
     "secrets.set": (p) => core.secrets.set(p.key, p.value),
     "ui.get": () => core.store.uiState(),
+    "app.attach": (p) => (core.processes?.attach(Number(p?.pid)), null),
     "ui.set": (p) => {
       if (typeof p.key !== "string" || !p.key || p.key.length > 200) throw new Error("ui.set: invalid key");
       if (JSON.stringify(p.value ?? null).length > 64 * 1024) throw new Error("ui.set: value too large");

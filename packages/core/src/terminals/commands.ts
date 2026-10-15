@@ -88,6 +88,11 @@ export class CommandLog {
     panes.on("removed", (id) => this.#end(id, null));
   }
 
+  /** Whether a command runs in the pane now (between its shell's C and D marks): not at a prompt. */
+  running(id: PaneId): boolean {
+    return this.#running.has(id);
+  }
+
   #start(id: PaneId): void {
     const pane = this.#panes.get(id);
     if (!pane || pane.agentId) return;

@@ -56,9 +56,10 @@ Coding agents (Claude, Codex, …). Needs `workspace: ["read"]`.
 |---|---|---|---|
 | `cmd.agents.list(query?: ApiScopeQuery \| undefined): Promise<ApiAgent[]>` | 1.0 | `workspace: ["read"]` | The agents of this workspace, or of all with `{ scope: "all" }` (needs `workspace: ["all"]`). |
 | `cmd.agents.get(id: string): Promise<ApiAgent \| null>` | 1.0 | `workspace: ["read"]` | One agent by id, or null. |
-| `cmd.agents.start(req: ApiAgentStart): Promise<ApiStarted>` | 1.1 | `act: ["agents"]`, asks | Starts a coding agent on a task, in a terminal of its own in this workspace. The prompt is typed text: it asks every time, showing the prompt, and is never kept for always. Works only right after they pressed something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`). |
+| `cmd.agents.start(req: ApiAgentStart): Promise<ApiStarted>` | 1.1 | `act: ["agents"]`, asks | Starts a coding agent on a task, in a terminal of its own in this workspace. The prompt is typed text: it asks every time, showing the prompt, and is never kept for always. Without a prompt (since 1.3) it starts an interactive session the person types into, and asks "Start a Claude session?" as any act does. Works only right after they pressed something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`). |
 | `cmd.agents.send(id: string, text: string): Promise<null>` | 1.1 | `act: ["agents"]`, asks | Sends a message to an agent of this workspace, as if typed into its terminal. Typed text always asks, every time. Needs `act: ["agents"]` (or `"agents.send"`); only after a press. |
 | `cmd.agents.stop(id: string): Promise<null>` | 1.1 | `act: ["agents"]`, asks | Stops an agent of this workspace. Asks first; only after a press. Needs `act: ["agents"]` (or `"agents.stop"`). |
+| `cmd.agents.select(id: string): Promise<null>` | 1.3 | none, acts | Shows an agent's terminal (a subagent's host's), in its workspace, and marks the agent seen, as a click in Agent Activity does: where a row's click goes. Within the widget's reach (its workspace, or every one with `workspace: ["all"]`); needs no permission. |
 | `cmd.agents.use(query?: ApiScopeQuery): ApiAgent[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useAgents()`. |
 
 #### `cmd.terminals`
@@ -73,6 +74,7 @@ Terminals. Needs `workspace: ["read"]`.
 | `cmd.terminals.type(id: string, text: string, opts?: { submit?: boolean \| undefined; } \| undefined): Promise<null>` | 1.1 | `act: ["terminals"]`, asks | Types `text` into a terminal of this workspace, and presses Return only with `{ submit: true }`. Typed text always asks, every time, showing exactly what; some commands are refused outright (root, piping a download into a shell, credentials). Only after a press. Needs `act: ["terminals"]` (or `"terminals.type"`). |
 | `cmd.terminals.open(req?: ApiTerminalOpen \| undefined): Promise<{ id: string; }>` | 1.1 | `act: ["terminals"]`, asks | Opens a terminal in this workspace, in `cwd`, with `command` typed at its prompt but not run: the person reads it and presses Return. Asks first; only after a press. Needs `act: ["terminals"]` (or `"terminals.open"`). |
 | `cmd.terminals.usage(query?: ApiUsageQuery \| undefined): Promise<ApiTerminalUsage[]>` | 1.2 | `workspace: ["read"]` | What each terminal of this workspace uses now (or of every workspace with `{ scope: "all" }`, which needs `workspace: ["all"]`): CPU (percent of one core), memory and processes of its whole process tree, sampled every few seconds; a terminal not sampled yet isn't listed. cmd's own processes aren't terminals and aren't here. Live: the hook `useTerminalUsage()`. |
+| `cmd.terminals.rerun(key: string): Promise<ApiRerun>` | 1.3 | `act: ["terminals"]`, asks | Runs a command again in the terminal it ran in: `key` is the command's, as `cmd.events.query` gives it (`event.key`). What is typed is the command cmd's log recorded, never text from the widget, and the sheet shows it. Refused when that terminal is closed or isn't at a prompt (something runs in it). Asks first, every time for a package you installed; only after a press. Needs `act: ["terminals"]` (or `"terminals.rerun"`). |
 | `cmd.terminals.use(query?: ApiScopeQuery): ApiTerminal[]` | 1.0 | `workspace: ["read"]` | Live: the hook `useTerminals()`. |
 
 #### `cmd.windows`
@@ -128,6 +130,7 @@ Stats (docs/49): how cmd is used, counted from the event log, as the Stats windo
 | Verb | Since | Permission | What |
 |---|---|---|---|
 | `cmd.stats.query(query: ApiStatQuery): Promise<ApiStatResult>` | 1.2 | `events: [<class>]` | One stat over a range, by bucket: `{ stat: "agents.time", range: "7d" }`, split with `by`, compared with the range before (`compare`) or ranked (`top`). This workspace's unless `{ scope: "all" }` (with `workspace: ["all"]`); a stat that can't tell workspaces apart needs "all". Needs `events: [<class>]` for the class it is counted from (an error names it). |
+| `cmd.stats.use(query: ApiStatQuery): ApiStatResult \| null` | 1.3 | `events: [<class>]` | Live: the hook `useStat(query)`. |
 
 #### `cmd.journal`
 
@@ -135,7 +138,27 @@ The journal (docs/23): what happened in this workspace, a few lines a day.
 
 | Verb | Since | Permission | What |
 |---|---|---|---|
-| `cmd.journal.days(query?: ApiJournalQuery \| undefined): Promise<ApiJournalDay[]>` | 1.2 | `workspace: ["read"]`, `events: ["agents"]` | The last `count` work days of this workspace with something in them (default 7, at most 30), newest first, as the Journal has written them; a day not written yet isn't there (a widget never has one written). Needs `workspace: ["read"]` and `events: ["agents"]` (a day is written from the agents' prompts and work). |
+| `cmd.journal.days(query?: ApiJournalQuery \| undefined): Promise<ApiJournalDay[]>` | 1.2 | `workspace: ["read"]`, `events: ["agents"]` | The last `count` work days of this workspace with something in them (default 7, at most 30), newest first, as the Journal has written them; a day not written yet isn't there (a widget never has one written). With `{ scope: "all" }` (since 1.3, with `workspace: ["all"]`) the journal of everything on this Mac; each entry names its `project` (a folder's name). Needs `workspace: ["read"]` and `events: ["agents"]` (a day is written from the agents' prompts and work). |
+| `cmd.journal.week(query?: ApiJournalWeekQuery \| undefined): Promise<ApiJournalWeek \| null>` | 1.3 | `workspace: ["read"]`, `events: ["agents"]` | This week as the Journal rolled it up from its days: a headline and the week's threads of work, or null before it has written one. Read only, like the days; `{ scope: "all" }` as there. Needs `workspace: ["read"]` and `events: ["agents"]`. |
+| `cmd.journal.use(query?: ApiJournalQuery): ApiJournalDay[]` | 1.3 | `workspace: ["read"]`, `events: ["agents"]` | Live: the hook `useJournal(query)`. |
+
+#### `cmd.workspaces`
+
+Every workspace, by name. Needs `workspace: ["all"]`.
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.workspaces.list(): Promise<ApiWorkspaceName[]>` | 1.3 | `workspace: ["read"]` | Each workspace's id and name, in the switcher's order; never its folder. Needs `workspace: ["all"]`. |
+| `cmd.workspaces.use(): ApiWorkspaceName[]` | 1.3 | `workspace: ["read"]` | Live: the hook `useWorkspaces()`. |
+
+#### `cmd.app`
+
+cmd itself.
+
+| Verb | Since | Permission | What |
+|---|---|---|---|
+| `cmd.app.usage(): Promise<ApiAppUsage>` | 1.3 | `events: [<class>]`, `events: ["system"]` | What cmd uses now, as the Task Manager adds it up: the app (its windows, pages and helpers) and the background process that keeps terminals and agents running, each CPU (percent of one core) and memory; null where cmd can't tell. Needs `events: ["system"]`. |
+| `cmd.app.use(): ApiAppUsage \| null` | 1.3 | none | Live: the hook `useAppUsage()`. |
 
 #### `cmd.media`
 
@@ -271,19 +294,23 @@ The reads as subscriptions: each gets the current value at once and every change
 |---|---|---|
 | `useActions(): ApiAction[]` | 1.0 | The workspace's Actions (docs/36), live. |
 | `useAgents(query?: ApiScopeQuery): ApiAgent[]` | 1.0 | The agents of this workspace (or every workspace with `{ scope: "all" }`), live: a row updates when an agent's state, name or line changes. Empty until they arrive. Needs `workspace: ["read"]` (`["all"]` for every workspace). |
+| `useAppUsage(): ApiAppUsage \| null` | 1.3 | What cmd itself uses, live: the app's processes and the background one, CPU and memory, sampled every 2 seconds while the widget shows it. null until the first sample. Needs `events: ["system"]`. |
 | `useCompletion(request: ApiCompletionRequest \| null): CompletionState` | 1.0 | Asks the person's AI once per distinct `request` (a new prompt asks again; null asks nothing): `cmd.ai.complete` as a hook. Needs `ai: ["complete"]`. |
 | `useConfig<T extends ConfigShape<T> = Record<string, WireValue>>() => T` | 1.0 | This window's config values (from package.json's `config` fields, as the person set them, else their defaults), live, typed by `cmd-env.d.ts`. Secret fields are never here: a widget never holds a secret (`cmd.net.fetch`'s `auth` names one). |
 | `useData<T>(fn: (): Promise<T>, opts?: { every?: number \| undefined; }) => DataState<T>` | 1.0 | The outside world on a timer: runs `fn` (a `cmd.net.fetch`) now and every `every` seconds (default 60), keeps the last good data through failures and says how fresh it is. A run that throws keeps the old data with `stale` and `error` set. |
 | `useEnv(): WidgetEnv` | 1.0 | Where the widget runs: cmd's version, the API served, the theme, the size class and the placement (board or sidebar), live. |
 | `useEvents(query?: ApiEventQuery): ApiEvent[]` | 1.0 | Events from the log matching `query`, newest last: the query's result first, then each new one as it happens; at most `query.limit` (default 200) are kept. An event recorded again (a command as it ends: the same `key`, since 1.1) replaces the one before. Needs `events: [<class>]` for each class of events it reads. `{ scope: "all" }` reads every workspace's, with `workspace: ["all"]` (live since cmd of 2026-10-15; an older cmd refuses it, and `cmd.events.query` reads them). |
 | `useGit(): ApiGitStatus \| null` | 1.0 | The workspace's git status (branch, ahead/behind, changed files), live; null outside a repository. |
+| `useJournal(query?: ApiJournalQuery): ApiJournalDay[]` | 1.3 | The journal's written days, live: what `cmd.journal.days(query)` answers, again when the Journal writes a day of it. Empty until they arrive. `{ scope: "all" }` reads the journal of everything on this Mac (with `workspace: ["all"]`). Needs `workspace: ["read"]` and `events: ["agents"]`. |
 | `useNow(every?: number): number` | 1.0 | The time now, re-rendering every `every` ms (default 1000): for ages that move. |
+| `useStat(query: ApiStatQuery): ApiStatResult \| null` | 1.3 | A stat, live: what `cmd.stats.query(query)` answers, counted again soon after cmd records something for it (and each minute for time spent, which grows without events). null until it arrives. Needs `events: [<class>]` for the class the stat is counted from. |
 | `useStorage<T extends WireValue = never, I extends WireValue = never>(scope: ApiStorageScope, key: string, initial: [T] extends [never] ? I : NoInfer<T>): Stored<StoredValue<T, I>>` | 1.3 | A stored value, live, like useState: `useStorage("package", "notes", [])`. `scope` is `"window"` (this window; `useStoredState` keeps the same values), `"workspace"` (this package in the window's workspace) or `"package"` (this package everywhere). A set here reaches every other open window of the package that uses the same scope and key at once. `initial` until the stored value arrives (a window's own is there on the first render) and while none is stored. |
 | `useStoredState<T extends WireValue = never, I extends WireValue = never>(key: string, initial: [T] extends [never] ? I : NoInfer<T>): Stored<StoredValue<T, I>>` | 1.0 | A value kept by the core for this window across reloads and restarts, like useState. The first render already has the stored value. |
 | `useTerminals(query?: ApiScopeQuery): ApiTerminal[]` | 1.0 | The terminals of this workspace (or all), live. |
 | `useTerminalUsage(query?: ApiUsageQuery): ApiTerminalUsage[]` | 1.2 | What each terminal of this workspace (or all, with `{ scope: "all" }` and `workspace: ["all"]`) uses, live: CPU, memory and processes of its process tree, a new sample every few seconds when it moved. Empty until the first arrives. Needs `workspace: ["read"]`. |
 | `useWindows(query?: ApiScopeQuery): ApiWindow[]` | 1.0 | The windows of this workspace (or all), live, with which is selected. |
 | `useWorkspace(): ApiWorkspace \| null` | 1.0 | The widget's workspace (id, name, folder, branch), live; null until it arrives. Needs `workspace: ["read"]`. |
+| `useWorkspaces(): ApiWorkspaceName[]` | 1.3 | Every workspace by id and name, live, in the switcher's order: what says where an agent or terminal of another workspace is. Never their folders. Empty until they arrive. Needs `workspace: ["all"]`. |
 
 `defineWidget<Config extends ConfigShape<Config> = Record<string, WireValue>>(render: (props: { config: Config; }) => ReactNode) => Widget`: Declares a widget: `render` is its view, called with this window's config (live). The module's default export is what cmd runs; a plain component works too. export default defineWidget<{ repo: string }>(({ config }) => <Text>{config.repo}</Text>);
 
@@ -293,7 +320,7 @@ A frame widget's page (`"surface": "frame"`, its `view.html`) has a `cmd` of its
 
 | Member | What |
 |---|---|
-| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions \| storage \| terminalUsage>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
+| `cmd.<workspace \| agents \| terminals \| windows \| events \| git \| actions \| stats \| journal \| workspaces \| storage \| terminalUsage \| appUsage>.subscribe(query?, fn, onError?): () => void` | Calls `fn` with the topic's value now and again on each change (for `events`: the query's result, then each batch of new events); returns a function that stops it. When the widget restarts it goes on, starting again with the value then. A refusal (the grant doesn't reach it) or its end (the widget stopped) goes to `onError`, else the console. |
 | `cmd.storage.window.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
 | `cmd.storage.workspace.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |
 | `cmd.storage.package.subscribe(key: string, fn: (value: WireValue) => void, onError?: (e: FrameCallError) => void): () => void` | Calls `fn` with the key's value now and on each change, from any window of the package (null: none); returns what stops it. |

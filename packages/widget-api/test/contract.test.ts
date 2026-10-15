@@ -38,7 +38,7 @@ describe("verbs", () => {
   });
 
   it("every verb is cmd.<namespace>.<name>, sends a call with its own name, and the fake host serves it", async () => {
-    const host = createHost({ terminals: [fixtures.pane({ id: "x" })], actions: [{ name: "x", title: "x", risky: false }], fetch: () => ({}), ai: { text: "" }, run: () => ({}) });
+    const host = createHost({ events: [fixtures.command({ key: "x", terminalId: "x", exitCode: 0 })], terminals: [fixtures.pane({ id: "x" })], actions: [{ name: "x", title: "x", risky: false }], fetch: () => ({}), ai: { text: "" }, run: () => ({}) });
     await render(() => null, host);
     for (const v of API_VERBS) {
       const [ns, name] = v.split(".") as [keyof Cmd, string];

@@ -15,6 +15,7 @@ import type { ApiElement } from "./widget-elements.ts";
 import type { ApiTopic, ApiVerb } from "./widget-verbs.ts";
 import type { ApiEventClass, ApiJournalDay, ApiJournalQuery, ApiMediaCommand, ApiNowPlaying, ApiStatQuery, ApiStatResult, ApiTerminalUsage, ApiUsageQuery } from "./widget-tree-1.2.ts";
 import type { ApiStorageMigrate, ApiStorageQuery, ApiStorageScope, WidgetMigrated } from "./widget-tree-1.3.ts";
+import type { ApiAppUsage, ApiJournalWeek, ApiJournalWeekQuery, ApiRerun, ApiWorkspaceName } from "./widget-tree-1.3.ts";
 
 // ── versions ────────────────────────────────────────────
 
@@ -284,6 +285,12 @@ export interface ApiMethods {
   "storage.delete": { params: [scope: ApiStorageScope, key: string]; result: null };
   "storage.keys": { params: [scope: ApiStorageScope, prefix?: string]; result: string[] };
   "storage.history": { params: [scope: ApiStorageScope, key: string, value?: number | null, max?: number]; result: number[] };
+  // 1.3: what the native views read (widget-tree-1.3.ts).
+  "journal.week": { params: [query?: ApiJournalWeekQuery]; result: ApiJournalWeek | null };
+  "workspaces.list": { params: []; result: ApiWorkspaceName[] };
+  "agents.select": { params: [id: string]; result: null };
+  "terminals.rerun": { params: [key: string]; result: ApiRerun };
+  "app.usage": { params: []; result: ApiAppUsage };
 }
 
 /** ApiMethods has exactly the verbs of API_VERBS (tsc fails here otherwise). */
@@ -300,6 +307,10 @@ export interface TopicQuery {
   actions: null;
   terminalUsage: ApiUsageQuery;
   storage: ApiStorageQuery;
+  stats: ApiStatQuery;
+  journal: ApiJournalQuery;
+  workspaces: null;
+  appUsage: null;
 }
 export interface TopicData {
   workspace: ApiWorkspace;
@@ -313,6 +324,10 @@ export interface TopicData {
   terminalUsage: ApiTerminalUsage[];
   /** The key's value now, or null. */
   storage: WireValue;
+  stats: ApiStatResult;
+  journal: ApiJournalDay[];
+  workspaces: ApiWorkspaceName[];
+  appUsage: ApiAppUsage;
 }
 
 // ── the data, in the product's words ────────────────────
@@ -429,6 +444,8 @@ export interface ApiEvent {
   terminalId?: string | null;
   /** 1.2: the log's one line for it, as the Event Stream shows it ("pnpm test", "Committed “Fix the footer”"); null when it has none. */
   text?: string | null;
+  /** 1.3: the window it is about (a notification's, a tool call's), if any. */
+  windowId?: string | null;
 }
 
 export interface ApiEventStats {
@@ -517,8 +534,8 @@ export type ApiCompletion = ({ text: string } | { object: WireValue }) & { usage
 export interface ApiAgentStart {
   /** "claude" (the default) or "codex". */
   kind?: "claude" | "codex";
-  /** The task, as a complete brief. */
-  prompt: string;
+  /** The task, as a complete brief. 1.3: none starts an interactive session the person types into. */
+  prompt?: string;
   /** Where it works: a folder in the workspace's (relative to it, or absolute inside it); the workspace's folder by default. */
   cwd?: string;
 }

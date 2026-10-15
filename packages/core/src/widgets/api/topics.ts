@@ -6,6 +6,9 @@
 // API_TOPIC names its verb); TOPICS below says what it listens to. `events` sends only the
 // events that are new, within data/policy.ts. `storage` (1.3) is one key of one scope: a set
 // in any window of the package (widgets/storage.ts's `changed`), or this window's state.
+// 1.3's others (docs/57 C2–C12): a stat again 1.5 s after the core says it changed (as the Stats
+// window does) and each minute for one counted in time; the journal when a day or week of its
+// scope is written; workspaces as they change; cmd's own use every 2 s.
 
 import { API_TOPIC, mergeEvents, topicVerb, type ApiEvent, type ApiEventQuery, type ApiTopic, type ApiVerb, type DataEvent, type WidgetPermissions, type WireValue } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
@@ -24,8 +27,16 @@ const log = logger("widgets");
 export const TOPIC_COALESCE_MS = 50;
 /** Git runs a process: its topic waits a little longer. */
 const GIT_COALESCE_MS = 400;
+/** A stat is counted again this long after the core says it changed (the Stats window's wait). */
+export const STATS_COALESCE_MS = 1500;
+/** A stat counted in time (time spent) grows without events: read again this often. */
+export const STATS_TIME_MS = 60_000;
+/** The Journal writes stale days one after another: they are read again once, this long after a write. */
+const JOURNAL_COALESCE_MS = 2000;
+/** cmd's own use is sampled this often while someone watches it (the Task Manager's pace). */
+export const APP_USAGE_MS = 2000;
 
-type TopicCore = Pick<CoreContext, "agents" | "panes" | "windows" | "workspaces" | "data" | "actions">;
+type TopicCore = Pick<CoreContext, "agents" | "panes" | "windows" | "workspaces" | "data" | "actions" | "stats" | "journal">;
 
 export interface TopicScope {
   topic: ApiTopic;
@@ -33,8 +44,8 @@ export interface TopicScope {
   own: () => string;
   perms: WidgetPermissions;
   root: () => string | null;
-  /** The adapter's read of a verb (adapter.ts), checking the grant as the verb does. */
-  read(verb: ApiVerb, query: unknown): unknown;
+  /** The adapter's read of a verb (adapter.ts), checking the grant as the verb does; `live`: a read again after a change (not the first). */
+  read(verb: ApiVerb, query: unknown, live?: boolean): unknown;
   /** The subscribing window, and its package's storage (the `storage` topic). */
   windowId?: string;
   storage?: { store: WidgetStorage; owner: string };
@@ -88,6 +99,42 @@ const TOPICS: { [T in Exclude<ApiTopic, "events">]: { listen: Listen; coalesceMs
       return [on(core.windows, "updated", own), ...(mine && s.storage ? [on(s.storage.store, "changed", mine)] : [])];
     },
   },
+  // 1.3: the stat named, when the core says it changed; one counted in time also each minute.
+  stats: {
+    coalesceMs: STATS_COALESCE_MS,
+    listen: (core, s, changed) => {
+      const id = (s.query as { stat?: unknown } | null)?.stat;
+      if (typeof id !== "string") return [];
+      const offs = [on(core.stats, "changed", (stats: string[]) => stats.includes(id) && changed())];
+      let timed = false;
+      try {
+        timed = core.stats.def(id).kind === "duration";
+      } catch {}
+      if (timed) {
+        const t = setInterval(changed, STATS_TIME_MS);
+        t.unref?.();
+        offs.push(() => clearInterval(t));
+      }
+      return offs;
+    },
+  },
+  // 1.3: a day (or the week) of the scope it reads written, by the Journal or on its schedule.
+  journal: {
+    coalesceMs: JOURNAL_COALESCE_MS,
+    listen: (core, s, changed) => {
+      const all = (s.query as { scope?: unknown } | null)?.scope === "all";
+      return [on(core.journal, "written", (scope: string) => (all ? scope === "all" : scope === `workspace:${s.own()}`) && changed())];
+    },
+  },
+  workspaces: { listen: (core, _s, changed) => [on(core.workspaces, "updated", changed), on(core.workspaces, "removed", changed)] },
+  // 1.3: sampled while subscribed, never otherwise (the samples are shared: terminals/resources.ts ProcessSampler.own).
+  appUsage: {
+    listen: (_core, _s, changed) => {
+      const t = setInterval(changed, APP_USAGE_MS);
+      t.unref?.();
+      return [() => clearInterval(t)];
+    },
+  },
   git: {
     coalesceMs: GIT_COALESCE_MS,
     // Staging, committing, switching: the repository's index and HEAD.
@@ -110,7 +157,7 @@ export function subscribeTopic(core: TopicCore, s: TopicScope, push: (data: Wire
   if (s.topic === "events") return subscribeEvents(core, s, push);
   const topic = TOPICS[s.topic];
   const q = s.query && typeof s.query === "object" ? s.query : {};
-  const read = (): unknown => s.read(verb, q);
+  const read = (live = false): unknown => s.read(verb, q, live);
   // The first read checks the grant: a refusal throws before anything listens.
   const first = read();
   let last = "";
@@ -129,7 +176,7 @@ export function subscribeTopic(core: TopicCore, s: TopicScope, push: (data: Wire
       () => {
         timer = null;
         try {
-          void settle(read());
+          void settle(read(true));
         } catch {}
       },
       topic.coalesceMs ?? TOPIC_COALESCE_MS,

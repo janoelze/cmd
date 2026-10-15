@@ -218,6 +218,7 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "push.unsubscribe": "view",
   "push.visible": "view",
   "ui.presence": "never", // the Mac's own app
+  "app.attach": "never", // the Mac's own app
 };
 
 export class RemoteDenied extends Error {}

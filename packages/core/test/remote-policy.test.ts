@@ -286,7 +286,7 @@ describe("widget trees to devices (docs/56, Remote)", () => {
   // device's, so the act it leads to asks on the Mac every time, Once only, whatever was kept.
   it("leaves act verbs never for view scope and confirm on the Mac for control scope; this Mac's own never for a device", () => {
     const acts = API_VERBS.filter((v) => API[v].mode === "confirm");
-    expect(acts.length).toBe(8); // 1.2 added actions.stop
+    expect(acts.length).toBe(9); // 1.2 added actions.stop, 1.3 terminals.rerun
     // 1.2: what acts on this Mac (its clipboard, what it plays) is never for a device's press, whatever its scope (widget-api-12.test.ts).
     expect(API_VERBS.filter(localOnly)).toEqual(["media.control", "clipboard.write"]);
     expect(scopeAllows("view", REMOTE_ACCESS["widget.interact"])).toBe(false);

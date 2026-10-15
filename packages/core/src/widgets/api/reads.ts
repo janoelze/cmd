@@ -5,14 +5,17 @@
 // through data/policy.ts's widget row, and nothing that names a folder outside the workspace's
 // (a stat's key that is a path comes back as its name). The adapter (adapter.ts) checks each
 // verb's row first; what is checked per call (the stat's class, "all") is here.
+// 1.3 (docs/57 C3–C12): a stat's kind, quantiles and asOf; the journal of every workspace and
+// its week; the workspaces by name (never a folder); cmd's own CPU and memory.
 
-import { DATA_CLASSES, NOW_PLAYING_COMMANDS, type ApiEventClass, type ApiJournalDay, type ApiJournalQuery, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminalUsage, type ApiUsageQuery, type NowPlaying, type NowPlayingCommand, type StatQuery, type StatResult, type WidgetPermissions, type JournalDay } from "@cmd/protocol";
+import path from "node:path";
+import { DATA_CLASSES, NOW_PLAYING_COMMANDS, type ApiAppUsage, type ApiJournalWeek, type ApiJournalWeekQuery, type ApiStatInfo, type ApiWorkspaceName, type JournalWeek, type ApiEventClass, type ApiJournalDay, type ApiJournalQuery, type ApiNowPlaying, type ApiStatQuery, type ApiStatResult, type ApiTerminalUsage, type ApiUsageQuery, type NowPlaying, type NowPlayingCommand, type StatQuery, type StatResult, type WidgetPermissions, type JournalDay } from "@cmd/protocol";
 import type { CoreContext } from "../../kernel/context.ts";
 import { declarable, readsClass } from "../../data/policy.ts";
 import { holdNowPlaying } from "../../nowplaying/feature.ts";
 import { RateLimit, invalid, missing } from "./access.ts";
 
-export type ReadsCore = Pick<CoreContext, "panes" | "resources" | "stats" | "journal" | "workspaces" | "windows" | "broadcast" | "call">;
+export type ReadsCore = Pick<CoreContext, "panes" | "resources" | "processes" | "stats" | "journal" | "workspaces" | "windows" | "broadcast" | "call">;
 
 export interface ReadsScope {
   /** The widget's workspace now. */
@@ -114,20 +117,47 @@ export function widgetReads(core: ReadsCore, s: ReadsScope) {
       ...(q.top ? { top: Math.max(1, Math.min(Math.floor(Number(q.top)) || 10, STATS_TOP_MAX)) } : {}),
       ...(every ? {} : { workspaceId: s.own() }),
     };
+    const quantiles = q.quantiles === true;
     let r: StatResult;
     try {
       r = core.stats.query(query);
     } catch (e) {
       throw invalid(`stats.query: ${(e as Error).message.replace(/ \(cmd stats ls\)/, "")}`);
     }
-    return apiStat(r);
+    return apiStat(r, { quantiles });
   };
 
-  const days = async (q?: ApiJournalQuery | null): Promise<ApiJournalDay[]> => {
-    journal.take("journal.days");
+  /** The journal's scope a query reads: this workspace's, or with "all" (granted) everything's. */
+  const journalScope = (q: { scope?: unknown } | null | undefined, what: string): string => (all(q, what) ? "all" : `workspace:${s.own()}`);
+
+  /** `live`: the journal topic's read again after a write, already coalesced (topics.ts): not counted against the calls' limit. */
+  const days = async (q?: ApiJournalQuery | null, live = false): Promise<ApiJournalDay[]> => {
+    const scope = journalScope(q, "Reading the journal of every workspace");
+    if (!live) journal.take("journal.days");
     const count = Math.max(1, Math.min(Math.floor(Number(q?.count) || 7), JOURNAL_MAX_DAYS));
     // Read only: a widget never has a day written (that runs the person's model).
-    return (await core.journal.days(`workspace:${s.own()}`, count, "never")).map(apiDay);
+    return (await core.journal.days(scope, count, "never")).map(apiDay);
+  };
+
+  /** 1.3: this week as the Journal rolled it up, read only. */
+  const week = async (q?: ApiJournalWeekQuery | null): Promise<ApiJournalWeek | null> => {
+    const scope = journalScope(q, "Reading the journal of every workspace");
+    journal.take("journal.week");
+    const w = await core.journal.week(scope, Date.now(), "never");
+    return w && apiWeek(w);
+  };
+
+  /** 1.3: every workspace by id and name, in the switcher's order: never a folder. */
+  const workspaces = (): ApiWorkspaceName[] => {
+    if (s.level !== "all") throw missing("workspace", "all", "Seeing every workspace's name");
+    return core.workspaces.list().map((w) => ({ id: w.id, name: w.name }));
+  };
+
+  /** 1.3: what cmd itself uses: the app's processes and the background ones (terminals/resources.ts ProcessSampler.own). */
+  const appUsage = async (): Promise<ApiAppUsage> => {
+    if (!core.processes) return { app: null, background: null, at: Date.now() };
+    const u = await core.processes.own(core.panes.backend.info?.()?.pid ?? null);
+    return { app: u.app && { ...u.app }, background: u.background && { ...u.background }, at: u.at };
   };
 
   const media = async (): Promise<ApiNowPlaying | null> => {
@@ -161,6 +191,9 @@ export function widgetReads(core: ReadsCore, s: ReadsScope) {
     usage,
     stat,
     days,
+    week,
+    workspaces,
+    appUsage,
     media,
     control,
     dispose() {
@@ -170,12 +203,15 @@ export function widgetReads(core: ReadsCore, s: ReadsScope) {
   };
 }
 
-/** A stat's result in the API's words: a key that names a folder (a project, a file) comes back as its name. */
-export function apiStat(r: StatResult): ApiStatResult {
+/** What a stat counts, in the API's words: sums and durations add up as counts do; a stat computed from two others is a rate. */
+const statKind = (s: StatResult["stat"]): NonNullable<ApiStatInfo["kind"]> => (s.derived ? "rate" : s.kind === "gauge" || s.kind === "distribution" ? s.kind : "count");
+
+/** A stat's result in the API's words: a key that names a folder (a project, a file) comes back as its name; quantiles only when asked. */
+export function apiStat(r: StatResult, o: { quantiles?: boolean } = {}): ApiStatResult {
   const key = (k: string, label: string) => (pathLike(k) ? label : k);
   const s = r.stat;
   return {
-    stat: { id: s.id, title: s.title, description: s.description, unit: s.unit, dims: s.dims.map((d) => ({ id: d.id, title: d.title })), ...(s.good ? { good: s.good } : {}), class: s.class },
+    stat: { id: s.id, title: s.title, description: s.description, unit: s.unit, dims: s.dims.map((d) => ({ id: d.id, title: d.title, ...(d.many ? { many: true } : {}) })), ...(s.good ? { good: s.good } : {}), class: s.class, kind: statKind(s) },
     from: r.from,
     to: r.to,
     grain: r.grain,
@@ -186,17 +222,22 @@ export function apiStat(r: StatResult): ApiStatResult {
     ...(r.previous ? { previous: r.previous } : {}),
     ...(r.ranking ? { ranking: r.ranking.map((x) => ({ key: key(x.key, x.label), label: x.label, value: x.value })) } : {}),
     ...(r.partial ? { partial: r.partial } : {}),
+    ...(o.quantiles && r.quantiles ? { quantiles: { p50: r.quantiles.p50, p90: r.quantiles.p90 } } : {}),
+    asOf: r.asOf,
   };
 }
 
-/** A written day without its folders, hashes and model. */
+/** A written day without its folders (a project by its folder's name), hashes and model. */
 export function apiDay(d: JournalDay): ApiJournalDay {
   return {
     date: d.date,
     headline: d.headline,
     writtenAt: d.writtenAt,
-    entries: d.entries.map((e) => ({ id: e.id, kind: e.kind, title: e.title, summary: e.summary, outcome: e.outcome, start: e.start, end: e.end, counts: { ...e.counts } })),
+    entries: d.entries.map((e) => ({ id: e.id, kind: e.kind, title: e.title, summary: e.summary, outcome: e.outcome, start: e.start, end: e.end, counts: { ...e.counts }, project: e.repo ? path.basename(e.repo) || null : null })),
   };
 }
+
+/** A written week without its days' ids, hashes and model. */
+export const apiWeek = (w: JournalWeek): ApiJournalWeek => ({ start: w.start, headline: w.headline, themes: w.themes.map((t) => ({ title: t.title, summary: t.summary })), writtenAt: w.writtenAt });
 
 export const apiNowPlaying = (n: NowPlaying): ApiNowPlaying => ({ app: n.app, title: n.title, artist: n.artist, album: n.album, playing: n.playing, duration: n.duration, elapsed: n.elapsed, at: n.at, rate: n.rate, artwork: n.artwork });

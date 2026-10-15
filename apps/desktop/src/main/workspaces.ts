@@ -285,6 +285,8 @@ export class WorkspaceWindows {
           this.show(e.workspaceId, { newWindow: e.newWindow }, from);
         });
         await conn.client.call("events.subscribe", { types: ["workspace.show", "settings.updated"] });
+        // What cmd's own use counts as the app (a widget's app.usage); an older core doesn't ask.
+        void conn.client.call("app.attach", { pid: process.pid }).catch(() => {});
         this.#ownWindow = (await conn.client.call("settings.get", {})).settings["workspaces.ownWindow"];
         // Soon after a restart (Restart Core), or `cmd .` goes unheard meanwhile.
         conn.closed.then(() => ((this.#core = null), setTimeout(attach, 250)));

@@ -5,7 +5,8 @@
 // A widget sees its own window's workspace unless granted `workspace: ["all"]`; a terminal's
 // screen comes back clipped and marked untrusted; events go through data/policy.ts's widget row.
 // Live topics (subscribe) are topics.ts's, over the same reads; 1.2's reads are reads.ts's;
-// 1.3's storage, with 1.0's `state.*` (its window scope), is storage.ts's.
+// 1.3's storage, with 1.0's `state.*` (its window scope), is storage.ts's; 1.3's other reads are
+// reads.ts's, agents.select is here (windows.select's, for an agent) and terminals.rerun act.ts's.
 // A verb that needs a press (windows.open, media.control, clipboard.write; the acts in act.ts)
 // takes the one it came after, and one marked `local` is never for a paired device's press.
 
@@ -31,7 +32,7 @@ import { widgetRunner, type RunScope } from "./run.ts";
 import { windowStorage } from "./storage.ts";
 import { WidgetStorage } from "../storage.ts";
 
-export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call" | "resources" | "stats" | "journal">;
+export type AdapterCore = Pick<CoreContext, "agents" | "panes" | "windows" | "windowTypes" | "workspaces" | "data" | "actions" | "notifications" | "ai" | "settings" | "broadcast" | "opened" | "call" | "resources" | "stats" | "journal" | "processes" | "commands">;
 
 /** The window a widget runs for, and what it may do. */
 export interface WidgetScope {
@@ -294,6 +295,21 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     "journal.days": (q) => reads.days(q),
     "media.get": () => reads.media(),
     "media.control": (command, opts) => reads.control(command, opts),
+    // 1.3 (reads.ts; agents.select as windows.select).
+    "journal.week": (q) => reads.week(q),
+    "workspaces.list": () => reads.workspaces(),
+    "app.usage": () => reads.appUsage(),
+    "agents.select": (id) => {
+      const a = typeof id === "string" ? core.agents.get(id) : null;
+      if (!a || !(a.workspaceId === own() || level === "all")) throw invalid(`No agent ${String(id).slice(0, 60)} in this widget's reach.`);
+      // A subagent lives in its host's terminal.
+      let host: typeof a | null = a;
+      while (host && !host.paneId && host.parentId) host = core.agents.get(host.parentId);
+      if (!host?.paneId) throw invalid(`${a.name ?? "That agent"} has no terminal to show.`);
+      core.broadcast({ type: "window.focus", id: host.paneId });
+      core.agents.markSeen(a.id);
+      return null;
+    },
     "clipboard.write": async (text) => {
       if (typeof text !== "string") throw invalid("clipboard.write: give it text");
       await (scope.clipboard ?? writeClipboard)(text.slice(0, CLIPBOARD_MAX)).catch((e: Error) => {
@@ -304,7 +320,12 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
   };
 
   /** A topic's read: its verb, the row already checked (topics.ts). */
-  const read = (verb: ApiVerb, q: unknown): unknown => (verb === "storage.get" ? storage.read(q as ApiStorageQuery) : (VERBS[verb as keyof Verbs] as (q: unknown) => unknown)(q));
+  const read = (verb: ApiVerb, q: unknown, live = false): unknown => {
+    if (verb === "storage.get") return storage.read(q as ApiStorageQuery);
+    // The journal topic reads again only after a write, coalesced: not counted as the widget's calls are.
+    if (verb === "journal.days" && live) return reads.days(q as never, true);
+    return (VERBS[verb as keyof Verbs] as (q: unknown) => unknown)(q);
+  };
 
   return {
     verbs: [...API_VERBS],
@@ -336,6 +357,9 @@ export function widgetApi(core: AdapterCore, scope: WidgetScope): WidgetApi {
     subscribe(topic, query, push) {
       const verb = topicVerb(topic);
       if (verb && API[verb].needs === "workspace" && level === "none") throw missing("workspace", "read", "Seeing this workspace");
+      // A live read of a verb that reads a class of events (the journal, cmd's own use) needs it as the verb does.
+      const cls = verb ? verbClass(verb) : null;
+      if (verb && cls && !perms.events.includes(cls)) throw missing("events", cls, `${topic} (it reads ${cls} events)`);
       return subscribeTopic(core, { topic: topic as ApiTopic, query, own, read, perms, root: () => core.workspaces.get(own())?.root ?? null, windowId: scope.windowId, storage: { store: st.store, owner: st.owner } }, push);
     },
   };

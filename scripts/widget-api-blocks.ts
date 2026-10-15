@@ -13,7 +13,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { API, API_ACT_VERBS, API_AI_USES, API_ELEMENTS, API_MEDIA_USES, API_TOPICS, type ApiNeed, type ApiVerb } from "../packages/protocol/src/widget-tree.ts";
+import { API, API_ACT_VERBS, API_AI_USES, API_ELEMENTS, API_MEDIA_USES, API_TOPICS, verbClass, type ApiNeed, type ApiVerb } from "../packages/protocol/src/widget-tree.ts";
 import { PERMISSION_KEYS } from "../packages/protocol/src/widget-package.ts";
 import { DATA_CLASSES, type DataClass } from "../packages/protocol/src/events.ts";
 import { POLICY, declarable } from "../packages/core/src/data/policy.ts";
@@ -29,11 +29,14 @@ const list = (xs: string[], and = "and") => (xs.length < 2 ? xs.join("") : `${xs
 const verbsNeeding = (need: ApiNeed) => (Object.keys(API) as ApiVerb[]).filter((v) => API[v].needs === need);
 const namespaces = (verbs: string[]) => [...new Set(verbs.map((v) => v.split(".")[0]!))];
 
+/** A topic whose hook isn't use<Topic>: `stats` is one stat at a time (`useStat`). */
+const HOOK_NAMES: Partial<Record<string, string>> = { stats: "useStat" };
+
 /** The live hooks of cmd's world, one per topic, with the keys of their query: `useAgents({ scope })`. Storage's (useStorage) is the storage block's. */
 function liveHooks(): { name: string; keys: string[] }[] {
   const { checker, exported } = apiExports();
   return API_TOPICS.filter((t) => t !== "storage").map((t) => {
-    const name = `use${t[0]!.toUpperCase()}${t.slice(1)}`;
+    const name = HOOK_NAMES[t] ?? `use${t[0]!.toUpperCase()}${t.slice(1)}`;
     const hook = exported.find((s) => s.name === name);
     if (!hook) throw new Error(`@cmd/widget-api has no ${name} for the topic "${t}"`);
     const param = checker.getTypeOfSymbol(hook).getCallSignatures()[0]?.parameters[0];
@@ -64,6 +67,16 @@ function gloss(c: DataClass): string {
   return words === c || words === `${c}s` ? q(`"${c}"`) : `${q(`"${c}"`)} (${words})`;
 }
 
+/** The verbs that read a class of their own, with it: `cmd.journal.days` and `cmd.journal.week` `"agents"`. */
+function classVerbs(): string {
+  const by = new Map<string, string[]>();
+  for (const v of Object.keys(API) as ApiVerb[]) {
+    const c = verbClass(v);
+    if (c) by.set(c, [...(by.get(c) ?? []), q(`cmd.${v}`)]);
+  }
+  return [...by].map(([c, vs]) => `${list(vs)} ${q(`"${c}"`)}`).join(", ");
+}
+
 /** One verb alone, as `act` may name it. */
 const ONE_ACT = API_ACT_VERBS.includes("terminals.open") ? "terminals.open" : API_ACT_VERBS[0]!;
 
@@ -80,7 +93,7 @@ function permissionLines(): string[] {
   const lines: Record<(typeof PERMISSION_KEYS)[number], string> = {
     net: `hosts ${list(verbsNeeding("net").map((v) => q(`cmd.${v}`)))} may reach (${q('"api.open-meteo.com"')}); no ${q("*")}.`,
     workspace: `${q('["read"]')} to see this workspace's agents, terminals and what they use, windows, git status, Actions and journal (${list(ws)}, and their hooks); ${q('["read", "all"]')} for every workspace's, read with \`{ scope: "all" }\` (${list(LIVE.filter((h) => h.keys.includes("scope")).map((h) => q(h.name)))}, and their verbs).`,
-    events: `classes of cmd's event log beyond ${list(ev.free)}, which need none: ${ev.named.map(gloss).join(", ")}; ${q("cmd.stats.query")} needs the class its stat is counted from, ${q("cmd.journal.days")} ${q('"agents"')}.`,
+    events: `classes of cmd's event log beyond ${list(ev.free)}, which need none: ${ev.named.map(gloss).join(", ")}; ${q("cmd.stats.query")} needs the class its stat is counted from, ${classVerbs()}.`,
     ai: `${q(JSON.stringify(API_AI_USES))} to use the person's AI (it counts against their usage: only when the request is about it).`,
     run: `the programs ${q("cmd.run")} runs, by name (${q('["ps"]')}, ${q('["gh"]')}); never a shell or an interpreter (sh, node, python).`,
     read: `full paths of folders ${q("cmd.run")} may run in besides the workspace's (${q('["~/Notes"]')}); never the home folder itself or anything private.`,

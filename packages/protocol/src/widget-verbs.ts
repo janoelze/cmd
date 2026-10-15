@@ -31,10 +31,10 @@ export type ApiNeed = "workspace" | "events" | "net" | "ai" | "act" | "run" | "m
  * is never kept (true), or does so for a person's package while a built-in one follows the
  * levels ("person"). `press`: an "act" that also needs a press in the widget right before it.
  * `local`: never for a press from a paired device (it acts on this Mac: its clipboard, what it
- * plays). `class`: a read that also needs `events: [<class>]` beside its `needs` (1.2).
+ * plays). `class`: a read that also needs `events: [<class>]` beside its `needs` (1.2; "system" 1.3).
  */
 export type ApiVerbSpec =
-  | { since: ApiMinor; mode: "read" | "act"; needs: Exclude<ApiNeed, "act">; press?: true; local?: true; class?: "agents" }
+  | { since: ApiMinor; mode: "read" | "act"; needs: Exclude<ApiNeed, "act">; press?: true; local?: true; class?: "agents" | "system" }
   | { since: ApiMinor; mode: "confirm"; needs: "act"; ask: Permission; typed?: true | "person" };
 
 /** A minor of API 1. */
@@ -89,6 +89,12 @@ export const API = {
   "storage.delete": { since: "1.3", mode: "act", needs: null },
   "storage.keys": { since: "1.3", mode: "read", needs: null },
   "storage.history": { since: "1.3", mode: "act", needs: null },
+  // 1.3: what the native views read (docs/57, "1.3 additions" C4–C12).
+  "journal.week": { since: "1.3", mode: "read", needs: "workspace", class: "agents" }, // the week the Journal wrote; never writes one
+  "workspaces.list": { since: "1.3", mode: "read", needs: "workspace" }, // every workspace's id and name, with "all"; never a folder
+  "agents.select": { since: "1.3", mode: "act", needs: null }, // within the widget's scope, as windows.select; marks the agent seen
+  "terminals.rerun": { since: "1.3", mode: "confirm", needs: "act", ask: "type", typed: "person" }, // the command cmd's log recorded, never the widget's text
+  "app.usage": { since: "1.3", mode: "read", needs: "events", class: "system" }, // cmd's own CPU and memory, as the Task Manager shows it
 } as const satisfies Record<string, ApiVerbSpec>;
 
 export type ApiVerb = keyof typeof API;
@@ -109,7 +115,7 @@ export const API_AI_USES = API_VERBS.filter((v) => API[v].needs === "ai").map((v
 export const API_MEDIA_USES = ["read", "control"] as const;
 /** The `media` value a verb needs: "read" for a read, "control" for an act. */
 export const mediaUse = (v: ApiVerb): (typeof API_MEDIA_USES)[number] => (API[v].mode === "read" ? "read" : "control");
-/** The event class a verb needs beside its `needs` (journal.days: "agents"), or null. */
+/** The event class a verb needs beside its `needs` (journal.days: "agents", app.usage: "system"), or null. */
 export const verbClass = (v: string): string | null => ((API as Record<string, ApiVerbSpec>)[v] as { class?: string } | undefined)?.class ?? null;
 /** Whether a verb is never for a press from a paired device: it acts on this Mac (the clipboard, what it plays). */
 export const localOnly = (v: string): boolean => ((API as Record<string, ApiVerbSpec>)[v] as { local?: true } | undefined)?.local === true;
@@ -137,6 +143,10 @@ export const API_TOPIC = {
   actions: { verb: "actions.list" },
   terminalUsage: { verb: "terminals.usage" }, // 1.2: useTerminalUsage
   storage: { verb: "storage.get" }, // 1.3: useStorage, one key of one scope ({ scope, key })
+  stats: { verb: "stats.query" }, // 1.3: useStat, again after the stat changed (and each minute for time)
+  journal: { verb: "journal.days" }, // 1.3: useJournal, again when a day is written
+  workspaces: { verb: "workspaces.list" }, // 1.3: useWorkspaces
+  appUsage: { verb: "app.usage" }, // 1.3: useAppUsage, every 2 s while subscribed
 } as const satisfies Record<string, { verb: ApiVerb }>;
 
 export type ApiTopic = keyof typeof API_TOPIC;

@@ -11,6 +11,9 @@ import { API, API_ELEMENT_NAMES, API_TOPIC, API_TOPICS } from "@cmd/protocol/wid
 import type {
   ApiAction,
   ApiAgent,
+  ApiAppUsage,
+  ApiJournalWeek,
+  ApiWorkspaceName,
   ApiCompletion,
   ApiCompletionRequest,
   ApiEventClass,
@@ -42,7 +45,7 @@ import type {
   WireValue,
 } from "@cmd/protocol/widget-tree";
 import type { Transport } from "../connection.ts";
-import { classes as fixtureClasses, stat as fixtureStat, workspace as fixtureWorkspace } from "./fixtures.ts";
+import { appUsage as fixtureAppUsage, classes as fixtureClasses, stat as fixtureStat, workspace as fixtureWorkspace } from "./fixtures.ts";
 import { verbs } from "../cmd.ts";
 import { WIDGET_API, WIDGET_API_MINOR } from "../version.ts";
 
@@ -89,8 +92,14 @@ export interface HostData {
   classes?: ApiEventClass[];
   /** What `cmd.stats.query` answers, by stat id, or a function of the query; `fixtures.stat()` of the query unless given. @since 1.2 */
   stats?: Record<string, ApiStatResult> | ((q: ApiStatQuery) => ApiStatResult);
-  /** The written days `cmd.journal.days` gives, newest first. @since 1.2 */
+  /** The written days `cmd.journal.days` and `useJournal` give, newest first (whatever the scope asked). @since 1.2 */
   journal?: ApiJournalDay[];
+  /** This week, as `cmd.journal.week` gives it (`fixtures.week()`); null unless given. @since 1.3 */
+  week?: ApiJournalWeek | null;
+  /** The workspaces `cmd.workspaces.list` and `useWorkspaces` give; the widget's own alone unless given. @since 1.3 */
+  workspaces?: ApiWorkspaceName[];
+  /** What `cmd.app.usage` and `useAppUsage` give; `fixtures.appUsage()` unless given. @since 1.3 */
+  appUsage?: ApiAppUsage;
   /** What `cmd.media.get` gives: what plays, or null (the default). @since 1.2 */
   playing?: ApiNowPlaying | null;
   /**
@@ -307,6 +316,19 @@ export function createHost(data: HostData = {}): FakeHost {
     "storage.delete": ([scope, key]) => (store(scope, String(key), null), null),
     "storage.keys": ([scope, prefix]) => [...kv(scope).keys()].filter((k) => k.startsWith(prefix ?? "")).sort(),
     "storage.history": ([scope, key, value, max]) => history(`${String(scope ?? "window")}\n${String(key)}`, value, max),
+    // 1.3
+    "journal.week": () => d.week ?? null,
+    "workspaces.list": () => d.workspaces ?? [{ id: ws().id, name: ws().name }],
+    "agents.select": done,
+    "terminals.rerun": ([key]) => {
+      // As the core: the command the log recorded under the key, in its terminal, open and at a prompt.
+      const e = (d.events ?? []).find((x) => x.key === key && x.type === "command");
+      if (!e || typeof e.data.command !== "string") throw new Error("terminals.rerun: cmd has no command under that key.");
+      if (!e.terminalId || !terminal(e.terminalId)) throw new Error("That command's terminal is closed.");
+      if ((d.events ?? []).some((x) => x.type === "command" && x.terminalId === e.terminalId && x.until === null)) throw new Error("The terminal isn't at a prompt.");
+      return { terminalId: e.terminalId };
+    },
+    "app.usage": () => d.appUsage ?? fixtureAppUsage(),
   };
   function history(at: string, value: unknown, max: unknown): number[] {
     const all = [...(histories.get(at) ?? []), ...(typeof value === "number" ? [value] : [])].slice(-1000);

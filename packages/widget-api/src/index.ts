@@ -18,6 +18,7 @@ export { cmd } from "./cmd.ts";
 export { fmt } from "./fmt.ts";
 export { ApiCallError } from "./connection.ts";
 export type { Store, StorageScope, Migration, MigrationStep } from "./storage.ts";
+export { useStat, useJournal, useWorkspaces, useAppUsage } from "./hooks.ts";
 export { useWorkspace, useAgents, useTerminals, useTerminalUsage, useWindows, useEvents, useGit, useActions, useConfig, useEnv, type WidgetConfig, type ConfigValues, type ConfigShape, useData, useStoredState, useStorage, type Widen, type Stored, type StoredValue, useNow, useCompletion, type DataState, type CompletionState } from "./hooks.ts";
 export { WIDGET_API, WIDGET_API_MINOR } from "./version.ts";
 export type {
@@ -58,6 +59,12 @@ export type {
   ApiJournalEntry as JournalEntry,
   ApiNowPlaying as NowPlaying,
   ApiMediaCommand as MediaCommand,
+  ApiJournalWeek as JournalWeek,
+  ApiJournalWeekQuery as JournalWeekQuery,
+  ApiWorkspaceName as WorkspaceName,
+  ApiAppUsage as AppUsage,
+  ApiProcessUse as ProcessUse,
+  ApiRerun as Rerun,
   WidgetEnv as Env,
   ApiVerb as Verb,
 } from "@cmd/protocol/widget-tree";

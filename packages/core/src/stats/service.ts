@@ -5,6 +5,7 @@
 // scheduler's budget. Queries read buckets (the open hour of a live stat is recomputed first).
 
 import { type DataEvent, type StatInfo, type StatQuery, type StatResult, type StatsEvent } from "@cmd/protocol";
+import { EventEmitter } from "node:events";
 import path from "node:path";
 import { logger } from "@cmd/protocol/node";
 import type { CoreContext } from "../kernel/context.ts";
@@ -35,7 +36,10 @@ export type StatsCore = Pick<CoreContext, "data" | "views" | "agents" | "session
 
 const typeIn = (type: string, types: string[]) => types.some((x) => (x.endsWith(".") ? type.startsWith(x) : type === x));
 
-export class StatsService {
+/** What the service tells the core's own listeners (a widget's live stat, widgets/api/topics.ts): the stats that changed, as stats.changed says to clients. */
+export type StatsEvents = { changed: [stats: string[]] };
+
+export class StatsService extends EventEmitter<StatsEvents> {
   #core: StatsCore;
   #defs = new Map<string, StatDef>();
   #store: StatsStore | null = null;
@@ -58,6 +62,7 @@ export class StatsService {
   now: () => number = Date.now;
 
   constructor(core: StatsCore, defs: StatDef[] = []) {
+    super();
     this.#core = core;
     for (const d of defs) this.register(d);
   }
@@ -350,7 +355,9 @@ export class StatsService {
       this.#changedTimer = null;
       const stats = [...this.#changed];
       this.#changed.clear();
-      if (stats.length) this.#core.broadcast({ type: "stats.changed", stats } satisfies StatsEvent);
+      if (!stats.length) return;
+      this.#core.broadcast({ type: "stats.changed", stats } satisfies StatsEvent);
+      this.emit("changed", stats);
     }, 1000);
     this.#changedTimer.unref?.();
   }

@@ -198,6 +198,7 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "push.visible": "never",
   "ui.presence": "never",
   "identify": "never",
+  "app.attach": "never",
 };
 
 /**

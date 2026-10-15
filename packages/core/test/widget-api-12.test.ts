@@ -33,7 +33,7 @@ const called = new Set<ApiVerb>();
 
 function adapter(permissions: Partial<WidgetPermissions>): WidgetApi {
   const pkg = core.library.packages.forKind("pkg:demo/main")!;
-  const ctx = { agents: core.agents, panes: core.panes, windows: core.windows, windowTypes: core.windowTypes, workspaces: core.workspaces, data: core.data, actions: core.actions, notifications: core.notifications, ai: core.ai, settings: core.settings, resources: core.resources, stats: core.stats, journal: core.journal, broadcast: (e: CoreEvent) => core.server.broadcast(e), opened: <W>(w: W) => w, call: core.call.bind(core) as never };
+  const ctx = { agents: core.agents, panes: core.panes, windows: core.windows, windowTypes: core.windowTypes, workspaces: core.workspaces, data: core.data, actions: core.actions, notifications: core.notifications, ai: core.ai, settings: core.settings, resources: core.resources, stats: core.stats, journal: core.journal, processes: core.processes, commands: core.commands, broadcast: (e: CoreEvent) => core.server.broadcast(e), opened: <W>(w: W) => w, call: core.call.bind(core) as never };
   return widgetApi(ctx, {
     windowId,
     workspaceId: () => A.id,

@@ -3,7 +3,7 @@
 
 import { describe, expect, it, test } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
-import { Stat, Inline, useData, useCompletion, useTerminalUsage, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
+import { Stat, Inline, useData, useCompletion, useTerminalUsage, useStat, useJournal, useWorkspaces, useAppUsage, cmd, defineWidget, View, Text, ApiCallError } from "@cmd/widget-api";
 import Widget from "../examples/v1/agents.tsx";
 
 test("waiting agents come first", async () => {
@@ -245,5 +245,41 @@ describe("API 1.2's verbs in the fake host", () => {
     await cmd.clipboard.write("pnpm dev");
     expect(host.calls).toEqual([["actions.stop", "dev"], ["actions.run", "dev", { restart: true }], ["media.control", "toggle"], ["clipboard.write", "pnpm dev"]]);
     await expect(cmd.actions.stop("nope")).rejects.toThrow(/No action nope/);
+  });
+});
+
+describe("API 1.3's data in the fake host", () => {
+  it("serves useStat, useJournal, useWorkspaces and useAppUsage live, and journal.week", async () => {
+    function Data() {
+      const runs = useStat({ stat: "commands.runs" });
+      const days = useJournal({ count: 2 });
+      const spaces = useWorkspaces();
+      const app = useAppUsage();
+      return <Text>{[runs?.total ?? "-", days.map((d) => `${d.headline} (${d.entries[0]?.project})`).join("; "), spaces.map((w) => w.name).join("+"), app?.app?.cpu ?? "-"].join(" | ")}</Text>;
+    }
+    const host = createHost({ journal: [fixtures.day({ headline: "Shipped" })], workspaces: [{ id: "ws-1", name: "app" }, { id: "ws-2", name: "docs" }], appUsage: fixtures.appUsage() });
+    const tree = await render(<Data />, host);
+    expect(tree.text()).toBe("28 | Shipped (app) | app+docs | 3.2");
+    host.set({ stats: { "commands.runs": fixtures.stat({ stat: "commands.runs" }, { values: [1, 1] }) }, journal: [fixtures.day({ headline: "Again" })], workspaces: [{ id: "ws-1", name: "app" }], appUsage: fixtures.appUsage({ app: { cpu: 40, memory: 1 } }) });
+    await tree.idle();
+    expect(tree.text()).toBe("2 | Again (app) | app | 40");
+    expect(await cmd.journal.week()).toBeNull();
+    host.set({ week: fixtures.week({ headline: "A good week" }) });
+    expect((await cmd.journal.week())?.themes).toHaveLength(2);
+  });
+
+  it("records agents.select and reruns only a command the log has, in an open terminal at a prompt", async () => {
+    const host = createHost({
+      terminals: [fixtures.pane({ id: "t-zsh" })],
+      events: [fixtures.command({ key: "command:1", terminalId: "t-zsh", exitCode: 0 }), fixtures.command({ key: "command:2", terminalId: "t-gone", exitCode: 1 })],
+    });
+    await render(() => null, host);
+    await cmd.agents.select("a-tours");
+    expect(await cmd.terminals.rerun("command:1")).toEqual({ terminalId: "t-zsh" });
+    expect(host.calls).toEqual([["agents.select", "a-tours"], ["terminals.rerun", "command:1"]]);
+    await expect(cmd.terminals.rerun("command:2")).rejects.toThrow(/terminal is closed/);
+    await expect(cmd.terminals.rerun("nope")).rejects.toThrow(/no command under that key/);
+    host.emit(fixtures.command({ key: "command:3", terminalId: "t-zsh" }));
+    await expect(cmd.terminals.rerun("command:1")).rejects.toThrow(/isn't at a prompt/);
   });
 });

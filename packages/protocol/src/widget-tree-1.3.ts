@@ -43,3 +43,51 @@ export interface WidgetMigrated {
   /** What the migration threw (ok: false). */
   message?: string;
 }
+
+// ── what the native views read (docs/57, "1.3 additions" C4–C12) ──
+
+/** Which week (`journal.week`): this one, of this workspace's journal or, with `workspace: ["all"]`, the one of everything. */
+export interface ApiJournalWeekQuery {
+  scope?: "workspace" | "all";
+}
+
+/** The week the Journal rolled up from its days (`journal.week`): a headline and the week's threads of work. */
+export interface ApiJournalWeek {
+  /** Monday 00:00 (local) of the week. */
+  start: number;
+  headline: string;
+  /** The week's main threads of work. */
+  themes: { title: string; summary: string }[];
+  /** When it was written (ms). */
+  writtenAt: number;
+}
+
+/** A workspace by name (`workspaces.list`, `useWorkspaces`): what says where something is, never its folder. */
+export interface ApiWorkspaceName {
+  id: string;
+  name: string;
+}
+
+/** CPU (percent of one core, can pass 100) and memory (bytes) of a group of processes. */
+export interface ApiProcessUse {
+  cpu: number;
+  memory: number;
+}
+
+/**
+ * What cmd itself uses (`app.usage`, `useAppUsage`), as the Task Manager adds it up: the app's
+ * processes (its windows, pages and helpers), and the background process that keeps terminals
+ * and agents running (with the terminals' host, not what runs in them). Null where cmd can't
+ * tell (no app open, or sampling unavailable).
+ */
+export interface ApiAppUsage {
+  app: ApiProcessUse | null;
+  background: ApiProcessUse | null;
+  /** When it was sampled (ms). */
+  at: number;
+}
+
+/** A command run again (`terminals.rerun`): the terminal it was typed into. */
+export interface ApiRerun {
+  terminalId: string;
+}

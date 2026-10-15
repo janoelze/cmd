@@ -19,6 +19,7 @@
 // ended, only when asked to (docs/24). Without an AI provider no day is
 // written at all (events are still recorded, so they can be once there is).
 
+import { EventEmitter } from "node:events";
 import os from "node:os";
 import { logger } from "@cmd/protocol/node";
 import { buildContext } from "../ai/context.ts";
@@ -91,7 +92,10 @@ export type WriteMode = "never" | "stale" | "force";
 /** "workspace:<id>", "repo:<path>" or "all". */
 export type JournalScope = string;
 
-export class JournalService {
+/** What the service tells the core's own listeners (a widget's live journal, widgets/api/topics.ts): a day or week of a scope was written. */
+export type JournalEvents = { written: [scope: JournalScope] };
+
+export class JournalService extends EventEmitter<JournalEvents> {
   readonly store: JournalStore;
   #o: JournalServiceOptions;
   /**
@@ -120,6 +124,7 @@ export class JournalService {
   #disposed = false;
 
   constructor(o: JournalServiceOptions) {
+    super();
     this.#o = o;
     this.store = o.store;
     if (Number(this.store.meta("sources.format") ?? 0) !== SOURCES_FORMAT) this.#reread = true;
@@ -363,6 +368,7 @@ export class JournalService {
       .then((r) => {
         const day = toDay(r.value, d, threads, events, { date, scope, writtenBy: r.model, window: { from, to }, writtenAt: this.#now });
         this.store.saveDay(day);
+        this.emit("written", scope);
         log.info("day written", { scope, date: new Date(date).toDateString(), entries: day.entries.length, chars: d.text.length, tokens: r.usage });
         return day;
       })
@@ -423,6 +429,7 @@ export class JournalService {
       .then((r) => {
         const w = toWeek(r.value, days, ids, { start, scope, writtenBy: r.model });
         this.store.saveWeek(w);
+        this.emit("written", scope);
         log.info("week written", { scope, start: new Date(start).toDateString(), themes: w.themes.length, days: days.length });
         return w;
       })

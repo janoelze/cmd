@@ -436,6 +436,9 @@ export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, 
   };
   /** Read the widget packages folder again now (a link made or taken out), then the Widget Library. */
   "widget.rescan": { params: {}; result: WidgetEntry[] };
+
+  /** The app's main process, told on each connect: what cmd's own use counts as the app (a widget's app.usage). */
+  "app.attach": { params: { pid: number }; result: null };
 }
 
 export type Method = keyof Methods;

@@ -1,5 +1,7 @@
 // The widget API's acts (API 1.1, docs/56 phase 4): start, message and stop agents, type into
-// or open a terminal, run, restart or stop (1.2) a Workspace Action, close a window. A widget process is untrusted, so
+// or open a terminal, run, restart or stop (1.2) a Workspace Action, close a window; 1.3: start an
+// interactive agent session (no prompt), and run a command again where it ran (terminals.rerun:
+// the text is what cmd's log recorded, never the widget's). A widget process is untrusted, so
 // each act, in this order:
 //
 //   1. needs its grant (`act: ["agents"]` or `act: ["agents.start"]`, access.ts's mayAct);
@@ -39,7 +41,7 @@ const ASK_MS = 15 * 60_000;
 const TEXT_MAX = 20_000;
 const LINE_MAX = 2000;
 
-export type ActCore = Pick<CoreContext, "agents" | "panes" | "windows" | "workspaces" | "actions" | "data" | "call" | "opened">;
+export type ActCore = Pick<CoreContext, "agents" | "panes" | "windows" | "workspaces" | "actions" | "data" | "call" | "opened" | "commands">;
 
 /** What the acts ask and show through: the tools' approvals and board marks (tools/feature.ts). */
 export interface ActDeps {
@@ -70,6 +72,8 @@ interface Plan {
   approval: Omit<Approval, "permission"> & { permission?: Permission };
   /** The window it acts on (for the mark), when known before it runs. */
   target: string | null;
+  /** 1.3: this call carries no typed text though its verb can (agents.start without a prompt): it follows the levels. */
+  untyped?: true;
   run(): Promise<{ value: WireValue; target?: string | null }>;
 }
 
@@ -155,9 +159,22 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
       const r = (req && typeof req === "object" ? req : {}) as unknown as ApiAgentStart;
       const kind = r.kind === undefined ? "claude" : r.kind;
       if (kind !== "claude" && kind !== "codex") throw invalid("agents.start: kind is \"claude\" or \"codex\"");
-      const prompt = text(r.prompt, "agents.start's prompt");
       const cwd = folder(r.cwd);
       const where = path.relative(own().root || os.homedir(), cwd);
+      // 1.3: no prompt is an interactive session the person types into: nothing typed, so it asks as any act does.
+      if (r.prompt === undefined || r.prompt === null || r.prompt === "") {
+        return {
+          approval: { title: `Start a ${kindLabel(kind)} session${where ? ` in ${where}` : ""}?` },
+          target: null,
+          untyped: true,
+          async run() {
+            const a = await core.call("agent.spawn", { kind, workspaceId: own().id, cwd, parentId: null });
+            if (a.paneId) opened.add(a.paneId);
+            return { value: { id: a.id, terminalId: a.paneId ?? null, windowId: a.paneId ?? null }, target: a.paneId ?? null };
+          },
+        };
+      }
+      const prompt = text(r.prompt, "agents.start's prompt");
       return {
         // The prompt is the whole act (agents often run with their permissions skipped): typed text, asked every
         // time and never kept, for a person's package; a built-in one follows the levels (the row's typed: "person").
@@ -243,6 +260,32 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
         run: async () => (await core.call("actions.stop", { root: list.root, actionId: a.id }), { value: null }),
       };
     },
+    // 1.3: a command the log recorded, typed again and run in the terminal it ran in, when that one is still open and at a prompt.
+    "terminals.rerun": ([key]) => {
+      if (typeof key !== "string" || !key.startsWith("command:")) throw invalid("terminals.rerun: give it a command's key, as events.query gives it");
+      const e = core.data.store.get(key);
+      const command = e?.type === "command" ? (e.data as { command?: unknown } | null)?.command : null;
+      if (!e || typeof command !== "string" || !command.trim()) throw invalid("terminals.rerun: cmd has no command under that key.");
+      const p = e.paneId ? core.panes.get(e.paneId) : null;
+      if (!p || p.exitCode !== null) throw failed("That command's terminal is closed.");
+      if (p.workspaceId !== own().id) throw invalid("That command ran in another workspace's terminal.");
+      if (p.agentId || core.commands.running(p.id)) throw failed(`${terminalName(p.id)[0]!.toUpperCase()}${terminalName(p.id).slice(1)} isn't at a prompt.`);
+      // One line, as it was run; a multi-line command (a here-doc) isn't typed back.
+      if (/[\r\n]/.test(command.trim())) throw failed("That command runs over several lines, so cmd won't type it again.");
+      const t = line(command.trim(), "terminals.rerun");
+      refuseTyped(t);
+      return {
+        approval: { title: `Run again in ${terminalName(p.id)}`, exact: `${t}  ⏎` },
+        target: p.id,
+        async run() {
+          // Checked again after the person answered: the terminal may have moved on meanwhile.
+          const now = core.panes.get(p.id);
+          if (!now || now.exitCode !== null || now.agentId || core.commands.running(p.id)) throw failed(`${terminalName(p.id)[0]!.toUpperCase()}${terminalName(p.id).slice(1)} isn't at a prompt.`);
+          await core.call("pane.write", { paneId: p.id, data: `${t}\r` });
+          return { value: { terminalId: p.id } };
+        },
+      };
+    },
     "windows.close": ([id]) => {
       const w = ownWindow(id);
       // Closing what it opened is tidying up ("show"); anything else may end someone's work (the row's "stop").
@@ -270,7 +313,7 @@ export function widgetActs(core: ActCore, scope: ActScope): { call(verb: ApiActV
       deps.show({ ...shown, target, state });
       core.data.record({ id: `tool:${id}`, at: t0, until: Date.now(), type: "tool.call", source: "cmd", workspaceId: ws.id, windowId: target, text: a.title, data: { caller: scope.widget.title, widget: `${scope.pkg.name} ${scope.pkg.version}`, tool: verb, acts: true, state, permission: a.permission, site: null, ask: a.title, exact: answer ? (a.exact ?? null) : null, allowed: answer ? answer.allow : null, scope: answer?.scope ?? null, reason: answer?.reason ?? null, remembered: kept, remote, ms: Date.now() - t0, error: error ?? null } });
     };
-    const d = deps.approvals.decideWidget(session, ws.id, a, { pkg: scope.pkg.name, builtin: !!scope.pkg.builtin, typed: actTyped(verb, !!scope.pkg.builtin), remote });
+    const d = deps.approvals.decideWidget(session, ws.id, a, { pkg: scope.pkg.name, builtin: !!scope.pkg.builtin, typed: !plan.untyped && actTyped(verb, !!scope.pkg.builtin), remote });
     if ("refuse" in d) {
       end("denied");
       throw new ApiRefusal({ code: "denied", message: d.refuse });

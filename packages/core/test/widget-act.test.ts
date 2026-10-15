@@ -4,7 +4,9 @@
 // workspace (approvals.list, approvals.forget), typed text and a press from a paired device ask
 // every time, the deny-list and risky actions are refused before any sheet, an act comes only
 // right after a press and takes it, and nothing outside the widget's workspace or its own window
-// can be named. A process built for 1.0 runs unchanged on this core.
+// can be named. A process built for 1.0 runs unchanged on this core. 1.3: an interactive agent
+// session (agents.start without a prompt) and terminals.rerun, which types only what the log
+// recorded, in that terminal, while it is open and at a prompt.
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -108,6 +110,12 @@ async function setup(o: { pkgs?: FakePackage[]; builtin?: boolean; minor?: numbe
   return { core, rt, proc, ws, other, win, term, elsewhere, repo, acting, events, drawn, call, ok, refused, press, asked, answer, act, ptyOf, waits: () => acting.filter((a) => a.state === "waiting").length };
 }
 
+/** A command as the shell integration records it (terminals/commands.ts): ended, unless `running`. */
+function recordCommand(t: Awaited<ReturnType<typeof setup>>, id: string, paneId: string, command: string, o: { workspaceId?: string; running?: boolean } = {}) {
+  const at = Date.now() - 1000;
+  t.core.data.record({ id, at, until: o.running ? null : at + 500, type: "command", source: "osc", paneId, workspaceId: o.workspaceId ?? t.ws.id, text: command, data: { command, exitCode: o.running ? null : 0, cwd: t.repo, git: null, output: null } });
+}
+
 describe("acting widgets (API 1.1)", () => {
   it("asks with the widget's name, package and version; Always keeps it for the package here, listed and forgotten through approvals", async () => {
     const t = await setup();
@@ -207,11 +215,19 @@ describe("acting widgets (API 1.1)", () => {
     const tidy = await t.act("windows.close", [mine.value.id]);
     expect(tidy.ask.approval?.permission).toBe("show");
 
+    // 1.3: terminals.rerun types again what the log recorded under the key, in the terminal it ran in, and runs it.
+    recordCommand(t, "command:r1", t.term.id, "pnpm test");
+    const again = await t.act("terminals.rerun", ["command:r1"]);
+    expect(again.ask.approval).toMatchObject({ permission: "type", title: expect.stringMatching(/^Run again in the terminal/), exact: "pnpm test  ⏎", scopes: ["once"] });
+    expect(again.ask.target).toBe(t.term.id);
+    expect(again.result).toMatchObject({ ok: true, value: { terminalId: t.term.id } });
+    expect(t.ptyOf(t.term.id).written.join("")).toContain("pnpm test\r");
+
     // Every act verb has a confirm row (protocol widget-verbs.ts), and each was asked for above.
     const acts = API_VERBS.filter((v) => API[v].mode === "confirm");
-    expect(acts.sort()).toEqual(["actions.run", "actions.stop", "agents.send", "agents.start", "agents.stop", "terminals.open", "terminals.type", "windows.close"]);
+    expect(acts.sort()).toEqual(["actions.run", "actions.stop", "agents.send", "agents.start", "agents.stop", "terminals.open", "terminals.rerun", "terminals.type", "windows.close"]);
     expect(new Set(t.acting.filter((a) => a.state === "waiting").map((a) => a.tool))).toEqual(new Set(acts));
-    expect(acts.every((v) => API[v].since === (v === "actions.stop" ? "1.2" : "1.1"))).toBe(true);
+    expect(acts.every((v) => API[v].since === (v === "actions.stop" ? "1.2" : v === "terminals.rerun" ? "1.3" : "1.1"))).toBe(true);
     expect([...API_ACT_VERBS].sort()).toEqual(acts);
   });
 
@@ -370,6 +386,83 @@ describe("acting widgets (API 1.1)", () => {
     t.core.settings.set("agents.permissions.show", "ask");
     const asks = await t.act("terminals.open", [{}]);
     expect(asks.ask.approval?.permission).toBe("show");
+  });
+
+  it("1.3: starts an interactive agent session without a prompt, asked as any act is", async () => {
+    const t = await setup();
+    const start = await t.act("agents.start", [{ cwd: "web" }], true, "always");
+    // Nothing typed: no exact text, and a yes can be kept (the prompt's start asks every time).
+    expect(start.ask.approval).toMatchObject({ permission: "agents", title: "Start a Claude session in web?", scopes: ["once", "session", "always"] });
+    expect(start.ask.approval?.exact).toBeUndefined();
+    const started = (start.result as unknown as { value: { id: string; terminalId: string } }).value;
+    expect(t.core.agents.get(started.id)).toMatchObject({ kind: "claude", workspaceId: t.ws.id });
+    expect(t.core.panes.get(started.terminalId)?.cwd).toBe(path.join(t.repo, "web"));
+    // Kept: the next one starts without a sheet; one with a prompt still asks, every time.
+    const waits = t.waits();
+    t.press();
+    expect(await t.ok("agents.start", { kind: "codex" })).toMatchObject({ id: expect.any(String) });
+    expect(t.waits()).toBe(waits);
+    const task = await t.act("agents.start", [{ prompt: "write the tests" }]);
+    expect(task.ask.approval).toMatchObject({ exact: "write the tests", scopes: ["once"] });
+  });
+
+  it("1.3: reruns only the log's command, in its own terminal of this workspace, open and at a prompt", async () => {
+    const t = await setup();
+    const sheets = t.waits();
+    const refusedAfterPress = async (key: string) => (t.press(), t.refused("terminals.rerun", key));
+    // Not a command's key, or none the log has.
+    expect(await refusedAfterPress("pnpm test")).toMatchObject({ code: "invalid", message: expect.stringContaining("command's key") });
+    expect(await refusedAfterPress("command:nope")).toMatchObject({ code: "invalid", message: "terminals.rerun: cmd has no command under that key." });
+    // A command of another workspace's terminal: out of reach.
+    recordCommand(t, "command:there", t.elsewhere.id, "make", { workspaceId: t.other.id });
+    expect(await refusedAfterPress("command:there")).toMatchObject({ code: "invalid", message: "That command ran in another workspace's terminal." });
+    // Its terminal is gone.
+    const gone = t.core.panes.create({ workspaceId: t.ws.id, cwd: t.repo });
+    recordCommand(t, "command:gone", gone.id, "ls");
+    t.core.panes.kill(gone.id);
+    await until(() => !t.core.panes.get(gone.id) || t.core.panes.get(gone.id)!.exitCode !== null, "the terminal to close");
+    expect(await refusedAfterPress("command:gone")).toMatchObject({ code: "failed", message: "That command's terminal is closed." });
+    // Its terminal is busy: a command runs there now (between the shell's C and D marks).
+    recordCommand(t, "command:busy", t.term.id, "pnpm dev");
+    t.core.panes.emit("osc", t.term.id, { type: "prompt", mark: "C" });
+    expect(await refusedAfterPress("command:busy")).toMatchObject({ code: "failed", message: expect.stringMatching(/isn't at a prompt\.$/) });
+    t.core.panes.emit("osc", t.term.id, { type: "prompt", mark: "D", exitCode: 0 });
+    // Several lines aren't typed back.
+    recordCommand(t, "command:heredoc", t.term.id, "cat <<EOF\nhi\nEOF");
+    expect(await refusedAfterPress("command:heredoc")).toMatchObject({ code: "failed", message: expect.stringContaining("several lines") });
+    // The deny-list holds for what the log recorded too.
+    recordCommand(t, "command:root", t.term.id, "sudo rm -rf /");
+    expect(await refusedAfterPress("command:root")).toMatchObject({ code: "denied" });
+    // None of those reached a sheet; back at the prompt, it asks, and a no types nothing.
+    expect(t.waits()).toBe(sheets);
+    const no = await t.act("terminals.rerun", ["command:busy"], false);
+    expect(no.ask.approval?.exact).toBe("pnpm dev  ⏎");
+    expect(no.result).toMatchObject({ ok: false, error: { code: "denied" } });
+    expect(t.ptyOf(t.term.id).written.join("")).not.toContain("pnpm dev");
+    // A terminal that moved on while the sheet was up isn't typed into.
+    t.press();
+    const late = t.call("terminals.rerun", "command:busy");
+    await t.asked();
+    t.core.panes.emit("osc", t.term.id, { type: "prompt", mark: "C" });
+    await t.answer(true);
+    expect(await late).toMatchObject({ ok: false, error: { message: expect.stringMatching(/isn't at a prompt\.$/) } });
+    expect(t.ptyOf(t.term.id).written.join("")).not.toContain("pnpm dev");
+    // Without the grant, it names it.
+    const bare = await setup({ pkgs: [{ permissions: { workspace: ["read"] } }] });
+    bare.press();
+    expect(await bare.refused("terminals.rerun", "command:r1")).toMatchObject({ code: "permission", permission: 'act: ["terminals"]' });
+  });
+
+  it("1.3: a built-in package's rerun follows the levels; a person's asks every time", async () => {
+    const t = await setup({ builtin: true, pkgs: [{ permissions: ACTS }] });
+    recordCommand(t, "command:b1", t.term.id, "pnpm test");
+    const first = await t.act("terminals.rerun", ["command:b1"]);
+    expect(first.ask.approval?.scopes).toEqual(["once", "session", "always"]);
+    const person = await setup();
+    recordCommand(person, "command:p1", person.term.id, "pnpm test");
+    expect((await person.act("terminals.rerun", ["command:p1"], true, "always")).ask.approval?.scopes).toEqual(["once"]);
+    // Asked again: never kept.
+    expect((await person.act("terminals.rerun", ["command:p1"])).ask.approval?.exact).toBe("pnpm test  ⏎");
   });
 
   it("serves a process built for 1.0 unchanged", async () => {

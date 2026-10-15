@@ -49,7 +49,7 @@ async function setup(pkgs: FakePackage[], o: { runtime?: boolean } = {}) {
 }
 
 /** Every permission there is, for a frame widget that may do everything. */
-const FULL: Partial<WidgetPermissions> = { workspace: ["read", "all"], events: ["agents"], net: ["example.com"], ai: ["complete"], run: ["ps"], act: ["agents", "terminals", "actions", "windows"], media: ["read", "control"] };
+const FULL: Partial<WidgetPermissions> = { workspace: ["read", "all"], events: ["agents", "system"], net: ["example.com"], ai: ["complete"], run: ["ps"], act: ["agents", "terminals", "actions", "windows"], media: ["read", "control"] };
 
 /** Arguments that answer at once for each verb (an id that isn't there, a query of a class to declare). */
 const ARGS: { [V in ApiVerb]: unknown[] } = {
@@ -61,6 +61,7 @@ const ARGS: { [V in ApiVerb]: unknown[] } = {
   "terminals.open": [{}], "actions.run": ["none"], "windows.close": ["w-none"], "run.exec": ["ps", "not a list"],
   "actions.stop": ["none"], "events.classes": [], "terminals.usage": [], "stats.query": [{ stat: "agents.turns" }], "journal.days": [{ count: 1 }], "media.get": [], "media.control": ["toggle"], "clipboard.write": ["hi"],
   "storage.get": ["package", "k"], "storage.set": ["package", "k", 1], "storage.delete": ["package", "k"], "storage.keys": ["package"], "storage.history": ["package", "k", 1],
+  "journal.week": [], "workspaces.list": [], "agents.select": ["a-none"], "terminals.rerun": ["command:none"], "app.usage": [],
 };
 
 describe("frame widgets", () => {
@@ -187,7 +188,14 @@ describe("frame widgets", () => {
     expect(await sub(bare.id, 2, "agents")).toMatchObject({ ok: false, error: { code: "permission", permission: 'workspace: ["read"]' } });
     expect(await sub(w.id, 3, "agents", { scope: "all" })).toMatchObject({ ok: false, error: { code: "permission", permission: 'workspace: ["all"]' } });
     expect(await sub(w.id, 4, "pages")).toMatchObject({ ok: false, error: { code: "unknown" } });
-    for (const t of API_TOPICS.filter((t) => t !== "events")) expect((await sub(w.id, 10, t, t === "storage" ? { scope: "package", key: "k" } : undefined)).ok, t).toBe(true);
+    // Each topic with a query it takes; 1.3's that need more than this grant name what.
+    const QUERY: Record<string, unknown> = { storage: { scope: "package", key: "k" }, stats: { stat: "git.commits" } };
+    const MORE: Record<string, string> = { workspaces: 'workspace: ["all"]', journal: 'events: ["agents"]', appUsage: 'events: ["system"]' };
+    for (const t of API_TOPICS.filter((t) => t !== "events")) {
+      const r = await sub(w.id, MORE[t] ? 20 : 10, t, QUERY[t]);
+      if (MORE[t]) expect(r, t).toMatchObject({ ok: false, error: { code: "permission", permission: MORE[t] } });
+      else expect(r.ok, `${t}: ${JSON.stringify(r)}`).toBe(true);
+    }
     expect(core.library.host.frames.count()).toBe(1); // one sub id, each replaced
 
     // The frame goes: every one of its subscriptions with it.

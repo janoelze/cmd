@@ -220,7 +220,7 @@ export class Core {
     this.notifications = createNotifications(ctx);
     this.commands = new CommandLog(this.panes, this.data);
     this.resources = opts.sampler ? new ResourceMonitor(this.panes, opts.sampler, 2000, ctx.watched) : null;
-    this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler) : null;
+    this.processes = opts.procSampler ? new ProcessSampler(opts.procSampler, opts.sampler ?? null) : null;
     this.workspaces = createWorkspaces(ctx, opts.home);
     this.subscriptions = createSubscriptions(ctx, activity);
     resetOnRoots(ctx);

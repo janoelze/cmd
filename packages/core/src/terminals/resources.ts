@@ -101,16 +101,82 @@ export function usageChanged(a: PaneUsage | null, b: PaneUsage): boolean {
   );
 }
 
+/** CPU and memory of a group of processes. */
+export type ProcessUse = { cpu: number; memory: number };
+/** cmd's own use (a widget's app.usage): the app's processes, and the background ones (the core and the PTY host). */
+export type OwnUse = { app: ProcessUse | null; background: ProcessUse | null; at: number };
+
+/** A sample of cmd's own use this recent is answered again (the widget topic and the verb share it). */
+const OWN_FRESH_MS = 1500;
+/** CPU% needs two samples: without one this recent, a first is taken and the answer waits this long for the second. */
+const OWN_PRIME_AFTER_MS = 10_000;
+const OWN_PRIME_MS = 400;
+
 /**
  * Usage of single processes (the core, the PTY host) for the Task Manager,
- * sampled when asked; CPU% is over the time since the previous ask.
+ * sampled when asked; CPU% is over the time since the previous ask. With a
+ * tree sampler, also cmd's own use as the Task Manager adds it up (own()):
+ * the app's process tree (the app tells its pid, app.attach) and the
+ * background processes.
  */
 export class ProcessSampler {
   #sample: ProcSampler;
+  #trees: TreeSampler | null;
   #prev = new Map<number, { cpu: number; at: number }>();
+  #prevTree = new Map<number, { cpu: number; at: number }>();
+  #own: { at: number; value: Promise<OwnUse> } | null = null;
+  /** The app's main process, as it said when it connected (null: no app has). */
+  app: number | null = null;
 
-  constructor(sample: ProcSampler) {
+  constructor(sample: ProcSampler, trees: TreeSampler | null = null) {
     this.#sample = sample;
+    this.#trees = trees;
+  }
+
+  /** The app's main process (app.attach). */
+  attach(pid: number): void {
+    this.app = Number.isInteger(pid) && pid > 0 ? pid : null;
+    this.#own = null;
+  }
+
+  /** cmd's own use now: `host` is the PTY host's pid. Shared by callers within OWN_FRESH_MS; the first ever waits a moment for CPU%. */
+  own(host: number | null, now = Date.now()): Promise<OwnUse> {
+    if (this.#own && now - this.#own.at < OWN_FRESH_MS) return this.#own.value;
+    const primed = this.#own && now - this.#own.at < OWN_PRIME_AFTER_MS;
+    const value = (async () => {
+      if (!primed) {
+        await this.#ownNow(host, Date.now());
+        await new Promise((r) => setTimeout(r, OWN_PRIME_MS));
+      }
+      return this.#ownNow(host, Date.now());
+    })();
+    this.#own = { at: now, value };
+    value.catch(() => this.#own?.value === value && (this.#own = null));
+    return value;
+  }
+
+  async #ownNow(host: number | null, now: number): Promise<OwnUse> {
+    const pids = host ? [process.pid, host] : [process.pid];
+    const procs = await this.sample(pids, now);
+    const background = procs.size ? [...procs.values()].reduce<ProcessUse>((t, p) => ({ cpu: t.cpu + p.cpu, memory: t.memory + p.memory }), { cpu: 0, memory: 0 }) : null;
+    let app: ProcessUse | null = null;
+    if (this.app && this.#trees) {
+      // The app started this core (its parent): its tree holds the core's, terminals and all, which aren't the app's.
+      const nested = process.ppid === this.app;
+      const trees = new Map((await this.#trees(nested ? [this.app, process.pid] : [this.app])).map((t) => [t.pid, t]));
+      const use = (pid: number): ProcessUse | null => {
+        const t = trees.get(pid);
+        if (!t) return null;
+        const cpu = cpuPercent(this.#prevTree.get(pid), t.cpu, now);
+        this.#prevTree.set(pid, { cpu: t.cpu, at: now });
+        return { cpu, memory: t.mem };
+      };
+      const whole = use(this.app);
+      const inner = nested ? use(process.pid) : null;
+      if (whole) app = { cpu: Math.max(0, Math.round((whole.cpu - (inner?.cpu ?? 0)) * 10) / 10), memory: Math.max(0, whole.memory - (inner?.memory ?? 0)) };
+      else this.app = null; // the app is gone
+    }
+    return { app, background: background && { cpu: Math.round(background.cpu * 10) / 10, memory: background.memory }, at: now };
   }
 
   async sample(pids: number[], now = Date.now()): Promise<Map<number, ProcessStat>> {

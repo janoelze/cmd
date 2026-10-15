@@ -9,7 +9,7 @@ import type { ApiMethods, ApiVerb, ApiEventQuery, ApiRunOptions, ApiRunResult, W
 import { connection } from "./connection.ts";
 import { ELEMENT_SINCE } from "./elements-since.gen.ts";
 import { fmt } from "./fmt.ts";
-import { useActions, useAgents, useCompletion, useConfig, useEnv, useEvents, useGit, useStorage, useTerminals, useWindows, useWorkspace } from "./hooks.ts";
+import { useActions, useAgents, useAppUsage, useCompletion, useConfig, useEnv, useEvents, useGit, useJournal, useStat, useStorage, useTerminals, useWindows, useWorkspace, useWorkspaces } from "./hooks.ts";
 import { registerMigration, store } from "./storage.ts";
 
 type Verbs = { [V in ApiVerb]: (...args: ApiMethods[V]["params"]) => Promise<ApiMethods[V]["result"]> };
@@ -74,6 +74,11 @@ const VERBS: Verbs = {
   },
   "storage.keys": verb("storage.keys"),
   "storage.history": verb("storage.history"),
+  "journal.week": verb("journal.week"),
+  "workspaces.list": verb("workspaces.list"),
+  "agents.select": verb("agents.select"),
+  "terminals.rerun": verb("terminals.rerun"),
+  "app.usage": verb("app.usage"),
 };
 
 /** cmd.run: a function (`cmd.run("gh", ["run", "list"])`) that is also the namespace of its one verb (`cmd.run.exec`). */
@@ -124,8 +129,9 @@ export const cmd = {
     /**
      * Starts a coding agent on a task, in a terminal of its own in this workspace. The prompt
      * is typed text: it asks every time, showing the prompt, and is never kept for always.
-     * Works only right after they pressed something in the widget, once per press. Needs
-     * `act: ["agents"]` (or `"agents.start"`).
+     * Without a prompt (since 1.3) it starts an interactive session the person types into,
+     * and asks "Start a Claude session?" as any act does. Works only right after they pressed
+     * something in the widget, once per press. Needs `act: ["agents"]` (or `"agents.start"`).
      * @since 1.1
      */
     start: VERBS["agents.start"],
@@ -137,6 +143,13 @@ export const cmd = {
     send: VERBS["agents.send"],
     /** Stops an agent of this workspace. Asks first; only after a press. Needs `act: ["agents"]` (or `"agents.stop"`). @since 1.1 */
     stop: VERBS["agents.stop"],
+    /**
+     * Shows an agent's terminal (a subagent's host's), in its workspace, and marks the agent
+     * seen, as a click in Agent Activity does: where a row's click goes. Within the widget's
+     * reach (its workspace, or every one with `workspace: ["all"]`); needs no permission.
+     * @since 1.3
+     */
+    select: VERBS["agents.select"],
     /** Live: the hook `useAgents()`. @since 1.0 */
     use: useAgents,
   },
@@ -171,6 +184,15 @@ export const cmd = {
      * @since 1.2
      */
     usage: VERBS["terminals.usage"],
+    /**
+     * Runs a command again in the terminal it ran in: `key` is the command's, as `cmd.events.query`
+     * gives it (`event.key`). What is typed is the command cmd's log recorded, never text from the
+     * widget, and the sheet shows it. Refused when that terminal is closed or isn't at a prompt
+     * (something runs in it). Asks first, every time for a package you installed; only after a
+     * press. Needs `act: ["terminals"]` (or `"terminals.rerun"`).
+     * @since 1.3
+     */
+    rerun: VERBS["terminals.rerun"],
     /** Live: the hook `useTerminals()`. @since 1.0 */
     use: useTerminals,
   },
@@ -253,17 +275,49 @@ export const cmd = {
      * @since 1.2
      */
     query: VERBS["stats.query"],
+    /** Live: the hook `useStat(query)`. @since 1.3 */
+    use: useStat,
   },
   /** The journal (docs/23): what happened in this workspace, a few lines a day. @since 1.2 */
   journal: {
     /**
      * The last `count` work days of this workspace with something in them (default 7, at most
      * 30), newest first, as the Journal has written them; a day not written yet isn't there (a
-     * widget never has one written). Needs `workspace: ["read"]` and `events: ["agents"]`
-     * (a day is written from the agents' prompts and work).
+     * widget never has one written). With `{ scope: "all" }` (since 1.3, with `workspace: ["all"]`)
+     * the journal of everything on this Mac; each entry names its `project` (a folder's name).
+     * Needs `workspace: ["read"]` and `events: ["agents"]` (a day is written from the agents'
+     * prompts and work).
      * @since 1.2
      */
     days: VERBS["journal.days"],
+    /**
+     * This week as the Journal rolled it up from its days: a headline and the week's threads of
+     * work, or null before it has written one. Read only, like the days; `{ scope: "all" }` as
+     * there. Needs `workspace: ["read"]` and `events: ["agents"]`.
+     * @since 1.3
+     */
+    week: VERBS["journal.week"],
+    /** Live: the hook `useJournal(query)`. @since 1.3 */
+    use: useJournal,
+  },
+  /** Every workspace, by name. Needs `workspace: ["all"]`. @since 1.3 */
+  workspaces: {
+    /** Each workspace's id and name, in the switcher's order; never its folder. Needs `workspace: ["all"]`. @since 1.3 */
+    list: VERBS["workspaces.list"],
+    /** Live: the hook `useWorkspaces()`. @since 1.3 */
+    use: useWorkspaces,
+  },
+  /** cmd itself. @since 1.3 */
+  app: {
+    /**
+     * What cmd uses now, as the Task Manager adds it up: the app (its windows, pages and helpers)
+     * and the background process that keeps terminals and agents running, each CPU (percent of
+     * one core) and memory; null where cmd can't tell. Needs `events: ["system"]`.
+     * @since 1.3
+     */
+    usage: VERBS["app.usage"],
+    /** Live: the hook `useAppUsage()`. @since 1.3 */
+    use: useAppUsage,
   },
   /** What the Mac is playing (any app that tells macOS: Music, Spotify, a browser tab). @since 1.2 */
   media: {

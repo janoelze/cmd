@@ -60,6 +60,8 @@ export interface ApiStatQuery {
   top?: number;
   /** "workspace" (the default): this workspace's only; "all": every workspace's, with `workspace: ["all"]`. */
   scope?: "workspace" | "all";
+  /** 1.3: also the whole range's median and 90th percentile (`quantiles`), for a stat that keeps them (`kind: "distribution"`). */
+  quantiles?: boolean;
 }
 
 /** A stat as the Stats window names it. */
@@ -69,12 +71,18 @@ export interface ApiStatInfo {
   /** One line: what it answers. */
   description: string;
   unit: "count" | "ms" | "bytes" | "tokens" | "percent";
-  /** Its dimensions, for `by` and `filter`. */
-  dims: { id: string; title: string }[];
+  /** Its dimensions, for `by` and `filter`; 1.3: `many` marks one with many values (commands, files, hosts), for a ranking (`top`) rather than series. */
+  dims: { id: string; title: string; many?: boolean }[];
   /** Which way a change is good, if either. */
   good?: "up" | "down";
   /** The class of events it is counted from (what `events` must name). */
   class: string;
+  /**
+   * 1.3: what it counts, so a detail picks its chart: "count" adds up (bars: runs, time spent, tokens),
+   * "gauge" is a level (a line: memory), "distribution" spreads (a line, with `quantiles`), "rate" is
+   * one count over another (a line in percent: how often commands fail).
+   */
+  kind?: "count" | "gauge" | "distribution" | "rate";
 }
 
 /** A stat's buckets over a range: one series, or one per value of `by`. */
@@ -96,12 +104,18 @@ export interface ApiStatResult {
   ranking?: { key: string; label: string; value: number }[];
   /** The log is younger than the range, or the stat is still being counted: numbers start here. */
   partial?: { since: number };
+  /** 1.3: with `quantiles` in the query, for a distribution: the whole range's median and 90th percentile. */
+  quantiles?: { p50: number; p90: number };
+  /** 1.3: when cmd counted it (ms): what "Updated" says. */
+  asOf?: number;
 }
 
 /** Which days (`journal.days`): the last `count` work days with something in them, newest first. */
 export interface ApiJournalQuery {
   /** Default 7, at most 30. */
   count?: number;
+  /** 1.3: "workspace" (the default): this workspace's journal; "all": the one of everything on this Mac, with `workspace: ["all"]`. */
+  scope?: "workspace" | "all";
 }
 
 /** A piece of work on a day, as the journal names it ("Released v0.14.4", "Investigated a corrupt search index"). */
@@ -114,6 +128,8 @@ export interface ApiJournalEntry {
   start: number;
   end: number;
   counts: { agents: number; prompts: number; commands: number; commits: number; pages: number; files: number };
+  /** 1.3: the project it was in, by its folder's name ("cmd"), never a path; null when it had none. */
+  project?: string | null;
 }
 
 /** A work day of the workspace as the journal wrote it (a work day runs 04:00 to 04:00). */
