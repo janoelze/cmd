@@ -251,6 +251,8 @@ const SCENARIOS = {
   "widget-timer": [],
   "widget-events": [],
   "widget-actions": [],
+  "widget-stats": [],
+  "widget-resources": [],
   "app-window": [],
 };
 const failures = [];
@@ -3015,6 +3017,98 @@ await scenario("widget-actions", async () => {
     const copied = await until(() => app.evaluate(({ clipboard }) => clipboard.readText()), (t) => t.includes("hello"), 10_000).catch(() => "");
     await unchoosing();
     check(/run hello/.test(copied), `Copy Command puts the action's command on the clipboard (${JSON.stringify(copied)})`);
+    await call("window.close", { id });
+  } finally {
+    for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
+    await call("workspace.close", { id: ws.id });
+    fs.rmSync(where, { recursive: true, force: true });
+  }
+});
+
+// Usage Stats (packages/widgets/stats): the native Stats window's job as a package. Added from the
+// Widget Library in a workspace of its own, it counts that workspace's commands (stats.query, API
+// 1.2): a command run in its terminal raises the Commands number live, a number opens its detail
+// and Back returns; All Workspaces from the title menu adds your active time.
+await scenario("widget-stats", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const where = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-e2e-stats-")));
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === ws.name);
+  const terminals = () => call("pane.list").then((l) => l.filter((p) => p.workspaceId === ws.id).map((p) => p.id));
+  try {
+    await menu("file.newTerminal");
+    const [termId] = await until(terminals, (l) => l.length === 1);
+    await until(() => paneText(termId, 5), (t) => /\S/.test(t)); // its prompt
+    await menu("view.grid");
+    const { id, source } = await addFromLibrary("Usage Stats", "pkg:stats/stats");
+    check(source === "Built-in · stats 1.0.0", `the Widget Library lists Usage Stats under Built-in (${source})`);
+    await tileIn(id);
+    const tile = win.locator(`.tile[data-pane="${id}"]`);
+    const commands = tile.locator(".ui-stat", { has: win.locator(".ui-stat-label", { hasText: /^Commands$/ }) });
+    const count = () => commands.locator(".ui-stat-value").textContent({ timeout: 2000 }).then((t) => Number(/^[\d,]+/.exec(t ?? "")?.[0]?.replace(/,/g, "") ?? NaN)).catch(() => NaN);
+    const before = await until(count, (n) => Number.isFinite(n), 30_000);
+    const labels = await tile.locator(".ui-stat-label").allTextContents();
+    await call("pane.write", { paneId: termId, data: "true\r" });
+    await call("pane.write", { paneId: termId, data: "echo e2e-stats-ok\r" });
+    const after = await until(count, (n) => n >= before + 2, 20_000).catch(() => before);
+    await shot(win, "widget-stats.png");
+    check(labels.includes("Agent time") && !labels.includes("Active time") && after >= before + 2, `it counts this workspace's commands, live (${labels.join(", ")}; Commands ${before} → ${after})`);
+    await commands.click();
+    const back = tile.locator('button[aria-label="Stats"]');
+    const opened = await until(() => back.isVisible(), Boolean, 10_000).catch(() => false);
+    const title = opened ? await tile.locator(".ui-pane-title").first().textContent().catch(() => "") : "";
+    await shot(win, "widget-stats-detail.png");
+    await back.click();
+    const page = await until(() => tile.locator(".ui-stat").count(), (n) => n >= 5, 10_000).catch(() => 0);
+    check(opened && /Commands/i.test(title ?? "") && page >= 5, `a number opens its detail and Back returns to the page (${JSON.stringify(title)}; ${page} numbers)`);
+    await choosing("All Workspaces");
+    await tile.locator(".ui-window-bar-menu").click();
+    await unchoosing();
+    const all = await until(() => tile.locator(".ui-stat-label").allTextContents(), (l) => l.includes("Active time"), 15_000).catch(() => []);
+    check(all.includes("Active time"), `All Workspaces adds your active time (${all.join(", ")})`);
+    await call("window.close", { id });
+  } finally {
+    for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
+    await call("workspace.close", { id: ws.id });
+    fs.rmSync(where, { recursive: true, force: true });
+  }
+});
+
+// Terminal Usage (packages/widgets/resources): the terminals part of the native Resources widget as
+// a package. Added from the Widget Library in a workspace of its own, it lists the workspace's
+// terminal with what it uses (useTerminalUsage, API 1.2), live: a busy loop started in it shows as
+// CPU on its row and in the title bar; a click on the row goes to the terminal.
+await scenario("widget-resources", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  if (!(await call("magic.runtime")).deno) return void console.log("  (skipped: no Deno for widget processes)");
+  const where = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "cmd-e2e-resources-")));
+  const ws = (await call("workspace.open", { path: where, show: true })).workspace;
+  const chip = () => win.locator(".workspace-trigger .workspace-name").textContent();
+  await until(chip, (c) => c === ws.name);
+  const terminals = () => call("pane.list").then((l) => l.filter((p) => p.workspaceId === ws.id).map((p) => p.id));
+  try {
+    await menu("file.newTerminal");
+    const [termId] = await until(terminals, (l) => l.length === 1);
+    await until(() => paneText(termId, 5), (t) => /\S/.test(t)); // its prompt
+    await menu("view.grid");
+    const { id, source } = await addFromLibrary("Terminal Usage", "pkg:resources/resources");
+    check(source === "Built-in · resources 1.0.0", `the Widget Library lists Terminal Usage under Built-in (${source})`);
+    await tileIn(id);
+    const tile = win.locator(`.tile[data-pane="${id}"]`);
+    const rows = () => tile.locator(".ui-grid tbody tr").allTextContents();
+    const listed = await until(rows, (r) => r.length === 1 && /MB|KB|GB/.test(r[0]), 30_000).catch(() => []);
+    check(listed.length === 1, `it lists the workspace's terminal with what it uses (${listed.map((t) => t.slice(0, 60)).join(" | ")})`);
+    await call("pane.write", { paneId: termId, data: "while :; do :; done\r" });
+    const busy = await until(() => tile.locator(".tile-title").textContent(), (t) => { const m = /(\d+(\.\d+)?)%/.exec(t ?? ""); return !!m && Number(m[1]) >= 20; }, 30_000).catch(() => "");
+    const row = (await rows())[0] ?? "";
+    await shot(win, "widget-resources.png");
+    check(/\d+%/.test(busy) && /\d+%/.test(row), `a busy loop shows as CPU on its row and in the title bar, live (${JSON.stringify(busy)}; ${JSON.stringify(row.slice(0, 60))})`);
+    await call("pane.write", { paneId: termId, data: "\x03" });
+    await tile.locator(".ui-grid tbody tr").first().click();
+    const went = await until(selected, (s) => s === termId, 10_000).catch(() => null);
+    check(went === termId, `a click on the row goes to its terminal (${went})`);
     await call("window.close", { id });
   } finally {
     for (const id of await terminals()) await call("pane.kill", { paneId: id }).catch(() => {});
