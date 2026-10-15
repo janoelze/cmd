@@ -1,6 +1,6 @@
 # Work Log
 
-A cmd widget: the last days of this workspace as the Journal wrote them, newest first. Each day is its name and the hours worked, a headline, a ribbon of those hours (a bar per piece of work, in its kind's colour; a click rings the entry it belongs to) and a timeline of what was done: a title, how it ended (Shipped, Merged, Fixed, Open…), a line of summary, how long it took and what it took (agents, commands, commits, pages, files). The footer says when the newest day was written; **Read Again** is the small button on the newest day's heading (where the native Journal has Write Again), and it looks again every few minutes by itself.
+A cmd widget: the last days of this workspace as the Journal wrote them, newest first. Each day is its name and the hours worked, a headline, a ribbon of those hours (a bar per piece of work, in its kind's colour; a click rings the entry it belongs to) and a timeline of what was done: a title, how it ended (Shipped, Merged, Fixed, Open…), a line of summary, how long it took and what it took (agents, commands, commits, pages, files). The footer says when the newest day was written; **Read Again** is the small button on the newest day's heading (where the native Journal has Write Again; on the empty state before there is a day), and it looks again every few minutes by itself.
 
 It ships with cmd (Widget Library → Built-in), shows what the native Journal writes, and is written against the widget API like any package ([`@cmd/widget-api`](../../widget-api/README.md), [docs/57](../../../docs/57-builtin-widgets.md)).
 

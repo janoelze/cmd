@@ -107,9 +107,14 @@ describe("Work Log", () => {
   });
 
   it("says what goes here when nothing is written", async () => {
-    const tree = await render(<WorkLog />, createHost({ journal: [] }));
+    const host = createHost({ journal: [] });
+    const tree = await render(<WorkLog />, host);
     expect(tree).toShowState("empty", "Nothing written yet");
     expect(tree.findAll("StatusLine")).toHaveLength(0);
+    // Read Again from the empty state too: there is no day's heading to carry it yet.
+    host.set({ journal: [day({ headline: "Written since" })] });
+    await tree.choose(tree.find("View"), "Read Again", "state");
+    expect(tree.text()).toContain("Written since");
   });
 
   it("says what it needs when the journal is refused", async () => {

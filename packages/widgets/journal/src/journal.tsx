@@ -5,7 +5,8 @@
 // title, outcome, summary, how long and what it took. A widget never has a day written (that
 // runs the person's model): it reads what is there every few minutes, and says when the newest
 // day was written; Read Again is the small button on the newest day's heading, where the native
-// Journal has Write Again. Refused, it says what it needs; failed, it says so with Try Again.
+// Journal has Write Again, and on the empty state before any day is there. Refused, it says
+// what it needs; failed, it says so with Try Again.
 
 import { Window, View, Stack, Inline, Text, Badge, IconButton, Ribbon, Timeline, TimelineEntry, StatusLine, useData, useNow, cmd, ApiCallError, type JournalDay, type JournalEntry } from "@cmd/widget-api";
 import { useState } from "react";
@@ -172,7 +173,7 @@ export default function WorkLog() {
         : data === undefined
           ? { kind: "loading" as const, title: "Reading the journal" }
           : days.length === 0
-            ? { icon: "book", title: "Nothing written yet", text: "The Journal writes up each day from what you and your agents did. Open it to write today's." }
+            ? { icon: "book", title: "Nothing written yet", text: "The Journal writes up each day from what you and your agents did. Open it to write today's.", action: { label: "Read Again", run: refresh } }
             : null;
   const newest = days.reduce((t, d) => Math.max(t, d.writtenAt), 0);
 
