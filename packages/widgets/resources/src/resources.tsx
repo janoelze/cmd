@@ -2,7 +2,8 @@
 // cmd's own processes): what each terminal of this workspace (or every workspace, from the title
 // menu) uses now, CPU and memory of its whole process tree, busiest first, live from cmd's
 // samples (useTerminalUsage, API 1.2), with the last two minutes of the totals as sparklines and
-// the totals in the title bar. A click on a row goes to its terminal; a header sorts. A terminal
+// the totals in the title bar. A terminal with an agent says the agent's name and its kind's icon,
+// as the sidebar does. A click on a row goes to its terminal; a header sorts. A terminal
 // cmd hasn't sampled yet isn't listed, so terminals with no sample yet read as loading.
 
 import {
@@ -18,6 +19,7 @@ import {
   StatusLine,
   useTerminals,
   useTerminalUsage,
+  useAgents,
   useWorkspace,
   useStoredState,
   fmt,
@@ -73,13 +75,16 @@ export default function TerminalUsage() {
   const query = scope === "all" ? { scope } : {};
   const terminals = useTerminals(query);
   const usage = useTerminalUsage(query);
+  const agents = new Map(useAgents(query).map((a) => [a.id, a]));
   const workspace = useWorkspace();
   const [history, setHistory] = useState<Use[]>([]);
 
   const named = new Map(terminals.map((t) => [t.id, t]));
   const rows: Row[] = usage.map((u: TerminalUsage) => {
     const t = named.get(u.id);
-    return { id: u.id, name: t?.title || t?.command || "Terminal", icon: t?.agentId ? "sparkles" : "terminal", cpu: u.cpu, memory: u.memory, top: u.top.slice(0, 3).map((p) => p.name), processes: u.processes, where: u.workspaceId === workspace?.id && workspace?.name ? workspace.name : t ? folder(t.cwd) : "", windowId: t?.windowId ?? null };
+    // An agent's terminal goes by the agent's name and its kind's icon, as in the sidebar.
+    const agent = t?.agentId ? agents.get(t.agentId) : undefined;
+    return { id: u.id, name: agent?.name || t?.title || t?.command || "Terminal", icon: agent?.icon ?? (t?.agentId ? "sparkles" : "terminal"), cpu: u.cpu, memory: u.memory, top: u.top.slice(0, 3).map((p) => p.name), processes: u.processes, where: u.workspaceId === workspace?.id && workspace?.name ? workspace.name : t ? folder(t.cwd) : "", windowId: t?.windowId ?? null };
   });
   const total = rows.reduce<Use>((s, r) => ({ cpu: s.cpu + r.cpu, memory: s.memory + r.memory }), { cpu: 0, memory: 0 });
   const processes = rows.reduce((n, r) => n + r.processes, 0);

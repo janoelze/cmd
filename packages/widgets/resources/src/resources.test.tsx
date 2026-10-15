@@ -3,13 +3,13 @@
 // one lit, the totals in the title bar and the footer; live (a new sample moves the rows and adds
 // to the sparklines); a header sorts, kept per window; a click goes to the terminal; every
 // workspace's from the title menu; terminals not sampled yet read as loading; nothing running;
-// refused; many terminals.
+// refused; many terminals; an agent's terminal by the agent's name and icon, as the sidebar.
 
 import { describe, expect, it } from "vitest";
 import { render, createHost, fixtures } from "@cmd/widget-api/testing";
 import TerminalUsage, { HOT_CPU, pct, sorted } from "./resources.tsx";
 
-const { pane, usage } = fixtures;
+const { agent, pane, usage } = fixtures;
 const MB = 2 ** 20;
 
 const terminals = [pane({ title: "Claude · window design", agentId: "a1" }), pane({ title: "pnpm dev", command: "pnpm dev" }), pane({ title: "zsh" })];
@@ -37,6 +37,15 @@ describe("Terminal Usage", () => {
     expect(tree.find("Window").props.status).toBe("114% · 2 GB");
     expect(tree.find("Pane", (p) => p.props.title === "Terminals").props.aside).toBe(3);
     expect(tree.find("StatusLine").children[0]).toMatchObject({ text: "3 terminals · 24 processes" });
+  });
+
+  it("names an agent's terminal by the agent, with its kind's icon, as the sidebar does", async () => {
+    const codex = agent({ id: "a1", name: "Codex · sqlite viewer", kind: "codex", terminalId: "t-claude-window-design" });
+    const tree = await render(<TerminalUsage />, createHost({ terminals, agents: [codex], terminalUsage: samples }));
+    const g = grid(tree);
+    expect(g.rows[0]!.cells.slice(0, 2)).toEqual([codex.icon, "Codex · sqlite viewer"]);
+    expect(codex.icon).not.toBe("sparkles");
+    expect(g.rows[0]!.tip).toContain("Codex · sqlite viewer");
   });
 
   it("follows cmd's samples live: the rows move and the sparklines grow", async () => {

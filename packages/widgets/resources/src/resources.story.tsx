@@ -2,7 +2,7 @@
 // against the fake host, one variant per state, each the host's data (stand-in samples).
 
 import type { HostData } from "@cmd/widget-api/testing/host";
-import { pane, usage } from "@cmd/widget-api/testing/fixtures";
+import { agent, pane, usage } from "@cmd/widget-api/testing/fixtures";
 import TerminalUsage from "./resources.tsx";
 
 export default TerminalUsage;
@@ -16,6 +16,8 @@ const terminals = [
   pane({ title: "Codex · sqlite viewer", agentId: "a2" }),
   pane({ title: "zsh" }),
 ];
+// The agents in two of them: their rows say the agent's name and its kind's icon, as the sidebar does.
+const agents = [agent({ id: "a1", name: "Claude · window design", terminalId: "t-claude-window-design" }), agent({ id: "a2", name: "Codex · sqlite viewer", kind: "codex", terminalId: "t-codex-sqlite-viewer" })];
 const samples = [
   usage({ id: "t-claude-window-design", cpu: 92, memory: 812 * MB, processes: 9, top: top(["claude", 600], ["node", 200], ["rg", 12]) }),
   usage({ id: "t-pnpm-dev", cpu: 21.4, memory: 1240 * MB, processes: 14, top: top(["Electron Helper (Renderer)", 700], ["node", 400], ["esbuild", 140]) }),
@@ -24,7 +26,7 @@ const samples = [
 ];
 
 /** A busy workspace: an agent at work, a dev server, an idle shell. */
-export const Busy: HostData = { terminals, terminalUsage: samples };
+export const Busy: HostData = { terminals, agents, terminalUsage: samples };
 
 /** Every workspace's terminals, from the title menu: where each runs. */
 export const EveryWorkspace: HostData = {
@@ -37,7 +39,7 @@ export const EveryWorkspace: HostData = {
 export const OneTerminal: HostData = { terminals: [pane()], terminalUsage: [usage()] };
 
 /** In a narrow window, as in a sidebar: the least important columns give way. */
-export const Narrow: HostData & { size: "narrow" } = { terminals, terminalUsage: samples, size: "narrow" };
+export const Narrow: HostData & { size: "narrow" } = { terminals, agents, terminalUsage: samples, size: "narrow" };
 
 /** Terminals cmd hasn't sampled yet. */
 export const Loading: HostData = { terminals, terminalUsage: [] };
