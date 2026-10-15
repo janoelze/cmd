@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { API, API_VERBS, type CoreEvent, type Method } from "@cmd/protocol";
+import { API, API_VERBS, localOnly, type CoreEvent, type Method } from "@cmd/protocol";
 import { Core } from "../src/kernel/core.ts";
 import { checkRemoteCall, MAX_WATCHES, NO_ARGS, REMOTE_ACCESS, RemoteDenied, remoteEvent, remoteEventVisible, remoteResult, scopeAllows, type PolicyContext } from "../src/remote/policy.ts";
 import { fakeFactory } from "./fake-pty.ts";
@@ -284,9 +284,11 @@ describe("widget trees to devices (docs/56, Remote)", () => {
   // API 1.1's acts (widgets/api/act.ts): a widget acts only after a press, and a device's press is
   // widget.interact. View scope has none to make (never); control scope's press is marked as a
   // device's, so the act it leads to asks on the Mac every time, Once only, whatever was kept.
-  it("leaves act verbs never for view scope and confirm on the Mac for control scope", () => {
+  it("leaves act verbs never for view scope and confirm on the Mac for control scope; this Mac's own never for a device", () => {
     const acts = API_VERBS.filter((v) => API[v].mode === "confirm");
-    expect(acts.length).toBe(7);
+    expect(acts.length).toBe(8); // 1.2 added actions.stop
+    // 1.2: what acts on this Mac (its clipboard, what it plays) is never for a device's press, whatever its scope (widget-api-12.test.ts).
+    expect(API_VERBS.filter(localOnly)).toEqual(["media.control", "clipboard.write"]);
     expect(scopeAllows("view", REMOTE_ACCESS["widget.interact"])).toBe(false);
     const seen: boolean[] = [];
     const real = core.library.host.interact.bind(core.library.host);
