@@ -1,0 +1,32 @@
+{
+  "name": "actions",
+  "version": "1.0.0",
+  "description": "How to run this project: its scripts, a click to run one.",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": { "cmd": ">=0.30" },
+  "files": ["src/actions.tsx", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cmd/widget-api": "workspace:*",
+    "@types/react": "^19.0.0",
+    "react": "^19.3.0"
+  },
+  "cmd": {
+    "api": 1,
+    "widgets": [
+      {
+        "id": "actions",
+        "title": "Run Scripts",
+        "icon": "play.rectangle",
+        "description": "How to run this project, from its own files: package.json scripts, a Makefile, a justfile. A click runs one in its own terminal.",
+        "main": "src/actions.tsx",
+        "size": "m"
+      }
+    ],
+    "permissions": { "workspace": ["read"], "act": ["actions.run"] }
+  }
+}
