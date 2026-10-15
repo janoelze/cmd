@@ -34,4 +34,5 @@ export * from "./widget-package.ts";
 export * from "./magic-package.ts";
 export * from "./widget-tree.ts";
 export * from "./widget-events.ts";
+export * from "./widget-patch.ts";
 export * from "./widget-host.ts";

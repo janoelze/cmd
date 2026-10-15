@@ -1,30 +1,31 @@
 // The last full tree of a package widget's window (docs/56, "The wire"), kept by the core so
-// a window drawn later gets the whole tree, not a stream of patches. Patches apply in order,
-// each op to the tree the ops before it left; a patch whose rev doesn't follow, or that names
-// a node this tree lacks, is refused and the process is asked for the whole tree again.
+// a window drawn later gets the whole tree, not a stream of patches. Patches apply as the
+// protocol's WireTree applies them (widget-patch.ts), in place, on a copy of what the process
+// sent (the message itself goes on to the renderer as it came); a patch that doesn't fit
+// loses the tree, and the process is asked for the whole tree again.
 
-import { TREE_ROOT, type PatchOp, type TreeElement, type TreeNode, type WidgetPatch, type WidgetTree } from "@cmd/protocol";
-import { API_ELEMENTS, type ApiElementSpec, type WireValue } from "@cmd/protocol";
+import { API_ELEMENTS, WireTree, type ApiElementSpec, type TreeElement, type WidgetPatch, type WidgetTree, type WireValue } from "@cmd/protocol";
 
 export class TreeState {
-  rev = 0;
-  #roots: TreeNode[] = [];
-  /** Every node by id, with its parent's id. */
-  #nodes = new Map<number, { node: TreeNode; parent: number }>();
+  readonly #tree = new WireTree({ adopt: (n) => structuredClone(n) });
+
+  get rev(): number {
+    return this.#tree.rev;
+  }
 
   /** Whether there is a tree yet. */
   get ready(): boolean {
-    return this.rev > 0;
+    return this.#tree.ready;
   }
 
   /** The whole tree as a message. */
   tree(): WidgetTree {
-    return { kind: "tree", rev: this.rev, nodes: this.#roots };
+    return this.#tree.tree();
   }
 
   /** Whether `handler` is a text field's onChange (typing, not a press). */
   typesInto(handler: number): boolean {
-    for (const { node } of this.#nodes.values()) {
+    for (const node of this.#tree.nodes()) {
       if (node.type !== "ToolbarField" && node.type !== "ToolbarSearchField") continue;
       const h = node.props.onChange;
       if (h && typeof h === "object" && !Array.isArray(h) && (h as { $handler?: unknown }).$handler === handler) return true;
@@ -33,95 +34,21 @@ export class TreeState {
   }
 
   reset(): void {
-    this.rev = 0;
-    this.#roots = [];
-    this.#nodes.clear();
+    this.#tree.reset();
   }
 
   setTree(t: WidgetTree): void {
-    this.#roots = t.nodes;
-    this.#nodes.clear();
-    for (const n of t.nodes) this.#index(n, TREE_ROOT);
-    this.rev = t.rev;
+    this.#tree.load(t);
   }
 
-  /** Apply a patch; false (and the tree as it was before, rev unchanged) when it doesn't fit. */
+  /** Apply a patch; false when it doesn't fit (then, unless it was one already applied, the tree is gone until the next whole one). */
   apply(p: WidgetPatch): boolean {
-    if (!this.ready || p.rev !== this.rev + 1) return false;
-    for (const op of p.ops) {
-      if (!this.#op(op)) {
-        this.reset();
-        return false;
-      }
-    }
-    this.rev = p.rev;
-    return true;
-  }
-
-  #children(parent: number): TreeNode[] | null {
-    if (parent === TREE_ROOT) return this.#roots;
-    const n = this.#nodes.get(parent)?.node;
-    return n && n.type !== "#text" ? n.children : null;
-  }
-
-  #index(n: TreeNode, parent: number): void {
-    this.#nodes.set(n.id, { node: n, parent });
-    if (n.type !== "#text") for (const c of n.children) this.#index(c, n.id);
-  }
-
-  #unindex(n: TreeNode): void {
-    this.#nodes.delete(n.id);
-    if (n.type !== "#text") for (const c of n.children) this.#unindex(c);
-  }
-
-  /** Take a node out of its parent's children; the node, or null. */
-  #detach(id: number): TreeNode | null {
-    const at = this.#nodes.get(id);
-    if (!at) return null;
-    const list = this.#children(at.parent);
-    const i = list ? list.indexOf(at.node) : -1;
-    if (!list || i < 0) return null;
-    list.splice(i, 1);
-    return at.node;
-  }
-
-  #op(op: PatchOp): boolean {
-    switch (op.op) {
-      case "insert": {
-        const list = this.#children(op.parent);
-        if (!list || op.index < 0 || op.index > list.length || this.#nodes.has(op.node.id)) return false;
-        list.splice(op.index, 0, op.node);
-        this.#index(op.node, op.parent);
-        return true;
-      }
-      case "move": {
-        const node = this.#detach(op.id);
-        const list = this.#children(op.parent);
-        if (!node || !list || op.index < 0 || op.index > list.length) return false;
-        list.splice(op.index, 0, node);
-        this.#nodes.set(op.id, { node, parent: op.parent });
-        return true;
-      }
-      case "remove": {
-        const node = this.#detach(op.id);
-        if (!node) return false;
-        this.#unindex(node);
-        return true;
-      }
-      case "props": {
-        const n = this.#nodes.get(op.id)?.node;
-        if (!n || n.type === "#text") return false;
-        const el = n as TreeElement;
-        el.props = { ...el.props, ...op.set };
-        for (const k of op.unset) delete el.props[k];
-        return true;
-      }
-      case "text": {
-        const n = this.#nodes.get(op.id)?.node;
-        if (!n || n.type !== "#text") return false;
-        n.text = op.text;
-        return true;
-      }
+    try {
+      this.#tree.apply(p);
+      return true;
+    } catch {
+      // A PatchError, or a malformed node: either way the process sends the whole tree again.
+      return false;
     }
   }
 
@@ -130,7 +57,7 @@ export class TreeState {
    * names, or "run" inside a prop that holds handlers (a menu entry, an action, a view state's).
    */
   fires(handler: number, event: string): boolean {
-    for (const { node } of this.#nodes.values()) {
+    for (const node of this.#tree.nodes()) {
       const spec = node.type === "#text" ? undefined : (API_ELEMENTS as Record<string, ApiElementSpec>)[node.type];
       if (!spec) continue;
       for (const [k, v] of Object.entries((node as TreeElement).props)) {

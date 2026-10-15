@@ -1,8 +1,9 @@
 // A package widget's tree in the renderer (docs/56, "The view"): what its process sent,
-// whole (`tree`) and then as patches, applied in order and checked on the way in. The
-// store keeps nodes immutable (a change copies the node and its ancestors), so the view
-// redraws only what a patch touched; a skipped rev asks the core for the whole tree
-// again (`resync`). Everything outside API 1's allow-list (API_ELEMENTS) is dropped
+// whole (`tree`) and then as patches, applied in order as the core applies them (the
+// protocol's WireTree, widget-patch.ts) and checked on the way in. The store keeps nodes
+// immutable (a change copies the node and its ancestors), so the view redraws only what a
+// patch touched; a patch that doesn't fit (a skipped rev, an unknown node) asks the core
+// for the whole tree again (`resync`), the last good tree staying on screen till it comes. Everything outside API 1's allow-list (API_ELEMENTS) is dropped
 // here with a warning naming it: an unknown element, a prop the element doesn't take, a
 // handler on a prop that isn't one of its events, a URL that isn't https, markup in
 // words, values of the wrong type (the checks are the protocol's, widget-values.ts, run
@@ -11,11 +12,11 @@
 import {
   API_ELEMENTS,
   MARKUP,
-  TREE_ROOT,
+  PatchError,
+  WireTree,
   checkValue,
   isHandler,
   type ApiElementSpec,
-  type PatchOp,
   type TreeElement,
   type TreeNode,
   type WidgetHostStatus,
@@ -139,22 +140,15 @@ export class Sanitizer {
   }
 }
 
-const isEl = (n: TreeNode | undefined): n is TreeElement => !!n && n.type !== "#text";
-
 /** What stands in for a dropped node: nothing to draw, but it keeps its place. */
 const placeholder = (id: number): TreeNode => ({ id, type: "#text", text: "" });
 const isPlaceholder = (n: TreeNode) => n.type === "#text" && n.text === "";
 
-/** Ops that can't apply: the tree here isn't the process's any more. */
-class Lost extends Error {}
-
 /** One window's tree. */
 export class TreeStore {
   private snap: TreeSnapshot = { nodes: [], rev: 0, loaded: false, status: "starting", reason: undefined, detail: undefined };
-  private byId = new Map<number, TreeNode>();
-  private parentOf = new Map<number, number>();
-  /** Ids dropped by the sanitiser (and their subtrees as sent): later ops on them are ignored, not a reason to resync. */
-  private dropped = new Set<number>();
+  /** The tree as the patches leave it: copy-on-write, sanitised on the way in (protocol widget-patch.ts). */
+  private readonly tree: WireTree;
   /** A resync was asked for: patches wait for the tree. */
   private resyncing = false;
   private readonly listeners = new Set<() => void>();
@@ -166,6 +160,23 @@ export class TreeStore {
     this.opts = opts;
     this.warn = opts.warn ?? ((m) => console.warn(m));
     this.clean = new Sanitizer(opts.elements ?? API_ELEMENTS, this.warn);
+    const typeOf = (parent: TreeElement | null) => (parent ? String(parent.type) : "root");
+    this.tree = new WireTree({
+      immutable: true,
+      adopt: (n, parent, drop) => {
+        const type = typeOf(parent);
+        if (this.clean.holds(type, n)) return this.clean.node(n, type, drop);
+        this.warn(`widget: <${type}> can't hold a ${n.type === "#text" ? "text" : `<${String(n.type)}>`}: dropped`);
+        drop(n);
+        return placeholder(n.id);
+      },
+      props: (el, set) => this.clean.props(el.type, set),
+      text: (_, text, parent) => {
+        if (typeof text === "string" && !MARKUP.test(text)) return text;
+        this.warn(`widget: a text in <${typeOf(parent)}> dropped: markup in text`);
+        return "";
+      },
+    });
   }
 
   get snapshot(): TreeSnapshot {
@@ -180,30 +191,27 @@ export class TreeStore {
   getSnapshot = (): TreeSnapshot => this.snap;
 
   get(id: number): TreeNode | undefined {
-    return this.byId.get(id);
+    return this.tree.get(id);
   }
 
   apply(m: TreeMessage): void {
     if (m.kind === "status") {
       this.set({ status: m.state, reason: m.reason, detail: m.detail });
     } else if (m.kind === "tree") {
-      this.byId.clear();
-      this.parentOf.clear();
-      this.dropped.clear();
       this.resyncing = false;
-      const nodes = this.adoptAll(m.nodes, TREE_ROOT);
+      this.tree.load(m);
       // The status stays as last told: a stopped process's last tree comes after its status on resync.
-      this.set({ nodes, rev: m.rev, loaded: true });
+      this.set({ nodes: this.tree.roots, rev: m.rev, loaded: true });
     } else if (m.kind === "patch") {
-      if (this.resyncing || m.rev <= this.snap.rev) return; // waiting for the tree, or old news
-      if (!this.snap.loaded || m.rev !== this.snap.rev + 1) return this.lose();
+      if (this.resyncing) return; // waiting for the tree
       try {
-        for (const op of m.ops) this.op(op);
+        this.tree.apply(m);
       } catch (err) {
-        if (err instanceof Lost) return this.lose();
-        throw err;
+        if (!(err instanceof PatchError)) throw err;
+        if (err.reason !== "stale") this.lose(); // the last good tree stays on screen until the whole one comes
+        return;
       }
-      this.set({ rev: m.rev });
+      this.set({ nodes: this.tree.roots, rev: m.rev });
     }
   }
 
@@ -223,143 +231,5 @@ export class TreeStore {
   private set(change: Partial<TreeSnapshot>): void {
     this.snap = { ...this.snap, ...change };
     for (const fn of [...this.listeners]) fn();
-  }
-
-  /** Sanitises nodes from the wire and indexes them under `parent`. */
-  private adoptAll(nodes: readonly TreeNode[], parent: number): TreeNode[] {
-    const parentType = parent === TREE_ROOT ? "root" : String(this.byId.get(parent)?.type);
-    return nodes.map((n) => {
-      const s = this.clean.node(n, parentType, (d) => this.forgetWire(d));
-      this.index(s, parent);
-      return s;
-    });
-  }
-
-  /** Every id in a dropped subtree, as sent. */
-  private forgetWire(n: TreeNode): void {
-    this.dropped.add(n.id);
-    if (n.type !== "#text") for (const c of n.children ?? []) this.forgetWire(c);
-  }
-
-  private index(n: TreeNode, parent: number): void {
-    this.byId.set(n.id, n);
-    this.parentOf.set(n.id, parent);
-    if (isEl(n)) for (const c of n.children) this.index(c, n.id);
-  }
-
-  private unindex(n: TreeNode): void {
-    this.byId.delete(n.id);
-    this.parentOf.delete(n.id);
-    if (isEl(n)) for (const c of n.children) this.unindex(c);
-  }
-
-  private children(parent: number): readonly TreeNode[] {
-    if (parent === TREE_ROOT) return this.snap.nodes;
-    const p = this.byId.get(parent);
-    if (!isEl(p)) throw new Lost();
-    return p.children;
-  }
-
-  /** Puts a new list of children on `parent`, copying it and its ancestors (immutable). */
-  private setChildren(parent: number, list: TreeNode[]): void {
-    if (parent === TREE_ROOT) {
-      this.snap = { ...this.snap, nodes: list };
-      return;
-    }
-    const p = this.byId.get(parent) as TreeElement;
-    this.replace({ ...p, children: list });
-  }
-
-  /** Puts a changed copy of a node in place of the old one, up to the root. */
-  private replace(n: TreeNode): void {
-    const parent = this.parentOf.get(n.id)!;
-    this.byId.set(n.id, n);
-    this.setChildren(
-      parent,
-      this.children(parent).map((c) => (c.id === n.id ? n : c)),
-    );
-  }
-
-  /** Whether an op names something the sanitiser dropped (then it is skipped). */
-  private gone(id: number): boolean {
-    return this.dropped.has(id);
-  }
-
-  private op(op: PatchOp): void {
-    switch (op.op) {
-      case "insert": {
-        if (op.parent !== TREE_ROOT && this.gone(op.parent)) return this.forgetWire(op.node);
-        const list = [...this.children(op.parent)];
-        const parentType = op.parent === TREE_ROOT ? "root" : String(this.byId.get(op.parent)!.type);
-        let node: TreeNode;
-        if (this.clean.holds(parentType, op.node)) node = this.adoptAll([op.node], op.parent)[0]!;
-        else {
-          this.warn(`widget: <${parentType}> can't hold a ${op.node.type === "#text" ? "text" : `<${op.node.type}>`}: dropped`);
-          this.forgetWire(op.node);
-          node = placeholder(op.node.id);
-          this.index(node, op.parent);
-        }
-        list.splice(Math.min(op.index, list.length), 0, node);
-        this.setChildren(op.parent, list);
-        return;
-      }
-      case "move": {
-        if (this.gone(op.id)) return;
-        const n = this.byId.get(op.id);
-        if (!n) throw new Lost();
-        if (op.parent !== TREE_ROOT && this.gone(op.parent)) {
-          this.remove(n);
-          this.unindex(n);
-          return this.forgetWire(n);
-        }
-        this.remove(n);
-        this.index(n, op.parent);
-        const list = [...this.children(op.parent)];
-        list.splice(Math.min(op.index, list.length), 0, n);
-        this.setChildren(op.parent, list);
-        return;
-      }
-      case "remove": {
-        if (this.gone(op.id)) return;
-        const n = this.byId.get(op.id);
-        if (!n) throw new Lost();
-        this.remove(n);
-        this.unindex(n);
-        return;
-      }
-      case "props": {
-        if (this.gone(op.id)) return;
-        const n = this.byId.get(op.id);
-        if (!isEl(n)) throw new Lost();
-        const props = { ...n.props, ...this.clean.props(n.type, op.set) };
-        for (const k of op.unset) delete props[k];
-        this.replace({ ...n, props });
-        return;
-      }
-      case "text": {
-        if (this.gone(op.id)) return;
-        const n = this.byId.get(op.id);
-        if (!n || n.type !== "#text") throw new Lost();
-        const parent = this.parentOf.get(op.id)!;
-        const type = parent === TREE_ROOT ? "root" : String(this.byId.get(parent)?.type);
-        if (typeof op.text !== "string" || MARKUP.test(op.text)) {
-          this.warn(`widget: a text in <${type}> dropped: markup in text`);
-          return this.replace({ ...n, text: "" });
-        }
-        this.replace({ ...n, text: op.text });
-        return;
-      }
-    }
-  }
-
-  /** Takes a node out of its parent's children (still indexed). */
-  private remove(n: TreeNode): void {
-    const parent = this.parentOf.get(n.id)!;
-    const list = this.children(parent);
-    if (!list.some((c) => c.id === n.id)) throw new Lost();
-    this.setChildren(
-      parent,
-      list.filter((c) => c.id !== n.id),
-    );
   }
 }

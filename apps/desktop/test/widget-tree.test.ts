@@ -125,6 +125,30 @@ describe("the allow-list", () => {
     expect((s.snapshot.nodes[0] as TreeElement).children.map((c) => c.type)).toEqual(["#text", "Text", "Badge"]);
   });
 
+  it("moves and removes a dropped element's stand-in, so later indexes still line up", () => {
+    // Before the shared applier (protocol widget-patch.ts) the store ignored every op on a
+    // dropped node: its stand-in stayed after the process removed or moved it, and later
+    // inserts landed out of order.
+    const { s, resync } = store();
+    s.apply(tree([el(1, "Stack", {}, [el(2, "iframe" as never), el(3, "Text", {}, [txt(4, "a")]), el(5, "Text", {}, [txt(6, "b")])])]));
+    s.apply({ kind: "patch", rev: 2, ops: [{ op: "move", id: 2, parent: 1, index: 2 }, { op: "insert", parent: 1, index: 2, node: el(7, "Text", {}, [txt(8, "c")]) }] });
+    const words = () => (s.snapshot.nodes[0] as TreeElement).children.map((c) => (c.type === "#text" ? "·" : ((c as TreeElement).children[0] as { text: string }).text));
+    expect(words()).toEqual(["a", "b", "c", "·"]);
+    s.apply({ kind: "patch", rev: 3, ops: [{ op: "remove", id: 2 }, { op: "insert", parent: 1, index: 3, node: el(9, "Text", {}, [txt(10, "d")]) }] });
+    expect(words()).toEqual(["a", "b", "c", "d"]);
+    expect(resync).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last good tree on screen while it waits for the whole one", () => {
+    const { s, resync } = store();
+    s.apply(tree(list()));
+    const shown = s.snapshot.nodes;
+    s.apply({ kind: "patch", rev: 2, ops: [{ op: "remove", id: 2 }, { op: "remove", id: 99 }] });
+    expect(resync).toHaveBeenCalledTimes(1);
+    expect(s.snapshot.nodes).toBe(shown);
+    expect(titles(s)).toEqual(["Tours", "Perf"]);
+  });
+
   it("drops a prop the element doesn't take", () => {
     const { s, warnings } = store();
     s.apply(tree([el(1, "Button", { variant: "primary", className: "x", style: { color: "red" } }, [txt(2, "Go")])]));

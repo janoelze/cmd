@@ -8,7 +8,8 @@
     "./node": "./src/node.ts",
     "./replay": "./src/replay.ts",
     "./widget-tree": "./src/widget-tree.ts",
-    "./widget-events": "./src/widget-events.ts"
+    "./widget-events": "./src/widget-events.ts",
+    "./widget-patch": "./src/widget-patch.ts"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1"

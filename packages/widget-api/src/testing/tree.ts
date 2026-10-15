@@ -1,10 +1,12 @@
 // The tree a test sees: built from the process's own `tree` and `patch` messages the way
-// the app's renderer builds it (a patch out of order fails the test), with finders, the
-// interactions a person would make (press, change, a menu entry) and the matchers. Which
+// the app's renderer builds it (the protocol's WireTree: a patch the app would refuse fails
+// the test), with finders, the interactions a person would make (press, change, a menu
+// entry) and the matchers. Which
 // events a gesture fires and which props are an element's title and words is the
 // protocol's element spec (API_ELEMENTS).
 
-import { API_ELEMENTS, isHandler, type ApiElementSpec, type ApiGesture, type HandlerRef, type PatchOp, type TreeElement, type TreeNode, type WidgetOut, type WireValue } from "@cmd/protocol/widget-tree";
+import { API_ELEMENTS, isHandler, type ApiElementSpec, type ApiGesture, type HandlerRef, type TreeElement, type TreeNode, type WidgetOut, type WireValue } from "@cmd/protocol/widget-tree";
+import { PatchError, WireTree } from "@cmd/protocol/widget-patch";
 import type { FakeHost } from "./host.ts";
 
 /** A node of the rendered tree. @since 1.0 */
@@ -22,86 +24,31 @@ const wordProps = (type: string): string[] => {
   return [...props.filter(([, p]) => p.shows === "title"), ...props.filter(([, p]) => p.shows === "words")].map(([k]) => k);
 };
 
-/** Keeps a copy of the widget's tree from its messages. */
+/** Keeps a copy of the widget's tree from its messages, applied as the core and the app apply them (protocol widget-patch.ts). */
 export class Mirror {
-  nodes: TreeNode[] = [];
   rev = 0;
   trees = 0;
   patches = 0;
-  private byId = new Map<number, TreeNode>();
-  private parentOf = new Map<number, number>();
+  private readonly tree = new WireTree({ adopt: (n) => structuredClone(n), props: (_, set) => structuredClone(set) });
+
+  get nodes(): TreeNode[] {
+    return this.tree.roots as TreeNode[];
+  }
 
   apply(m: WidgetOut): void {
     if (m.kind === "tree") {
-      this.byId.clear();
-      this.parentOf.clear();
-      this.nodes = m.nodes.map((n) => this.adopt(structuredClone(n), 0));
+      this.tree.load(m);
       this.rev = m.rev;
       this.trees++;
     } else if (m.kind === "patch") {
-      if (m.rev !== this.rev + 1) throw new Error(`patch rev ${m.rev} after ${this.rev}: the renderer would resync`);
-      for (const op of m.ops) this.op(op);
+      try {
+        this.tree.apply(m);
+      } catch (e) {
+        if (e instanceof PatchError) throw new Error(`${e.message}: the renderer would resync`);
+        throw e;
+      }
       this.rev = m.rev;
       this.patches++;
-    }
-  }
-
-  private adopt(n: TreeNode, parent: number): TreeNode {
-    this.byId.set(n.id, n);
-    this.parentOf.set(n.id, parent);
-    if (isEl(n)) for (const c of n.children) this.adopt(c, n.id);
-    return n;
-  }
-
-  private list(parent: number): TreeNode[] {
-    if (parent === 0) return this.nodes;
-    const p = this.byId.get(parent);
-    if (!isEl(p)) throw new Error(`patch names parent ${parent}, which isn't an element of the tree`);
-    return p.children;
-  }
-
-  private forget(n: TreeNode): void {
-    this.byId.delete(n.id);
-    this.parentOf.delete(n.id);
-    if (isEl(n)) n.children.forEach((c) => this.forget(c));
-  }
-
-  private take(id: number): TreeNode {
-    const n = this.byId.get(id);
-    const list = n && this.list(this.parentOf.get(id)!);
-    const at = list ? list.indexOf(n!) : -1;
-    if (!n || at < 0) throw new Error(`patch names node ${id}, which isn't in the tree`);
-    list!.splice(at, 1);
-    return n;
-  }
-
-  private op(op: PatchOp): void {
-    switch (op.op) {
-      case "insert":
-        this.list(op.parent).splice(op.index, 0, this.adopt(structuredClone(op.node), op.parent));
-        return;
-      case "move": {
-        const n = this.take(op.id);
-        this.list(op.parent).splice(op.index, 0, n);
-        this.parentOf.set(op.id, op.parent);
-        return;
-      }
-      case "remove":
-        this.forget(this.take(op.id));
-        return;
-      case "props": {
-        const n = this.byId.get(op.id);
-        if (!isEl(n)) throw new Error(`props for ${op.id}, which isn't an element`);
-        n.props = { ...n.props, ...structuredClone(op.set) };
-        for (const k of op.unset) delete n.props[k];
-        return;
-      }
-      case "text": {
-        const n = this.byId.get(op.id);
-        if (!n || n.type !== "#text") throw new Error(`text for ${op.id}, which isn't a text`);
-        n.text = op.text;
-        return;
-      }
     }
   }
 }
