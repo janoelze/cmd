@@ -216,6 +216,30 @@ describe("subscriptions", () => {
     expect(rt.last.killed).toBe(false);
   });
 
+  it("pushes every workspace's events with scope \"all\" and a workspace: [\"all\"] grant, and refuses it without one", async () => {
+    const { core, rt, open, isStatus } = await setup([{ permissions: { workspace: ["read"] } }, { name: "wide", permissions: { workspace: ["read", "all"] } }]);
+    core.library.host.grant("demo");
+    core.library.host.grant("wide");
+    const narrow = await open();
+    await until(isStatus(narrow.id, "running"), "running");
+    rt.last.send({ kind: "subscribe", id: 5, topic: "events", query: { types: ["command"], scope: "all" } });
+    expect(await rt.last.next("result", (m) => m.id === 5)).toMatchObject({ ok: false, error: { code: "permission", permission: 'workspace: ["all"]', message: expect.stringMatching(/every workspace/i) } });
+
+    const w = await open("pkg:wide/main");
+    await until(isStatus(w.id, "running"), "running");
+    const p = rt.last;
+    const elsewhere = core.workspaces.open(tmp("cmd-widget-elsewhere-")).workspace;
+    p.send({ kind: "subscribe", id: 6, topic: "events", query: { types: ["command"], scope: "all" } });
+    expect((await p.next("event", (m) => m.sub === 6)).data).toEqual([]);
+    const run = (id: string, workspaceId: string, exitCode: number | null) => core.data.record({ id: `command:${id}`, at: 1000, until: exitCode === null ? null : 2000, type: "command", source: "osc", workspaceId, data: { command: "make", cwd: "/", exitCode } as never });
+    run("here", core.workspaces.home().id, null);
+    run("there", elsewhere.id, null);
+    run("there", elsewhere.id, 2);
+    const pushed = await p.next("event", (m) => m.sub === 6 && Array.isArray(m.data) && m.data.length > 0);
+    // One burst: both workspaces, the command recorded again once, as it ended.
+    expect(pushed.data).toEqual([expect.objectContaining({ key: "command:here", workspaceId: core.workspaces.home().id }), expect.objectContaining({ key: "command:there", workspaceId: elsewhere.id, until: 2000, data: expect.objectContaining({ exitCode: 2 }) })]);
+  });
+
   it("keeps a widget's console to about 50 lines a second, and says how many it dropped", async () => {
     const { rt, events, open, isStatus } = await setup();
     const w = await open();

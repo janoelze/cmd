@@ -5,7 +5,7 @@
 // with the command typed, not run (cmd.terminals.open, API 1.1); refused, a notification says
 // why. The title menu switches the scope and Failed Only, kept per window.
 
-import { ApiCallError, Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, useEvents, useData, useTerminals, useWorkspace, useStoredState, useNow, fmt, cmd, type Event } from "@cmd/widget-api";
+import { ApiCallError, Window, View, List, ListSection, ListRow, ListRowIcon, ListRowContent, ListRowEnd, Chip, useEvents, useTerminals, useWorkspace, useStoredState, useNow, fmt, cmd, type Event } from "@cmd/widget-api";
 
 type Scope = "workspace" | "all";
 
@@ -33,19 +33,11 @@ export function runOf(e: Event): Run {
 
 const newestFirst = (runs: Run[]) => [...runs].sort((a, b) => b.startedAt - a.startedAt);
 
-/** This workspace's commands, live. */
-function Here(p: { failedOnly: boolean; scope: Scope; setScope: (s: Scope) => void; setFailedOnly: (f: boolean) => void }) {
-  const runs = useEvents({ types: ["command"], limit: 300 }).map(runOf);
-  return <Commands {...p} runs={runs} />;
-}
-
-/** Every workspace's commands: the log asked every few seconds (a live query reads one workspace). */
-function Everywhere(p: { failedOnly: boolean; scope: Scope; setScope: (s: Scope) => void; setFailedOnly: (f: boolean) => void }) {
-  const { data, error } = useData(() => cmd.events.query({ types: ["command"], scope: "all", limit: 300 }), { every: 5 });
-  return <Commands {...p} runs={(data ?? []).map(runOf)} error={error?.message} />;
-}
-
-function Commands({ runs: all, failedOnly, scope, setScope, setFailedOnly, error }: { runs: Run[]; failedOnly: boolean; scope: Scope; setScope: (s: Scope) => void; setFailedOnly: (f: boolean) => void; error?: string }) {
+export default function RecentCommands() {
+  const [scope, setScope] = useStoredState<Scope>("scope", "workspace");
+  const [failedOnly, setFailedOnly] = useStoredState<boolean>("failedOnly", false);
+  // This workspace's commands, or every workspace's (`workspace: ["all"]`), live.
+  const all = useEvents({ types: ["command"], limit: 300, ...(scope === "all" ? { scope } : {}) }).map(runOf);
   const terminals = useTerminals({ scope });
   const ws = useWorkspace();
   const anyRunning = all.some((r) => r.endedAt === null);
@@ -55,7 +47,7 @@ function Commands({ runs: all, failedOnly, scope, setScope, setFailedOnly, error
   const running = runs.filter((r) => r.endedAt === null);
   const done = runs.filter((r) => r.endedAt !== null);
   const failures = done.filter(failed).length;
-  const status = error ? `Stale · ${error}` : failures ? `${failures} failed` : running.length ? `${running.length} running` : null;
+  const status = failures ? `${failures} failed` : running.length ? `${running.length} running` : null;
 
   /** In a folder of this workspace's (where a terminal may open): the workspace's own commands. */
   const here = (r: Run) => !!ws?.root && r.workspaceId === ws.id && (r.cwd === ws.root || r.cwd.startsWith(ws.root + "/"));
@@ -124,11 +116,4 @@ function Commands({ runs: all, failedOnly, scope, setScope, setFailedOnly, error
       </View>
     </Window>
   );
-}
-
-export default function RecentCommands() {
-  const [scope, setScope] = useStoredState<Scope>("scope", "workspace");
-  const [failedOnly, setFailedOnly] = useStoredState<boolean>("failedOnly", false);
-  const p = { scope, setScope, failedOnly, setFailedOnly };
-  return scope === "all" ? <Everywhere {...p} /> : <Here {...p} />;
 }

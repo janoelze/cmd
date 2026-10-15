@@ -13,7 +13,7 @@ import { clampRows, clampQuery, type Reader } from "../../data/policy.ts";
 import { checkoutOf } from "../../lib/checkout.ts";
 import { WatchService } from "../../lib/watch.ts";
 import { logger } from "@cmd/protocol/node";
-import { ApiRefusal, invalid } from "./access.ts";
+import { ApiRefusal } from "./access.ts";
 import { apiEvent } from "./model.ts";
 
 const log = logger("widgets");
@@ -129,24 +129,34 @@ export function subscribeTopic(core: TopicCore, s: TopicScope, push: (data: Wire
   };
 }
 
-/** `events`: the query's result, then the new events that answer it, a burst at a time. */
+/**
+ * `events`: the query's result, then the new events that answer it, a burst at a time. With
+ * `scope: "all"` (a `workspace: ["all"]` grant, checked by the first read) every workspace's,
+ * each event clamped by data/policy.ts as its own workspace's.
+ */
 function subscribeEvents(core: TopicCore, s: TopicScope, push: (data: WireValue) => void): Off {
   const q = (s.query && typeof s.query === "object" ? s.query : {}) as ApiEventQuery;
-  if (q.scope === "all") throw invalid("A live events query reads this workspace; use events.query with scope \"all\" for every workspace.");
-  const first = s.read(API_TOPIC.events.verb, q) as ApiEvent[]; // checks the grant, names what's missing
+  const first = s.read(API_TOPIC.events.verb, q) as ApiEvent[]; // checks the grant ("all" too), names what's missing
+  const all = q.scope === "all";
   const reader: Reader = { kind: "widget", workspaceId: s.own(), declared: s.perms.events };
   const clamped = clampQuery(reader, { ...(Array.isArray(q.types) ? { types: q.types } : {}) }, { fallback: 200, max: 1000 });
+  /** The workspace an event is read as, or null when this subscription doesn't see it. */
+  const seenIn = (e: DataEvent) => (!e.workspaceId ? null : all ? (core.workspaces.get(e.workspaceId) ? e.workspaceId : null) : e.workspaceId === s.own() ? e.workspaceId : null);
   let pending: DataEvent[] = [];
   let timer: NodeJS.Timeout | null = null;
   let closed = false;
   const take = (events: DataEvent[]) => {
     if (closed) return;
     // An event recorded again within the burst (a command's start, then its end) goes once, as it is now.
-    pending = mergeEvents(pending, events.filter((e) => e.workspaceId === s.own() && matchesQuery({ ...clamped, workspaceId: s.own() }, e)), (e) => e.id);
+    const fresh = events.filter((e) => {
+      const w = seenIn(e);
+      return !!w && matchesQuery({ ...clamped, workspaceId: w }, e);
+    });
+    pending = mergeEvents(pending, fresh, (e) => e.id);
     if (!pending.length || timer) return;
     timer = setTimeout(() => {
       timer = null;
-      const seen = clampRows({ ...reader, workspaceId: s.own() }, clamped, pending);
+      const seen = pending.flatMap((e) => clampRows({ ...reader, workspaceId: e.workspaceId }, clamped, [e]));
       pending = [];
       if (seen.length && !closed) push(seen.map(apiEvent) as unknown as WireValue);
     }, TOPIC_COALESCE_MS);

@@ -69,7 +69,9 @@ export function useWindows(query: ApiScopeQuery = {}): ApiWindow[] {
  * Events from the log matching `query`, newest last: the query's result first, then each
  * new one as it happens; at most `query.limit` (default 200) are kept. An event recorded again
  * (a command as it ends: the same `key`, since 1.1) replaces the one before. Needs
- * `events: [<class>]` for each class of events it reads.
+ * `events: [<class>]` for each class of events it reads. `{ scope: "all" }` reads every
+ * workspace's, with `workspace: ["all"]` (live since cmd of 2026-10-15; an older cmd refuses
+ * it, and `cmd.events.query` reads them).
  * @since 1.0
  */
 export function useEvents(query: ApiEventQuery = {}): ApiEvent[] {

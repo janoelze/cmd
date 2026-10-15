@@ -86,7 +86,12 @@ describe("Recent Commands", () => {
     expect(host.requests).toContainEqual(["state.set", "failedOnly", true]);
     await tree.choose(tree.find("Window"), "All Workspaces");
     expect(titles(tree.rows()).sort()).toEqual(["make", "pnpm test"]);
-    expect(host.requests).toContainEqual(["events.query", { types: ["command"], scope: "all", limit: 300 }]);
+    // Live, not asked for: the events topic with scope "all".
+    expect(host.subscriptions()).toContainEqual(expect.objectContaining({ topic: "events", query: { types: ["command"], limit: 300, scope: "all" } }));
+    expect(host.requests.some((r) => r[0] === "events.query")).toBe(false);
+    host.emit(command({ command: "cargo build", exitCode: 3, workspaceId: "ws-3" }));
+    await tree.idle();
+    expect(titles(tree.rows()).sort()).toEqual(["cargo build", "make", "pnpm test"]);
   });
 
   it("says what goes here when nothing ran, and when nothing failed", async () => {
