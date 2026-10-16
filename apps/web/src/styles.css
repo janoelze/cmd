@@ -69,7 +69,9 @@ body { background: var(--bg); color: var(--text); font: var(--text-base) / 1.35 
 .term-head { flex: 1; min-width: 0; }
 .term-name { display: flex; align-items: center; gap: var(--space-1-5); font-weight: 600; font-size: var(--text-md); }
 .term-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.term-state { font-size: var(--text-sm); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-state { display: flex; font-size: var(--text-sm); color: var(--text-dim); white-space: nowrap; }
+.term-state > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.term-sized { flex: none; }
 /* Fills the rest. The terminal is drawn at the Mac's grid in .term-pan, which
    viewport.ts moves (a transform) and zooms (the font) under .term-view; it handles
    every touch there itself. */

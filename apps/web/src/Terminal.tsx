@@ -73,9 +73,11 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
   const asked = useRef<string[]>([]);
   /** The core confirmed our size (sizedBy set) since we asked: a null after that means the Mac took it back. */
   const confirmed = useRef(false);
-  const [mods, setMods] = useState({ ctrl: false, alt: false });
+  const [mods, setModsState] = useState({ ctrl: false, alt: false });
   const modsRef = useRef(mods);
   modsRef.current = mods;
+  /** The ref at once too: a key tapped right after a modifier (before the render) still gets it. */
+  const setMods = (m: { ctrl: boolean; alt: boolean }) => ((modsRef.current = m), setModsState(m));
   const [enter, setEnter] = useState(true);
   const [menu, setMenu] = useState(false);
   const [link, setLink] = useState<string | null>(null);
@@ -265,6 +267,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
     x!.viewport.clearSelection();
   };
 
+  // Who has the size, kept in view when the line runs long.
   const sizedBy = fitting ? "Sized for this phone" : pane.sizedBy ? `Sized by ${pane.sizedBy}` : null;
 
   return (
@@ -276,10 +279,12 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
             <StatusDot state={item.light} size="sm" /> <span>{item.title}</span>
           </div>
           <div className="term-state">
-            {item.workspace ? `${item.workspace} · ` : ""}
-            {stateText(item)}
-            {item.detail ? ` · ${item.detail}` : ""}
-            {sizedBy ? ` · ${sizedBy}` : ""}
+            <span>
+              {item.workspace ? `${item.workspace} · ` : ""}
+              {stateText(item)}
+              {item.detail ? ` · ${item.detail}` : ""}
+            </span>
+            {sizedBy && <span className="term-sized">&nbsp;· {sizedBy}</span>}
           </div>
         </div>
         <IconButton icon="ellipsis" size="lg" label="More" onClick={() => setMenu(true)} />
@@ -305,10 +310,10 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
       {control ? (
         <div className="term-input">
           <div className="keys">
-            <Button size="sm" className="key" pressed={mods.ctrl} onMouseDown={keep} onClick={() => setMods({ ...mods, ctrl: !mods.ctrl })}>
+            <Button size="sm" className="key" pressed={mods.ctrl} onMouseDown={keep} onClick={() => setMods({ ...modsRef.current, ctrl: !modsRef.current.ctrl })}>
               ctrl
             </Button>
-            <Button size="sm" className="key" pressed={mods.alt} onMouseDown={keep} onClick={() => setMods({ ...mods, alt: !mods.alt })} aria-label="alt">
+            <Button size="sm" className="key" pressed={mods.alt} onMouseDown={keep} onClick={() => setMods({ ...modsRef.current, alt: !modsRef.current.alt })} aria-label="alt">
               alt
             </Button>
             {KEYS.map((k) => (
@@ -428,7 +433,7 @@ function TerminalMenu(p: {
             p.fitting
               ? `${p.pane.cols}×${p.pane.rows} on the Mac until you leave`
               : other
-                ? `${p.pane.sizedBy} has it; this takes it over`
+                ? `Sized by ${p.pane.sizedBy}; this takes it over`
                 : "Resizes it on the Mac while it's open here"
           }
         />

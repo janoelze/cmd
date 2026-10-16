@@ -6,12 +6,18 @@
 process.stdin.setRawMode?.(true);
 process.stdin.resume();
 let typed = "";
+// Keys by name, so they show instead of acting: arrows, ESC (alt sends it first), control characters.
+const named = (s) =>
+  s
+    .replace(/\x1b\[([ABCD])/g, (_, c) => ({ A: "↑", B: "↓", C: "→", D: "←" })[c])
+    .replace(/\x1b/g, "esc ")
+    .replace(/[\x00-\x1f\x7f]/g, (c) => (c === "\x7f" ? "^?" : `^${String.fromCharCode(c.charCodeAt(0) + 64)}`));
 const say = (s) => process.stdout.write(`${s}\r\n`);
 say("Input probe: send something from the phone.");
 process.stdin.on("data", (d) => {
   const s = d.toString("utf8");
   if (s.includes("\x03")) process.exit(0);
-  const text = s.replace(/\r/g, "");
+  const text = named(s.replace(/\r/g, ""));
   if (s.includes("\r") && text) {
     say(`paste: “${typed + text}” and Return in one burst (an agent adds a new line)`);
     typed = "";
