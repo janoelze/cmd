@@ -115,7 +115,8 @@ try {
   await until(async () => (await call("remote.status")).sessions[0]?.watching.includes(pane.id), "opening it follows it on the Mac");
   // Opening it leaves the Mac's terminal at its size: the phone shows it scaled, and the page itself doesn't scroll.
   const opened = (await call("pane.list")).find((p) => p.id === pane.id);
-  await page.waitForTimeout(500); // fixed-wait: proving nothing resizes it (the follow, the snapshot and a fit would by now)
+  // Its snapshot is drawn: the old client fitted the Mac's terminal by then.
+  await until(async () => (await page.locator(".term .xterm-rows").innerText()).trim().length > 0, "the terminal shows the Mac's screen");
   const kept = (await call("pane.list")).find((p) => p.id === pane.id);
   check(kept.sizedBy === null && kept.cols === opened.cols && kept.rows === opened.rows, `opening it keeps the Mac's size (${kept.cols}×${kept.rows})`);
   check(await page.evaluate(() => document.scrollingElement.scrollHeight <= innerHeight + 1), "the page doesn't scroll, only the terminal");
