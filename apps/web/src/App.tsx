@@ -210,6 +210,18 @@ function Paired({ conn, pane: first, onAdd, onSwitch, onForget }: { conn: Connec
       }),
     [conn],
   );
+  // Still not through after a few seconds: offer to try now rather than wait for the next attempt.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (model) return setSlow(false);
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, [model, phase.kind]);
+  const tryAgain = slow && (
+    <Button size="lg" onClick={() => (setSlow(false), conn.retry())}>
+      Try Again
+    </Button>
+  );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   const [macs, setMacs] = useState(false);
@@ -250,11 +262,20 @@ function Paired({ conn, pane: first, onAdd, onSwitch, onForget }: { conn: Connec
     return (
       <>
         {phase.kind === "offline" ? (
-          <Center icon="wifi.slash" title={`${conn.identity.name ?? "Your Mac"} is offline`} action={switchMac}>
+          <Center
+            icon="wifi.slash"
+            title={`${conn.identity.name ?? "Your Mac"} is offline`}
+            action={
+              <>
+                {tryAgain}
+                {switchMac}
+              </>
+            }
+          >
             {offlineText(phase)}
           </Center>
         ) : (
-          <Center icon="terminal" title="Connecting…" />
+          <Center icon="terminal" title="Connecting…" action={tryAgain || undefined} />
         )}
         {others}
       </>
