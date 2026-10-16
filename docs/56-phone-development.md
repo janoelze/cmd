@@ -31,6 +31,7 @@ The page and its code come from Vite; the core's own listener serves nothing to 
 
 ```sh
 pnpm phone:serve                 # Vite + Tailscale Serve on :5443; prints the phone's URL. Ctrl-C to stop
+pnpm phone:serve --no-hmr        # the same without hot reload: Vite doesn't reload the page when the network comes back, so you see the client reconnect
 pnpm phone:core                  # the phone's dev core, from this checkout's code; /c/dev points at it
 pnpm phone:pair dev              # once: QR + link for the phone's dev core; approve on the Mac (here or in cmd's sheet)
 pnpm phone:pair release          # once: the same for the installed cmd

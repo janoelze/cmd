@@ -1,10 +1,12 @@
-// `pnpm phone:serve [--port N] [--https-port N] [--no-tailscale]`: the web
+// `pnpm phone:serve [--port N] [--https-port N] [--no-tailscale] [--no-hmr]`: the web
 // client (apps/web) from Vite with hot reload, on one fixed origin a real phone
 // opens (docs/56-phone-development.md): Vite on 127.0.0.1, Tailscale Serve in
 // front for HTTPS on https://<mac>.<tailnet>.ts.net:5443, and /c/release and
 // /c/dev forwarded to those cores (proxy.ts). Ctrl-C takes the Serve entry off
 // again when this run added it. Without Tailscale it says what to run and still
-// serves on localhost (a secure context, for this Mac's browsers).
+// serves on localhost (a secure context, for this Mac's browsers). --no-hmr turns
+// hot reload off: Vite's client reloads the page when its socket comes back, which
+// hides how the client itself reconnects (airplane mode on a real phone).
 
 import fs from "node:fs";
 import type http from "node:http";
@@ -53,6 +55,7 @@ const server = await vite.createServer({
     port,
     strictPort: true,
     ...(ts ? { allowedHosts: [ts.host], hmr: { protocol: "wss", clientPort: httpsPort } } : {}),
+    ...(args.includes("--no-hmr") ? { hmr: false, ws: false } : {}),
   },
   plugins: [
     {
