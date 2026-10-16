@@ -1,11 +1,12 @@
 // Content pieces as sheets, settings and views use them: a setup's Checklist, what something
 // offers (SheetHeader and FeatureList), facts in KeyValue, running text in Prose; the
 // Settings layout (FormSection, FormRow, ResetButton, InfoButton, FormActions, Group);
-// Callouts and EmptyStates; a Diff; a QrCode; a Toolbar with its Separator and Spacer.
+// Callouts and EmptyStates; a Diff; a QrCode; a Toolbar with its Separator and Spacer;
+// a JumpButton over a scroller.
 import { useState } from "react";
 import { renderSVG } from "uqr";
 import { Badge, Kbd } from "./status.tsx";
-import { Button, ButtonGroup, IconButton, LinkButton } from "./button.tsx";
+import { Button, ButtonGroup, IconButton, JumpButton, LinkButton } from "./button.tsx";
 import { Segmented, Switch } from "./choice.tsx";
 import { NumberField, SecretField, TextArea, TextField } from "./fields.tsx";
 import { Callout, Card, Checklist, Diff, EmptyState, FeatureList, FormActions, FormRow, FormSection, Group, InfoButton, KeyValue, Prose, QrCode, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar } from "./layout.tsx";
@@ -256,3 +257,19 @@ export const Bar = () => (
     <div style={{ height: 48, background: "var(--well)" }} />
   </div>
 );
+
+/** A scroller away from its end: the JumpButton floats in its corner, with a dot once something new arrived. Tap it to toggle the dot; Hide shows it leaving. */
+export const Jump = () => {
+  const [unread, setUnread] = useState(true);
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", width: 320 }}>
+      <div style={{ position: "relative", height: 160, borderRadius: "var(--radius-md)", background: "var(--well)", boxShadow: "inset 0 0 0 1px var(--separator)" }}>
+        <div style={{ position: "absolute", right: "var(--space-3)", bottom: "var(--space-3)" }}>
+          <JumpButton open={open} unread={unread} onClick={() => setUnread(!unread)} />
+        </div>
+      </div>
+      <Button onClick={() => setOpen(!open)}>{open ? "Hide" : "Show"}</Button>
+    </div>
+  );
+};

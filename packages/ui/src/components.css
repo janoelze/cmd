@@ -123,6 +123,11 @@
 .ui-icon-button[data-pulse] > * { animation: ui-pulse 1.2s var(--ease) infinite alternate; }
 @keyframes ui-pulse { from { opacity: 1; } to { opacity: 0.35; } }
 .ui-icon-button[data-variant="default"] { --h: var(--control-h); min-width: var(--h); padding: 0; border-radius: var(--radius); color: var(--text-dim); background: var(--control-bg); box-shadow: inset 0 0 0 1px var(--control-edge); }
+
+/* JumpButton: round, raised over the content it scrolls; the dot is the accent. */
+.ui-jump { position: relative; display: inline-grid; place-items: center; width: var(--control-h-lg); height: var(--control-h-lg); padding: 0; border: 0; border-radius: var(--radius-pill); color: var(--text); background: var(--control-bg); box-shadow: inset 0 0 0 1px var(--control-edge), var(--popover-shadow); }
+.ui-jump:active { background: var(--bg-selected); }
+.ui-jump-dot { position: absolute; top: var(--space-0-5); right: var(--space-0-5); width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: var(--accent); box-shadow: 0 0 0 2px var(--control-bg); }
 .ui-icon-button[data-variant="default"]:hover:not(:disabled) { background: var(--control-hover); }
 /* Small and filled (bars): one segment of a small Segmented, the same height, corners,
    fill, hairline and padding, so the two sit side by side as a set (the top bar's + beside

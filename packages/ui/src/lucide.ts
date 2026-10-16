@@ -78,7 +78,10 @@ import {
   WandSparkles,
   X,
   // The web client (apps/web).
+  ArrowDown,
   ArrowUp,
+  Minus,
+  Minimize2,
   ClipboardPaste,
   CornerDownLeft,
   Laptop,
@@ -171,6 +174,9 @@ const LUCIDE: Record<string, string> = {
   "play.fill": Play,
   // The web client (apps/web), where there are no SF Symbols.
   "arrow.up": ArrowUp,
+  "arrow.down": ArrowDown,
+  minus: Minus,
+  "arrow.down.right.and.arrow.up.left": Minimize2,
   "arrow.up.left.and.arrow.down.right": Maximize2,
   bolt: Zap,
   "doc.on.clipboard": ClipboardPaste,

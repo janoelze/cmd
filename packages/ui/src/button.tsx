@@ -1,6 +1,7 @@
 // Buttons: Button (text, with an optional icon), IconButton (an icon alone, for
-// toolbars and bars), LinkButton (an inline action in running text) and
-// ButtonGroup (buttons joined into one control, or spaced in a row).
+// toolbars and bars), LinkButton (an inline action in running text),
+// ButtonGroup (buttons joined into one control, or spaced in a row) and
+// JumpButton (back to the latest, floating over a scroller).
 //
 // Variants: default (a filled control, like the Settings window's), primary
 // (the accent: one per view, the thing Enter does), danger (removes or
@@ -10,6 +11,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner } from "./status.tsx";
+import { usePresence } from "./motion.ts";
 
 export type ButtonVariant = "default" | "primary" | "danger" | "ghost";
 export type Size = "sm" | "md" | "lg";
@@ -129,5 +131,45 @@ export function ButtonGroup({
     <div role="group" aria-label={label} className={cls(joined ? "ui-button-joined" : "ui-button-row", className)} data-align={align}>
       {children}
     </div>
+  );
+}
+
+/**
+ * Back to the latest: a round button floating over a scroller's end corner while the
+ * view is away from its end (a terminal scrolled up, a log). `unread` adds a dot:
+ * something new arrived meanwhile. It pops in and out with `open` (usePresence), so
+ * keep it mounted; place it with `className` (absolute, in the scroller's frame).
+ */
+export function JumpButton({
+  open,
+  unread,
+  label = "Jump to Latest",
+  icon = "arrow.down",
+  onClick,
+  className,
+}: {
+  open: boolean;
+  unread?: boolean;
+  label?: string;
+  icon?: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  const { present, closing } = usePresence(open);
+  if (!present) return null;
+  return (
+    <button
+      type="button"
+      className={cls("ui-jump", className)}
+      aria-label={unread ? `${label}, new output` : label}
+      data-tip={label}
+      data-motion="pop"
+      data-closing={closing || undefined}
+      inert={closing}
+      onClick={onClick}
+    >
+      {iconNode(icon, ICON.toolbar)}
+      {unread && <span className="ui-jump-dot" />}
+    </button>
   );
 }
