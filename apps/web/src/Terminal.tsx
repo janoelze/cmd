@@ -1,128 +1,199 @@
-// A terminal on the phone (prototype; docs/13, "Terminals on a phone"). The
-// page never scrolls: the terminal fills what's left above the keyboard and
-// only its scrollback scrolls. With control access it sizes the Mac's terminal
-// to that space (pane.fitOverride) while it's shown, and refits as the
-// keyboard opens and closes or the phone rotates; leaving, locking the phone or
-// disconnecting gives the Mac its size back. If the Mac takes it back (someone
-// types there), the phone shows the Mac's size scaled down until you tap Fit.
-// View-only devices always show the Mac's size, scaled to fit. Above it: the
-// state line (what the agent is doing or asking), below it a key row (with a
-// sticky ctrl) and a compose bar; the menu switches sizing and closes it.
+// A terminal on the phone (docs/13, "Terminals on a phone"). The page never scrolls:
+// the terminal fills what's left above the keyboard. It shows the Mac's terminal at
+// the Mac's size, at a readable text size (the width when it fits, else it pans), with
+// pinch, pan and double-tap (viewport.ts); opening or reading it never resizes it on
+// the Mac. "Fit to This Phone" (the menu, control access) sizes the Mac's terminal to
+// this screen while it's shown (pane.fitOverride), refitting as the keyboard opens and
+// closes or the phone rotates; leaving, locking the phone or disconnecting gives the
+// Mac its size back, and the Mac (someone types there) or another device can take it.
+// Above it: the state line (what the agent is doing or asking, who sized it); below
+// it a key row (sticky ctrl and alt, arrows that repeat) and a compose bar (Return
+// after a pause, or not). The xterm lives as long as the screen: a reconnect resyncs
+// into it (screen.ts).
 
-import { useEffect, useRef, useState } from "react";
-import { Button, Dialog, Icon, IconButton, ListRow, ListRowContent, ListRowIcon, StatusDot, TextField } from "@cmd/ui";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Button, ButtonGroup, ConfirmDialog, Dialog, Icon, IconButton, JumpButton, ListRow, ListRowContent, ListRowEnd, ListRowIcon, Presence, StatusDot, TextField } from "@cmd/ui";
 import { terminalColors, useTheme } from "@cmd/ui/themes";
 import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import type { Pane } from "@cmd/protocol";
 import type { Connection } from "./connection.ts";
 import { stateText, type Item } from "./model.ts";
-import { Screen } from "./screen.ts";
+import { Screen, type Size } from "./screen.ts";
+import { Viewport, type ViewportState } from "./viewport.ts";
+import { DEFAULT_FONT, MAX_FONT, MIN_FONT, clamp } from "./zoom.ts";
+import { KEYS, Repeater, compose, modified } from "./keys.ts";
 
-const FONT = 13;
-const MIN_FONT = 5;
-/** A cell's size per point of font size (monospace, xterm's default line height). */
-const CELL_W = 0.6;
-const CELL_H = 1.2;
-/** The range the core accepts (remote/policy.ts). */
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const FONT_KEY = "cmd.terminal.fontSize";
 
-const KEYS: { label: string; data: string; wide?: boolean }[] = [
-  { label: "esc", data: "\x1b" },
-  { label: "tab", data: "\t" },
-  { label: "⇧tab", data: "\x1b[Z", wide: true },
-  { label: "↑", data: "\x1b[A" },
-  { label: "↓", data: "\x1b[B" },
-  { label: "←", data: "\x1b[D" },
-  { label: "→", data: "\x1b[C" },
-  { label: "^C", data: "\x03" },
-  { label: "|", data: "|" },
-  { label: "~", data: "~" },
-  { label: "/", data: "/" },
-  { label: "-", data: "-" },
-  { label: "⏎", data: "\r" },
-];
-
-/** ctrl + a key: its control character (ctrl-c → \x03), else the key as is. */
-function withCtrl(data: string): string {
-  const c = data[0];
-  if (!c || data.length !== 1) return data;
-  const code = c.toUpperCase().charCodeAt(0);
-  if (code >= 64 && code <= 95) return String.fromCharCode(code - 64);
-  if (c === " ") return "\x00";
-  return data;
+/** This browser's text size for terminals (Text Size in the menu); kept per browser, never on the Mac. */
+function useTextSize(): [number, (n: number) => void] {
+  const [size, setSize] = useState(() => {
+    try {
+      const n = Number(localStorage.getItem(FONT_KEY));
+      return n ? clamp(n, MIN_FONT, MAX_FONT) : DEFAULT_FONT;
+    } catch {
+      return DEFAULT_FONT;
+    }
+  });
+  const set = (n: number) => {
+    const v = clamp(n, MIN_FONT, MAX_FONT);
+    setSize(v);
+    try {
+      localStorage.setItem(FONT_KEY, String(v));
+    } catch {}
+  };
+  return [size, set];
 }
 
-export function TerminalScreen({ conn, item, control, onBack }: { conn: Connection; item: Item; control: boolean; onBack: () => void }) {
+export interface TerminalScreenProps {
+  conn: Connection;
+  item: Item;
+  control: boolean;
+  onBack: () => void;
+  /** Start with "Fit to This Phone" on (control access only); off by default: the Mac's size, scaled. */
+  fit?: boolean;
+}
+
+export function TerminalScreen({ conn, item, control, onBack, fit = false }: TerminalScreenProps) {
   const pane: Pane = item.pane;
+  const view = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
-  const term = useRef<{ t: Terminal; fit: FitAddon; screen: Screen } | null>(null);
-  /** Sizes the terminal (the size effect's), again once a snapshot is parsed. */
-  const sizeRef = useRef<() => void>(() => {});
+  const term = useRef<{ t: Terminal; screen: Screen; viewport: Viewport } | null>(null);
   const [text, setText] = useState("");
-  /** This phone sizes the terminal (else: the Mac's size, scaled). */
-  const [fitting, setFitting] = useState(control);
+  /** This phone sizes the Mac's terminal (else: the Mac's size, scaled). */
+  const [fitting, setFitting] = useState(fit && control);
+  const fittingRef = useRef(fitting);
+  fittingRef.current = fitting;
+  /** We asked the Mac for a size and haven't released it. */
   const holding = useRef(false);
+  /** The sizes we asked for since: the pane at another one, sized by a device, means someone else took it. */
+  const asked = useRef<string[]>([]);
   /** The core confirmed our size (sizedBy set) since we asked: a null after that means the Mac took it back. */
   const confirmed = useRef(false);
-  const [ctrl, setCtrl] = useState(false);
-  const ctrlRef = useRef(false);
-  ctrlRef.current = ctrl;
+  const [mods, setMods] = useState({ ctrl: false, alt: false });
+  const modsRef = useRef(mods);
+  modsRef.current = mods;
+  const [enter, setEnter] = useState(true);
   const [menu, setMenu] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
+  const [vs, setVs] = useState<ViewportState>({ atBottom: true, unread: false, selection: false, pans: false, font: 0 });
+  const [textSize, setTextSize] = useTextSize();
   const theme = useTheme();
   const colors = terminalColors(theme);
   const client = conn.client;
-  const send = (data: string) => void client?.call("pane.write", { paneId: pane.id, data }).catch(() => {});
-  /** Keys typed or tapped; a sticky ctrl applies to the next one. */
-  const write = (data: string) => {
-    if (ctrlRef.current) {
-      setCtrl(false);
-      return send(withCtrl(data));
-    }
-    send(data);
-  };
+  const clientRef = useRef(client);
+  clientRef.current = client;
+  const paneRef = useRef(pane);
+  paneRef.current = pane;
 
-  // The terminal: snapshot, then live output for this pane only (window.follow).
+  const call = (data: string) => clientRef.current?.call("pane.write", { paneId: pane.id, data }).catch(() => {});
+  /** Keys typed or tapped; sticky ctrl and alt apply to the next one. */
+  const write = (data: string) => {
+    const m = modsRef.current;
+    if (m.ctrl || m.alt) setMods({ ctrl: false, alt: false });
+    void call(modified(data, m));
+  };
+  const writeRef = useRef(write);
+  writeRef.current = write;
+
+  const release = () => {
+    if (holding.current) void clientRef.current?.call("pane.fitOverride", { paneId: pane.id, release: true }).catch(() => {});
+    holding.current = false;
+    confirmed.current = false;
+    asked.current = [];
+  };
+  /** Fit mode: this size, here and (once a snapshot is parsed) on the Mac. */
+  const tell = (size: Size) => {
+    const x = term.current;
+    if (!x || !fittingRef.current || document.visibilityState !== "visible") return;
+    x.screen.resize(size, () => {
+      const p = paneRef.current;
+      if (holding.current && p.cols === size.cols && p.rows === size.rows) return;
+      holding.current = true;
+      asked.current = [...asked.current.slice(-4), `${size.cols}x${size.rows}`];
+      void clientRef.current?.call("pane.fitOverride", { paneId: p.id, ...size }).catch(() => {});
+    });
+  };
+  const tellRef = useRef(tell);
+  tellRef.current = tell;
+
+  // The terminal, for as long as this screen shows: reconnects resync into it.
   useEffect(() => {
     const t = new Terminal({
       cols: pane.cols,
       rows: pane.rows,
-      fontSize: FONT,
+      fontSize: textSize,
       fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
       disableStdin: !control,
       scrollback: 5000,
       theme: terminalColors(theme),
+      allowProposedApi: true,
     });
-    const fit = new FitAddon();
-    t.loadAddon(fit);
+    t.loadAddon(new Unicode11Addon());
+    t.unicode.activeVersion = "11";
+    // A click with a mouse (or a trackpad); taps are viewport.ts's.
+    t.loadAddon(new WebLinksAddon((_e, uri) => setLink(uri)));
     t.open(host.current!);
-    // Written at the snapshot's size; no resizing until it is parsed, then the size again.
     const screen = new Screen(t);
-    screen.onParsed = () => sizeRef.current();
-    term.current = { t, fit, screen };
-    if (control) t.onData((d) => write(d));
+    const viewport = new Viewport({
+      view: view.current!,
+      pan: host.current!,
+      term: t,
+      pref: textSize,
+      onState: setVs,
+      onLink: setLink,
+      onFit: (size) => tellRef.current(size),
+    });
+    // Written at the snapshot's size; no resizing until it is parsed, then the size again.
+    screen.onParsed = () => {
+      viewport.replaying = false;
+      if (!fittingRef.current) screen.resize({ cols: paneRef.current.cols, rows: paneRef.current.rows });
+      viewport.layout();
+    };
+    term.current = { t, screen, viewport };
+    if (control) t.onData((d) => writeRef.current(d));
+    return () => {
+      release();
+      term.current = null;
+      viewport.dispose();
+      t.dispose();
+    };
+  }, [pane.id]);
+
+  // The connection: follow this pane, its snapshot, then its output. A new connection
+  // (a reconnect) asks again and carries on in the same terminal.
+  useEffect(() => {
+    const x = term.current;
+    if (!x || !client) return;
     let live = true;
     const snapshot = async () => {
-      screen.awaitSnapshot();
-      const snap = await client?.call("pane.snapshot", { paneId: pane.id });
+      x.screen.awaitSnapshot();
+      const snap = await client.call("pane.snapshot", { paneId: pane.id }).catch(() => null);
       if (!live || !snap) return;
-      screen.snapshot(snap);
+      // A resync replayed over what shows: a still copy stays on top until it's parsed and drawn, so it doesn't blink.
+      const el = x.screen.shown ? x.t.element?.querySelector<HTMLElement>(".xterm-screen") : null;
+      const still = el?.cloneNode(true) as HTMLElement | undefined;
+      if (still && el) (still.classList.add("term-still"), (still.style.top = `${el.offsetTop}px`), (still.style.left = `${el.offsetLeft}px`), el.parentElement!.append(still));
+      x.viewport.replaying = true;
+      const drop = () => requestAnimationFrame(() => requestAnimationFrame(() => still?.remove()));
+      if (x.screen.snapshot(snap)) x.t.write("", drop);
+      else still?.remove();
     };
     const off = conn.onEvent((e) => {
-      if (e.type === "pane.output" && e.paneId === pane.id) screen.output(e.data, e.seq);
+      if (e.type === "pane.output" && e.paneId === pane.id) x.screen.output(e.data, e.seq);
       else if (e.type === "pane.resync" && e.paneId === pane.id) void snapshot();
     });
-    void client?.call("window.follow", { ids: [pane.id] }).then(snapshot, () => {});
+    void client.call("window.follow", { ids: [pane.id] }).then(snapshot, () => {});
     return () => {
       live = false;
       off();
-      void client?.call("window.follow", { ids: [] }).catch(() => {});
-      if (holding.current) void client?.call("pane.fitOverride", { paneId: pane.id, release: true }).catch(() => {});
+      void client.call("window.follow", { ids: [] }).catch(() => {});
+      // A session's override ends with it; a new one asks again (fit mode refits after its snapshot).
       holding.current = false;
       confirmed.current = false;
-      term.current = null;
-      t.dispose();
     };
   }, [conn, pane.id, client]);
 
@@ -131,69 +202,70 @@ export function TerminalScreen({ conn, item, control, onBack }: { conn: Connecti
     if (term.current) term.current.t.options.theme = terminalColors(theme);
   }, [theme]);
 
-  // Size: fit the space (and the Mac's terminal to it), or scale the Mac's size into it.
+  useEffect(() => term.current?.viewport.setPref(textSize), [textSize]);
+
+  // Fit to This Phone, or the Mac's size scaled; and the Mac's size when it changes.
   useEffect(() => {
-    const el = host.current!;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const apply = () => {
-      const x = term.current;
-      if (!x || !el.clientWidth || !el.clientHeight) return;
-      if (fitting && document.visibilityState === "visible") {
-        x.t.options.fontSize = FONT;
-        const d = x.fit.proposeDimensions();
-        if (!d || !Number.isFinite(d.cols) || !Number.isFinite(d.rows)) return;
-        const cols = clamp(d.cols, 20, 300);
-        const rows = clamp(d.rows, 5, 200);
-        x.screen.resize({ cols, rows }, () => {
-          if (holding.current && pane.cols === cols && pane.rows === rows) return;
-          holding.current = true;
-          void client?.call("pane.fitOverride", { paneId: pane.id, cols, rows }).catch(() => {});
-        });
-      } else {
-        x.screen.resize({ cols: pane.cols, rows: pane.rows });
-        x.t.options.fontSize = Math.max(MIN_FONT, Math.min(FONT, el.clientWidth / (pane.cols * CELL_W), el.clientHeight / (pane.rows * CELL_H)));
-      }
-    };
-    sizeRef.current = apply;
-    // The keyboard and rotation change the space in steps; settle before resizing the PTY.
-    const later = () => (clearTimeout(timer), (timer = setTimeout(apply, 120)));
-    const ro = new ResizeObserver(later);
-    ro.observe(el);
-    // Locked or switched away: give the Mac its size back; refit on return.
+    const x = term.current;
+    if (!x) return;
+    if (!fitting) {
+      release();
+      x.screen.resize({ cols: pane.cols, rows: pane.rows });
+    }
+    x.viewport.setMode(fitting ? "fit" : "scaled");
+    x.viewport.layout();
+  }, [fitting, pane.cols, pane.rows]);
+
+  // Locked or switched away: give the Mac its size back; refit on return.
+  useEffect(() => {
     const vis = () => {
-      if (document.visibilityState === "hidden" && holding.current) {
-        holding.current = false;
-        confirmed.current = false;
-        void client?.call("pane.fitOverride", { paneId: pane.id, release: true }).catch(() => {});
-      } else later();
+      if (document.visibilityState === "hidden") release();
+      else term.current?.viewport.layout();
     };
     document.addEventListener("visibilitychange", vis);
-    apply();
-    return () => (clearTimeout(timer), ro.disconnect(), document.removeEventListener("visibilitychange", vis));
-  }, [fitting, pane.cols, pane.rows, pane.id, client]);
+    return () => document.removeEventListener("visibilitychange", vis);
+  }, [client]);
 
-  // The Mac took it back (someone typed there): stop fitting until asked again.
+  // The Mac took it back (someone typed there), or another device did: stop fitting until asked again.
   useEffect(() => {
     if (!holding.current) return;
-    if (pane.sizedBy !== null) confirmed.current = true;
-    else if (confirmed.current) {
+    const mine = asked.current.includes(`${pane.cols}x${pane.rows}`);
+    if (pane.sizedBy !== null && mine) confirmed.current = true;
+    else if ((pane.sizedBy === null && confirmed.current) || (pane.sizedBy !== null && !mine && confirmed.current)) {
       holding.current = false;
       confirmed.current = false;
+      asked.current = [];
       setFitting(false);
     }
-  }, [pane.sizedBy]);
+  }, [pane.sizedBy, pane.cols, pane.rows]);
 
-  const submit = () => {
-    if (!text) return;
-    write(text + "\r");
+  const [sending, setSending] = useState(false);
+  const submit = async () => {
+    if (!text && !enter) return;
+    const m = modsRef.current;
+    if (m.ctrl || m.alt) setMods({ ctrl: false, alt: false });
     setText("");
+    setSending(true);
+    await compose(call, modified(text, m), enter);
+    setSending(false);
   };
   const paste = async () => {
     try {
       const t = await navigator.clipboard.readText();
-      if (t) send(`\x1b[200~${t}\x1b[201~`);
+      if (t) void call(`\x1b[200~${t}\x1b[201~`);
     } catch {}
   };
+  const copy = async () => {
+    const x = term.current;
+    const s = x?.t.getSelection();
+    if (!s) return;
+    try {
+      await navigator.clipboard.writeText(s);
+    } catch {}
+    x!.viewport.clearSelection();
+  };
+
+  const sizedBy = fitting ? "Sized for this phone" : pane.sizedBy ? `Sized by ${pane.sizedBy}` : null;
 
   return (
     <div className="term-screen" style={{ background: colors.background }}>
@@ -207,39 +279,57 @@ export function TerminalScreen({ conn, item, control, onBack }: { conn: Connecti
             {item.workspace ? `${item.workspace} · ` : ""}
             {stateText(item)}
             {item.detail ? ` · ${item.detail}` : ""}
+            {sizedBy ? ` · ${sizedBy}` : ""}
           </div>
         </div>
         <IconButton icon="ellipsis" size="lg" label="More" onClick={() => setMenu(true)} />
       </header>
-      <div className="term" ref={host} />
+      <div className="term">
+        <div className="term-view" ref={view}>
+          <div className="term-pan" ref={host} />
+        </div>
+        <Presence when={vs.selection}>
+          {(_, open) => (
+            <div className="term-float" data-motion="pop" data-closing={!open || undefined}>
+              <Button size="lg" variant="primary" icon="doc.on.doc" onClick={() => void copy()}>
+                Copy
+              </Button>
+              <IconButton icon="xmark" size="lg" variant="default" label="Clear Selection" onClick={() => term.current?.viewport.clearSelection()} />
+            </div>
+          )}
+        </Presence>
+        <JumpButton className="term-jump" open={!vs.atBottom} unread={vs.unread} onClick={() => term.current?.viewport.toBottom()} />
+      </div>
       {control ? (
         <div className="term-input">
           <div className="keys">
-            <Button size="sm" className="key" pressed={ctrl} onClick={() => setCtrl(!ctrl)}>
+            <Button size="sm" className="key" pressed={mods.ctrl} onPointerDown={keep} onClick={() => setMods({ ...mods, ctrl: !mods.ctrl })}>
               ctrl
             </Button>
+            <Button size="sm" className="key" pressed={mods.alt} onPointerDown={keep} onClick={() => setMods({ ...mods, alt: !mods.alt })} aria-label="alt">
+              alt
+            </Button>
             {KEYS.map((k) => (
-              <Button key={k.label} size="sm" className="key" onClick={() => write(k.data)}>
-                {k.label}
-              </Button>
+              <Key key={k.label} label={k.label} name={k.name} repeat={k.repeat} onKey={() => write(k.data)} />
             ))}
-            <Button size="sm" className="key" icon="doc.on.clipboard" aria-label="Paste" onClick={() => void paste()} />
+            <Button size="sm" className="key" icon="doc.on.clipboard" aria-label="Paste" onPointerDown={keep} onClick={() => void paste()} />
           </div>
-          <form className="compose" onSubmit={(e) => (e.preventDefault(), submit())}>
+          <form className="compose" onSubmit={(e) => (e.preventDefault(), void submit())}>
             <IconButton icon="keyboard" size="lg" label="Type into the terminal" onClick={() => term.current?.t.focus()} />
             <TextField
               fill
               size="lg"
               value={text}
               onChange={setText}
-              placeholder={ctrl ? "ctrl + a key…" : "Message or command"}
+              placeholder={mods.ctrl ? "ctrl + a key…" : mods.alt ? "alt + a key…" : "Message or command"}
               aria-label="Message or command"
-              enterKeyHint="send"
+              enterKeyHint={enter ? "send" : "done"}
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
             />
-            <Button type="submit" size="lg" variant="primary" icon="arrow.up" disabled={!text} aria-label="Send" />
+            <IconButton icon="return" size="lg" pressed={enter} label={enter ? "Return after Sending: On" : "Return after Sending: Off"} onPointerDown={keep} onClick={() => setEnter(!enter)} />
+            <Button type="submit" size="lg" variant="primary" icon="arrow.up" disabled={(!text && !enter) || sending} aria-label={enter ? "Send" : "Send without Return"} />
           </form>
         </div>
       ) : (
@@ -248,24 +338,102 @@ export function TerminalScreen({ conn, item, control, onBack }: { conn: Connecti
         </div>
       )}
       <Dialog open={menu} onClose={() => setMenu(false)} title={item.title} padded={false}>
-        <TerminalMenu conn={conn} pane={pane} control={control} fitting={fitting} onFit={(v) => (setFitting(v), setMenu(false))} onClosed={() => (setMenu(false), onBack())} />
+        <TerminalMenu
+          conn={conn}
+          pane={pane}
+          control={control}
+          fitting={fitting}
+          textSize={textSize}
+          onTextSize={setTextSize}
+          onFit={(v) => (setFitting(v), setMenu(false))}
+          onClosed={() => (setMenu(false), onBack())}
+        />
       </Dialog>
+      <ConfirmDialog open={link !== null} title="Open this link?" confirm="Open" onCancel={() => setLink(null)} onConfirm={() => (link && window.open(link, "_blank", "noopener,noreferrer"), setLink(null))}>
+        <span className="term-link">{link}</span>
+      </ConfirmDialog>
     </div>
   );
 }
 
-function TerminalMenu(p: { conn: Connection; pane: Pane; control: boolean; fitting: boolean; onFit: (v: boolean) => void; onClosed: () => void }) {
+/** A key row button keeps the focus where it is (the keyboard stays up). */
+const keep = (e: { preventDefault: () => void }) => e.preventDefault();
+
+/** A key in the row. `repeat`: held, it types again until let go. */
+function Key({ label, name, repeat, onKey }: { label: string; name?: string; repeat?: boolean; onKey: () => void }) {
+  const r = useRef<Repeater | null>(null);
+  const on = useRef(onKey);
+  on.current = onKey;
+  r.current ??= new Repeater(() => on.current());
+  useEffect(() => () => r.current?.release(), []);
+  const stop = () => r.current?.release();
+  return (
+    <Button
+      size="sm"
+      className="key"
+      aria-label={name}
+      onPointerDown={(e) => {
+        keep(e);
+        if (repeat) r.current!.press("");
+      }}
+      onPointerUp={stop}
+      onPointerCancel={stop}
+      onPointerLeave={stop}
+      // Repeating keys type on the press; Enter or Space on the button still type once.
+      onClick={(e) => (!repeat || e.detail === 0) && onKey()}
+    >
+      {label}
+    </Button>
+  );
+}
+
+function TerminalMenu(p: {
+  conn: Connection;
+  pane: Pane;
+  control: boolean;
+  fitting: boolean;
+  textSize: number;
+  onTextSize: (n: number) => void;
+  onFit: (v: boolean) => void;
+  onClosed: () => void;
+}) {
   const [confirm, setConfirm] = useState(false);
-  if (!p.control) return <p className="note padded">View only: this phone shows the Mac's terminal at the Mac's size.</p>;
+  const size: ReactNode = (
+    <ListRow>
+      <ListRowIcon icon="textformat" />
+      <ListRowContent title="Text Size" detail={`${p.textSize} px on this phone`} />
+      <ListRowEnd>
+        <ButtonGroup joined>
+          <IconButton variant="default" size="lg" icon="minus" label="Smaller" disabled={p.textSize <= MIN_FONT} onClick={() => p.onTextSize(p.textSize - 1)} />
+          <IconButton variant="default" size="lg" icon="plus" label="Larger" disabled={p.textSize >= MAX_FONT} onClick={() => p.onTextSize(p.textSize + 1)} />
+        </ButtonGroup>
+      </ListRowEnd>
+    </ListRow>
+  );
+  if (!p.control)
+    return (
+      <div className="menu-rows">
+        {size}
+        <p className="note padded">View only: this phone shows the Mac's terminal at the Mac's size.</p>
+      </div>
+    );
+  const other = !p.fitting && p.pane.sizedBy;
   return (
     <div className="menu-rows">
-      <ListRow
-        role="button"
-        onClick={() => p.onFit(!p.fitting)}
-      >
-        <ListRowIcon icon="arrow.up.left.and.arrow.down.right" />
-        <ListRowContent title={p.fitting ? "Use the Mac's Size" : "Fit to This Phone"} detail={p.fitting ? `Now ${p.pane.cols}×${p.pane.rows}, sized for this phone` : "The Mac's terminal takes this screen's size while you look at it"} />
+      <ListRow role="button" onClick={() => p.onFit(!p.fitting)}>
+        <ListRowIcon icon={p.fitting ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"} tone={p.fitting ? "accent" : undefined} />
+        <ListRowContent
+          title={p.fitting ? "Use the Mac's Size" : "Fit to This Phone"}
+          detail={
+            p.fitting
+              ? `Now ${p.pane.cols}×${p.pane.rows}, sized for this phone until you leave`
+              : other
+                ? `${p.pane.sizedBy} has it at ${p.pane.cols}×${p.pane.rows}; this takes it over`
+                : `Resizes it on the Mac while you look at it (now ${p.pane.cols}×${p.pane.rows})`
+          }
+        />
       </ListRow>
+      {size}
       <ListRow
         role="button"
         onClick={() => {

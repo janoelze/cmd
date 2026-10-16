@@ -59,4 +59,43 @@ describe("the phone's screen", () => {
     await write(t, "");
     expect(text(t)).toBe("one two three four");
   });
+
+  it("a reconnect that missed nothing carries on in the same terminal: no reset, no replay", async () => {
+    const t = term(CORE);
+    let resets = 0;
+    const reset = t.reset.bind(t);
+    t.reset = () => (resets++, reset());
+    const s = new Screen(t);
+    let parsed = 0;
+    s.onParsed = () => parsed++;
+    s.awaitSnapshot();
+    expect(s.snapshot({ data: "one ", cols: CORE, rows: ROWS, seq: 4 })).toBe(true);
+    s.output("two ", 8);
+    await write(t, "");
+    // The phone reconnects: a new session asks again. Nothing happened meanwhile.
+    s.awaitSnapshot();
+    expect(s.snapshot({ data: "one two ", cols: CORE, rows: ROWS, seq: 8 })).toBe(false);
+    expect(resets).toBe(1);
+    // Output after it is written once, as ever; the held size applies (onParsed) right away.
+    s.output("three", 13);
+    await write(t, "");
+    expect(text(t)).toBe("one two three");
+    expect(parsed).toBe(2);
+  });
+
+  it("a reconnect that missed output replays the snapshot (output that waited for it counts)", async () => {
+    const t = term(CORE);
+    const s = new Screen(t);
+    s.awaitSnapshot();
+    s.snapshot({ data: "one ", cols: CORE, rows: ROWS, seq: 4 });
+    await write(t, "");
+    s.awaitSnapshot();
+    s.output("three", 13); // arrived before the reply, after what the snapshot shows
+    expect(s.snapshot({ data: "one two ", cols: CORE, rows: ROWS, seq: 8 })).toBe(true);
+    await write(t, "");
+    expect(text(t)).toBe("one two three");
+    // And the next reconnect knows it has all of it.
+    s.awaitSnapshot();
+    expect(s.snapshot({ data: "one two three", cols: CORE, rows: ROWS, seq: 13 })).toBe(false);
+  });
 });

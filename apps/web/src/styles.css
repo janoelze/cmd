@@ -70,11 +70,21 @@ body { background: var(--bg); color: var(--text); font: var(--text-base) / 1.35 
 .term-name { display: flex; align-items: center; gap: var(--space-1-5); font-weight: 600; font-size: var(--text-md); }
 .term-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-state { font-size: var(--text-sm); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Fills the rest; only the terminal's own scrollback scrolls. */
-.term { flex: 1; min-height: 0; overflow: hidden; padding: var(--space-1) 0 0 var(--space-1-5); }
-.term .xterm { height: 100%; }
+/* Fills the rest. The terminal is drawn at the Mac's grid in .term-pan, which
+   viewport.ts moves (a transform) and zooms (the font) under .term-view; it handles
+   every touch there itself. */
+.term { flex: 1; min-height: 0; position: relative; }
+.term-view { position: absolute; inset: 0; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.term-pan { position: absolute; left: 0; top: 0; width: max-content; padding: var(--space-1) var(--space-1-5); transform-origin: 0 0; will-change: transform; }
 .term .xterm-viewport { background: transparent !important; }
-
+/* Its own scrollbar would sit at the Mac's right edge, often off screen: the pan and the jump button stand in. */
+.term .xterm .scrollbar { display: none !important; }
+/* A copy of the screen over it while a resync replays (Terminal.tsx). */
+.term-still { position: absolute; z-index: 1; pointer-events: none; }
+.term-jump { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 2; }
+/* The selection's actions, over the terminal's top. */
+.term-float { position: absolute; top: var(--space-2); left: 50%; translate: -50% 0; z-index: 2; display: flex; gap: var(--space-1-5); }
+.term-link { word-break: break-all; font-family: var(--font-mono); }
 .term-input { flex: none; background: var(--bg-sidebar); border-top: 1px solid var(--separator); padding-bottom: env(safe-area-inset-bottom); }
 .keys { display: flex; gap: var(--space-1-5); padding: var(--space-2); overflow-x: auto; scrollbar-width: none; }
 .keys::-webkit-scrollbar { display: none; }
