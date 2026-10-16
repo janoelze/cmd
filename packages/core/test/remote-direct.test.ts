@@ -399,4 +399,15 @@ describe("defaultDirectPort", () => {
     const ports = new Set(["a", "b", "c", "d", "e"].map((w) => (env("dev", `/tmp/wt-${w}/.cmd-dev`), defaultDirectPort())));
     expect(ports.size).toBeGreaterThan(1);
   });
+
+  it("answers for another core when told its instance and home, whatever this process is", () => {
+    env("dev", "/tmp/wt-a/.cmd-dev");
+    const a = defaultDirectPort();
+    env("release", undefined);
+    expect(defaultDirectPort({ instance: "dev", home: "/tmp/wt-a/.cmd-dev" })).toBe(a);
+    expect(defaultDirectPort({ instance: "dev", home: null })).toBe(47392);
+    env("dev", "/tmp/wt-b/.cmd-dev");
+    expect(defaultDirectPort({ instance: "release", home: null })).toBe(47391);
+    expect(defaultDirectPort({ instance: "dev" })).toBe(defaultDirectPort());
+  });
 });

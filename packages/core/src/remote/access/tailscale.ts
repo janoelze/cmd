@@ -4,19 +4,20 @@
 // Everything goes through the CLI (the App Store app's LocalAPI isn't reachable
 // from outside its sandbox). It only ever adds or removes its own HTTPS port's
 // entry, and only when that entry proxies to our port: never `serve reset`,
-// never someone else's handler.
+// never someone else's handler. Where the CLI lives, the status shapes and
+// host() are exported for `pnpm phone:serve` (scripts/phone-origin, docs/56).
 
 import fs from "node:fs";
 import type { AccessAdapter, AdapterContext, Check } from "./adapter.ts";
 import { probePage } from "./url.ts";
 
-interface Cli {
+export interface Cli {
   cmd: string;
   env?: NodeJS.ProcessEnv;
 }
 
 /** Where the CLI lives: the app (App Store and Standalone, as a CLI with TAILSCALE_BE_CLI), Homebrew and the like, then PATH. */
-const CANDIDATES: Cli[] = [
+export const CANDIDATES: Cli[] = [
   { cmd: "/Applications/Tailscale.app/Contents/MacOS/Tailscale", env: { TAILSCALE_BE_CLI: "1" } },
   { cmd: "/usr/local/bin/tailscale" },
   { cmd: "/opt/homebrew/bin/tailscale" },
@@ -28,7 +29,7 @@ export const DNS_ADMIN_URL = "https://login.tailscale.com/admin/dns";
 const ADMIN = "Open Admin Console";
 
 /** The parts of `tailscale status --json` (ipnstate.Status) this reads. */
-interface Status {
+export interface Status {
   BackendState?: string;
   AuthURL?: string;
   Self?: { DNSName?: string };
@@ -37,7 +38,7 @@ interface Status {
 }
 
 /** The parts of `tailscale serve status --json` (ipn.ServeConfig) this reads. */
-interface ServeConfig {
+export interface ServeConfig {
   TCP?: Record<string, { HTTPS?: boolean; TCPForward?: string }>;
   Web?: Record<string, { Handlers?: Record<string, { Proxy?: string }> }>;
 }
@@ -225,12 +226,12 @@ export function createTailscaleAdapter(o: TailscaleOptions = {}): AccessAdapter 
 export const tailscaleAdapter = createTailscaleAdapter();
 
 /** This Mac's MagicDNS name, without the trailing dot. */
-function host(s: Status): string | null {
+export function host(s: Status): string | null {
   return s.Self?.DNSName?.replace(/\.$/, "") || null;
 }
 
 /** "http://127.0.0.1:47391/" and "127.0.0.1:47391" alike. */
-function normalizeProxy(p: string): string {
+export function normalizeProxy(p: string): string {
   return (p.includes("://") ? p : `http://${p}`).replace(/\/+$/, "").replace("://localhost:", "://127.0.0.1:");
 }
 

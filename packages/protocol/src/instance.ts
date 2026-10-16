@@ -172,8 +172,13 @@ export function configDir(): string {
  * reachable from sandboxed agents, unlike ~/Library. Never $CMD_SOCKET.
  */
 export function coreSocketPath(): string {
-  if (process.env.CMD_HOME) return path.join(process.env.CMD_HOME, "core.sock");
-  return path.join(os.tmpdir(), instanceDir(), "core.sock");
+  return coreSocketPathOf(instanceName(), process.env.CMD_HOME || null);
+}
+
+/** The socket of a core of instance `name` with state dir `home` (null: its default), from any process. */
+export function coreSocketPathOf(name: InstanceName, home: string | null): string {
+  if (home) return path.join(home, "core.sock");
+  return path.join(os.tmpdir(), name === "dev" ? "cmd-dev" : "cmd", "core.sock");
 }
 
 /** The PTY host's socket, next to the core's (see packages/core/src/terminals/host.ts). */

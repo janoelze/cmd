@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { PANE_ENV, cmdHome, configDir, coreSocketPath, defaultSocketPath, enterInstance, isOwnCore, logDir, worktreeHome } from "@cmd/protocol/node";
+import { PANE_ENV, cmdHome, configDir, coreSocketPath, coreSocketPathOf, defaultSocketPath, enterInstance, isOwnCore, logDir, worktreeHome } from "@cmd/protocol/node";
 import { Core } from "../src/kernel/core.ts";
 import { fakeFactory } from "./fake-pty.ts";
 
@@ -26,6 +26,16 @@ describe("instances", () => {
     expect(coreSocketPath()).not.toBe(release.socket);
     expect(logDir()).not.toBe(release.logs);
     expect(configDir()).toBe(path.join(os.homedir(), ".config", "cmd")); // shared
+  });
+
+  it("names another core's socket by its instance and state dir, the same path that core uses", () => {
+    clean();
+    const release = coreSocketPath();
+    process.env.CMD_INSTANCE = "dev";
+    expect(coreSocketPathOf("release", null)).toBe(release);
+    expect(coreSocketPathOf("dev", null)).toBe(coreSocketPath());
+    process.env.CMD_HOME = "/state";
+    expect(coreSocketPathOf("dev", "/state")).toBe(coreSocketPath());
   });
 
   it("an app started in another core's pane ignores that pane's socket", () => {

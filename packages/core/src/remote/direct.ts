@@ -15,7 +15,7 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { RELAY_LIMITS, RelayClose } from "@cmd/protocol";
-import { cmdHome, instanceName, logger } from "@cmd/protocol/node";
+import { cmdHome, instanceName, logger, type InstanceName } from "@cmd/protocol/node";
 import type { Endpoint, Transport, TransportEvents, TransportState } from "./transport.ts";
 
 const log = logger("remote");
@@ -24,11 +24,14 @@ const log = logger("remote");
  * The local port when remote.port is 0, stable so a published Serve config
  * stays valid: 47391 for release, 47392 for the default dev instance, and for
  * an instance in its own $CMD_HOME (one per worktree) a port in 47400–48399
- * derived from that folder, so several dev cores don't collide.
+ * derived from that folder, so several dev cores don't collide. This process's
+ * own by default; `instance` and `home` (null: none) ask for another core's
+ * (pnpm phone:use, docs/56).
  */
-export function defaultDirectPort(): number {
-  if (process.env.CMD_HOME) return 47400 + (createHash("sha256").update(path.resolve(cmdHome())).digest().readUInt32BE(0) % 1000);
-  return instanceName() === "dev" ? 47392 : 47391;
+export function defaultDirectPort(o: { instance?: InstanceName; home?: string | null } = {}): number {
+  const home = o.home !== undefined ? o.home : process.env.CMD_HOME ? cmdHome() : null;
+  if (home) return 47400 + (createHash("sha256").update(path.resolve(home)).digest().readUInt32BE(0) % 1000);
+  return (o.instance ?? instanceName()) === "dev" ? 47392 : 47391;
 }
 
 /** Most IPs the connect rate limit tracks between sweeps; past it the oldest go. */
