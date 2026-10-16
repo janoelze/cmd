@@ -19,11 +19,10 @@ import os from "node:os";
 import path from "node:path";
 import { devices, type BrowserContext, type Page } from "playwright";
 import type { PaneId } from "../../../packages/protocol/src/model.ts";
-import { worktreeHome } from "../../../packages/protocol/src/instance.ts";
 import { connect } from "../../../packages/protocol/src/node.ts";
 import { rewriteLink } from "../../../scripts/phone-origin/link.ts";
 import { phoneHosts, phoneProxy } from "../../../scripts/phone-origin/proxy.ts";
-import { coreInfo, devTarget, phoneHome as phoneCoreHome, reachable, type TargetName } from "../../../scripts/phone-origin/targets.ts";
+import { coreInfo, devTarget, reachable, type TargetName } from "../../../scripts/phone-origin/targets.ts";
 import { parseCore, deviceName, browserName, keyName, isSelector, type CoreChoice } from "./args.ts";
 import {
   DEVICES,
@@ -33,7 +32,6 @@ import {
   freePort,
   pairRequests,
   portFree,
-  root,
   startCore,
   startWeb,
   stopCore,
@@ -44,7 +42,7 @@ import {
   type DeviceName,
 } from "./harness.ts";
 import { loadScenario, scenarioContext, seed, type Seeded } from "./scenario.ts";
-import { driverHome, forgetReplaced, readPorts, shotsDir, stateFile, writePorts, type PhoneState } from "./state.ts";
+import { devCoreHome, driverHome, forgetReplaced, readPorts, shotsDir, stateFile, writePorts, type PhoneState } from "./state.ts";
 
 const opts = JSON.parse(process.argv[2] ?? "{}") as { core?: string; browser?: string; device?: string };
 const core: CoreChoice = parseCore(opts.core);
@@ -55,10 +53,8 @@ fs.mkdirSync(home, { recursive: true });
 
 const log = (line: string) => console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
 const notes: string[] = [];
-// --core dev: this worktree's own core ($CMD_HOME, else its .cmd-dev). Not the phone's dev core
-// (phone:core's, in ~/.cmd-phone/home): that's the developer's, and agents' sandboxes can't
-// write there anyway. Not the main checkout's dev instance either: the developer's own.
-const devHome = process.env.CMD_HOME || worktreeHome(root) || null;
+// --core dev: this worktree's own core, never the phone's or the main checkout's (devCoreHome).
+const devHome = core.kind === "dev" ? devCoreHome() : null;
 const coreTarget = devTarget(core.kind === "dev" ? devHome : path.join(home, `scenario-${core.name}`));
 const coreHome = coreTarget.home;
 const coreLog = path.join(coreHome ? path.join(coreHome, "logs") : path.join(os.homedir(), "Library/Logs/cmd-dev"), "core.log");
@@ -77,9 +73,6 @@ const fatal = async (err: unknown) => {
 };
 process.on("uncaughtException", fatal);
 process.on("unhandledRejection", fatal);
-if (core.kind === "dev" && !devHome) throw new Error("--core dev uses a worktree's own core, and this is the main checkout. Run it from a worktree, or set CMD_HOME to a folder of its own.");
-if (core.kind === "dev" && path.resolve(devHome!) === path.resolve(phoneCoreHome()))
-  throw new Error("CMD_HOME is your phone's dev core (pnpm phone:core), which the phone driver leaves alone. Set CMD_HOME to this worktree's .cmd-dev instead.");
 
 // ── the web client, on the port kept from last time, with the phone origin's proxy ──
 let ports = readPorts();
@@ -254,9 +247,9 @@ if (mine) {
     return (await pairings()).find((p) => ids.includes(p.deviceId));
   }, "the pairing to be saved");
   log(`pairing: paired this browser now (device ${mine.deviceId}, words ${request.words.join(" ")})`);
-  // A scenario core is the driver's alone: the devices it paired before (a lost profile) go.
-  if (core.kind === "scenario")
-    for (const d of await call("remote.devices", {})) if (d.id !== mine.deviceId) await call("remote.revoke", { id: d.id });
+  // The device this browser's profile paired with this core before (the profile was lost) goes, so they don't pile up there either.
+  const before = forgetReplaced(`${label}/${engine}`, mine.deviceId, path.join(home, "devices.json"));
+  if (before && (await call("remote.devices", {})).some((d) => d.id === before)) await call("remote.revoke", { id: before });
 }
 const mac = mine.key;
 // The pairing this core had before, under another host key (its folder was deleted): gone, so they don't pile up.

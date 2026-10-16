@@ -6,9 +6,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { HELP, parseArgs, type Parsed } from "./args.ts";
+import { HELP, parseArgs, parseCore, type Parsed } from "./args.ts";
 import { sleep, stopCore } from "./harness.ts";
-import { alive, logFile, driverHome, readState, stateFile, type PhoneState } from "./state.ts";
+import { alive, devCoreHome, driverHome, logFile, readState, stateFile, type PhoneState } from "./state.ts";
 
 let parsed: Parsed;
 try {
@@ -40,6 +40,12 @@ async function start() {
   if (s) {
     console.log(`The phone is already running: ${s.device} in ${s.browser}, paired with ${where(s)}. pnpm phone stop first to start it differently.`);
     return;
+  }
+  try {
+    if (parseCore(flags.core).kind === "dev") devCoreHome();
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
   }
   fs.mkdirSync(driverHome(), { recursive: true });
   fs.rmSync(stateFile(), { force: true });

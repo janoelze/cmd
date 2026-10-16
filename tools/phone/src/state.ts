@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { worktreeHome } from "../../../packages/protocol/src/instance.ts";
+import { phoneHome as phoneCoreHome } from "../../../scripts/phone-origin/targets.ts";
 import { root, type BrowserName, type DeviceName } from "./harness.ts";
 
 export const baseHome = (): string => path.resolve(process.env.CMD_HOME || worktreeHome(root) || path.join(root, ".cmd-dev"));
@@ -67,7 +68,9 @@ export const writePorts = (p: Ports): void => fs.writeFileSync(portsFile(), JSON
  * The host key each core was last paired under (scenario:<name>, dev:<home>).
  * When one changes (a scenario's folder was deleted, so its core made a new
  * host key), returns the old key, whose pairing in the profile is dead: the
- * profile then holds one pairing per core, however often it restarts.
+ * profile then holds one pairing per core, however often it restarts. The same
+ * for the device each browser paired as with a core (devices.json): when it
+ * paired again, the old device is revoked.
  */
 export function forgetReplaced(label: string, key: string, file = path.join(driverHome(), "pairings.json")): string | null {
   let map: Record<string, string> = {};
@@ -79,4 +82,18 @@ export function forgetReplaced(label: string, key: string, file = path.join(driv
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(map, null, 2));
   return old && old !== key ? old : null;
+}
+
+/**
+ * --core dev's core: this worktree's own ($CMD_HOME, else its .cmd-dev). Not the
+ * phone's dev core (phone:core's, ~/.cmd-phone/home: the developer's, and agents'
+ * sandboxes can't write there), nor the main checkout's dev instance (the
+ * developer's own): those throw, saying what to do.
+ */
+export function devCoreHome(): string {
+  const home = process.env.CMD_HOME || worktreeHome(root);
+  if (!home) throw new Error("--core dev uses a worktree's own core, and this is the main checkout. Run it from a worktree, or set CMD_HOME to a folder of its own.");
+  if (path.resolve(home) === path.resolve(phoneCoreHome()))
+    throw new Error("CMD_HOME is your phone's dev core (pnpm phone:core), which the phone driver leaves alone. Set CMD_HOME to this worktree's .cmd-dev instead.");
+  return home;
 }
