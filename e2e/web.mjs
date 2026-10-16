@@ -4,7 +4,8 @@
 // `cmd remote pair` does. Opens the pairing link in a browser tab (iOS asks to
 // pair from the Home Screen app, and pairs only when told to), opens a terminal
 // from Now, types from the key row and the compose bar, checks the text reached
-// the PTY and that the Mac's terminal is sized for the phone while it shows it,
+// the PTY, that opening it leaves the Mac's size alone and Fit to This Phone sizes
+// it for the phone while it shows it,
 // shows the Mac's notifications as toasts that open their terminal (push itself
 // needs a real push service: core tests, and a phone by hand), pairs a second
 // Mac (a second core) from a pasted link and switches between
@@ -112,18 +113,25 @@ try {
   await page.locator(".now .ui-list-row").first().click();
   await page.locator(".term .xterm-rows").waitFor();
   await until(async () => (await call("remote.status")).sessions[0]?.watching.includes(pane.id), "opening it follows it on the Mac");
-  // Control: the Mac's terminal takes the phone's size; the page itself doesn't scroll.
-  await until(async () => /iPhone/.test((await call("pane.list")).find((p) => p.id === pane.id).sizedBy ?? ""), "the Mac's terminal is sized for the phone");
+  // Opening it leaves the Mac's terminal at its size: the phone shows it scaled, and the page itself doesn't scroll.
+  const opened = (await call("pane.list")).find((p) => p.id === pane.id);
+  await page.waitForTimeout(500); // fixed-wait: proving nothing resizes it (the follow, the snapshot and a fit would by now)
+  const kept = (await call("pane.list")).find((p) => p.id === pane.id);
+  check(kept.sizedBy === null && kept.cols === opened.cols && kept.rows === opened.rows, `opening it keeps the Mac's size (${kept.cols}×${kept.rows})`);
+  check(await page.evaluate(() => document.scrollingElement.scrollHeight <= innerHeight + 1), "the page doesn't scroll, only the terminal");
+  // Fit to This Phone (the menu): the Mac's terminal takes the phone's size.
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByText("Fit to This Phone").click();
+  await until(async () => /iPhone/.test((await call("pane.list")).find((p) => p.id === pane.id).sizedBy ?? ""), "Fit to This Phone sizes the Mac's terminal for the phone");
   const fitted = (await call("pane.list")).find((p) => p.id === pane.id);
   check(fitted.cols < 70 && fitted.rows > 10, `it fits the phone (${fitted.cols}×${fitted.rows})`);
-  check(await page.evaluate(() => document.scrollingElement.scrollHeight <= innerHeight + 1), "the page doesn't scroll, only the terminal");
   // Less room (the keyboard opening): fewer rows.
   const vp = page.viewportSize();
   await page.setViewportSize({ width: vp.width, height: vp.height - 300 });
   await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).rows < fitted.rows, "a smaller viewport (keyboard) refits the rows");
   await page.setViewportSize(vp);
   await page.locator(".compose input").fill("echo phone-was-here");
-  await page.locator(".compose").getByRole("button", { name: "Send" }).click();
+  await page.locator(".compose").getByRole("button", { name: "Send", exact: true }).click();
   await until(async () => (await call("pane.read", { paneId: pane.id })).text.includes("phone-was-here\n"), "the compose bar types into the terminal");
   await until(async () => (await page.locator(".term").innerText()).includes("phone-was-here"), "the output comes back to the phone");
   await page.getByRole("button", { name: "^C" }).click();

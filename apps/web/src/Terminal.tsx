@@ -335,7 +335,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
               autoCorrect="off"
               spellCheck={false}
             />
-            <IconButton icon="return" size="lg" pressed={enter} label="Send with Return" onMouseDown={keep} onClick={() => setEnter(!enter)} />
+            <IconButton icon="return" size="lg" pressed={enter} label="Press Return after sending" onMouseDown={keep} onClick={() => setEnter(!enter)} />
             <Button type="submit" size="lg" variant="primary" icon="arrow.up" disabled={(!text && !enter) || sending} aria-label={enter ? "Send" : "Send without Return"} />
           </form>
         </div>
