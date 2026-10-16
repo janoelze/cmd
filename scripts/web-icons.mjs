@@ -2,6 +2,9 @@
 // app icon's sources, apps/desktop/build/icon.icon (its background gradient and
 // glyph.svg; the release icon, not build/dev), in headless Chromium. Run it
 // after the icon changes and commit the PNGs: `node scripts/web-icons.mjs`.
+// `--dev` draws only the red set, with scripts/make-icons.mjs's dev gradient, into
+// scripts/phone-origin/icons (and a manifest named "cmd dev"): phone:serve serves those
+// in place of the real ones, so the dev origin's Home Screen app looks like cmd dev.
 //   apple-touch-icon.png  180, full bleed and opaque (iOS rounds it itself)
 //   icon-192/512.png      the rounded tile, for browsers and "any" purpose
 //   icon-maskable-512.png full bleed, the glyph well inside the 80% safe circle
@@ -12,14 +15,17 @@ import { chromium } from "playwright";
 
 const root = path.resolve(import.meta.dirname, "..");
 const src = path.join(root, "apps/desktop/build/icon.icon");
-const out = path.join(root, "apps/web/public");
+const dev = process.argv.includes("--dev");
+const out = path.join(root, dev ? "scripts/phone-origin/icons" : "apps/web/public");
+fs.mkdirSync(out, { recursive: true });
 
 const spec = JSON.parse(fs.readFileSync(path.join(src, "icon.json"), "utf8"));
 const rgb = (s) => {
   const [r, g, b] = s.replace(/^srgb:/, "").split(",").map(Number);
   return `#${[r, g, b].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("")}`;
 };
-const [top, bottom] = spec.fill["linear-gradient"].map(rgb);
+// The dev gradient is make-icons.mjs's.
+const [top, bottom] = (dev ? ["srgb:0.86000,0.20000,0.18000,1.00000", "srgb:0.52000,0.06000,0.06000,1.00000"] : spec.fill["linear-gradient"]).map(rgb);
 const glyph = fs.readFileSync(path.join(src, "Assets/glyph.svg"), "utf8").match(/ d="([^"]+)"/)[1];
 
 /** The icon as SVG on a 1024 canvas: `rounded` gives the tile its corners, `scale` the glyph's share of the side. */
@@ -43,6 +49,10 @@ const icons = [
   { file: "icon-maskable-512.png", size: 512, rounded: false, scale: 0.4 },
 ];
 
+if (dev) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, "apps/web/public/manifest.webmanifest"), "utf8"));
+  fs.writeFileSync(path.join(out, "manifest.webmanifest"), JSON.stringify({ ...manifest, name: "cmd dev", short_name: "cmd dev" }, null, 2) + "\n");
+}
 fs.writeFileSync(path.join(out, "favicon.svg"), svg({ rounded: true, scale: TILE }).replace(/\n/g, "") + "\n");
 const browser = await chromium.launch();
 try {

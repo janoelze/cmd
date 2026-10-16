@@ -7,6 +7,9 @@
 // serves on localhost (a secure context, for this Mac's browsers). --no-hmr turns
 // hot reload off: Vite's client reloads the page when its socket comes back, which
 // hides how the client itself reconnects (airplane mode on a real phone).
+// The page is "cmd dev" with the red icon (icons/, from `node scripts/web-icons.mjs
+// --dev`) in place of apps/web/public's, so its Home Screen app isn't mistaken for
+// the everyday one; the client that ships keeps its own.
 
 import fs from "node:fs";
 import type http from "node:http";
@@ -46,6 +49,14 @@ if (!args.includes("--no-tailscale")) {
 interface Vite {
   createServer(config: object): Promise<{ listen(): Promise<unknown>; close(): Promise<void> }>;
 }
+const DEV_ICONS: Record<string, string> = {
+  "manifest.webmanifest": "application/manifest+json",
+  "apple-touch-icon.png": "image/png",
+  "icon-192.png": "image/png",
+  "icon-512.png": "image/png",
+  "icon-maskable-512.png": "image/png",
+  "favicon.svg": "image/svg+xml",
+};
 const vite = (await import(pathToFileURL(path.join(root, "apps/web/node_modules/vite/dist/node/index.js")).href)) as Vite;
 const proxy = phoneProxy({ hosts: phoneHosts(port, ts && { host: ts.host, port: httpsPort }), log: (m) => console.log(`${time()}  ${m}`) });
 const server = await vite.createServer({
@@ -61,8 +72,19 @@ const server = await vite.createServer({
   plugins: [
     {
       name: "cmd-phone-proxy",
-      configureServer(s: { httpServer: http.Server | null }) {
+      configureServer(s: { httpServer: http.Server | null; middlewares: { use(fn: (req: http.IncomingMessage, res: http.ServerResponse, next: () => void) => void): void } }) {
         s.httpServer?.on("upgrade", phoneUpgrades(proxy, { hmr: !noHmr }));
+        // Before Vite's own: these paths are public/'s too.
+        s.middlewares.use((req, res, next) => {
+          const name = new URL(req.url ?? "/", "http://x").pathname.slice(1);
+          const type = DEV_ICONS[name];
+          if (!type) return next();
+          res.writeHead(200, { "content-type": type, "cache-control": "no-cache" });
+          res.end(fs.readFileSync(path.join(import.meta.dirname, "icons", name)));
+        });
+      },
+      transformIndexHtml(html: string) {
+        return html.replace('<meta name="apple-mobile-web-app-title" content="cmd" />', '<meta name="apple-mobile-web-app-title" content="cmd dev" />').replace("<title>cmd</title>", "<title>cmd dev</title>");
       },
     },
   ],
