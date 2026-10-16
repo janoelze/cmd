@@ -8,7 +8,7 @@
 // A trackpad or mouse wheel pans too, with ctrl (a trackpad pinch) zooming.
 
 import type { Terminal } from "@xterm/xterm";
-import { anchors, clamp, clampView, doubleTap, fitSize, maxV, offsetOf, pinchEnd, pinchTransform, place, translateOf, zoomAt, zoomRange, type Extents, type Point, type Ratio, type View } from "./zoom.ts";
+import { anchors, clamp, clampView, doubleTap, fitSize, maxV, offsetOf, overflowOf, pinchEnd, pinchTransform, place, translateOf, zoomAt, zoomRange, type Extents, type Point, type Ratio, type View } from "./zoom.ts";
 import { linkAt, wordAt } from "./keys.ts";
 
 export interface ViewportState {
@@ -50,6 +50,8 @@ export class Viewport {
   #measured = false;
   #shift = 0;
   #ours = false;
+  /** At the latest line: output, a new size and the keyboard keep it there. */
+  #follow = true;
   #state: ViewportState = { atBottom: true, unread: false, selection: false, pans: false, font: 0 };
   #lastBase = 0;
   #lastCursor = -1;
@@ -113,6 +115,7 @@ export class Viewport {
     if (mode === this.#mode) return;
     this.#mode = mode;
     this.#anchor = "readable";
+    this.#follow = true;
     this.#view = { ...this.#view, x: 0, v: 0 };
     this.layout();
   }
@@ -126,7 +129,7 @@ export class Viewport {
   /** Back to the latest line. */
   toBottom(): void {
     this.#stopFling();
-    this.#view.v = 0;
+    this.#view.v = this.#live(this.#extents());
     this.#apply();
   }
 
@@ -193,6 +196,7 @@ export class Viewport {
       const [lo, hi] = zoomRange(a);
       this.#setFont(this.#anchor ? a[this.#anchor] : clamp(this.#view.font, lo, hi));
     }
+    if (this.#follow) this.#view.v = this.#live(this.#extents());
     this.#apply();
   }
 
@@ -205,6 +209,23 @@ export class Viewport {
       t.options.fontSize = f;
       this.#measure();
     }
+  }
+
+  /**
+   * `v` at the latest line: the bottom of what's drawn (the cursor's row, or a lower one
+   * with text) at the view's bottom edge. When the screen doesn't fit (a fresh shell with
+   * the keyboard up), its blank rows stay below it rather than the prompt above.
+   */
+  #live(e: Extents): number {
+    const t = this.#o.term;
+    const b = t.buffer.active;
+    let last = b.cursorY;
+    for (let y = t.rows - 1; y > last; y--)
+      if (b.getLine(b.baseY + y)?.translateToString(true)) {
+        last = y;
+        break;
+      }
+    return clamp((t.rows - 1 - last) * e.cellH, 0, overflowOf(e));
   }
 
   /** The view onto the terminal as it stands: the pan and scrollback place, drawn. */
@@ -221,7 +242,8 @@ export class Viewport {
     }
     const tr = translateOf(this.#view.x, shift, e);
     this.#o.pan.style.transform = `translate3d(${tr.x}px, ${tr.y}px, 0)`;
-    const atBottom = this.#view.v < 1;
+    const atBottom = this.#view.v < this.#live(e) + 1;
+    this.#follow = atBottom;
     this.#emit({ atBottom, unread: atBottom ? false : this.#state.unread, font: this.#view.font, pans: this.#mode === "scaled" && this.#anchors().pans });
   }
 
@@ -240,7 +262,8 @@ export class Viewport {
     const moved = b.baseY !== this.#lastBase || b.baseY + b.cursorY !== this.#lastCursor;
     this.#lastBase = b.baseY;
     this.#lastCursor = b.baseY + b.cursorY;
-    if (this.#view.v >= 1) {
+    if (this.#follow) this.#view.v = this.#live(this.#extents());
+    else {
       this.#view.v = offsetOf(this.#shift, b.viewportY, this.#extents());
       if (moved && !this.replaying) this.#emit({ unread: true });
     }

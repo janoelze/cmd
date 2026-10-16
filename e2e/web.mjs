@@ -120,6 +120,20 @@ try {
   const kept = (await call("pane.list")).find((p) => p.id === pane.id);
   check(kept.sizedBy === null && kept.cols === opened.cols && kept.rows === opened.rows, `opening it keeps the Mac's size (${kept.cols}×${kept.rows})`);
   check(await page.evaluate(() => document.scrollingElement.scrollHeight <= innerHeight + 1), "the page doesn't scroll, only the terminal");
+  // The keyboard opening on a fresh shell: its prompt (the top row) stays in view, not the blank rows under it.
+  const full = page.viewportSize();
+  const tall = await page.evaluate(() => document.querySelector(".term-view").clientHeight);
+  await page.setViewportSize({ width: full.width, height: full.height - 300 });
+  await until(
+    () =>
+      page.evaluate((tall) => {
+        const v = document.querySelector(".term-view").getBoundingClientRect();
+        const r = document.querySelector(".term .xterm-rows > div").getBoundingClientRect();
+        return v.height < tall - 200 && r.top >= v.top - 1 && r.bottom <= v.bottom + 1;
+      }, tall),
+    "with the keyboard up, a fresh shell's prompt stays in view",
+  );
+  await page.setViewportSize(full);
   // Fit to This Phone (the menu): the Mac's terminal takes the phone's size.
   await page.getByRole("button", { name: "More" }).click();
   await page.getByText("Fit to This Phone").click();
@@ -131,6 +145,7 @@ try {
   await page.setViewportSize({ width: vp.width, height: vp.height - 300 });
   await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).rows < fitted.rows, "a smaller viewport (keyboard) refits the rows");
   await page.setViewportSize(vp);
+  await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).rows === fitted.rows, "the keyboard closing refits it again");
   await page.locator(".compose input").fill("echo phone-was-here");
   await page.locator(".compose").getByRole("button", { name: "Send", exact: true }).click();
   await until(async () => (await call("pane.read", { paneId: pane.id })).text.includes("phone-was-here\n"), "the compose bar types into the terminal");

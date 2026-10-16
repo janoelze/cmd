@@ -23,6 +23,7 @@ pnpm phone stop                        # also stops the scenario core and its te
 ```
 
 - **Look at every change.** Edit, `shot`, Read the PNG. Vite hot-reloads, so there is no restart between edits; shots wait for a terminal to refit. Check `--theme all`, `--device se` (the smallest screen) and `--keyboard` (iOS's shrunken visual viewport) for anything layout-related.
+- **Keep the worktree's path short.** The scenario core's socket lives in `$CMD_HOME/phone/scenario-<name>/`, and macOS caps socket paths at 104 bytes: a long worktree name makes `start` time out waiting for the core (`listen EINVAL` in that folder's `logs/core.log`). `git worktree move` to a shorter name.
 - **Ids change on every `start`**: the scenario core is seeded again. Take them from `ls` each time, or `goto` by title.
 - `--core scenario[:<name>]` (default `default`, `tools/phone/scenarios/default.ts`): a shell, an 800-line build log, a ticker printing every second, an input probe (tells you whether input arrived as typing or a paste), a stand-in Claude asking, working and done, and htop. Add a scenario file there for a state you need again; `tools/phone/src/scenario.ts` says what one can declare.
 - `--core dev`: your worktree's own core, for core changes (new methods, policy in `packages/core/src/remote/policy.ts`, events). After editing core code, `pnpm core:stop` and start again so the phone talks to the new code.
