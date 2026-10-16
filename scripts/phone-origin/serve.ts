@@ -12,7 +12,7 @@ import fs from "node:fs";
 import type http from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { phoneHosts, phoneProxy } from "./proxy.ts";
+import { phoneHosts, phoneProxy, phoneUpgrades } from "./proxy.ts";
 import { findCli, magicName, publish, shown, unpublish } from "./tailscale.ts";
 import { devLine, phoneHome, resolveTarget, stateDir, TARGETS } from "./targets.ts";
 
@@ -23,6 +23,7 @@ const flag = (name: string, fallback: number) => {
   return i >= 0 ? Number(args[i + 1]) : fallback;
 };
 const port = flag("--port", 5190);
+const noHmr = args.includes("--no-hmr");
 const httpsPort = flag("--https-port", 5443);
 const local = `http://127.0.0.1:${port}`;
 const time = () => new Date().toLocaleTimeString();
@@ -55,13 +56,13 @@ const server = await vite.createServer({
     port,
     strictPort: true,
     ...(ts ? { allowedHosts: [ts.host], hmr: { protocol: "wss", clientPort: httpsPort } } : {}),
-    ...(args.includes("--no-hmr") ? { hmr: false, ws: false } : {}),
+    ...(noHmr ? { hmr: false, ws: false } : {}),
   },
   plugins: [
     {
       name: "cmd-phone-proxy",
       configureServer(s: { httpServer: http.Server | null }) {
-        s.httpServer?.on("upgrade", (req, socket, head) => void proxy(req, socket, head));
+        s.httpServer?.on("upgrade", phoneUpgrades(proxy, { hmr: !noHmr }));
       },
     },
   ],

@@ -21,7 +21,7 @@ import { devices, type BrowserContext, type Page } from "playwright";
 import type { PaneId } from "../../../packages/protocol/src/model.ts";
 import { connect } from "../../../packages/protocol/src/node.ts";
 import { rewriteLink } from "../../../scripts/phone-origin/link.ts";
-import { phoneHosts, phoneProxy } from "../../../scripts/phone-origin/proxy.ts";
+import { phoneHosts, phoneProxy, phoneUpgrades } from "../../../scripts/phone-origin/proxy.ts";
 import { coreInfo, devTarget, reachable, type TargetName } from "../../../scripts/phone-origin/targets.ts";
 import { parseCore, deviceName, browserName, keyName, isSelector, type CoreChoice } from "./args.ts";
 import {
@@ -92,7 +92,7 @@ const web = await startWeb(ports.web, [
   {
     name: "cmd-phone-proxy",
     configureServer(s: { httpServer: http.Server | null }) {
-      s.httpServer?.on("upgrade", (req, socket, head) => void proxy(req, socket, head));
+      s.httpServer?.on("upgrade", phoneUpgrades(proxy, { hmr: true }));
     },
   },
 ]);

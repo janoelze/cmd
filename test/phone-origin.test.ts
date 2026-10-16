@@ -1,6 +1,7 @@
 // The phone origin's dev tooling (scripts/phone-origin, docs/56-phone-development.md):
 // pairing links pointed at it, where /c/<target> paths go, the ports it computes
-// with the core's own function, and the proxy following `phone:use` live.
+// with the core's own function, the proxy following `phone:use` live, and no
+// upgrade left unanswered (Vite's client socket with --no-hmr used to hang there).
 
 import fs from "node:fs";
 import http from "node:http";
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { decodePairing, encodePairing, toBase64Url } from "../packages/remote-crypto/src/index.ts";
 import { defaultDirectPort } from "../packages/core/src/remote/direct.ts";
 import { rewriteLink } from "../scripts/phone-origin/link.ts";
-import { phoneHosts, phoneProxy } from "../scripts/phone-origin/proxy.ts";
+import { isViteUpgrade, phoneHosts, phoneProxy, phoneUpgrades } from "../scripts/phone-origin/proxy.ts";
 import { coreSocketPathOf } from "../packages/protocol/src/node.ts";
 import { devTarget, homeFor, phoneHome, resolveTarget, splitPath, useDev } from "../scripts/phone-origin/targets.ts";
 
@@ -107,6 +108,14 @@ function listener(name: string) {
 const listen = (s: http.Server) => new Promise<void>((r) => s.listen(0, "127.0.0.1", () => r()));
 
 /** Opens a socket through the proxy and says what came back for "ping", or the status it was refused with. */
+async function until(fn: () => boolean, ms = 2000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!fn()) {
+    if (Date.now() > end) throw new Error("timed out");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 function dial(port: number, p: string, headers: Record<string, string> = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = http.request({ host: "127.0.0.1", port, path: p, headers: { connection: "Upgrade", upgrade: "websocket", origin: `http://127.0.0.1:${port}`, ...headers } });
@@ -144,9 +153,7 @@ describe("phoneProxy", () => {
       },
       log: (m) => logs.push(m),
     });
-    front.on("upgrade", (req, socket, head) => {
-      if (!proxy(req, socket, head)) socket.destroy();
-    });
+    front.on("upgrade", phoneUpgrades(proxy, { hmr: false }));
   });
 
   afterAll(() => {
@@ -200,6 +207,29 @@ describe("phoneProxy", () => {
     expect(await dial(port(), "/c/release/r/X", { host: "mac.tailnet.ts.net:5443", origin: "https://mac.tailnet.ts.net:5443" })).toBe("release:ping");
     expect(await dial(port(), "/c/release/r/X", { host: `localhost:${port()}`, origin: `http://localhost:${port()}` })).toBe("release:ping");
     expect(phoneHosts(5190, { host: "mac.tailnet.ts.net", port: 443 })).toContain("mac.tailnet.ts.net");
+  });
+
+  it("answers an upgrade it doesn't take with 404 at once (Vite's client socket with --no-hmr), and logs a forwarded socket opening and closing", async () => {
+    const t = Date.now();
+    expect(await dial(port(), "/")).toBe("refused 404");
+    expect(await dial(port(), "/?token=abc", { "sec-websocket-protocol": "vite-hmr" })).toBe("refused 404");
+    expect(Date.now() - t).toBeLessThan(1000);
+    expect(await dial(port(), "/c/release/r/ROUTE1234")).toBe("release:ping");
+    await until(() => logs.some((l) => /release: closed ROUTE123… after \d+\.\d s$/.test(l)));
+    expect(logs.some((l) => /release: open ROUTE123… → 127\.0\.0\.1:\d+/.test(l))).toBe(true);
+  });
+
+  it("with HMR on, leaves Vite's own socket to Vite", () => {
+    const req = (protocol?: string) => ({ url: "/?token=x", headers: protocol ? { "sec-websocket-protocol": protocol } : {} }) as unknown as http.IncomingMessage;
+    expect(isViteUpgrade(req("vite-hmr"))).toBe(true);
+    expect(isViteUpgrade(req("x, vite-ping"))).toBe(true);
+    expect(isViteUpgrade(req())).toBe(false);
+    const written: string[] = [];
+    const socket = { on: () => socket, end: (d: string) => written.push(d), destroy: () => {} } as unknown as Duplex;
+    phoneUpgrades(() => false, { hmr: true })(req("vite-hmr"), socket, Buffer.alloc(0));
+    expect(written).toEqual([]);
+    phoneUpgrades(() => false, { hmr: true })(req(), socket, Buffer.alloc(0));
+    expect(written[0]).toMatch(/^HTTP\/1\.1 404/);
   });
 
   it("says when nothing listens", async () => {
