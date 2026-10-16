@@ -142,6 +142,16 @@ try {
   await page.getByRole("button", { name: "Back to Now" }).click();
   await until(async () => (await call("pane.list")).find((p) => p.id === pane.id).sizedBy === null, "leaving the terminal gives the Mac its size back");
 
+  // A reload (iOS reloads a background tab or the Home Screen app on its own) lands on the terminal that was open.
+  await page.locator(".now .ui-list-row").first().click();
+  await page.locator(".term .xterm-rows").waitFor();
+  check(new URL(page.url()).searchParams.get("pane") === pane.id, "the open terminal is in the address");
+  await page.reload();
+  await page.locator(".term .xterm-rows").waitFor();
+  await until(async () => (await page.locator(".term").innerText()).includes("phone-was-here"), "a reload lands on the same terminal");
+  await page.getByRole("button", { name: "Back to Now" }).click();
+  check(new URL(page.url()).search === "", "back on Now, the address is plain again");
+
   // The phone starts a terminal of its own, in Now's bottom bar, and lands in it.
   const before = (await call("pane.list")).length;
   await page.locator(".actions").getByRole("button", { name: "Terminal" }).click();

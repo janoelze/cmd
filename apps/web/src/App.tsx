@@ -182,6 +182,17 @@ function Paired({ conn, pane: first, onAdd, onSwitch, onForget }: { conn: Connec
   shown.current = open;
   const openRef = useRef<(id: string) => void>(setOpen);
 
+  // The terminal on screen is in the address (the form a notification's link has, push.ts), so a reload
+  // (iOS reloads background tabs and Home Screen apps on its own) lands on it again. Replaced, never
+  // added: the Home Screen app has no Back, and Now is this screen's own back.
+  useEffect(() => {
+    history.replaceState(null, "", open ? `/?${new URLSearchParams({ mac: conn.key, pane: open })}` : "/");
+  }, [open, conn.key]);
+  // Gone by the time the Mac answers (closed meanwhile): Now, quietly.
+  useEffect(() => {
+    if (model && open && !model.panes.has(open)) setOpen(null);
+  }, [model, open]);
+
   // The Mac's notifications while this page is open: a toast, unless it's about the terminal on screen.
   useEffect(
     () =>
