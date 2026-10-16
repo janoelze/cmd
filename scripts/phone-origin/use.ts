@@ -26,5 +26,5 @@ if (given) {
 }
 const t = resolveTarget("dev");
 const phone = t.home === phoneHome();
-console.log(`/c/dev ${given ? "now reaches" : "reaches"} ${phone ? "the phone's dev core" : t.home} (${t.home})\n  ${await devLine(t)}`);
+console.log(`/c/dev ${given ? "now reaches" : "reaches"} ${phone ? `the phone's dev core (${t.home})` : t.home}\n  ${await devLine(t)}`);
 if (given && !phone) console.log("A core here pairs on its own: pnpm phone:pair dev. pnpm phone:use phone points back.");
