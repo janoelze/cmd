@@ -1,6 +1,6 @@
 # Phone development
 
-**Status:** built (2026-10-15): `pnpm phone:serve`, `phone:core`, `phone:use` and `phone:pair` in `scripts/phone-origin/`, unit tests in `test/phone-origin.test.ts`, `pnpm e2e:phone-origin`; not yet tried on a real phone. The phone driver for agents (`pnpm phone`, `tools/phone/`) uses the same proxy.
+**Status:** built (2026-10-15): `pnpm phone:serve`, `phone:core`, `phone:use` and `phone:pair` in `scripts/phone-origin/`, unit tests in `test/phone-origin.test.ts`, `pnpm e2e:phone-origin`; tried on a real iPhone (2026-10-16). The phone driver for agents (`pnpm phone`, `tools/phone/`) uses the same proxy; agents start from the `mobile` skill.
 
 Working on the web client (`apps/web`, docs/13, docs/38) on a real phone used to mean re-pairing all the time and no hot reload: the core serves a built `dist`, and a phone keeps its pairings per origin (IndexedDB), so every new address was a new, unpaired device. This sets up **one fixed HTTPS origin** for the phone, served by Vite with hot reload, that reaches both the installed app's core (your real sessions) and a dev core. You pair once with the installed app and once with the phone's dev core, which keeps one state dir whatever worktree it runs ("The phone's dev core"), and stay paired.
 

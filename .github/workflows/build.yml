@@ -269,6 +269,43 @@ jobs:
           include-hidden-files: true # .cmd-dev is hidden: without this nothing is uploaded
           if-no-files-found: ignore
 
+  # The phone's side of remote access (e2e/web.mjs): the web client on Vite in an emulated
+  # iPhone (WebKit), a local relay and a core from source, pairing, terminals, toasts and a
+  # second Mac. No app build. apps/web's unit tests run in the mac job's pnpm test.
+  web:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec playwright install webkit
+
+      - name: Web client test
+        timeout-minutes: 8
+        env:
+          SHELL: /bin/zsh
+        run: pnpm e2e:web
+
+      - name: Web client screenshots and core logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-mac
+          path: |
+            .cmd-dev/shots/web-*.png
+            .cmd-dev/e2e-web*/logs
+          include-hidden-files: true
+          if-no-files-found: ignore
+
   windows:
     if: false # disabled for now
     runs-on: windows-latest
