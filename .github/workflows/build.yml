@@ -5,6 +5,7 @@
 # secrets below exist) and publishes one GitHub release: the .dmg and .zip, and
 # the update metadata (latest-mac.yml, blockmaps) installed apps update from.
 # A tag without a CHANGELOG.md section fails; that section is the release's notes.
+# A release also bumps the Homebrew cask (Casks/cmd.rb) on master.
 # The Windows job is disabled for now (`if: false`); re-enable it and add it to
 # the release's `needs` to ship Windows builds again.
 #
@@ -372,6 +373,28 @@ jobs:
           # latest-mac.yml, latest.yml and the blockmaps are what installed apps update from (src/main/updater.ts).
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" "${notes[@]}"
+
+      # Points the Homebrew cask (Casks/cmd.rb) at the release's .zip, as a commit on master;
+      # prereleases keep the last release. Pushed with the job's token, so it starts no build.
+      # A failed bump doesn't fail the release; it's already out.
+      - name: Bump the Homebrew cask
+        if: ${{ !contains(github.ref_name, '-') }}
+        continue-on-error: true
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sha=$(sha256sum "dist/cmd-$version-arm64.zip" | cut -d' ' -f1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch --depth=1 origin master
+            git checkout -B master FETCH_HEAD
+            sed -i -E "s/^  version \".*\"/  version \"$version\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/cmd.rb
+            git diff --quiet && { echo "Casks/cmd.rb is already at $version"; exit 0; }
+            git commit -am "Homebrew cask: cmd $version"
+            git push origin master && exit 0
+            sleep 5
+          done
+          exit 1
 
       # Prereleases aren't announced. A failed post doesn't fail the release; it's already out.
       - name: Announce on Discord
