@@ -55,8 +55,35 @@ export class Viewport {
   #lastCursor = -1;
   #frame = 0;
   #off: (() => void)[] = [];
-  /** A snapshot is being written: what changes isn't news. */
-  replaying = false;
+  #replaying = false;
+  /** Up in the history when a replay began: the line on top and how far it was from the bottom, to find it again. */
+  #held: { text: string; fromBottom: number } | null = null;
+
+  /** A snapshot is being written: what changes isn't news, and the view holds still until it's parsed. */
+  get replaying(): boolean {
+    return this.#replaying;
+  }
+
+  set replaying(on: boolean) {
+    if (on === this.#replaying) return;
+    this.#replaying = on;
+    const b = this.#o.term.buffer.active;
+    if (on) {
+      this.#held = b.viewportY < b.baseY ? { text: b.getLine(b.viewportY)?.translateToString(true) ?? "", fromBottom: b.baseY - b.viewportY } : null;
+      return;
+    }
+    // Parsed: the same line on top again, if it's still there (lines arrived meanwhile, or the Mac keeps less history).
+    const a = this.#held;
+    this.#held = null;
+    if (!a || !a.text) return;
+    const guess = b.baseY - a.fromBottom;
+    for (let d = 0; d <= 500; d++)
+      for (const i of [guess + d, guess - d])
+        if (i >= 0 && i < b.baseY && b.getLine(i)?.translateToString(true) === a.text) {
+          this.#view.v = offsetOf(this.#shift, i, this.#extents());
+          return;
+        }
+  }
 
   constructor(o: ViewportOptions) {
     this.#o = o;
@@ -71,7 +98,7 @@ export class Viewport {
       this.#touch(),
       this.#wheel(),
     );
-    const ro = new ResizeObserver(() => this.layout());
+    const ro = new ResizeObserver(() => !this.replaying && this.layout());
     ro.observe(o.view);
     ro.observe(o.pan);
     this.#off.push(() => ro.disconnect());
@@ -207,6 +234,8 @@ export class Viewport {
 
   /** Output was parsed: a view up in the history stays on what it shows (xterm holds it), and it's news. */
   #written(): void {
+    // A replay rebuilds the buffer from nothing: the view keeps its place from the bottom until it's parsed (layout).
+    if (this.replaying) return;
     const b = this.#o.term.buffer.active;
     const moved = b.baseY !== this.#lastBase || b.baseY + b.cursorY !== this.#lastCursor;
     this.#lastBase = b.baseY;
@@ -220,6 +249,7 @@ export class Viewport {
 
   /** xterm scrolled by itself (a reset, a clear): follow it. */
   #scrolled(): void {
+    if (this.replaying) return;
     const b = this.#o.term.buffer.active;
     this.#view.v = offsetOf(this.#shift, b.viewportY, this.#extents());
     this.#apply();
