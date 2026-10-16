@@ -80,10 +80,10 @@ body { background: var(--bg); color: var(--text); font: var(--text-base) / 1.35 
 /* Its own scrollbar would sit at the Mac's right edge, often off screen: the pan and the jump button stand in. */
 .term .xterm .scrollbar { display: none !important; }
 /* A copy of the screen over it while a resync replays (Terminal.tsx). */
-.term-still { position: absolute; z-index: 1; pointer-events: none; }
+.term .xterm .term-still { position: absolute; z-index: 1; pointer-events: none; }
 .term-jump { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 2; }
-/* The selection's actions, over the terminal's top. */
-.term-float { position: absolute; top: var(--space-2); left: 50%; translate: -50% 0; z-index: 2; display: flex; gap: var(--space-1-5); }
+/* The selection's actions, floating over the terminal's foot (the selection is usually above it). */
+.term-float { position: absolute; bottom: var(--space-3); left: 50%; translate: -50% 0; z-index: 2; display: flex; gap: var(--space-1-5); padding: var(--space-1-5); border-radius: var(--radius-lg); background: var(--bg-sidebar); box-shadow: var(--popover-shadow); }
 .term-link { word-break: break-all; font-family: var(--font-mono); }
 .term-input { flex: none; background: var(--bg-sidebar); border-top: 1px solid var(--separator); padding-bottom: env(safe-area-inset-bottom); }
 .keys { display: flex; gap: var(--space-1-5); padding: var(--space-2); overflow-x: auto; scrollbar-width: none; }

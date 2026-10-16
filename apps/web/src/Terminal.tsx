@@ -294,7 +294,9 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
               <Button size="lg" variant="primary" icon="doc.on.doc" onClick={() => void copy()}>
                 Copy
               </Button>
-              <IconButton icon="xmark" size="lg" variant="default" label="Clear Selection" onClick={() => term.current?.viewport.clearSelection()} />
+              <Button size="lg" onClick={() => term.current?.viewport.clearSelection()}>
+                Cancel
+              </Button>
             </div>
           )}
         </Presence>
@@ -303,16 +305,16 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
       {control ? (
         <div className="term-input">
           <div className="keys">
-            <Button size="sm" className="key" pressed={mods.ctrl} onPointerDown={keep} onClick={() => setMods({ ...mods, ctrl: !mods.ctrl })}>
+            <Button size="sm" className="key" pressed={mods.ctrl} onMouseDown={keep} onClick={() => setMods({ ...mods, ctrl: !mods.ctrl })}>
               ctrl
             </Button>
-            <Button size="sm" className="key" pressed={mods.alt} onPointerDown={keep} onClick={() => setMods({ ...mods, alt: !mods.alt })} aria-label="alt">
+            <Button size="sm" className="key" pressed={mods.alt} onMouseDown={keep} onClick={() => setMods({ ...mods, alt: !mods.alt })} aria-label="alt">
               alt
             </Button>
             {KEYS.map((k) => (
               <Key key={k.label} label={k.label} name={k.name} repeat={k.repeat} onKey={() => write(k.data)} />
             ))}
-            <Button size="sm" className="key" icon="doc.on.clipboard" aria-label="Paste" onPointerDown={keep} onClick={() => void paste()} />
+            <Button size="sm" className="key" icon="doc.on.clipboard" aria-label="Paste" onMouseDown={keep} onClick={() => void paste()} />
           </div>
           <form className="compose" onSubmit={(e) => (e.preventDefault(), void submit())}>
             <IconButton icon="keyboard" size="lg" label="Type into the terminal" onClick={() => term.current?.t.focus()} />
@@ -328,7 +330,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
               autoCorrect="off"
               spellCheck={false}
             />
-            <IconButton icon="return" size="lg" pressed={enter} label={enter ? "Return after Sending: On" : "Return after Sending: Off"} onPointerDown={keep} onClick={() => setEnter(!enter)} />
+            <IconButton icon="return" size="lg" pressed={enter} label="Send with Return" onMouseDown={keep} onClick={() => setEnter(!enter)} />
             <Button type="submit" size="lg" variant="primary" icon="arrow.up" disabled={(!text && !enter) || sending} aria-label={enter ? "Send" : "Send without Return"} />
           </form>
         </div>
@@ -356,7 +358,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
   );
 }
 
-/** A key row button keeps the focus where it is (the keyboard stays up). */
+/** A key row button keeps the focus where it is (the keyboard stays up). Not on pointerdown: WebKit then drops the click. */
 const keep = (e: { preventDefault: () => void }) => e.preventDefault();
 
 /** A key in the row. `repeat`: held, it types again until let go. */
@@ -372,10 +374,8 @@ function Key({ label, name, repeat, onKey }: { label: string; name?: string; rep
       size="sm"
       className="key"
       aria-label={name}
-      onPointerDown={(e) => {
-        keep(e);
-        if (repeat) r.current!.press("");
-      }}
+      onMouseDown={keep}
+      onPointerDown={() => repeat && r.current!.press("")}
       onPointerUp={stop}
       onPointerCancel={stop}
       onPointerLeave={stop}
@@ -426,10 +426,10 @@ function TerminalMenu(p: {
           title={p.fitting ? "Use the Mac's Size" : "Fit to This Phone"}
           detail={
             p.fitting
-              ? `Now ${p.pane.cols}×${p.pane.rows}, sized for this phone until you leave`
+              ? `${p.pane.cols}×${p.pane.rows} on the Mac until you leave`
               : other
-                ? `${p.pane.sizedBy} has it at ${p.pane.cols}×${p.pane.rows}; this takes it over`
-                : `Resizes it on the Mac while you look at it (now ${p.pane.cols}×${p.pane.rows})`
+                ? `${p.pane.sizedBy} has it; this takes it over`
+                : "Resizes it on the Mac while it's open here"
           }
         />
       </ListRow>
