@@ -3,8 +3,9 @@
 // RpcClient the desktop uses. Reconnects with backoff, and right away when the page comes back
 // (iOS freezes WebSockets in the background), then bootstraps again. An attempt that hangs
 // (iOS right after a network change, a VPN coming back: the socket neither opens nor closes)
-// is given up at a deadline; coming back or online again drops one at once, and checks that
-// an established session still answers (a half-open socket looks online but is dead). Each
+// is given up at a deadline: 8 s for the handshake, then 30 s without a byte until the
+// bootstrap is in (a big one on a slow link keeps arriving). Coming back or online again
+// drops a hung attempt at once, and checks that an established session still answers (a half-open socket looks online but is dead). Each
 // session checks this device's notifications (push.ts) and tells the Mac
 // whether the page is in front, so it doesn't push what the page shows.
 
@@ -28,8 +29,10 @@ function closed(code: number, since: number): Phase {
   return { kind: "offline", since, reason };
 }
 
-/** From the socket opening to the bootstrap answered: past this an attempt is given up and tried again. */
+/** From the socket opening to the Noise session established (what hangs on iOS): past this an attempt is given up and tried again. */
 export const ATTEMPT_MS = 8000;
+/** After the handshake, until the bootstrap is answered: this long without a byte arriving gives up (a big bootstrap on a slow link keeps it alive). */
+export const SILENT_MS = 30_000;
 /** An attempt this young is left to finish when the page comes back. */
 const FRESH_MS = 1000;
 /** How long an established session gets to answer when the page comes back. */
@@ -200,6 +203,14 @@ export class Connection {
       const s = await session;
       if (this.#ws !== ws) return; // given up meanwhile
       established = true;
+      // Handshake done: hello, ack and bootstrap may take a while on a slow link, as long as bytes keep coming.
+      const silent = () => {
+        if (this.#ws !== ws || this.#ready) return;
+        if (this.#deadline) clearTimeout(this.#deadline);
+        this.#deadline = setTimeout(() => this.#abandon(ws), SILENT_MS);
+      };
+      silent();
+      ws.addEventListener("message", silent);
       const client = new RpcClient((line) => void s.send(line));
       // What was read, acked every 64 KiB (remote.ack): the Mac holds output past a window instead of the relay dropping a slow phone.
       let received = 0;

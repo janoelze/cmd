@@ -4,7 +4,7 @@
 // the deadline and tried again; coming online or back in front drops a hung attempt at once;
 // and a session that no longer answers is found out when the page comes back.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ATTEMPT_MS, BACKOFF_VISIBLE_MS, Connection, PING_MS, type Opener } from "../src/connection.ts";
+import { ATTEMPT_MS, BACKOFF_VISIBLE_MS, Connection, PING_MS, SILENT_MS, type Opener } from "../src/connection.ts";
 import type { Identity } from "../src/identity.ts";
 
 /** One attempt: a socket that opens (or doesn't), and a session that answers (or doesn't). */
@@ -18,8 +18,18 @@ class Attempt {
   /** The Mac stops answering (a half-open socket). */
   deaf = false;
   #line: (l: string) => void = () => {};
+  messageFns: (() => void)[] = [];
+  /** The bootstrap's answer waits until `release` (a slow link); bytes of it arrive with `trickle`. */
+  slow = false;
+  #held: (() => void)[] = [];
+  trickle(): void {
+    this.messageFns.forEach((f) => f());
+  }
+  release(): void {
+    this.#held.splice(0).forEach((f) => f());
+  }
   ws = {
-    addEventListener: (type: string, fn: (e: { code: number }) => void) => type === "close" && this.closeFns.push(fn),
+    addEventListener: (type: string, fn: (e: { code: number }) => void) => (type === "close" ? this.closeFns.push(fn) : type === "message" && this.messageFns.push(fn as () => void)),
     close: () => (this.closedByUs = true),
   };
   /** The socket opens and the handshake completes: the Mac answers core.hello and remote.bootstrap. */
@@ -30,7 +40,9 @@ class Attempt {
         const m = JSON.parse(line) as { id: number; method: string };
         if (this.deaf) return;
         const result = m.method === "core.hello" ? { protocol: 1 } : m.method === "remote.bootstrap" ? { panes: [], agents: [], windows: [], workspaces: [], windowTypes: [], device: null, host: { name: "Mac" } } : null;
-        queueMicrotask(() => this.#line(JSON.stringify({ jsonrpc: "2.0", id: m.id, result })));
+        const answer = () => this.#line(JSON.stringify({ jsonrpc: "2.0", id: m.id, result }));
+        if (this.slow && m.method === "remote.bootstrap") this.#held.push(answer);
+        else queueMicrotask(answer);
       },
       onLine: (fn: (l: string) => void) => (this.#line = fn),
     });
@@ -157,6 +169,44 @@ describe("connecting to the Mac", () => {
     expect(attempts).toHaveLength(1);
     expect(attempts[0]!.closedByUs).toBe(false);
     expect(online(c)).toBe(true);
+    c.close();
+  });
+
+  it("a slow bootstrap that keeps arriving goes online, past the handshake's 8 s and the 30 s silence limit", async () => {
+    const c = new Connection(id, opener);
+    c.start();
+    const a = attempts[0]!;
+    a.slow = true;
+    a.up();
+    await vi.advanceTimersByTimeAsync(0);
+    // 2 minutes of download, a frame every 10 s.
+    for (let i = 0; i < 12; i++) {
+      await vi.advanceTimersByTimeAsync(10_000);
+      a.trickle();
+    }
+    expect(a.closedByUs).toBe(false);
+    a.release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(online(c)).toBe(true);
+    // Online: silence is fine now (the wake check looks after a dead session).
+    await vi.advanceTimersByTimeAsync(SILENT_MS * 2);
+    expect(online(c)).toBe(true);
+    c.close();
+  });
+
+  it("a session that goes silent after the handshake is given up at the silence limit", async () => {
+    const c = new Connection(id, opener);
+    c.start();
+    const a = attempts[0]!;
+    a.slow = true;
+    a.up();
+    await vi.advanceTimersByTimeAsync(5000);
+    a.trickle();
+    await vi.advanceTimersByTimeAsync(SILENT_MS - 1);
+    expect(a.closedByUs).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(a.closedByUs).toBe(true);
+    expect(c.phase.kind).toBe("offline");
     c.close();
   });
 });
