@@ -83,7 +83,7 @@ export function QuickCommands({
     );
   return (
     <>
-      <PageIntro icon="bolt">
+      <PageIntro icon="bolt.fill">
         Save the commands and prompts you type every day. <code>{"{{variables}}"}</code> fill in what you’re looking at, like the folder, the selected text or the
         branch. Run them from Session → Quick Commands, the palette, a shortcut or <code>cmd quick run</code>.
       </PageIntro>

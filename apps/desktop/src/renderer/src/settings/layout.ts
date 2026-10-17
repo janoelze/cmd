@@ -30,7 +30,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "appearance",
     title: "Appearance",
-    icon: "paintpalette",
+    icon: "paintpalette.fill",
     sections: [
       { title: "Theme", items: ["theme.appearance", "theme.dark", "theme.light", "theme.dockIcon"] },
       { title: "Fonts", items: ["font.code", "font.codeSize", "font.text", "font.textSize"] },
@@ -40,7 +40,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "windows",
     title: "Windows",
-    icon: "macwindow",
+    icon: "rectangle.on.rectangle.fill",
     sections: [
       { title: "Workspaces", items: ["workspaces.ownWindow"] },
       { title: "Layout", items: ["ui.defaultView", "ui.gutter", "ui.paddingX", "ui.paddingY", "ui.windowRadius"] },
@@ -54,7 +54,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "terminal",
     title: "Terminal",
-    icon: "terminal",
+    icon: "terminal.fill",
     sections: [
       {
         title: "Display",
@@ -68,7 +68,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "open",
     title: "Opening Files",
-    icon: "arrow.up.forward.app",
+    icon: "arrow.up.forward.app.fill",
     sections: [
       { title: "The open command", items: ["shell.openFolders", "shell.openFiles", "shell.openUrls"] },
       { title: "File types", items: ["open.handlers"] },
@@ -78,7 +78,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "notifications",
     title: "Notifications",
-    icon: "bell",
+    icon: "bell.fill",
     sections: [
       { title: "Notify me when", items: ["notifications.needsInput", "notifications.done", "notifications.longCommand", "notifications.terminalSequences", "notifications.widgets"] },
       { title: "Wording", items: ["notifications.ai"] },
@@ -116,7 +116,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "remote",
     title: "Remote Access",
-    icon: "iphone",
+    icon: "smartphone",
     sections: [
       { items: ["remote.enabled"] },
       { title: "Connection", items: ["remote.access", "remote.relay", "remote.client", "remote.tailscale.port", "remote.url", "remote.port"] },
@@ -127,7 +127,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "magic",
     title: "Magic Widgets",
-    icon: "wand.and.stars",
+    icon: "wand.and.stars.inverse",
     sections: [
       { title: "While building", items: ["magic.explore", "magic.showSteps"] },
       { title: "Running widgets", items: ["magic.autoFix", "magic.deno"] },
@@ -138,7 +138,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "data",
     title: "Data",
-    icon: "internaldrive",
+    icon: "internaldrive.fill",
     sections: [
       { title: "What cmd keeps", items: ["data.record.transcripts", "data.record.output", "data.record.browsing", "data.record.actions"] },
       { title: "For how long", items: ["data.keepDays"] },

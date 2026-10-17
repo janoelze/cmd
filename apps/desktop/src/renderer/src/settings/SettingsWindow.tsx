@@ -48,7 +48,7 @@ import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page a
 
 const PAGES: SettingsPage[] = settingsPages();
 type Nav = { id: string; title: string; icon: string };
-const NAV: Nav[] = [...PAGES, { id: "browser", title: "Browser", icon: "globe" }, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "quick", title: "Quick Commands", icon: "bolt" }, { id: "about", title: "Updates & About", icon: "info.circle" }];
+const NAV: Nav[] = [...PAGES, { id: "browser", title: "Browser", icon: "globe.fill" }, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard.fill" }, { id: "quick", title: "Quick Commands", icon: "bolt.fill" }, { id: "about", title: "Updates & About", icon: "info.circle.fill" }];
 
 const APPLIES_NOTE = { newTerminals: "Applies to new terminals.", firstLaunch: "Applies on first launch." } as const;
 const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", workspace: "Workspaces", help: "Help" };

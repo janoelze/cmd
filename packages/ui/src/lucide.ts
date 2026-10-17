@@ -195,7 +195,8 @@ export type SymbolImage = { url: string; w: number; h: number; contain?: boolean
 
 /** The icon for an SF Symbol name at a point size: an SVG data URL in the same even, square box. */
 export function lucideSymbol(name: string, size: number, weight: string): SymbolImage {
-  const svg = LUCIDE[name];
+  // A filled variant draws as its outline.
+  const svg = LUCIDE[name] ?? LUCIDE[name.replace(/\.fill$/, "")];
   if (!svg) return null;
   const sized = svg.replace(/stroke-width="[^"]*"/, `stroke-width="${STROKE[weight] ?? 2}"`);
   const side = Math.ceil(size / 2) * 2;

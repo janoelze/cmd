@@ -69,7 +69,7 @@ export const Offer = () => (
 /** A settings page's intro: what the feature is and where it shows up, above its sections. */
 export const Intro = () => (
   <div style={{ width: 560 }}>
-    <PageIntro icon="bolt" links={<LinkButton onClick={() => {}}>Edit quick-commands.json…</LinkButton>}>
+    <PageIntro icon="bolt.fill" links={<LinkButton onClick={() => {}}>Edit quick-commands.json…</LinkButton>}>
       Save the commands and prompts you type every day. Run them from Session → Quick Commands, the palette, a shortcut or <code>cmd quick run</code>.
     </PageIntro>
     <FormSection title="Quick Commands">
