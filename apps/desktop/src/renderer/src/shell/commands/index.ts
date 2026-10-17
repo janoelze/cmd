@@ -7,3 +7,4 @@ import "./edit.ts";
 import "./view.ts";
 import "./session.ts";
 import "./workspace.ts";
+import "../quick/commands.ts";

@@ -3,12 +3,12 @@
 // Pure (Electron's types only), so a test can check every command is placed exactly once.
 
 import type { MenuItemConstructorOptions } from "electron";
-import { COMMANDS, type CommandSpec, type ContextItem, type Keybindings, type MenuLists } from "../shared/commands.ts";
+import { COMMANDS, norm, type CommandSpec, type ContextItem, type Keybindings, type MenuLists } from "../shared/commands.ts";
 
 type Send = (id: string) => void;
 type Role = NonNullable<MenuItemConstructorOptions["role"]>;
-/** A group of a menu: a command slot ("File/new"), roles and slots in one run, a slot as a submenu, or File → Open Recent. */
-type Part = string | { role: Role } | { submenu: string; slot: string } | { recent: true };
+/** A group of a menu: a command slot ("File/new"), roles and slots in one run, a slot as a submenu, File → Open Recent, or Session → Quick Commands. */
+type Part = string | { role: Role } | { submenu: string; slot: string } | { recent: true } | { quick: string };
 type Menu = { label?: string; role?: Role; groups: Part[][] };
 
 const r = (role: Role) => ({ role });
@@ -23,7 +23,7 @@ function layout(mac: boolean, appName: string): Menu[] {
     },
     { label: "Edit", groups: [[r("undo"), r("redo")], [r("cut"), "Edit/copy", r("paste"), "Edit/select"], ["Edit/find"], ["Edit/text", { submenu: "Lines", slot: "Edit/lines" }, { submenu: "Code Folding", slot: "Edit/folding" }], ["Edit/terminal"]] },
     { label: "View", groups: [["View/layout"], ["View/sidebars"], ["View/palette"], ["View/zoom"], ["View/editor"], [r("togglefullscreen")], ["@developer"]] },
-    { label: "Session", groups: [["Session/move"], ["Session/select", "Session/agent"]] },
+    { label: "Session", groups: [["Session/move"], ["Session/select", "Session/agent"], [{ quick: "Session/quick" }]] },
     { label: "Workspace", groups: [["Workspace/move", "Workspace/select"], ["Workspace/edit"], ["Workspace/actions"], ["Workspace/close"]] },
     { label: "Widgets", groups: [["Widgets/library"], ["Widgets/widget"], ["Widgets/remove"]] },
     { role: "windowMenu", groups: [[r("minimize"), r("zoom")], ["Window/dock"], ["Window/size"], ["Window/app"], ...(mac ? [[r("front")]] : [])] },
@@ -63,10 +63,26 @@ function recentMenu(o: MenuOptions): MenuItemConstructorOptions {
   };
 }
 
+/**
+ * Session → Quick Commands (docs/58): the person's, each with its shortcuts (a shortcut an app
+ * command has stays the command's), then the slot's commands (New…, Edit…).
+ */
+function quickMenu(o: MenuOptions, send: Send, bindings: Keybindings, after: MenuItemConstructorOptions[]): MenuItemConstructorOptions {
+  const taken = new Set(Object.values(bindings).flat().map(norm));
+  const mine = (o.lists?.quick ?? []).flatMap((q): MenuItemConstructorOptions[] => {
+    const keys = q.keys.filter((k) => !taken.has(norm(k)));
+    for (const k of keys) taken.add(norm(k));
+    const click = () => send(q.id);
+    return [{ id: q.id, label: q.label, accelerator: keys[0], click }, ...keys.slice(1).map((acc) => ({ label: q.label, accelerator: acc, visible: false, acceleratorWorksWhenHidden: true, click }))];
+  });
+  return { label: "Quick Commands", submenu: [...(mine.length ? mine : [{ label: "No Quick Commands", enabled: false }]), { type: "separator" }, ...after] };
+}
+
 export function menuTemplate(send: Send, bindings: Keybindings, o: MenuOptions): MenuItemConstructorOptions[] {
   const bySlot = new Map<string, CommandSpec[]>();
   for (const c of COMMANDS as readonly CommandSpec[]) bySlot.set(c.menu, [...(bySlot.get(c.menu) ?? []), c]);
   const part = (p: Part): MenuItemConstructorOptions[] => {
+    if (typeof p !== "string" && "quick" in p) return [quickMenu(o, send, bindings, (bySlot.get(p.quick) ?? []).flatMap((c) => items(c, send, bindings)))];
     if (typeof p !== "string") return "recent" in p ? [recentMenu(o)] : "submenu" in p ? [{ label: p.submenu, submenu: (bySlot.get(p.slot) ?? []).flatMap((c) => items(c, send, bindings)) }] : [p];
     if (p === "@developer") return [{ label: "Developer", submenu: [{ role: "reload" }, { role: "toggleDevTools" }] }];
     return (bySlot.get(p) ?? []).flatMap((c) => items(c, send, bindings, o.lists));
@@ -80,7 +96,7 @@ export function menuTemplate(send: Send, bindings: Keybindings, o: MenuOptions):
 
 /** Every slot the layout places (for the test: a command in another slot isn't in the menu). */
 export function menuSlots(mac: boolean): string[] {
-  return layout(mac, "cmd").flatMap((m) => m.groups.flat().flatMap((p) => (typeof p === "string" ? [p] : "slot" in p ? [p.slot] : [])));
+  return layout(mac, "cmd").flatMap((m) => m.groups.flat().flatMap((p) => (typeof p === "string" ? [p] : "slot" in p ? [p.slot] : "quick" in p ? [p.quick] : [])));
 }
 
 /** A context menu's template; an entry that is an app command shows its shortcut, which the menu bar runs (not this menu). */

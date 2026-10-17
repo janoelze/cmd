@@ -32,6 +32,8 @@ import { NewPicker } from "./NewPicker.tsx";
 import { openItems } from "./newItems.ts";
 import { useDock, useNotifications } from "./notifications.ts";
 import { Palette, SEARCH_PREFIX } from "./Palette.tsx";
+import { finishQuick, quickItems } from "./quick/quick.ts";
+import { QuickSheet } from "./quick/QuickSheet.tsx";
 import { actionItems, commandItems, lineItems, searchAll, SEARCH_GROUPS, usePaletteActions, windowItems } from "./palette.ts";
 import { useSelectionFollows } from "./selection.ts";
 import { closeSheet, openSheet, useSheet } from "./sheets.ts";
@@ -106,7 +108,7 @@ export function App() {
   const shownPicker = usePresentValue(pickerProps && picker ? { kind: picker.kind, props: pickerProps } : null, !!(pickerProps && picker));
   const ctx = commandContext({}, all);
   const attention = ctx.attention;
-  const paletteItems = shownPalette.value === false || shownPalette.value === undefined ? [] : [...commandItems(ctx, keys.bindings), ...actionItems(paletteActions, ctx), ...windowItems(ctx)];
+  const paletteItems = shownPalette.value === false || shownPalette.value === undefined ? [] : [...commandItems(ctx, keys.bindings), ...quickItems(ctx), ...actionItems(paletteActions, ctx), ...windowItems(ctx)];
 
   // Every Navigator window shows this (windows/navigator/Navigator.tsx).
   const navigatorData: NavigatorData = {
@@ -207,6 +209,7 @@ export function App() {
       <Presence when={sheet?.kind === "library"}>{(_, open) => <WidgetLibrary open={open} onClose={closeSheet} />}</Presence>
       <Toaster />
       <Presence when={sheet?.kind === "feedback"}>{(_, open) => <Feedback open={open} onClose={closeSheet} />}</Presence>
+      <Presence when={sheet?.kind === "quick" && sheet.pending}>{(p, open) => <QuickSheet key={p.command.id} open={open} pending={p} onClose={closeSheet} run={(values) => finishQuick(p.command, p.context, values)} />}</Presence>
       <Presence when={sheet?.kind === "taskManager"}>{(_, open) => <TaskManager open={open} onClose={closeSheet} />}</Presence>
       <Presence when={sheet?.kind === "setup" && sheet.ids}>{(ids, open) => <Onboarding key={ids.join()} open={open} ids={ids} onClose={closeSheet} />}</Presence>
       <Presence when={sheet?.kind === "whatsNew" && sheet.releases}>{(releases, open) => <WhatsNew open={open} releases={releases} onClose={closeSheet} onLink={(url) => (closeSheet(), openLink(url))} />}</Presence>

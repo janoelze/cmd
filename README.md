@@ -56,6 +56,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Images.** PNG, JPEG, GIF, WebP, AVIF and SVG open in an image window: fit or zoomed, sharp at actual size, with the folder's other images on ← and →.
 - **Drag and drop.** Drop files on a terminal to type their paths (agents take images as attachments), on the file browser to move them into a folder (⌥ copies), or anywhere else to open them. Drag rows from the file browser, or a window's title icon, out to Finder or any app.
 - **Notifications.** Waiting agents, bells and finished commands mark the terminal until you look, and count on the Dock badge.
+- **Quick Commands.** Save the commands and prompts you type every day in Settings → Quick Commands, and run them from Session → Quick Commands, the palette, a shortcut of their own or `cmd quick run`. They're typed into the terminal you're in (or sent to the agent in it), run in a new terminal, or opened as a page. `{{file}}`, `{{selection}}`, `{{branch}}` and friends fill in from what you're looking at, and `{{ask:name}}` asks when it runs. Values go into shell commands quoted.
 - **Keyboard first.** ⌘K finds windows, commands and past sessions. Every action is in the menu bar, and every shortcut can be remapped.
 - **CLI.** `cmd` spawns, messages, waits on and stops agents, so an agent can run other agents.
 - **Agent integration (beta).** Agents in cmd's terminals know they run in cmd: their pane and workspace, the agents working beside them, and cmd's tools to open a browser next to them, start other agents and wait for them, read other terminals and arrange the board. Turn it on in Settings → Agents: cmd adds its MCP server to Claude Code, Codex and Gemini CLI, and takes it out when you turn it off. What asks first is up to you, per kind of action (open websites, type into terminals, act on web pages…) in Settings → Agents → Permissions; an approval opens at once and Return allows it, once, for the agent's session or always in that workspace.
@@ -130,6 +131,7 @@ cmd agents turns <agent>             # what an agent did, turn by turn (also: ev
 cmd agents summary <agent>           # summarise its session with AI, as Markdown
 cmd data query --type git. --since 7d # what cmd recorded (also: stats, explain, subscribe, ai, forget, export)
 cmd stats --range month              # how cmd was used; `cmd stats commands.runs --by command` for one stat
+cmd quick run "Push Branch"          # a Quick Command; `cmd quick` lists them, `add NAME BODY`, `rm NAME`
 cmd magic "how full is my disk"      # build a Magic widget without the app
 cmd widget list                      # the Widget Library; `cmd widget add <widget>` puts one on the board
 ```

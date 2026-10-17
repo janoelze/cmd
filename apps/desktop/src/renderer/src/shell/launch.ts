@@ -10,6 +10,7 @@ import { select } from "../lib/selection.ts";
 import { getState, onWindowFocus, workspaceOfWindow } from "../lib/store.ts";
 import { showSetup, stepsAtLaunch } from "../onboarding/Onboarding.tsx";
 import { runCommand } from "./commands/registry.ts";
+import { quickOfMenuId, runQuickCommand } from "./quick/quick.ts";
 import { queueSheet } from "./sheets.ts";
 import { releasesSince } from "./WhatsNew.tsx";
 
@@ -18,7 +19,11 @@ export function useLaunch(title: string): void {
     performance.mark("boot:app-mounted");
     // Test hook for the e2e smoke test.
     (window as unknown as { __cmdSelect?: (id: PaneId) => void }).__cmdSelect = select;
-    const offCommand = cmd.onCommand((id) => runCommand(id, "menu"));
+    const offCommand = cmd.onCommand((id) => {
+      const quick = quickOfMenuId(id);
+      if (quick) void runQuickCommand(quick);
+      else runCommand(id, "menu");
+    });
     const offUrl = cmd.onOpenUrl(openLink);
     // `open` in a terminal: follow it, unless it came from another workspace while this window is in the background.
     const offFocus = onWindowFocus((id) => (document.hasFocus() || workspaceOfWindow(id) === getState().workspaceId) && select(id));

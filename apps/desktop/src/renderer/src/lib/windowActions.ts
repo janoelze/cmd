@@ -25,7 +25,7 @@ export type WindowActions = {
   /** A file browser's own commands (windows/files/commands.ts), on its selected row or folder. */
   files?: { newFolder: () => void; duplicate: () => void; trash: () => void; up: () => void; open: () => void };
   /** A text window's editor (windows/text/commands.ts): its line count, Go to Line, and its edits by name. */
-  text?: { lines: () => number; goToLine: (line: number, column?: number) => void; run: (edit: TextEdit) => void; focused: () => boolean };
+  text?: { lines: () => number; goToLine: (line: number, column?: number) => void; run: (edit: TextEdit) => void; focused: () => boolean; selection?: () => string };
 };
 /** The editor commands a text window runs (windows/text/commands.ts). */
 export type TextEdit = "toggleComment" | "moveLineUp" | "moveLineDown" | "duplicateLine" | "deleteLine" | "indent" | "outdent" | "fold" | "unfold" | "foldAll" | "unfoldAll";

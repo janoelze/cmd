@@ -23,6 +23,7 @@ import { terminals } from "../../windows/terminal/terminals.ts";
 import { recentLabels, useRecentWorkspaces } from "../workspaces.tsx";
 import { sideOf, type Side } from "../board/docks.ts";
 import { stateStr } from "../../windows/registry.ts";
+import { quickMenu, useQuickCommands } from "../quick/quick.ts";
 
 /** What a command can see: the shown workspace, the window it is for (the selection, or a row's), and the app around it. */
 export interface CommandContext {
@@ -150,8 +151,9 @@ export function menuState(c: CommandContext, recent: Workspace[] = []): MenuStat
     enabled[spec.id as CommandId] = !!command && (command.when?.(c) ?? true);
     if (command?.checked) checked[spec.id as CommandId] = command.checked(c);
   }
-  const lists = { workspaces: c.workspaces.slice(0, 9).map((sp) => sp.name), recent: recentLabels(recent, 10).map((r) => ({ path: r.workspace.root, label: r.label })) };
-  return { checked, enabled, lists };
+  const quick = quickMenu(c);
+  const lists = { workspaces: c.workspaces.slice(0, 9).map((sp) => sp.name), recent: recentLabels(recent, 10).map((r) => ({ path: r.workspace.root, label: r.label })), quick: quick.quick };
+  return { checked, enabled: { ...enabled, ...quick.enabled }, lists };
 }
 
 let lastMenu = "";
@@ -173,11 +175,12 @@ export function useMenuState(): void {
   const textSelected = useSyncExternalStore(terminals.onSelection, terminals.selectionVersion);
   const focus = useSyncExternalStore(onFocus, () => focusVersion);
   const recent = useRecentWorkspaces();
+  const quick = useQuickCommands();
   useEffect(() => {
     const m = menuState(commandContext({}, state), recent);
     const json = JSON.stringify(m);
     if (json !== lastMenu) (lastMenu = json), cmd.setMenuState(m);
-  }, [state, actions, ai, textSelected, focus, recent]);
+  }, [state, actions, ai, textSelected, focus, recent, quick]);
 }
 
 /** useMenuState in a component of its own: what it follows changes often (focus, a window's actions), and the shell needn't render for it. */

@@ -315,6 +315,10 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
             if (v) EDITS[name](v);
           },
           focused: () => !!view.current?.hasFocus,
+          selection: () => {
+            const st = view.current?.state;
+            return st ? st.sliceDoc(st.selection.main.from, st.selection.main.to) : "";
+          },
         },
       }),
     [win.id, save, file, find.request],

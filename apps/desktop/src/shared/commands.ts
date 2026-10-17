@@ -132,6 +132,9 @@ export const COMMANDS = spec([
   { id: "session.rename", label: "Rename Agent…", menu: "Session/agent" },
   { id: "session.summarize", label: "Summarize Session", menu: "Session/agent" },
   { id: "session.reveal", label: "Show Folder in Finder", keys: ["Alt+Cmd+R"], menu: "Session/agent" },
+  // Quick Commands (docs/58): the person's own sit above these in Session → Quick Commands (menu-template.ts), as `quick:<id>`.
+  { id: "session.newQuickCommand", label: "New Quick Command…", menu: "Session/quick" },
+  { id: "session.quickCommands", label: "Edit Quick Commands…", menu: "Session/quick" },
   // Workspace Actions (docs/39).
   { id: "actions.show", label: "Workspace Actions", menu: "Workspace/actions" },
   { id: "actions.rerun", label: "Run Last Action Again", keys: ["Shift+Cmd+R"], menu: "Workspace/actions" },
@@ -177,7 +180,8 @@ export const COMMAND_BY_ID = new Map<string, CommandSpec>((COMMANDS as readonly 
 /** State the renderer reports so menu items can be checked/enabled. */
 export interface MenuState {
   checked: Partial<Record<CommandId, boolean>>;
-  enabled: Partial<Record<CommandId, boolean>>;
+  /** Commands, and the person's Quick Commands (`quick:<id>`). */
+  enabled: Partial<Record<CommandId | QuickMenuId, boolean>>;
   /** The menus made of workspaces; main rebuilds the menu bar when they change. */
   lists?: MenuLists;
 }
@@ -186,7 +190,13 @@ export interface MenuState {
 export interface MenuLists {
   workspaces: string[];
   recent: { path: string; label: string }[];
+  /** Session → Quick Commands, in the file's order, with their shortcuts (docs/58). */
+  quick?: { id: QuickMenuId; label: string; keys: string[] }[];
 }
+
+/** A Quick Command as a menu item and in the menu's state: never a command id (those have a dot). */
+export type QuickMenuId = `quick:${string}`;
+export const QUICK_PREFIX = "quick:";
 
 /**
  * A context-menu item sent from renderer to main; `checked` shows a checkmark, `submenu` nests

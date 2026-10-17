@@ -213,6 +213,7 @@ const SCENARIOS = {
   "blank-browser": [],
   "site-permissions": ["browser"],
   approvals: [],
+  quick: [],
   osc8: [],
   resync: [],
   files: ["terminals"],
@@ -878,6 +879,57 @@ await scenario("approvals", async () => {
     await window.cmd.call("settings.set", { key: "agents.integration", value: false });
   }, term.id);
   await until(browsers, (n) => n === before);
+});
+
+// Quick Commands (docs/58): one runs from Session → Quick Commands into the selected terminal,
+// with its folder quoted in; one that asks opens the sheet from the palette, and Return runs it.
+await scenario("quick", async () => {
+  const save = (command) => win.evaluate((command) => window.cmd.call("quick.save", { command }), command);
+  await save({ name: "Say Folder", body: "echo said-{{folder}}", keys: ["Ctrl+Alt+Shift+Q"] });
+  await save({ name: "Echo Word", body: "echo word-{{ask:word=hi}}" });
+  const item = () => app.evaluate(({ Menu }) => { const i = Menu.getApplicationMenu()?.getMenuItemById("quick:say-folder"); return i ? { label: i.label, accelerator: i.accelerator ?? null } : null; });
+  const shown = await until(item, (i) => !!i);
+  check(shown?.label === "Say Folder" && shown.accelerator === "Ctrl+Alt+Shift+Q", `Session → Quick Commands lists it with its shortcut (${JSON.stringify(shown)})`);
+  await menu("file.newTerminal");
+  const term = await shellReady();
+  await focusIn(term.id);
+  await menu("quick:say-folder");
+  const said = await until(() => paneText(term.id), (t) => /said-\//.test(t));
+  check(/said-\//.test(said), "it types into the selected terminal and runs");
+  await menu("view.palette");
+  await win.waitForSelector(".palette");
+  await focused(".palette-input");
+  await win.keyboard.type("Echo Word");
+  await win.keyboard.press("Enter");
+  const sheet = win.getByRole("dialog", { name: "Echo Word" });
+  await sheet.waitFor({ timeout: 5000 }).catch(expired("Quick Command sheet"));
+  await shot(win, "quick-sheet.png");
+  await win.keyboard.press("ControlOrMeta+A");
+  await win.keyboard.type("it's");
+  await until(() => sheet.locator("pre").textContent(), (t) => t === "echo word-'it'\\''s'");
+  await win.keyboard.press("Enter");
+  const ran = await until(() => paneText(term.id), (t) => /word-it's/.test(t));
+  check(/word-it's/.test(ran) && (await sheet.count()) === 0, "a Quick Command that asks shows the sheet, and Return runs it with the value quoted");
+  // Session → New Quick Command… opens Settings at the page, with the editor.
+  const opened = app.waitForEvent("window");
+  await menu("session.newQuickCommand");
+  const sw = await opened;
+  sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
+  const editor = sw.getByRole("dialog", { name: "New Quick Command" });
+  await editor.waitFor({ timeout: 10_000 }).catch(expired("Quick Command editor"));
+  check((await sw.locator(".ui-row-name", { hasText: "Say Folder" }).count()) === 1, "Settings → Quick Commands lists them");
+  await sw.keyboard.type("From Settings");
+  await editor.locator("textarea").fill("echo from-settings {{ask:x}}");
+  await shot(sw, "quick-editor.png");
+  await editor.getByRole("button", { name: "Save" }).click();
+  const saved = await until(() => win.evaluate(() => window.cmd.call("quick.list", {}).then((l) => l.commands.map((q) => q.name))), (n) => n.includes("From Settings"));
+  check(saved.includes("From Settings") && (await sw.locator(".ui-row-name", { hasText: "From Settings" }).count()) === 1, `its editor saves a new one (${saved.join(", ")})`);
+  await sw.close();
+  await win.evaluate(async (id) => {
+    for (const q of (await window.cmd.call("quick.list", {})).commands) await window.cmd.call("quick.remove", { id: q.id });
+    await window.cmd.call("window.close", { id });
+  }, term.id);
+  await until(item, (i) => !i);
 });
 
 await scenario("osc8", async () => {

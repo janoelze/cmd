@@ -205,8 +205,7 @@ async function run({ client, closed }: Connection): Promise<number> {
       return dataCommand(client, pos, opt);
     case "stats":
       return statsCommand(client, pos, opt);
-    case "quick": // Quick Commands (docs/58)
-      return quickCommand(client, pos, opt, callerPaneId);
+    case "quick": return quickCommand(client, pos, opt, callerPaneId); // Quick Commands (docs/58)
     case "identify": {
       const paneId = process.env[ENV.paneId];
       if (!paneId) return fail("not inside a cmd pane");

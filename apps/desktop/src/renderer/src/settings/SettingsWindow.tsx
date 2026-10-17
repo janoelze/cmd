@@ -4,7 +4,7 @@
 // left, a control chosen from the key's type and display hints on the right.
 // The key itself (what `cmd settings set` takes) is the title's tooltip. Secrets (API keys, SECRETS) are rows too but
 // are stored by the core outside settings.json. Pages that aren't settings
-// (Browser's site permissions, Keyboard Shortcuts, Updates & About) are added to
+// (Browser's site permissions, Keyboard Shortcuts, Quick Commands, Updates & About) are added to
 // the sidebar here and draw themselves.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -42,12 +42,13 @@ import { UnknownSettings } from "./UnknownSettings.tsx";
 import { NotifyPermission } from "./NotifyPermission.tsx";
 import { SITE_PERMISSION_WORDS, SitePermissions } from "./SitePermissions.tsx";
 import { AgentPermissions } from "./AgentPermissions.tsx";
+import { QuickCommands } from "./QuickCommands.tsx";
 import { allThemes } from "@cmd/ui/themes";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
 const PAGES: SettingsPage[] = settingsPages();
 type Nav = { id: string; title: string; icon: string };
-const NAV: Nav[] = [...PAGES, { id: "browser", title: "Browser", icon: "globe" }, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "about", title: "Updates & About", icon: "info.circle" }];
+const NAV: Nav[] = [...PAGES, { id: "browser", title: "Browser", icon: "globe" }, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "quick", title: "Quick Commands", icon: "bolt" }, { id: "about", title: "Updates & About", icon: "info.circle" }];
 
 const APPLIES_NOTE = { newTerminals: "Applies to new terminals.", firstLaunch: "Applies on first launch." } as const;
 const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", workspace: "Workspaces", help: "Help" };
@@ -101,6 +102,8 @@ export function SettingsWindow() {
   const [page, setPage] = useState(initialPage);
   /** Bumped by "Pair a Device…": the Remote page shows a pairing code. */
   const [pairAsk, setPairAsk] = useState(askedPage === "remote/pair" ? 1 : 0);
+  /** Bumped by Session → New Quick Command…: the editor opens. */
+  const [quickAsk, setQuickAsk] = useState(askedPage === "quick/new" ? 1 : 0);
   useEffect(
     () =>
       cmd.onSettingsPage((p) => {
@@ -109,6 +112,7 @@ export function SettingsWindow() {
         setQuery("");
         setPage(id!);
         if (sub === "pair") setPairAsk((n) => n + 1);
+        if (sub === "new") setQuickAsk((n) => n + 1);
       }),
     [],
   );
@@ -179,6 +183,8 @@ export function SettingsWindow() {
     body = <SitePermissions />;
   } else if (page === "keyboard") {
     body = <Shortcuts />;
+  } else if (page === "quick") {
+    body = <QuickCommands newAsk={quickAsk} />;
   } else if (page === "remote") {
     body = <Remote key={pairAsk} status={remote} settings={snap.settings} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} />;
   } else if (page === "about") {

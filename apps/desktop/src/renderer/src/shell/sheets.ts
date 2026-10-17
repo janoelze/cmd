@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from "react";
 import type { Release } from "../../../shared/changelog.ts";
 import { cmd } from "../lib/bridge.ts";
+import type { QuickPending } from "./quick/quick.ts";
 import type { Picker } from "./workspaces.tsx";
 
 export type Sheet =
@@ -17,7 +18,9 @@ export type Sheet =
   | { kind: "library" }
   | { kind: "whatsNew"; releases: Release[] }
   | { kind: "feedback" }
-  | { kind: "taskManager" };
+  | { kind: "taskManager" }
+  /** A Quick Command that asks for values or a yes before it runs (docs/58). */
+  | { kind: "quick"; pending: QuickPending };
 
 let sheet: Sheet | null = null;
 /** Sheets waiting for the open one to close, first first. */
