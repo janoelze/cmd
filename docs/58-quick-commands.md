@@ -2,7 +2,7 @@
 
 **Status:** proposal (2026-10-17): nothing built yet.
 
-Commands and prompts you save once and run from anywhere in cmd: `git push -u origin {{branch}}` in the focused terminal, `docker compose logs -f {{ask:service}}` in a new one, "Review {{file}} for missing tests" sent to the focused agent, `https://github.com/acme/app/pull/{{ask:number}}` in a browser window. You keep them in Settings → Quick Commands, run them from the palette, the menu bar, a hotkey or the CLI, and fill in what they need from what you are looking at.
+Commands and prompts you save once and run from anywhere in cmd: `git push -u origin {{branch}}` in the focused terminal, `docker compose logs -f {{ask:service}}` in a new one, `claude "Review {{file}} for missing tests"` in a new terminal, "Review {{file}} for missing tests" typed into the Claude session you are looking at, `https://github.com/acme/app/pull/{{ask:number}}` in a browser window. You keep them in Settings → Quick Commands, run them from the palette, the menu bar, a hotkey or the CLI, and fill in what they need from what you are looking at.
 
 Read first: docs/39-workspace-actions.md (the commands cmd finds in a folder; Quick Commands are the ones you write yourself), `apps/desktop/src/shared/commands.ts` (app commands, the menu bar, keybindings), docs/55-approvals.md (when an agent runs one).
 
@@ -25,7 +25,7 @@ In code the feature's id is `quick`: methods `quick.*`, event `quick.changed`, c
 | Zed | `tasks.json`, global and per project; `$ZED_FILE`, `$ZED_WORKTREE_ROOT`, `$ZED_SELECTED_TEXT`; `use_new_terminal`, `reveal`, `hide: on_success`, `allow_concurrent_runs`; a task whose variable can't be filled is hidden | Where it runs is a field; no context, no command (disabled, not run with a blank) |
 | VS Code | `tasks.json` with `${file}`, `${workspaceFolder}`, `${input:x}` (`promptString`, `pickString`); keybindings to `terminal.sendSequence` with a `when` clause | Pick lists as well as free text |
 | iTerm2, kitty, WezTerm, Ghostty | A key that sends text (iTerm2 also a snippet library) | The usual complaint: a global key that can't tell where you are |
-| Claude Code, Cursor | Saved prompts as Markdown in `.claude/commands/`, `$ARGUMENTS` | Prompts for agents are the same thing as shell commands, with another target |
+| Claude Code, Cursor | Saved prompts as Markdown in `.claude/commands/`, `$ARGUMENTS` | A prompt is no target of its own: `claude "…"` is a command, and a running agent's terminal takes typed text |
 | Tabby, Termius | Quick commands / snippets sent to the current tab (Termius: to several hosts) | The name |
 
 Sources: research notes from 2026-10-17 (manual.raycast.com/dynamic-placeholders, docs.warp.dev/features/workflows, zed.dev/docs/tasks, code.visualstudio.com/docs/editor/tasks, docs.claude.com slash commands; iTerm2, kitty, WezTerm, Tabby and Termius from memory, unchecked).
@@ -43,12 +43,10 @@ interface QuickCommand {
   /** The command line, prompt or URL, with {{variables}}. */
   body: string;
   target: QuickTarget;
-  /** "type" and "agent": press Return after it (default true). Off: left for you to edit. */
+  /** "type": press Return after it (default true). Off: left for you to edit. */
   submit?: boolean;
   /** "terminal": the folder it starts in, may use variables (default {{folder}}). */
   cwd?: string;
-  /** "newAgent": which agent (default the person's default agent). */
-  agent?: AgentKind;
   /** Shortcuts, Electron accelerator syntax, as in keybindings.json. */
   keys?: string[];
   /** Ask before running, showing the resolved text (a deploy, a force push). */
@@ -58,12 +56,12 @@ interface QuickCommand {
 type QuickTarget =
   | "terminal"  // a new terminal in the workspace runs it (pane.create { command })
   | "type"      // typed into the selected terminal (pane.write), Return if submit
-  | "agent"     // sent to the selected agent (agent.send { submit })
-  | "newAgent"  // a new agent session with it as its prompt (agent.spawn { prompt })
   | "open";     // a URL or path opened in a cmd window (window.openTarget: routing.ts picks the type)
 ```
 
-`type` and `agent` need a selected terminal or agent: without one the command is disabled (menu, palette) and the CLI says why. Several steps in one command, and output modes (run hidden, show the last line as a toast, as Raycast's silent/compact), are later.
+`type` needs a selected terminal (a shell or an agent in it): without one the command is disabled (menu, palette) and the CLI says why. Several steps in one command, and output modes (run hidden, show the last line as a toast, as Raycast's silent/compact), are later.
+
+**Prompts are commands.** A new agent with a prompt is a `terminal` command (`claude "Review {{file}}"`, `codex "…"`): cmd detects the agent from the terminal's process, as for any it didn't start. A prompt to an agent already running is `type` into its terminal: Return sends it. So there is no agent target. What changes when the selected terminal runs an agent is only the quoting (below).
 
 ## Where they are kept
 
@@ -74,7 +72,7 @@ type QuickTarget =
 // Variables: {{folder}}, {{file}}, {{selection}}, {{ask:name}}… (Settings lists them all).
 [
   { "id": "push-branch", "name": "Push Branch", "body": "git push -u origin {{branch}}", "target": "type", "keys": ["Ctrl+Alt+P"] },
-  { "id": "review-file", "name": "Review File", "body": "Review {{file}} for missing tests.", "target": "agent" }
+  { "id": "review-file", "name": "Review File", "body": "Review {{file}} for missing tests.", "target": "type" }
 ]
 ```
 
@@ -110,15 +108,15 @@ The same name twice is asked once. A command with asks opens a second step in th
 
 **When a variable has no value**, the command doesn't apply: disabled in the menu, left out of the palette (its `when`), refused by the CLI with the variable named. `{{name?}}` makes it optional (empty instead).
 
-**Quoting.** In `terminal` and `type` bodies, every value goes in shell-quoted (`'…'`, `'\''` inside), so a copied `$(rm -rf ~)` is text, not a command. `{{selection:raw}}` opts out per use, and the editor marks raw uses. `agent` bodies take values as they are (they are prose), `open` bodies URL-encode them in a URL (`{{selection:url}}` explicitly). A `terminal` run also gets the values as environment (`CMD_QUICK_FILE`, `CMD_QUICK_SELECTION`…, `pane.create { env }`), so a script it starts can read them without quoting at all.
+**Quoting.** Values go into a shell command shell-quoted (`'…'`, `'\''` inside), so a copied `$(rm -rf ~)` is text, not a command: every `terminal` body, and a `type` body when the selected terminal is at a shell prompt. `{{selection:raw}}` opts out per use, and the editor marks raw uses. A `type` body typed into an agent (the pane's foreground process is one, `agents/`) is prose: values go in as they are. `open` bodies URL-encode values in a URL (`{{selection:url}}` explicitly). A `terminal` run also gets the values as environment (`CMD_QUICK_FILE`, `CMD_QUICK_SELECTION`…, `pane.create { env }`), so a script it starts can read them without quoting at all.
 
 **Where they are resolved.** One parser in protocol `quick.ts` (pure: the variables and asks a body uses, and filling them in with the quoting above), used by the editor (errors, preview), the renderer (what to ask, `when`), the core and the CLI. The renderer sends what only it knows (selection, clipboard, the selected window's file and URL, the folder) with the run; the core adds the branch and repository and runs it. The CLI passes `--var name=value` and gets the folder from its pane.
 
 ## Running it
 
-`quick.run { id, context, values, confirmed? }`, in the core, by target: `pane.create` in the workspace (named after the command), `pane.write` to the selected pane, `agent.send`, `agent.spawn`, `window.openTarget`. A `confirm` command is refused unless `confirmed`; the renderer asks first with the resolved text (the same confirm Workspace Actions uses for risky actions).
+`quick.run { id, context, values, confirmed? }`, in the core, by target: `pane.create` in the workspace (named after the command), `pane.write` to the selected pane, `window.openTarget`. A `confirm` command is refused unless `confirmed`; the renderer asks first with the resolved text (the same confirm Workspace Actions uses for risky actions).
 
-Who runs it matters (docs/55): the person running their own command from the menu, the palette or a key is not asked anything beyond `confirm`. An agent running one through the CLI or MCP is asked as for what the target does: "Type into terminals and agents" for `type` and `agent`, "Run project commands" for `terminal`, "Start agents" for `newAgent`, "Open websites" for a URL; `confirm` commands as risky Workspace Actions (never auto-approved), and the deny-list applies to the resolved text.
+Who runs it matters (docs/55): the person running their own command from the menu, the palette or a key is not asked anything beyond `confirm`. An agent running one through the CLI or MCP is asked as for what the target does: "Type into terminals and agents" for `type`, "Run project commands" for `terminal`, "Open websites" for a URL; `confirm` commands as risky Workspace Actions (never auto-approved), and the deny-list applies to the resolved text.
 
 ## Where they show up
 
@@ -127,7 +125,7 @@ Who runs it matters (docs/55): the person running their own command from the men
 - **Menu bar.** A Quick Commands submenu of the Session menu (decided 2026-10-17), with every command in the file's order, its hotkey as a real key equivalent (so it beats the terminal, like every app command), disabled when it doesn't apply, then New Quick Command… and Edit Quick Commands…. Built like Open Recent: a `{ quick: true }` part in `menu-template.ts` fed through `MenuLists`, rebuilt on `quick.changed`. Enabled state comes from the renderer as for other commands (the registry's `when` for `quick.<id>`).
 - **Hotkeys.** `resolveKeybindings` learns `quick.<id>` ids (today it rejects ids outside `COMMANDS`). A key a command already has, or another quick command, is a clash shown in both Settings pages; the app command keeps it.
 - **CLI.** `cmd quick` lists them (`--json`), `cmd quick run <name or id> [--var k=v…] [--yes]`. Through `quick.list` and `quick.run`.
-- **Saving one** (phase 2): "Save as Quick Command…" on a terminal's command (its context menu, from the `command` events), on a "From your history" row in Workspace Actions, and on a sent agent prompt. It opens the editor filled in.
+- **Saving one** (phase 2): "Save as Quick Command…" on a terminal's command (its context menu, from the `command` events), on a "From your history" row in Workspace Actions, and on a prompt typed to an agent. It opens the editor filled in.
 
 ## Protocol
 
@@ -136,7 +134,7 @@ As Workspace Actions does, kept out of the shared registries: protocol `quick.ts
 - `quick.list {} → { commands: QuickCommand[]; path: string; error?: string }`
 - `quick.save { command: QuickCommand; before?: string } → QuickCommand` (add or replace; `before` places it)
 - `quick.remove { id } → null`
-- `quick.run { id; context?: QuickContext; values?: Record<string, string>; confirmed?: boolean } → { paneId?: PaneId; agentId?: AgentId; windowId?: WindowId }`
+- `quick.run { id; context?: QuickContext; values?: Record<string, string>; confirmed?: boolean } → { paneId?: PaneId; windowId?: WindowId }`
 - Event `quick.changed {}`.
 
 No settings keys in phase 1. Remote access (the phone: list and run) later, in `REMOTE_ACCESS`, with `type` and `terminal` as control.
@@ -154,6 +152,4 @@ No settings keys in phase 1. Remote access (the phone: list and run) later, in `
 - (2026-10-17) Commands are global: none names a folder or workspace it belongs to.
 - (2026-10-17) Project commands aren't confirmed on their first run.
 
-## Open questions
-
-- Agent prompts (the `agent` and `newAgent` targets): phase 1, or after shell commands have settled? Proposed: phase 1.
+- (2026-10-17) No agent targets: a prompt is a command (`claude "…"`) or text typed into an agent's terminal.
