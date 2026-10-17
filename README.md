@@ -50,7 +50,7 @@ Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd
 - **Stats.** How you and your agents used cmd: agent time and yours, turns and how they ended, the commands you run most and how often they fail, tokens, commits. The Stats widget reads like Screen Time, and every number opens its chart. `cmd stats` shows the same in a terminal.
 - **Session summaries.** Right-click an agent's title bar and choose Summarize Session: a Markdown window fills in with what the session did, ready to edit and paste into a message or ticket. Needs an AI provider (Settings → AI & Agents).
 - **Widgets.** Agent Activity and a Live Diff of your uncommitted changes come built in; with Magic, describe anything else and an agent builds a live widget for it. They live in the Widget Library (⇧⌘L). [More below](#magic-widgets).
-- **Web browser** next to your terminals, with phone, tablet and desktop sizes.
+- **Web browser** next to your terminals, with phone, tablet and desktop sizes, and Chrome's DevTools: ⌥⌘I, the toolbar's Inspector button or right-click › Inspect Element open the inspector in a window beside the page, so the page keeps its size, or inside its window (right-click the title bar › Open Inspector).
 - **Files and editor.** A file browser, a text editor, Markdown windows and JSON windows (a tree you fold, JSON Lines too). ⌘E switches a Markdown or JSON window to the editor and back, at the line you're on. The editor keeps a file's indentation and line endings, and a reload brings you back where you were. `open README.md` in a shell opens it in cmd.
 - **SQLite.** Open a `.sqlite` or `.db` file to browse its tables: rows sorted and filtered, the structure, and a read-only query. It updates as the file changes.
 - **Images.** PNG, JPEG, GIF, WebP, AVIF and SVG open in an image window: fit or zoomed, sharp at actual size, with the folder's other images on ← and →.
@@ -97,6 +97,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⇧⌘T | reopen the last closed window where it was (a terminal comes back in its folder, running nothing) |
 | ⌘F, ⌘G / ⇧⌘G | find in the window (a terminal's scrollback, a page, a file), next / previous |
 | ⌥⌘F | find and replace in the text editor |
+| ⌥⌘I | browser: show or close the inspector (DevTools) |
 | ⌃G, ⌘/, ⌥↑ / ⌥↓, ⌥Z | text editor: go to line, comment, move lines, word wrap (more in Edit › Lines and Code Folding) |
 | ⌘↑ / ⌘↓ | jump to the previous / next prompt |
 | ⇧⌘A | copy the last command's output |
