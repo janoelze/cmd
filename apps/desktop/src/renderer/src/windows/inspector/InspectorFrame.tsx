@@ -7,8 +7,10 @@ import { useEffect, useRef, useState } from "react";
 import type { WebviewTag } from "electron";
 import type { WindowId } from "@cmd/protocol";
 import { WebStage } from "@cmd/ui";
+import { onThemeChange } from "@cmd/ui/themes";
 import { cmd } from "../../lib/bridge.ts";
 import { handleEmbedMessage } from "../../lib/embed.ts";
+import { devtoolsThemeCss } from "./devtoolsTheme.ts";
 
 /** The inspector session (main/web-policy.ts INSPECTOR_PARTITION): only DevTools runs there. */
 const PARTITION = "persist:cmd-inspector";
@@ -43,7 +45,18 @@ export function InspectorFrame({ forId }: { forId: WindowId }) {
   useEffect(() => {
     const wv = ref.current;
     if (!wv) return;
-    const ready = () => wv.setAttribute("data-painted", "");
+    // The theme goes in with every load (a reload drops it), then follows the app's.
+    let themed: Promise<string | null> = Promise.resolve(null);
+    const theme = () => {
+      const css = devtoolsThemeCss();
+      themed = themed.then((key) => (key ? wv.removeInsertedCSS(key).catch(() => {}) : undefined)).then(() => wv.insertCSS(css).catch(() => null));
+    };
+    const ready = () => {
+      themed = Promise.resolve(null);
+      theme();
+      void themed.then(() => wv.setAttribute("data-painted", ""));
+    };
+    const offTheme = onThemeChange(theme);
     // Presses in DevTools select its window, as in any page (preload/guest.ts).
     const reported = (e: { channel: string; args: unknown[] }) => {
       if (e.channel === "cmd-embed") handleEmbedMessage(wv as unknown as HTMLElement, e.args[0]);
@@ -51,6 +64,7 @@ export function InspectorFrame({ forId }: { forId: WindowId }) {
     wv.addEventListener("dom-ready", ready);
     wv.addEventListener("ipc-message", reported as never);
     return () => {
+      offTheme();
       wv.removeEventListener("dom-ready", ready);
       wv.removeEventListener("ipc-message", reported as never);
     };

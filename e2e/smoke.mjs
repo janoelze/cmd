@@ -781,6 +781,25 @@ await scenario("inspector", async () => {
   const tree = await treeIn(`.tile[data-pane="${ins.id}"] webview[data-inspector]`);
   await shot(win, "inspector-window.png");
   check(!!tree, `Show Inspector opens DevTools in a window of its own, showing the page's elements (${tree})`);
+  // DevTools wears the app's theme (devtoolsTheme.ts): its panels are the window's well, and follow a theme change.
+  {
+    const frame = `.tile[data-pane="${ins.id}"] webview[data-inspector]`;
+    const rgb = (c) => win.evaluate((c) => { const d = document.createElement("div"); d.style.color = c; document.body.append(d); const out = getComputedStyle(d).color; d.remove(); return out; }, c);
+    const panel = () => win.evaluate((sel) => document.querySelector(sel)?.executeJavaScript(`getComputedStyle(document.documentElement).getPropertyValue("--sys-color-cdt-base-container").trim()`), frame).then((c) => (c ? rgb(c) : null)).catch(() => null);
+    const well = () => win.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--well").trim()).then(rgb);
+    const first = await until(panel, async (c) => c === (await well()), 10_000).catch(() => null);
+    check(first === (await well()), `the inspector's panels take the app's theme (${first})`);
+    const call = (method, params) => win.evaluate(([m, p]) => window.cmd.call(m, p), [method, params]);
+    const before = (await call("settings.get", {})).settings;
+    await call("settings.set", { key: "theme.appearance", value: "dark" });
+    await call("settings.set", { key: "theme.dark", value: "dracula" });
+    const dracula = await rgb("#282a36");
+    const after = await until(panel, (c) => c === dracula, 10_000).catch(() => null);
+    await shot(win, "inspector-dracula.png");
+    check(after === dracula, `and follow it when it changes (${after})`);
+    await call("settings.set", { key: "theme.dark", value: before["theme.dark"] });
+    await call("settings.set", { key: "theme.appearance", value: before["theme.appearance"] });
+  }
   const order = (await until(homeView, (v) => v["grid.order"]?.includes(ins.id)))["grid.order"];
   check(order.indexOf(ins.id) === order.indexOf(browserWin.id) + 1, `the inspector goes right after its page on the board (${order.indexOf(browserWin.id)}, ${order.indexOf(ins.id)})`);
   // Docking the page re-attaches its webview: a new guest, which the inspector reconnects to.
