@@ -2,6 +2,25 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.31.0 — 2026-10-17
+
+### New
+
+- **Quick Commands.** Save commands, prompts and links, then run them from the palette, Session → Quick Commands or their own shortcut. To start a coding agent, add one that runs it, like `claude`.
+- **Show Sidebars.** ⌥⌘S hides all of a workspace's sidebars and brings the same ones back. Attach any window as a left or right sidebar.
+
+### Improved
+
+- Switching views, opening large folders and long Markdown, and running many agents at once are smoother.
+- Settings opens almost instantly after the first time.
+- On your phone, a terminal keeps your Mac's size until you choose Fit to This Phone.
+- On your phone, the prompt stays in view with the keyboard up, and a button jumps back to the latest output.
+- Your phone reopens on the terminal you had open.
+
+### Fixed
+
+- Your phone no longer gets stuck on Connecting… after switching networks.
+
 ## 0.30.0 — 2026-10-14
 
 ### New

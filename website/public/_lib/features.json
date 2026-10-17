@@ -17,7 +17,7 @@
     { "title": "Files and editor", "text": "A file browser with git status, and an editor. `open README.md` in a shell opens it here." },
     { "title": "Viewers for your files", "text": "Markdown, JSON, PDF, images, video and SQLite open in windows made for them, and follow the file." },
     { "title": "Calm notifications", "text": "Waiting agents, bells and finished commands mark their window until you look. Nothing else nags." },
-    { "title": "Keyboard first", "text": "⌘K finds windows, commands and sessions, ⌘F finds in any window. Every shortcut is remappable." },
+    { "title": "Keyboard first", "text": "⌘K finds windows, commands and sessions. Save your own commands and prompts, each on a shortcut." },
     { "title": "Themes and updates", "text": "29 themes, light and dark, following the system or not. Updates install quietly when you quit." }
   ]
 }
