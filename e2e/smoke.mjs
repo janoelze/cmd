@@ -230,8 +230,8 @@ const SCENARIOS = {
   magic: ["terminals"],
   settings: ["files", "markdown"],
   keybindings: [],
-  mru: ["terminals"],
-  "close-idle": ["mru"],
+  tabs: ["terminals"],
+  "close-idle": ["tabs"],
   reopen: [],
   strip: ["terminals"],
   marker: ["terminals"],
@@ -2010,26 +2010,62 @@ await scenario("keybindings", async () => {
 });
 
 // Closing the focused terminal returns to the previously used one (MRU), not a sidebar neighbour.
-await scenario("mru", async () => {
+// Like tabs (lib/placement.ts): a new window goes right after the selected one, closing it
+// right away goes back there, else to the next window; ui.afterClose "recent": the last one used.
+await scenario("tabs", async () => {
   const n0 = await panes();
-  await menu("file.newTerminal");
-  await until(panes, (n) => n === n0 + 1);
-  await shellReady();
-  const list = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.sort((a, b) => a.createdAt - b.createdAt).map((x) => x.id)));
-  const [first, , newest] = [list[0], list[1], list[list.length - 1]];
   const selectedTile = () => win.evaluate(() => document.querySelector(".tile.sel")?.dataset.pane);
   const selectPane = async (id) => {
     await win.evaluate((id) => window.__cmdSelect?.(id), id);
     await until(selectedTile, (s) => s === id, 5000);
   };
+  // The board's order: grid.order (all of it once a window has come in), without what's in a sidebar.
+  const tiles = () => win.evaluate(() => [...document.querySelectorAll(".windows-track > .tile")].map((t) => t.dataset.pane));
+  const order = async () => {
+    const on = await tiles();
+    return ((await homeView())["grid.order"] ?? []).filter((id) => on.includes(id));
+  };
+  const opened = async () => {
+    const ids = await win.evaluate(() => window.cmd.call("pane.list", {}).then((p) => p.map((x) => x.id)));
+    await menu("file.newTerminal");
+    await until(panes, (n) => n === ids.length + 1);
+    const id = (await shellReady()).id;
+    await until(selectedTile, (s) => s === id, 5000);
+    return id;
+  };
+  const closeSelected = async () => {
+    const n = await panes();
+    await menu("file.close");
+    await until(panes, (m) => m === n - 1);
+  };
+  const [first] = await tiles();
   await selectPane(first);
-  await selectPane(newest);
-  await menu("file.close");
+  const a = await opened();
+  const o1 = await until(order, (o) => o.includes(a));
+  check(o1.indexOf(a) === o1.indexOf(first) + 1, `a new terminal opens right after the selected one (${o1.indexOf(first)}, ${o1.indexOf(a)})`);
+  await closeSelected();
+  check((await until(selectedTile, (s) => s === first)) === first, "closing it right away goes back to the one it was opened from");
+  const b = await opened();
+  const o2 = await until(order, (o) => o.includes(b));
+  const other = o2.find((id) => id !== b && id !== first);
+  if (other) await selectPane(other);
+  await selectPane(b);
+  const next = o2[o2.indexOf(b) + 1] ?? o2[o2.indexOf(b) - 1];
+  await closeSelected();
+  check((await until(selectedTile, (s) => s === next)) === next, "after going elsewhere, closing it selects the next window");
+  const set = (value) => win.evaluate((value) => window.cmd.call("settings.set", { key: "ui.afterClose", value }), value);
+  await set("recent");
+  await selectPane(first);
+  const extra = await opened();
+  if (other) await selectPane(other);
+  await selectPane(first);
+  const c = await opened();
+  check(c !== first, "a third terminal opens");
+  await closeSelected();
+  check((await until(selectedTile, (s) => s === first)) === first, "with ui.afterClose set to recent, closing selects the last one used");
+  await set("neighbour");
+  await win.evaluate((id) => window.cmd.call("pane.kill", { paneId: id }), extra);
   await until(panes, (n) => n === n0);
-  const sel = await until(async () => (await homeView())["selection.pane"], (s) => s === first);
-  check(sel === first, "closing a terminal focuses the previously used one");
-  // ⌘W next acts on the window the renderer shows selected.
-  await until(selectedTile, (s) => s === first);
 });
 
 // ⌘W on an idle shell closes it without asking

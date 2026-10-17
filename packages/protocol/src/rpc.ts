@@ -76,13 +76,13 @@ export interface SettingsSnapshot {
 }
 
 /**
- * Where something new goes (docs/11-workspaces.md). Resolved in order: `workspaceId`,
- * the calling pane's workspace (`callerPaneId`, the CLI's CMD_PANE_ID), the parent
- * agent's, the open workspace whose root most deeply contains the cwd or path, Home.
+ * Where something new goes (docs/11-workspaces.md). Resolved in order: `workspaceId`, the calling pane's workspace (`callerPaneId`, the CLI's CMD_PANE_ID),
+ * the parent agent's, the open workspace whose root most deeply contains the cwd or path, Home. `openerId`: the window it is opened from (default: the caller's pane), which the board puts it beside.
  */
 export interface Placement {
   workspaceId?: WorkspaceId;
   callerPaneId?: PaneId;
+  openerId?: WindowId;
 }
 
 /** Every method: the core's own, plus each feature's (declared in its own file, merged here). */

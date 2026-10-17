@@ -80,10 +80,10 @@ const editTool: Tool = {
     const e = await planEdit(i, b);
     // In an editor, so the person sees the change land (it reloads from disk); one already showing it if there is one.
     const shown = (await b.call("window.list", {})).find((w) => w.workspaceId === b.workspace().id && w.kind === "text" && w.state.path === e.abs);
-    const w = shown ?? (e.before === null ? null : await b.call("window.open", { kind: "text", input: { path: e.abs }, workspaceId: b.workspace().id }));
+    const w = shown ?? (e.before === null ? null : await b.call("window.open", { kind: "text", input: { path: e.abs }, workspaceId: b.workspace().id, openerId: b.caller.windowId ?? undefined }));
     // expectMtime: refused if the file changed on disk since it was read.
     await b.call("fs.write", { path: e.abs, text: e.after, expectMtime: e.mtime });
-    const opened = w ?? (await b.call("window.open", { kind: "text", input: { path: e.abs }, workspaceId: b.workspace().id }));
+    const opened = w ?? (await b.call("window.open", { kind: "text", input: { path: e.abs }, workspaceId: b.workspace().id, openerId: b.caller.windowId ?? undefined }));
     return `${e.before === null ? "Created" : "Changed"} ${e.rel}, shown in ${b.refs.of(opened.id)}.`;
   },
 };

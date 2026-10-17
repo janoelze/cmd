@@ -25,6 +25,8 @@ export function select(id: PaneId): void {
   const s = getState();
   if (target && target !== s.workspaceId) return cmd.showWorkspace(target, { select: id });
   deselected = false;
+  // Somewhere other than what was just opened: the next window opened goes right after its opener again (lib/placement.ts).
+  if (!getWorkspaceView<{ ids: string[] } | null>(s.workspaceId, "openers.run", null)?.ids.includes(id)) setWorkspaceView(s.workspaceId, "openers.run", null);
   setWorkspaceView(s.workspaceId, "selection.pane", id);
   setWorkspaceView(s.workspaceId, "selection.history", pushHistory(history(), id));
   const agentId = s.panes.get(id)?.agentId;

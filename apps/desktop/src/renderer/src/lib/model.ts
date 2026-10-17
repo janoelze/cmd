@@ -486,25 +486,6 @@ export function pushHistory(history: string[], id: string, cap = 50): string[] {
   return [id, ...history.filter((x) => x !== id)].slice(0, cap);
 }
 
-/**
- * Which terminal to focus after the selected one disappears:
- * 1. the most recently used one that still exists (like macOS windows / VS Code),
- * 2. else its neighbour in the view's order before it closed (next, else previous),
- * 3. else the first one left.
- */
-export function nextAfterClose(closed: string, history: string[], orderBefore: string[], alive: Set<string>): string | null {
-  const recent = history.find((id) => id !== closed && alive.has(id));
-  if (recent) return recent;
-  const i = orderBefore.indexOf(closed);
-  if (i >= 0) {
-    const after = orderBefore.slice(i + 1).find((id) => alive.has(id));
-    if (after) return after;
-    const before = orderBefore.slice(0, i).reverse().find((id) => alive.has(id));
-    if (before) return before;
-  }
-  return alive.values().next().value ?? null;
-}
-
 // ── resource usage ───────────────────────────────────────
 
 export function formatBytes(n: number): string {

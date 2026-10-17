@@ -174,13 +174,12 @@ export interface PaneManagerOptions {
   ptysExhausted?: () => boolean;
 }
 
-export interface CreatePaneOptions {
+/** cols, rows; openerId: the window it is opened from. */
+export interface CreatePaneOptions extends Partial<Pick<Pane, "cols" | "rows" | "openerId">> {
   /** Default: Home. The core resolves the workspace before creating (see Placement). */
   workspaceId?: WorkspaceId;
   cwd?: string;
   command?: string;
-  cols?: number;
-  rows?: number;
   env?: Record<string, string>;
   id?: PaneId;
   /** Restoring: the old pane's screen, shown above the new shell. */
@@ -333,6 +332,7 @@ export class PaneManager extends EventEmitter<PaneEvents> {
       agentId: null,
       usage: null,
       attention: opts.restored?.attention ?? null,
+      ...(opts.openerId ? { openerId: opts.openerId } : {}),
       muted: opts.restored?.muted ?? false,
       sizedBy: null,
       progress: null,

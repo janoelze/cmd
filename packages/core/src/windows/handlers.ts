@@ -44,7 +44,7 @@ export const windowHandlers = (core: CoreContext) =>
       return null;
     },
     "window.list": () => core.windows.list(),
-    "window.openTarget": (p) => core.opened(core.windows.openTarget(p.target, core.place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target }))),
+    "window.openTarget": (p) => core.opened(core.windows.openTarget(p.target, core.place(p, { path: /^[a-z][\w+.-]+:/i.test(p.target) ? undefined : p.target }), p.openerId ?? p.callerPaneId)),
     "video.trim": (p) => trimVideo(p.path, p.start, p.end),
     "window.move": (p) => core.windowOps.move(p.id, p.workspaceId),
     "window.follow": (p, { conn } = IN_CORE) => {

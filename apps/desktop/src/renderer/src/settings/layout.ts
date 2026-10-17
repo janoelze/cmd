@@ -44,6 +44,7 @@ export const SETTINGS_PAGES: Page[] = [
     sections: [
       { title: "Workspaces", items: ["workspaces.ownWindow"] },
       { title: "Layout", items: ["ui.defaultView", "ui.gutter", "ui.paddingX", "ui.paddingY", "ui.windowRadius"] },
+      { title: "Opening and closing", items: ["ui.newWindows", "ui.afterClose"] },
       { title: "Outline", items: ["ui.windowOutline", "ui.windowOutlineContrast", "ui.windowShadow", "ui.attentionOutline"] },
       { title: "Selected window", items: ["ui.focusOutline", "ui.focusColor", "ui.focusGlow", "ui.focusTitleBar", "ui.unfocusedDim", "ui.dimBrowsers", "ui.unfocusedDesaturation", "ui.showResources"] },
       { title: "Canvas", items: ["canvas.minimap", "canvas.minZoom", "canvas.maxZoom"] },

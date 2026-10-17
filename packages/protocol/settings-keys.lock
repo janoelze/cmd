@@ -110,6 +110,7 @@ theme.appearance
 theme.dark
 theme.dockIcon
 theme.light
+ui.afterClose
 ui.attentionOutline
 ui.defaultView
 ui.dimBrowsers
@@ -118,6 +119,7 @@ ui.focusGlow
 ui.focusOutline
 ui.focusTitleBar
 ui.gutter
+ui.newWindows
 ui.paddingX
 ui.paddingY
 ui.showResources

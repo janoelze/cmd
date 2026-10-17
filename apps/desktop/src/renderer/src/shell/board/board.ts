@@ -30,7 +30,7 @@ export interface Board {
   allFlat: SidebarRow[];
   /** Rows with a window (terminal, browser, files…), sidebar order. */
   windows: SidebarRow[];
-  /** The board's windows in the order the view shows them (grid/strip slots, else the sidebar's). */
+  /** The board's windows in the order the view shows them (the board's order; on the canvas the sidebar's). */
   order: PaneId[];
   /** The board's windows in grid order, whatever the view (where a closed one was, reopen.ts). */
   boardOrder: PaneId[];
@@ -77,7 +77,7 @@ export function boardOf(all: State): Board {
     flat,
     allFlat: flatten(allRows),
     windows,
-    order: mode === "grid" || mode === "strip" ? boardOrder : wins.map((p) => p.id),
+    order: mode === "canvas" ? wins.map((p) => p.id) : boardOrder,
     boardOrder,
   };
   cache.set(all, board);

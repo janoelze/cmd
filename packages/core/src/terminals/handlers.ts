@@ -14,7 +14,7 @@ export const paneHandlers = (core: CoreContext) =>
   slice({
     "pane.create": (p) => {
       const workspace = core.place(p, { path: p.cwd });
-      const pane = core.panes.create({ ...p, cwd: p.cwd ?? workspace.root, workspaceId: workspace.id });
+      const pane = core.panes.create({ ...p, cwd: p.cwd ?? workspace.root, workspaceId: workspace.id, openerId: p.openerId ?? p.callerPaneId });
       core.usage.window("terminal");
       return pane;
     },

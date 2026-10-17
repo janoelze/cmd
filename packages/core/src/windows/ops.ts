@@ -30,7 +30,7 @@ export class WindowOps {
     const at = [input.cwd, input.path].find((v): v is string => typeof v === "string");
     const widgetId = p.kind === "magic" && typeof input.widgetId === "string" ? input.widgetId : null;
     if (widgetId && !magic.library().some((e) => e.id === widgetId)) throw new Error(`no such widget: ${widgetId}`);
-    const w = windows.open(p.kind, input, place(p, { path: at }));
+    const w = windows.open(p.kind, input, place(p, { path: at }), undefined, p.openerId ?? p.callerPaneId);
     if (widgetId) magic.opened(w.id);
     return opened(windows.others().find((x) => x.id === w.id) ?? w);
   }
@@ -216,7 +216,7 @@ export class WindowOps {
     panes.on("request", (paneId, action, arg) => {
       if (action !== "open" || !arg) return;
       try {
-        const w = opened(windows.openTarget(arg, place({ callerPaneId: paneId })));
+        const w = opened(windows.openTarget(arg, place({ callerPaneId: paneId }), paneId));
         if (w) broadcast({ type: "window.focus", id: w.id });
       } catch {
         // not a folder / URL: ignore

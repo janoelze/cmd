@@ -1,5 +1,5 @@
 // Opening, moving and closing a browser window's inspector (docs/59): in a window of its own,
-// placed right after the page on the board, or inside the browser window (its state's
+// opened from the page, so it goes right after it on the board (lib/placement.ts), or inside the browser window (its state's
 // `inspector: "inside"`). One per page; the place last chosen is the workspace's default
 // (Show Inspector, ⌥⌘I: commands.ts).
 
@@ -7,7 +7,6 @@ import type { AppWindow, WindowId } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { select } from "../../lib/selection.ts";
 import { getState, getWorkspaceView, setWorkspaceView } from "../../lib/store.ts";
-import { boardOf } from "../../shell/board/board.ts";
 
 export type InspectorPlace = "window" | "inside";
 
@@ -37,14 +36,7 @@ export async function openInspector(page: AppWindow, where: InspectorPlace): Pro
   }
   if (page.state.inspector === "inside") await update(page, null);
   if (own) return select(own.id);
-  const w = await cmd.call("window.open", { kind: "inspector", input: { for: page.id }, workspaceId: page.workspaceId });
-  // Right after its page: the board is wider than the screen, so the page keeps its size.
-  const board = boardOf(getState());
-  if (board.workspaceId === page.workspaceId && board.order.includes(page.id)) {
-    const order = board.order.filter((id) => id !== w.id);
-    order.splice(order.indexOf(page.id) + 1, 0, w.id);
-    setWorkspaceView(page.workspaceId, "grid.order", order);
-  }
+  const w = await cmd.call("window.open", { kind: "inspector", input: { for: page.id }, workspaceId: page.workspaceId, openerId: page.id });
   select(w.id);
 }
 

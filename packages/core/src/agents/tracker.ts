@@ -585,7 +585,7 @@ export class AgentTracker extends EventEmitter<TrackerEvents> {
     if (sessionId) agent.native.claudeSessionId = sessionId;
     const env: Record<string, string> = { [ENV.agentId]: agent.id };
     if (parent) env[ENV.parentId] = parent.id;
-    const pane = this.#panes.create({ cwd, command, env, workspaceId: agent.workspaceId });
+    const pane = this.#panes.create({ cwd, command, env, workspaceId: agent.workspaceId, openerId: p.openerId ?? p.callerPaneId ?? parent?.paneId });
     this.#panes.setAgent(pane.id, agent.id);
     this.#update(agent, {}, { paneId: pane.id, cwd: pane.cwd });
     this.#expectStart(agent.id);

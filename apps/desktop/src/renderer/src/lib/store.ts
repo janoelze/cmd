@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import type { Agent, AgentId, AppNotification, AppWindow, ClosedWindow, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Workspace, WorkspaceId, StartupStatus, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
+import type { Agent, AgentId, AppWindow, ClosedWindow, CoreEvent, Pane, PaneId, RemotePairRequest, RemoteStatus, SearchStatus, SettingsSnapshot, Workspace, WorkspaceId, StartupStatus, WidgetEntry, WindowId, DataEvent, DataQuery, SessionInfo, TurnRow, ViewQuery } from "@cmd/protocol";
 import { DEFAULT_SETTINGS, HOME_WORKSPACE_ID, PROTOCOL } from "@cmd/protocol";
 import { OutputGate } from "@cmd/protocol/replay";
 import { reducedMotion } from "@cmd/ui";
@@ -17,6 +17,9 @@ import { setWindowTypes } from "../windows/registry.ts";
 import { handleMagicEvent } from "../windows/magic/magic.ts";
 import { countEvent, perf } from "./perf.ts";
 import { cleanTitle } from "./model.ts";
+import { arrival } from "./placement.ts";
+import { actionsListeners, focusListeners, fsListeners, notificationListeners } from "./listeners.ts";
+export { onActionsChanged, onFsChanged, onNotification, onWindowFocus } from "./listeners.ts";
 import { PendingViews } from "./pendingViews.ts";
 import { UiOutbox } from "./uiOutbox.ts";
 
@@ -70,16 +73,6 @@ let state: State = {
 };
 const inputTimers = new Map<PaneId, ReturnType<typeof setTimeout>>();
 const listeners = new Set<() => void>();
-const focusListeners = new Set<(id: WindowId) => void>();
-const fsListeners = new Set<(path: string) => void>();
-const actionsListeners = new Set<(root: string) => void>();
-const notificationListeners = new Set<(n: AppNotification) => void>();
-
-/** A notification from the core (packages/core/src/notifications/center.ts); the UI decides whether to show it. */
-export function onNotification(fn: (n: AppNotification) => void): () => void {
-  notificationListeners.add(fn);
-  return () => notificationListeners.delete(fn);
-}
 
 /** Commands terminals run (core/commands.ts), for the Commands widget. */
 /**
@@ -160,25 +153,6 @@ export function subscribeView(query: ViewQuery, fn: (rows: (TurnRow | SessionInf
       sub.id = null;
     }
   };
-}
-
-
-/** A watched file or folder changed on disk (see fs.watch). */
-export function onFsChanged(fn: (path: string) => void): () => void {
-  fsListeners.add(fn);
-  return () => fsListeners.delete(fn);
-}
-
-/** A folder's Workspace Actions changed (actions.list again). */
-export function onActionsChanged(fn: (root: string) => void): () => void {
-  actionsListeners.add(fn);
-  return () => actionsListeners.delete(fn);
-}
-
-/** The core asks to bring a window forward (e.g. `open .` in a terminal). */
-export function onWindowFocus(fn: (id: WindowId) => void): () => void {
-  focusListeners.add(fn);
-  return () => focusListeners.delete(fn);
 }
 
 function set(next: Partial<State>): void {
@@ -294,6 +268,15 @@ export function setWorkspaceView(workspaceId: WorkspaceId, key: string, value: u
   set({ workspaces });
   clearTimeout(viewTimers.get(workspaceId));
   viewTimers.set(workspaceId, setTimeout(() => sendView(workspaceId), 250));
+}
+
+/** A window came into the shown workspace: in the board's order beside its opener before it shows (lib/placement.ts). */
+function placeArrival(id: WindowId, workspaceId: WorkspaceId, openerId: WindowId | null | undefined): void {
+  const ws = state.workspaces.get(workspaceId);
+  if (!ws || workspaceId !== state.workspaceId) return;
+  const here = [...state.panes.values(), ...state.windows.values()].filter((w) => w.workspaceId === workspaceId && w.id !== id);
+  const placed = arrival(ws.view, here, id, openerId ?? null, state.settings.settings["ui.newWindows"]);
+  if (placed) for (const [k, v] of Object.entries(placed)) setWorkspaceView(workspaceId, k, v);
 }
 
 export function getWorkspaceView<T>(workspaceId: WorkspaceId, key: string, fallback: T): T {
@@ -458,6 +441,7 @@ function handle(e: CoreEvent): void {
     }
     case "pane.updated": {
       const prev = state.panes.get(e.pane.id);
+      if (prev?.workspaceId !== e.pane.workspaceId) placeArrival(e.pane.id, e.pane.workspaceId, e.pane.openerId);
       // Agents animate a spinner in their title many times a second; the UI shows titles
       // without it (cleanTitle). Keep the pane current, but don't re-render for that.
       if (prev && looksSame(prev, e.pane)) {
@@ -484,6 +468,7 @@ function handle(e: CoreEvent): void {
       return;
     }
     case "window.updated": {
+      if (state.windows.get(e.window.id)?.workspaceId !== e.window.workspaceId) placeArrival(e.window.id, e.window.workspaceId, e.window.openerId);
       const windows = new Map(state.windows);
       windows.set(e.window.id, e.window);
       set({ windows });

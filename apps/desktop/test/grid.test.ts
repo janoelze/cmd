@@ -23,27 +23,9 @@ describe("grid slots", () => {
   });
 });
 
-import { nextAfterClose, pushHistory } from "../src/renderer/src/lib/model.ts";
+import { pushHistory } from "../src/renderer/src/lib/model.ts";
 
-describe("focus after close", () => {
-  const alive = (...ids: string[]) => new Set(ids);
-
-  it("returns to the most recently used terminal", () => {
-    // visited a, then c; closing c goes back to a, not to its neighbour b
-    const history = pushHistory(pushHistory([], "a"), "c");
-    expect(nextAfterClose("c", history, ["a", "b", "c"], alive("a", "b"))).toBe("a");
-  });
-
-  it("falls back to the next neighbour in view order, then the previous one", () => {
-    expect(nextAfterClose("b", [], ["a", "b", "c"], alive("a", "c"))).toBe("c");
-    expect(nextAfterClose("c", [], ["a", "b", "c"], alive("a", "b"))).toBe("b");
-  });
-
-  it("skips history entries that are gone and handles closing the last terminal", () => {
-    expect(nextAfterClose("b", ["b", "x", "a"], ["a", "b"], alive("a"))).toBe("a");
-    expect(nextAfterClose("a", ["a"], ["a"], alive())).toBeNull();
-  });
-
+describe("selection history", () => {
   it("keeps history most-recent-first, unique and capped", () => {
     expect(pushHistory(["a", "b", "c"], "b")).toEqual(["b", "a", "c"]);
     expect(pushHistory(["a", "b", "c"], "d", 3)).toEqual(["d", "a", "b"]);

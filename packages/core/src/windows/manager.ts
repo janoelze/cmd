@@ -26,6 +26,7 @@ export function terminalWindow(p: Pane): AppWindow {
     createdAt: p.createdAt,
     updatedAt: p.lastActivityAt,
     state: { paneId: p.id, cwd: p.cwd },
+    ...(p.openerId ? { openerId: p.openerId } : {}),
   };
 }
 
@@ -67,30 +68,30 @@ export class WindowManager extends EventEmitter<{ updated: [AppWindow]; removed:
     return [...this.#panes.list().map(terminalWindow), ...this.others()];
   }
 
-  /** Open in `workspace`; a type without an explicit cwd (terminal, files) starts at the workspace's root. id: reopening one under its old id. */
-  open(kind: string, input: Record<string, unknown>, workspace: Workspace, id?: WindowId): AppWindow {
+  /** Open in `workspace`; a type without an explicit cwd (terminal, files) starts at the workspace's root. id: reopening one under its old id; openerId: the window it is opened from. */
+  open(kind: string, input: Record<string, unknown>, workspace: Workspace, id?: WindowId, openerId?: WindowId | null): AppWindow {
     if (typeof input.cwd !== "string") input = { ...input, cwd: workspace.root };
     if (kind === "terminal") {
       const cwd = typeof input.cwd === "string" ? expandHome(input.cwd) : undefined;
       const command = typeof input.command === "string" ? input.command : undefined;
-      return terminalWindow(this.#panes.create({ id, cwd, command, workspaceId: workspace.id }));
+      return terminalWindow(this.#panes.create({ id, cwd, command, workspaceId: workspace.id, openerId }));
     }
     const type = this.types.get(kind);
     if (!type) throw new Error(`unknown window type: ${kind}`);
     const { state, title } = type.create(input);
     const now = Date.now();
-    const w: AppWindow = { id: id ?? randomUUID(), workspaceId: workspace.id, kind, title, createdAt: now, updatedAt: now, state };
+    const w: AppWindow = { id: id ?? randomUUID(), workspaceId: workspace.id, kind, title, createdAt: now, updatedAt: now, state, ...(openerId ? { openerId } : {}) };
     this.#save(w);
     return { ...w };
   }
 
   /** Open a path or URL in the window type that suits it; null = not ours (use the default app). */
-  openTarget(input: string, workspace: Workspace): AppWindow | null {
+  openTarget(input: string, workspace: Workspace, openerId?: WindowId | null): AppWindow | null {
     const target = targetFor(input);
     if (!target) return null;
     const type = this.types.resolve(target, this.#overrides());
     if (!type) return null;
-    return this.open(type.kind, type.fromTarget ? type.fromTarget(target) : {}, workspace);
+    return this.open(type.kind, type.fromTarget ? type.fromTarget(target) : {}, workspace, undefined, openerId);
   }
 
   /** Move a non-terminal window (terminals move with their pane, see Core). */

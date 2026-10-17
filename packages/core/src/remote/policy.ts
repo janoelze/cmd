@@ -254,6 +254,7 @@ const ARGS: { [M in Method]?: Check<M> } = {
   "pane.create": (p, ctx) => {
     if (p.workspaceId) openWorkspace(ctx, p.workspaceId);
     if (p.callerPaneId) pane(ctx, p.callerPaneId);
+    if (p.openerId) window(ctx, p.openerId);
     if (p.cwd !== undefined) allowedPath(ctx, p.cwd);
   },
   "pane.write": (p, ctx) => {
@@ -293,6 +294,7 @@ const ARGS: { [M in Method]?: Check<M> } = {
   "window.open": (p, ctx) => {
     if (p.workspaceId) openWorkspace(ctx, p.workspaceId);
     if (p.callerPaneId) pane(ctx, p.callerPaneId);
+    if (p.openerId) window(ctx, p.openerId);
     for (const k of ["path", "cwd"]) {
       const v = p.input?.[k];
       if (v !== undefined) allowedPath(ctx, v);

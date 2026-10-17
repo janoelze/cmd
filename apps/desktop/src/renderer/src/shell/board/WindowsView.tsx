@@ -30,7 +30,8 @@ import { canvasLayout, dropOrder, focusLayout, gridLayout, stripLayout, type Lay
 import { arrangeTiles, labelOf, needsYou, windowIdOf, type SidebarRow } from "../../lib/model.ts";
 import { viewFor } from "../../windows/registry.ts";
 import { brokenView, useBrokenView } from "../../windows/break.ts";
-import { useStoreValue } from "../../lib/store.ts";
+import type { Openers } from "../../lib/placement.ts";
+import { useStoreValue, useWorkspaceView } from "../../lib/store.ts";
 import { useTitleHandlers } from "./titles.ts";
 import { sidebarsSliding } from "./sidebars.ts";
 import {
@@ -163,10 +164,7 @@ export function WindowsView(p: Props) {
   const [entering, setEntering] = useState(true);
 
   // ── layout ─────────────────────────────────────────────
-  const settled = arrangeTiles(
-    p.order,
-    p.rows.map((r) => ({ id: idOf(r), createdAt: createdOf(r) })),
-  ).map((x) => x.id);
+  const settled = arrangeTiles(p.order, p.rows.map((r) => ({ id: idOf(r), createdAt: createdOf(r) }))).map((x) => x.id);
   const ids = preview ?? settled;
   // The board's own selection: a selected sidebar (docs/21-sidebars.md) leaves focus mode on the window it showed.
   const shownRef = useRef<PaneId | null>(null);
@@ -180,10 +178,11 @@ export function WindowsView(p: Props) {
   const pxWidths = ids.map((id) =>
     resizing?.id === id ? resizing.w : widthFor(p.widths[id] ?? DEFAULT_FRACTION, vp.w ? stripW : 1000, padX),
   );
-  // Canvas: stored rects, new windows placed next to the last selected one.
+  // Canvas: stored rects, new windows placed next to the one they were opened from, else the last selected one.
+  const [openers] = useWorkspaceView<Openers>("openers", {});
   const lastPlaced = useRef<PaneId | null>(null);
   if (selected && p.canvasRects[selected]) lastPlaced.current = selected;
-  const arranged = mode === "canvas" ? arrange(ids, p.canvasRects, lastPlaced.current) : null;
+  const arranged = mode === "canvas" ? arrange(ids, p.canvasRects, lastPlaced.current, openers) : null;
   if (arranged && sizing) arranged.rects.set(sizing.id, sizing.rect);
   const lay: Layout =
     mode === "grid"

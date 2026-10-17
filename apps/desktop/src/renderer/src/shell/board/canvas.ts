@@ -104,14 +104,16 @@ export function place(existing: Rect[], near: Rect | null, w = DEFAULT_W, h = DE
 
 /**
  * Rects for every id: stored ones snapped onto the dot grid (rects saved before it
- * existed may be off it); missing ones placed next to `near` (the selected window)
- * at its size. With nothing stored yet (first time on the canvas), windows start
- * out as an even grid. `changed`: the caller should store the result.
+ * existed may be off it); missing ones placed next to the window they were opened
+ * from (`openers`), else `near` (the selected window), at its size. With nothing
+ * stored yet (first time on the canvas), windows start out as an even grid.
+ * `changed`: the caller should store the result.
  */
 export function arrange(
   ids: string[],
   stored: Record<string, Rect>,
   near: string | null,
+  openers: Record<string, string> = {},
 ): { rects: Map<string, Rect>; changed: boolean } {
   const rects = new Map<string, Rect>();
   let changed = false;
@@ -133,6 +135,8 @@ export function arrange(
   }
   let anchor = (near && rects.get(near)) || null;
   for (const id of missing) {
+    const by = rects.get(openers[id] ?? "");
+    if (by) anchor = by;
     const r = place([...rects.values()], anchor, anchor?.w, anchor?.h);
     rects.set(id, r);
     anchor = r;

@@ -198,6 +198,8 @@ export const SETTINGS_SCHEMA = {
   },
   "shell.openUrls": { title: "Open URLs in cmd", type: "boolean", default: false, description: "`open <url>` opens a browser window." },
 
+  "ui.newWindows": { title: "Open new windows", labels: { next: "Next to the current one", end: "At the end" }, type: "enum", default: "next", options: ["next", "end"], description: "Like tabs: beside the window they're opened from. Or after the rest." },
+  "ui.afterClose": { title: "After closing a window, select", labels: { neighbour: "The one beside it", recent: "The last one used" }, type: "enum", default: "neighbour", options: ["neighbour", "recent"], description: "Like tabs: the next one, or its opener. On the canvas, the nearest." },
   "ui.defaultView": { title: "Default view", labels: { focus: "Focus", grid: "Grid", strip: "Strip", canvas: "Canvas" }, type: "enum", default: "focus", applies: "firstLaunch", options: ["focus", "grid", "strip", "canvas"], description: "The view mode cmd starts in." },
   "files.git": {
     title: "Show git status",
@@ -218,12 +220,7 @@ export const SETTINGS_SCHEMA = {
     description: "In text windows. View › Word Wrap switches it too.",
   },
 
-  "ui.showResources": {
-    title: "Show resource usage",
-    type: "boolean",
-    default: true,
-    description: "The selected window's memory and CPU, in the status bar.",
-  },
+  "ui.showResources": { title: "Show resource usage", type: "boolean", default: true, description: "The selected window's memory and CPU, in the status bar." },
   "ui.unfocusedDim": { title: "Dim other windows", unit: "%", type: "number", default: 23, min: 0, max: 60, step: 1, description: "Darken windows other than the selected one." },
   "ui.dimBrowsers": { title: "Dim browser windows", type: "boolean", default: true, description: "Off keeps web pages undimmed and in colour when not selected." },
   "ui.unfocusedDesaturation": { title: "Desaturate other windows", unit: "%", type: "number", default: 0, min: 0, max: 100, step: 10, description: "Drain the colour from other windows." },

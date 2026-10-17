@@ -52,7 +52,7 @@ export function createActions(core: Pick<CoreContext, "panes" | "store" | "data"
     const ws = pane && core.workspaces.get(pane.workspaceId);
     if (!ws || ws.closedAt !== null || !core.settings.settings["actions.openBrowser"]) return;
     if (core.windows.list().some((w) => w.kind === "browser" && w.workspaceId === ws.id && typeof w.state.url === "string" && w.state.url.startsWith(url.replace(/\/$/, "")))) return;
-    core.opened(core.windows.open("browser", { url }, ws));
+    core.opened(core.windows.open("browser", { url }, ws, undefined, paneId));
   });
   core.data.onForget(({ what }) => void (what.projectId?.startsWith("dir:") && actions.forgetProject(what.projectId.slice(4))));
   core.settings.bind(["actions.describe"], () => actions.aiChanged());

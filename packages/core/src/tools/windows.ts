@@ -78,16 +78,16 @@ const openTool: Tool = {
       throw new Error(`${String(i.ref)} is ${windowName(w)}: only a browser takes a URL, a file browser a folder and an editor a line of its file; open a new window instead`);
     }
     let w: AppWindow | null;
-    if (kind === "terminal") w = await b.call("window.open", { kind: "terminal", input: { cwd: target ? readablePath(b, target) : ws.root }, workspaceId: ws.id });
-    else if (kind === "url") w = await b.call("window.open", { kind: "browser", input: { url: urlOf(target).href }, workspaceId: ws.id });
+    if (kind === "terminal") w = await b.call("window.open", { kind: "terminal", input: { cwd: target ? readablePath(b, target) : ws.root }, workspaceId: ws.id, openerId: b.caller.windowId ?? undefined });
+    else if (kind === "url") w = await b.call("window.open", { kind: "browser", input: { url: urlOf(target).href }, workspaceId: ws.id, openerId: b.caller.windowId ?? undefined });
     else if (kind !== "file") throw new Error("kind is file, url or terminal");
     else if (reveal) {
       // At a line: the editor, the one already showing the file if there is one.
       const file = readablePath(b, target ?? "");
       const shown = (await b.call("window.list", {})).find((x) => x.workspaceId === ws.id && x.kind === "text" && x.state.path === file);
       if (shown) await b.call("window.update", { id: shown.id, state: { reveal } });
-      w = shown ?? (await b.call("window.open", { kind: "text", input: { path: file, reveal }, workspaceId: ws.id }));
-    } else w = await b.call("window.openTarget", { target: readablePath(b, target ?? "."), workspaceId: ws.id });
+      w = shown ?? (await b.call("window.open", { kind: "text", input: { path: file, reveal }, workspaceId: ws.id, openerId: b.caller.windowId ?? undefined }));
+    } else w = await b.call("window.openTarget", { target: readablePath(b, target ?? "."), workspaceId: ws.id, openerId: b.caller.windowId ?? undefined });
     if (!w) return "No window type shows that; nothing opened.";
     b.opened?.add(w.id);
     return `Opened ${w.kind} ${b.refs.of(w.id)} "${w.title}".`;

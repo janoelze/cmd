@@ -82,6 +82,8 @@ export interface Pane {
   sizedBy: string | null;
   /** A progress bar the program in it reports (OSC 9;4); null when there is none. */
   progress: Progress | null;
+  /** The window it was opened from, when it was opened from one (Placement.openerId): the board puts it beside that one. */
+  openerId?: WindowId | null;
 }
 
 /** OSC 9;4 progress: a value (0–100) unless indeterminate; error and paused bars are coloured. */
@@ -286,6 +288,8 @@ export interface AppWindow {
   createdAt: number;
   updatedAt: number;
   state: Record<string, unknown>;
+  /** The window it was opened from, when it was opened from one (Placement.openerId): the board puts it beside that one. */
+  openerId?: WindowId | null;
 }
 
 /**
