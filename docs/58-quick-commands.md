@@ -124,7 +124,7 @@ Who runs it matters (docs/55): the person running their own command from the men
 
 - **Settings → Quick Commands.** A page of its own beside Keyboard Shortcuts (`NAV` in `SettingsWindow.tsx`, not generated from the schema; the component in `settings/QuickCommands.tsx`). A list (name, body in mono, hotkey) with Add, reorder by drag, and an editor for the selected one: Name, Description, Body (a code field with an Insert Variable menu and inline errors), Target (with Submit, Folder or Agent as the target needs), Hotkey (the recorder Keyboard Shortcuts uses, with clashes named), Ask Before Running, and a preview of the body resolved against the window that was selected when Settings opened. "Open quick-commands.json" at the bottom, as Keyboard Shortcuts has for its file. Built from `@cmd/ui` (the `window-design` and `prototype` skills; a story per state). Wording follows the `copywriting` skill.
 - **Palette.** A Quick Commands group before Actions (`quickItems()` beside `actionItems()` in `shell/palette.ts`): the name, the description or body as meta, the hotkey as hint. Only those that apply.
-- **Menu bar.** A Quick Commands menu (see Open questions) with every command in the file's order, its hotkey as a real key equivalent (so it beats the terminal, like every app command), disabled when it doesn't apply, then New Quick Command… and Edit Quick Commands…. Built like Open Recent: a `{ quick: true }` part in `menu-template.ts` fed through `MenuLists`, rebuilt on `quick.changed`. Enabled state comes from the renderer as for other commands (the registry's `when` for `quick.<id>`).
+- **Menu bar.** A Quick Commands submenu of the Session menu (decided 2026-10-17), with every command in the file's order, its hotkey as a real key equivalent (so it beats the terminal, like every app command), disabled when it doesn't apply, then New Quick Command… and Edit Quick Commands…. Built like Open Recent: a `{ quick: true }` part in `menu-template.ts` fed through `MenuLists`, rebuilt on `quick.changed`. Enabled state comes from the renderer as for other commands (the registry's `when` for `quick.<id>`).
 - **Hotkeys.** `resolveKeybindings` learns `quick.<id>` ids (today it rejects ids outside `COMMANDS`). A key a command already has, or another quick command, is a clash shown in both Settings pages; the app command keeps it.
 - **CLI.** `cmd quick` lists them (`--json`), `cmd quick run <name or id> [--var k=v…] [--yes]`. Through `quick.list` and `quick.run`.
 - **Saving one** (phase 2): "Save as Quick Command…" on a terminal's command (its context menu, from the `command` events), on a "From your history" row in Workspace Actions, and on a sent agent prompt. It opens the editor filled in.
@@ -148,9 +148,12 @@ No settings keys in phase 1. Remote access (the phone: list and run) later, in `
 3. **Project commands and saving.** `.cmd/quick-commands.json` as a Workspace Actions source, Save as Quick Command…, agents' approvals.
 4. **Later.** Several steps, output modes, remote access, App Intents (Shortcuts.app and Spotlight run them).
 
+## Decided
+
+- (2026-10-17) The menu: a Quick Commands submenu of Session, not a menu of its own.
+- (2026-10-17) Commands are global: none names a folder or workspace it belongs to.
+- (2026-10-17) Project commands aren't confirmed on their first run.
+
 ## Open questions
 
-- The menu: its own top-level menu ("Quick Commands", between Session and Widgets), or a submenu of Session? A top-level menu is easier to find and to reach with ⌃F2; the menu bar is already long.
-- Agent prompts: phase 1 (they are one target more, and where cmd differs from Warp and Raycast) or after shell commands have settled? Proposed: phase 1.
-- Should a quick command name a folder or workspace it belongs to (only in `~/src/app`), short of a project file? Proposed: no; that is what the project file is for.
-- Project commands run in someone else's repository are someone else's text: confirm the first run of each until its body changes, as for a cloned folder?
+- Agent prompts (the `agent` and `newAgent` targets): phase 1, or after shell commands have settled? Proposed: phase 1.
