@@ -912,20 +912,35 @@ await scenario("quick", async () => {
   await win.keyboard.press("Enter");
   const ran = await until(() => paneText(term.id), (t) => /word-it's/.test(t));
   check(/word-it's/.test(ran) && (await sheet.count()) === 0, "a Quick Command that asks shows the sheet, and Return runs it with the value quoted");
-  // Session → New Quick Command… opens Settings at the page, with the editor.
+  // Session → New Quick Command… opens Settings at the page, with the editor in the list's place.
   const opened = app.waitForEvent("window");
   await menu("session.newQuickCommand");
   const sw = await opened;
   sw.on("pageerror", (e) => console.log("settings pageerror:", e.message));
-  const editor = sw.getByRole("dialog", { name: "New Quick Command" });
+  const title = (text) => sw.locator(".ui-title-band h1", { hasText: text });
+  const editor = title("New Quick Command");
   await editor.waitFor({ timeout: 10_000 }).catch(expired("Quick Command editor"));
-  check((await sw.locator(".ui-row-name", { hasText: "Say Folder" }).count()) === 1, "Settings → Quick Commands lists them");
   await sw.keyboard.type("From Settings");
-  await editor.locator("textarea").fill("echo from-settings {{ask:x}}");
+  await sw.locator("textarea").fill("echo from-settings {{ask:x}}");
   await shot(sw, "quick-editor.png");
-  await editor.getByRole("button", { name: "Save" }).click();
+  await sw.getByRole("button", { name: "Save" }).click();
   const saved = await until(() => win.evaluate(() => window.cmd.call("quick.list", {}).then((l) => l.commands.map((q) => q.name))), (n) => n.includes("From Settings"));
-  check(saved.includes("From Settings") && (await sw.locator(".ui-row-name", { hasText: "From Settings" }).count()) === 1, `its editor saves a new one (${saved.join(", ")})`);
+  const row = (name) => sw.locator(".ui-row-name", { hasText: name });
+  await row("From Settings").waitFor({ timeout: 10_000 }).catch(expired("the list after Save"));
+  check(saved.includes("From Settings") && (await row("Say Folder").count()) === 1, `its editor saves a new one and goes back to the list (${saved.join(", ")})`);
+  await shot(sw, "quick-list.png");
+  const edit = async () => {
+    await sw.getByRole("button", { name: "Edit…" }).first().click();
+    await title("Say Folder").waitFor({ timeout: 10_000 }).catch(expired("editing Say Folder"));
+  };
+  await edit();
+  await shot(sw, "quick-edit.png");
+  await sw.locator(".ui-title-band-back").click();
+  await row("Say Folder").waitFor({ timeout: 10_000 }).catch(expired("the list after the back chevron"));
+  await edit();
+  await sw.keyboard.press("Escape");
+  await row("Say Folder").waitFor({ timeout: 10_000 }).catch(expired("the list after Esc"));
+  check((await title("Quick Commands").count()) === 1, "Edit… opens one in the page, titled with its name; the title bar's back chevron and Esc go back to the list");
   await sw.close();
   await win.evaluate(async (id) => {
     for (const q of (await window.cmd.call("quick.list", {})).commands) await window.cmd.call("quick.remove", { id: q.id });

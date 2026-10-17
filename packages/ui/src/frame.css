@@ -36,6 +36,9 @@
 .ui-title-band:has(h1) { min-height: calc(var(--titlebar-h) + var(--space-4)); padding-bottom: var(--space-3); }
 .ui-title-band[data-line] { box-shadow: 0 1px 0 var(--window-edge); }
 .ui-title-band h1 { margin-block: 0; font-weight: 600; font-size: var(--text-xl); letter-spacing: -0.01em; }
+/* The back chevron sits before the title, which keeps its place: the chevron hangs into the inset. */
+.ui-title-band h1:has(.ui-title-band-back) { display: flex; align-items: center; gap: var(--space-1); margin-left: calc(-1 * var(--space-6) - var(--space-1)); }
+.ui-title-band-back { -webkit-app-region: no-drag; }
 .ui-page { width: 100%; max-width: var(--page-w); margin-inline: auto; }
 .ui-view:has(> .ui-view-body > .ui-page) { --inset: var(--page-inset); } /* the page and its title band; the footer keeps --bar-inset */
 /* The window's outline covers the footer's bottom edge, so its text is centred between the

@@ -152,6 +152,21 @@ export const SettingsPage = () => {
   );
 };
 
+/** A page opened from another: the back chevron before its title returns to that page. */
+export const SettingsSubpage = () => (
+  <Box w={620} h={200}>
+    <View toolbar={<TitleBand title="Push Branch" back={{ label: "Quick Commands", onClick: () => {} }} />}>
+      <Page>
+        <FormSection>
+          <FormRow title="Name">
+            <Text>Push Branch</Text>
+          </FormRow>
+        </FormSection>
+      </Page>
+    </View>
+  </Box>
+);
+
 /** Hide at three window widths: the badge gives way below the regular size (600px), the button below narrow (360px). */
 export const Narrowing = () => (
   <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>

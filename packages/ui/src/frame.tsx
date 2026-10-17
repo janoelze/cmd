@@ -10,6 +10,7 @@
 
 import type * as React from "react";
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
+import { IconButton } from "./button.tsx";
 import { ICON, iconNode } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
 import { GLIDE_MS, timing, usePresence } from "./motion.ts";
@@ -116,11 +117,18 @@ export function View({ toolbar, footer, state, inset, scroll = true, focusable, 
  * The band under the traffic lights in a window of its own (Settings), in place of a
  * toolbar: the window drags by it. With a title, the page's, large, lined up with the
  * `Page` under it, and `line` once that page scrolls; without one, a sidebar's top.
+ * `back`: a page opened from another (one item's editor) has a back chevron before its
+ * title, as System Settings does; its label names the page it returns to.
  */
-export function TitleBand({ title, line }: { title?: ReactNode; line?: boolean }) {
+export function TitleBand({ title, line, back }: { title?: ReactNode; line?: boolean; back?: { label: string; onClick: () => void } }) {
   return (
     <header className="ui-title-band" data-line={line || undefined}>
-      {title != null && <h1 className="ui-page">{title}</h1>}
+      {title != null && (
+        <h1 className="ui-page">
+          {back && <IconButton className="ui-title-band-back" icon="chevron.left" label={back.label} shortcut="Esc" onClick={back.onClick} />}
+          {title}
+        </h1>
+      )}
     </header>
   );
 }

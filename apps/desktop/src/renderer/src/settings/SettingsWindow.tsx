@@ -119,6 +119,8 @@ export function SettingsWindow() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  /** A page opened from this one (a Quick Command's editor): its title, and the way back. */
+  const [sub, setSub] = useState<{ title: string; back: () => void } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const q = query.trim().toLowerCase();
   const nav = NAV.find((n) => n.id === page)!;
@@ -184,7 +186,7 @@ export function SettingsWindow() {
   } else if (page === "keyboard") {
     body = <Shortcuts />;
   } else if (page === "quick") {
-    body = <QuickCommands newAsk={quickAsk} />;
+    body = <QuickCommands newAsk={quickAsk} onSubpage={setSub} />;
   } else if (page === "remote") {
     body = <Remote key={pairAsk} status={remote} settings={snap.settings} pair={pairAsk > 0} row={(k) => <ItemRow k={k} ctx={ctx} />} />;
   } else if (page === "about") {
@@ -260,7 +262,7 @@ export function SettingsWindow() {
           // keyed by page: each page starts at the top
           key={q ? "search" : page}
           inset
-          toolbar={<TitleBand title={q ? "Search Results" : nav.title} line={scrolled} />}
+          toolbar={<TitleBand title={q ? "Search Results" : (sub?.title ?? nav.title)} back={!q && sub ? { label: nav.title, onClick: sub.back } : undefined} line={scrolled} />}
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
           footer={
             !connected && (
