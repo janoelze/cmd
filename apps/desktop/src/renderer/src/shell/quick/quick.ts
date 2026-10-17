@@ -4,7 +4,7 @@
 // Command sheet when it asks for values or a yes first.
 
 import { useSyncExternalStore } from "react";
-import { parseQuick, QUICK_TITLE, type QuickCommand, type QuickContext, type QuickList, type QuickResolved } from "@cmd/protocol";
+import { parseQuick, quickInWorkspace, QUICK_TITLE, type QuickCommand, type QuickContext, type QuickList, type QuickResolved } from "@cmd/protocol";
 import { toast } from "@cmd/ui";
 import { prettyAccelerator, QUICK_PREFIX, type MenuLists, type MenuState, type QuickMenuId } from "../../../../shared/commands.ts";
 import { cmd } from "../../lib/bridge.ts";
@@ -99,6 +99,9 @@ export async function finishQuick(command: QuickCommand, context: QuickContext, 
   if (to) goTo(to, context.workspaceId);
 }
 
+/** The commands of the workspace in view: every workspace's and its own. */
+const here = (c: CommandContext): QuickCommand[] => quickCommands().filter((q) => quickInWorkspace(q, c.workspace?.root));
+
 const menuId = (q: QuickCommand): QuickMenuId => `${QUICK_PREFIX}${q.id}`;
 
 /** A menu item's id (`quick:<id>`) as the command's; null for any other. */
@@ -108,7 +111,8 @@ export const quickOfMenuId = (id: string): string | null => (id.startsWith(QUICK
 export function quickMenu(c: CommandContext): { quick: NonNullable<MenuLists["quick"]>; enabled: MenuState["enabled"] } {
   const ctx = quickContext(c);
   const enabled: MenuState["enabled"] = {};
-  const quick = quickCommands().map((q) => {
+  // One kept to another workspace isn't in the menu, so its shortcut is free there.
+  const quick = here(c).map((q) => {
     enabled[menuId(q)] = quickApplies(q, ctx);
     return { id: menuId(q), label: q.name, keys: q.keys ?? [] };
   });
@@ -118,7 +122,7 @@ export function quickMenu(c: CommandContext): { quick: NonNullable<MenuLists["qu
 /** The palette's Quick Commands group: those that apply here, with their shortcuts. */
 export function quickItems(c: CommandContext): PaletteItem[] {
   const ctx = quickContext(c);
-  return quickCommands()
+  return here(c)
     .filter((q) => quickApplies(q, ctx))
     .map((q) => ({ id: `q-${q.id}`, group: QUICK_TITLE, icon: "bolt", label: q.name, meta: q.description || q.body, hint: prettyAccelerator(q.keys?.[0]), run: () => void runQuickCommand(q.id) }));
 }

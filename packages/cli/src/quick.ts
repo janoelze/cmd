@@ -2,6 +2,8 @@
 // the terminal. A run takes this folder (and this terminal's workspace) as what it looks at;
 // --var fills in a {{variable}} or answers an {{ask:…}}.
 
+import fs from "node:fs";
+import path from "node:path";
 import { parseQuick, QUICK_VARIABLES, type QuickCommand, type QuickContext } from "@cmd/protocol";
 import type { Connection } from "@cmd/protocol/node";
 
@@ -11,7 +13,8 @@ export const QUICK_HELP = `  quick [--json]                      your Quick Comm
   quick run NAME [--var K=V…] [--yes] [--json]
                                       run one here; --var fills a {{variable}} or answers an {{ask:…}},
                                       --yes runs one that asks first; "type" ones run in a new terminal
-  quick add NAME BODY [--target type|terminal|open] [--key SHORTCUT]   add one
+  quick add NAME BODY [--target type|terminal|open] [--key SHORTCUT] [--workspace DIR]
+                                      add one; --workspace keeps it to that workspace (. for this one)
   quick rm NAME                       remove one`;
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
@@ -21,7 +24,7 @@ const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is st
 function row(c: QuickCommand, w: number): string {
   const where = { type: "type", terminal: "new terminal", open: "open" }[c.target ?? "type"];
   const keys = c.keys?.length ? `  [${c.keys.join(", ")}]` : "";
-  return `  ${c.name.padEnd(w)}  ${where.padEnd(12)}  ${c.body.replace(/\s+/g, " ")}${keys}${c.confirm ? "  (asks first)" : ""}`;
+  return `  ${c.name.padEnd(w)}  ${where.padEnd(12)}  ${c.body.replace(/\s+/g, " ")}${keys}${c.confirm ? "  (asks first)" : ""}${c.workspace ? `  (in ${c.workspace})` : ""}`;
 }
 
 export async function quickCommand(client: Client, pos: string[], opt: Record<string, unknown>, callerPaneId: string | undefined): Promise<number> {
@@ -55,13 +58,19 @@ export async function quickCommand(client: Client, pos: string[], opt: Record<st
   }
   if (sub === "add") {
     const [name, ...body] = args;
-    if (!name || !body.length) throw new Error("usage: cmd quick add NAME BODY [--target type|terminal|open] [--key SHORTCUT]");
+    if (!name || !body.length) throw new Error("usage: cmd quick add NAME BODY [--target type|terminal|open] [--key SHORTCUT] [--workspace DIR]");
     const text = body.join(" ");
     const bad = parseQuick(text).errors;
     if (bad.length) throw new Error(`${bad.join("; ")} (variables: ${Object.keys(QUICK_VARIABLES).join(", ")}, ask:NAME, pick:NAME=a,b)`);
     const target = str(opt.target) as QuickCommand["target"];
     const keys = list(opt.key);
-    const c = await client.call("quick.save", { command: { name, body: text, ...(target ? { target } : {}), ...(keys.length ? { keys } : {}) } });
+    // The workspace a folder is in (its root), so `--workspace .` deep in a project keeps it to the project.
+    const dir = str(opt.workspace);
+    const folder = dir ? fs.realpathSync(path.resolve(dir)) : undefined;
+    const ws = folder ? await client.call("workspace.match", { path: folder }) : undefined;
+    // Not in an open workspace (match says Home): the workspace that would open there.
+    const workspace = ws && (ws.home && ws.root !== folder ? folder : ws.root);
+    const c = await client.call("quick.save", { command: { name, body: text, ...(target ? { target } : {}), ...(keys.length ? { keys } : {}), ...(workspace ? { workspace } : {}) } });
     return console.log(opt.json ? JSON.stringify(c, null, 2) : `Added "${c.name}" (${c.id})`), 0;
   }
   if (sub === "rm" || sub === "remove") {

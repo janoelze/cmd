@@ -6,7 +6,7 @@
 
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { fillQuick, parseQuick, QUICK_FILE, quickEnv, quickMode, RpcError, type Placement, type QuickCommand, type QuickContext, type QuickMethods, type QuickResolved, type QuickRun, type QuickVariable } from "@cmd/protocol";
+import { fillQuick, parseQuick, QUICK_FILE, quickEnv, quickInWorkspace, quickMode, RpcError, type Placement, type QuickCommand, type QuickContext, type QuickMethods, type QuickResolved, type QuickRun, type QuickVariable } from "@cmd/protocol";
 import type { CoreContext } from "../kernel/context.ts";
 import type { Feature } from "../kernel/features.ts";
 import type { HandlerSlice } from "../kernel/handlers.ts";
@@ -67,6 +67,7 @@ function prepare(core: CoreContext, id: string, ctx: QuickContext = {}, values: 
   if (!command) throw RpcError.of("notFound", `no Quick Command "${id}" (cmd quick lists them)`);
   const pane = ctx.paneId ? core.panes.get(ctx.paneId) : null;
   const ws = core.place({ workspaceId: ctx.workspaceId ?? pane?.workspaceId ?? from.workspaceId, callerPaneId: from.callerPaneId }, { path: ctx.folder });
+  if (!quickInWorkspace(command, ws.root)) throw RpcError.of("failed", `"${command.name}" only runs in ${command.workspace}`);
   const folder = ctx.folder || pane?.cwd || ws.root;
   const agent = pane?.agentId ? core.agents.get(pane.agentId) : null;
   const agentId = agent && agent.state !== "exited" ? agent.id : null;

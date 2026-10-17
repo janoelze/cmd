@@ -34,6 +34,8 @@ export interface QuickCommand {
   keys?: string[];
   /** Ask before running, showing the resolved text (a deploy, a force push). */
   confirm?: boolean;
+  /** Only in the workspace with this folder (its root; ~ for the home folder). Unset: in every workspace. */
+  workspace?: string;
 }
 
 /** What the caller is looking at; the core adds the workspace's root, the branch, the clipboard and the time. */
@@ -234,9 +236,21 @@ export function quickId(name: string, taken: Iterable<string>): string {
   return id;
 }
 
+/** Each known key's check, and what it should be (said when it isn't). */
+const FIELDS: Record<string, [(v: unknown) => boolean, string]> = {
+  id: [(v) => typeof v === "string", "text"],
+  description: [(v) => typeof v === "string", "text"],
+  target: [(v) => QUICK_TARGETS.includes(v as QuickTarget), `one of ${QUICK_TARGETS.join(", ")}`],
+  submit: [(v) => typeof v === "boolean", "true or false"],
+  cwd: [(v) => typeof v === "string", "a folder"],
+  keys: [(v) => typeof v === "string" || (Array.isArray(v) && v.every((k) => typeof k === "string")), "a shortcut or a list of them"],
+  confirm: [(v) => typeof v === "boolean", "true or false"],
+  workspace: [(v) => typeof v === "string", "a folder"],
+};
+
 /**
- * The file's commands, checked: entries that aren't commands are left out and said so.
- * Unknown keys are kept (a newer cmd's), so a save doesn't drop them.
+ * The file's commands, checked: entries that aren't commands, or have a key of the wrong
+ * type, are left out and said so. Unknown keys are kept (a newer cmd's), so a save doesn't drop them.
  */
 export function readQuickCommands(v: unknown): { commands: QuickCommand[]; errors: string[] } {
   const errors: string[] = [];
@@ -249,13 +263,22 @@ export function readQuickCommands(v: unknown): { commands: QuickCommand[]; error
     const c = x as Record<string, unknown>;
     if (typeof c.name !== "string" || !c.name.trim()) return void errors.push(`${at}: needs a "name"`);
     if (typeof c.body !== "string") return void errors.push(`${c.name}: needs a "body"`);
-    if (c.target !== undefined && !QUICK_TARGETS.includes(c.target as QuickTarget)) return void errors.push(`${c.name}: "target" is one of ${QUICK_TARGETS.join(", ")}`);
-    const keys = c.keys === undefined ? undefined : typeof c.keys === "string" ? [c.keys] : Array.isArray(c.keys) && c.keys.every((k) => typeof k === "string") ? (c.keys as string[]) : null;
-    if (keys === null) return void errors.push(`${c.name}: "keys" is a shortcut or a list of them`);
+    const wrong = Object.entries(FIELDS).find(([k, [ok]]) => c[k] !== undefined && c[k] !== null && !ok(c[k]));
+    if (wrong) return void errors.push(`${c.name}: "${wrong[0]}" is ${wrong[1][1]}`);
+    // null is as good as left out.
+    const known = Object.fromEntries(Object.entries(c).filter(([k, x]) => !(k in FIELDS) || x !== null));
+    const keys = typeof c.keys === "string" ? [c.keys] : (known.keys as string[] | undefined);
     let id = typeof c.id === "string" && c.id.trim() ? c.id.trim() : quickId(c.name, ids);
     if (ids.has(id)) id = quickId(id, ids);
     ids.add(id);
-    commands.push({ ...(c as object), id, name: c.name.trim(), body: c.body, ...(keys ? { keys } : {}) } as QuickCommand);
+    commands.push({ ...known, id, name: c.name.trim(), body: c.body, ...(keys ? { keys } : {}) } as QuickCommand);
   });
   return { commands, errors };
+}
+
+/** Whether a command scoped to `scope` (QuickCommand.workspace, ~ already expanded) belongs in the workspace at `root`. */
+export function quickInWorkspace(c: Pick<QuickCommand, "workspace">, root: string | undefined): boolean {
+  if (!c.workspace) return true;
+  const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
+  return !!root && trim(c.workspace) === trim(root);
 }

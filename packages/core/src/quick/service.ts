@@ -4,6 +4,7 @@
 // and says why, and isn't written over until it is fixed.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { editJsoncItem, parseJsonc, QUICK_TARGETS, quickId, readQuickCommands, RpcError, type QuickCommand, type QuickList } from "@cmd/protocol";
@@ -16,12 +17,13 @@ const HEADER = `// cmd Quick Commands (docs/58). Edit them in Settings → Quick
 // target: "type" (into the selected terminal, else a new one), "terminal" (a new one), "open" (a URL or path).
 // Variables: {{folder}} {{workspace}} {{file}} {{selection}} {{clipboard}} {{branch}} {{repo}} {{url}} {{date}} {{time}},
 // {{ask:name=default}} and {{pick:name=a,b}} ask when it runs; values are quoted for the shell ({{selection | raw}}: as is).
+// "workspace": "~/src/app" keeps one to that workspace (its folder); without it, it is in every workspace.
 [
 ]
 `;
 
 /** The keys a command is written with, in this order; the rest (a newer cmd's) after them. */
-const ORDER = ["id", "name", "description", "body", "target", "submit", "cwd", "keys", "confirm"] as const;
+const ORDER = ["id", "name", "description", "body", "target", "submit", "cwd", "keys", "confirm", "workspace"] as const;
 
 export class QuickService extends EventEmitter<{ changed: [] }> {
   readonly path: string;
@@ -158,8 +160,10 @@ export class QuickService extends EventEmitter<{ changed: [] }> {
     }
     try {
       const r = readQuickCommands(parseJsonc(this.#text) ?? []);
+      // A workspace written with ~ is compared as the folder it is.
+      const commands = r.commands.map((c) => (c.workspace?.startsWith("~") ? { ...c, workspace: c.workspace.replace(/^~(?=$|\/)/, os.homedir()) } : c));
       // Entries that aren't commands are left out and said so; the file stays writable (they stay in it).
-      this.#list = { commands: r.commands, path: this.path, ...(r.errors.length ? { problems: r.errors } : {}) };
+      this.#list = { commands, path: this.path, ...(r.errors.length ? { problems: r.errors } : {}) };
       if (r.errors.length) log.warn("left out", { problems: r.errors });
     } catch (err) {
       this.#list = { commands: this.#list.commands, path: this.path, error: (err as Error).message };

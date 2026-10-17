@@ -2,7 +2,7 @@
 
 **Status:** partly built (2026-10-17): phases 1 and 2; project commands and Save as Quick Command… not yet.
 
-> Status (2026-10-17), branch `quick-commands`: built as proposed, with these differences. Choices are `{{pick:name=a,b}}` (commas), a modifier goes after a pipe (`{{selection | raw}}`, `{{x | url}}`), and `{{x?}}` is optional. Only what looks meant as a variable is one: `{{.Names}}` and other templates' braces stay text, a misspelt `{{fiel}}` is an error. `type` with no terminal selected runs in a new one. `{{file}}` is a text-like window's file (not a file browser's selected row). The core reads the clipboard (`pbpaste`) only when a body uses it. The palette's ask step is a sheet (`shell/quick/QuickSheet.tsx`) that also asks for the yes of an "Ask before running" command and shows the text it will run. Hotkeys stay on the command: main puts them on the Session → Quick Commands items (`quick:<id>`) and leaves out any an app command has, so `resolveKeybindings` is unchanged; Settings says whose a shortcut is. Reordering is Move Up/Down, not drag. Added `quick.resolve` (the text, what's missing, the asks) and `quick.move`. No tool runs them for agents (`TOOL_ACCESS` and `REMOTE_ACCESS` say never); the CLI runs them as `cmd actions run` does. Code: protocol `quick.ts`, `jsonc.ts` `editJsoncItem`, core `quick/`, CLI `quick.ts`, renderer `shell/quick/`, `settings/QuickCommands.tsx`, main `menu-template.ts`; e2e `quick`.
+> Status (2026-10-17), branch `quick-commands`: built as proposed, with these differences. Choices are `{{pick:name=a,b}}` (commas), a modifier goes after a pipe (`{{selection | raw}}`, `{{x | url}}`), and `{{x?}}` is optional. Only what looks meant as a variable is one: `{{.Names}}` and other templates' braces stay text, a misspelt `{{fiel}}` is an error. `type` with no terminal selected runs in a new one. `{{file}}` is a text-like window's file (not a file browser's selected row). The core reads the clipboard (`pbpaste`) only when a body uses it. The palette's ask step is a sheet (`shell/quick/QuickSheet.tsx`) that also asks for the yes of an "Ask before running" command and shows the text it will run. Hotkeys stay on the command: main puts them on the Session → Quick Commands items (`quick:<id>`) and leaves out any an app command has, so `resolveKeybindings` is unchanged; Settings says whose a shortcut is. Reordering is Move Up/Down, not drag. Loading checks every known key's type (`readQuickCommands`): a command with one wrong (`"confirm": "yes"`) is left out and named in Settings and `cmd quick`, and `null` counts as left out. Added `quick.resolve` (the text, what's missing, the asks) and `quick.move`. No tool runs them for agents (`TOOL_ACCESS` and `REMOTE_ACCESS` say never); the CLI runs them as `cmd actions run` does. Code: protocol `quick.ts`, `jsonc.ts` `editJsoncItem`, core `quick/`, CLI `quick.ts`, renderer `shell/quick/`, `settings/QuickCommands.tsx`, main `menu-template.ts`; e2e `quick`.
 
 Commands and prompts you save once and run from anywhere in cmd: `git push -u origin {{branch}}` in the focused terminal, `docker compose logs -f {{ask:service}}` in a new one, `claude "Review {{file}} for missing tests"` in a new terminal, "Review {{file}} for missing tests" typed into the Claude session you are looking at, `https://github.com/acme/app/pull/{{ask:number}}` in a browser window. You keep them in Settings → Quick Commands, run them from the palette, the menu bar, a hotkey or the CLI, and fill in what they need from what you are looking at.
 
@@ -53,6 +53,8 @@ interface QuickCommand {
   keys?: string[];
   /** Ask before running, showing the resolved text (a deploy, a force push). */
   confirm?: boolean;
+  /** Only in the workspace with this folder (its root; ~ allowed). Unset: in every workspace. */
+  workspace?: string;
 }
 
 type QuickTarget =
@@ -151,7 +153,7 @@ No settings keys in phase 1. Remote access (the phone: list and run) later, in `
 ## Decided
 
 - (2026-10-17) The menu: a Quick Commands submenu of Session, not a menu of its own.
-- (2026-10-17) Commands are global: none names a folder or workspace it belongs to.
+- (2026-10-17) Commands are global by default. One can be kept to a workspace (`workspace`: its root folder, chosen in the editor's Workspace menu or `cmd quick add --workspace .`): it is only in that workspace's Session menu and palette, the core refuses to run it elsewhere, and two kept to different workspaces may share a shortcut. A folder rather than the workspace's id, so the file reads well and survives a workspace closed and opened again.
 - (2026-10-17) Project commands aren't confirmed on their first run.
 
 - (2026-10-17) No agent targets: a prompt is a command (`claude "…"`) or text typed into an agent's terminal.

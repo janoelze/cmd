@@ -1,11 +1,11 @@
 // Settings → Quick Commands (docs/58): the person's commands in the file's order, each with
 // where it goes and its shortcut, moved up and down, and an editor for one: its name, body
-// (with Insert Variable and the body's mistakes under it), target, shortcut and whether it
-// asks first. Saved through the core (quick.save), which keeps the file's comments; looks
+// (with Insert Variable and the body's mistakes under it), target, workspace, shortcut and
+// whether it asks first. Saved through the core (quick.save), which keeps the file's comments; looks
 // again when the window gets focus, as the file may have been edited by hand.
 
 import { useEffect, useRef, useState } from "react";
-import { parseQuick, QUICK_VARIABLES, type QuickCommand, type QuickList, type QuickTarget } from "@cmd/protocol";
+import { parseQuick, QUICK_VARIABLES, type QuickCommand, type QuickList, type QuickTarget, type Workspace } from "@cmd/protocol";
 import { Button, Callout, Dialog, FormActions, FormRow, FormSection, IconButton, Inline, Segmented, Select, ShortcutField, Switch, Text, TextArea, TextField } from "@cmd/ui";
 import { COMMAND_BY_ID, norm, prettyAccelerator } from "../../../shared/commands.ts";
 import { cmd } from "../lib/bridge.ts";
@@ -26,14 +26,21 @@ const ASKS = { "ask:name": "Asks for a value when it runs: {{ask:name=default}}"
 /** An error from main or the core without Electron's prefix. */
 const message = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 
+/** A workspace's name from its folder; the folder when cmd doesn't know it (any more). */
+const workspaceName = (root: string, all: Workspace[]) => all.find((w) => w.root === root)?.name ?? root;
+
 const where = (q: QuickCommand) => ({ type: "Type", terminal: "New Terminal", open: "Open" })[q.target ?? "type"];
 
 export function QuickCommands({ newAsk = 0 }: { /** Bumped by Session → New Quick Command…: the editor opens empty. */ newAsk?: number }) {
   const [list, setList] = useState<QuickList | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [editing, setEditing] = useState<QuickCommand | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const keys = useKeybindings();
-  const look = () => void cmd.call("quick.list", {}).then(setList, (e: unknown) => setError(message(e)));
+  const look = () => {
+    void cmd.call("quick.list", {}).then(setList, (e: unknown) => setError(message(e)));
+    void cmd.call("workspace.list", { closed: true }).then(setWorkspaces, () => {});
+  };
   useEffect(() => {
     look();
     window.addEventListener("focus", look);
@@ -66,7 +73,8 @@ export function QuickCommands({ newAsk = 0 }: { /** Bumped by Session → New Qu
             title={q.name}
             description={
               <>
-                {where(q)} · <code>{q.body}</code>
+                {where(q)}
+                {q.workspace && ` · ${workspaceName(q.workspace, workspaces)}`} · <code>{q.body}</code>
               </>
             }
             accessory={
@@ -97,6 +105,7 @@ export function QuickCommands({ newAsk = 0 }: { /** Bumped by Session → New Qu
         <QuickEditor
           command={editing === "new" ? null : editing}
           others={commands.filter((q) => editing === "new" || q.id !== editing.id)}
+          workspaces={workspaces}
           taken={keys.bindings}
           onClose={() => setEditing(null)}
           onSave={(c) => cmd.call("quick.save", { command: c }).then(() => (look(), setEditing(null)))}
@@ -111,6 +120,7 @@ export function QuickCommands({ newAsk = 0 }: { /** Bumped by Session → New Qu
 export function QuickEditor({
   command,
   others,
+  workspaces = [],
   taken,
   onClose,
   onSave,
@@ -120,6 +130,8 @@ export function QuickEditor({
   command: QuickCommand | null;
   /** The rest, whose shortcuts it can't have. */
   others: QuickCommand[];
+  /** Open and recent ones, which it can be kept to. */
+  workspaces?: Workspace[];
   /** App commands' shortcuts (keybindings): theirs to keep. */
   taken: Record<string, string[]>;
   onClose: () => void;
@@ -134,6 +146,7 @@ export function QuickEditor({
   const [cwd, setCwd] = useState(command?.cwd ?? "");
   const [keys, setKeys] = useState<string[]>(command?.keys ?? []);
   const [confirm, setConfirm] = useState(command?.confirm ?? false);
+  const [workspace, setWorkspace] = useState(command?.workspace ?? "");
   const [recording, setRecording] = useState<number | undefined>(undefined);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +172,8 @@ export function QuickEditor({
       if (!usableShortcut(acc)) return setNote(`${prettyAccelerator(acc)} alone would be typed; add ⌘, ⌃ or ⌥.`);
       const app = Object.entries(taken).find(([, ks]) => ks.some((k) => norm(k) === norm(acc)))?.[0];
       if (app) return setNote(`${prettyAccelerator(acc)} is ${COMMAND_BY_ID.get(app)?.label.replace(/…$/, "") ?? app}’s. Pick another, or change that one in Keyboard Shortcuts.`);
-      const mine = others.find((q) => q.keys?.some((k) => norm(k) === norm(acc)));
+      // Kept to different workspaces, two can share a shortcut: only one is in the menu at a time.
+      const mine = others.find((q) => (!q.workspace || !workspace || q.workspace === workspace) && q.keys?.some((k) => norm(k) === norm(acc)));
       if (mine) return setNote(`${prettyAccelerator(acc)} is “${mine.name}”’s already.`);
       setNote(null);
       setKeys((ks) => {
@@ -176,7 +190,7 @@ export function QuickEditor({
       window.removeEventListener("blur", stop);
       cmd.recordShortcut(false);
     };
-  }, [recording, taken, others]);
+  }, [recording, taken, others, workspace]);
 
   /** Insert a variable where the cursor is in the body. */
   const insert = (v: string) => {
@@ -207,6 +221,7 @@ export function QuickEditor({
         cwd: target !== "open" && cwd.trim() ? cwd.trim() : undefined,
         keys,
         confirm,
+        workspace: workspace || undefined,
       });
     } catch (e) {
       setError(message(e));
@@ -283,6 +298,18 @@ export function QuickEditor({
           <TextField fill code value={cwd} placeholder="{{folder}}" onChange={setCwd} />
         </FormRow>
       )}
+      <FormRow compact title="Workspace" description={workspace ? "Only in this workspace’s menu and palette." : "In every workspace’s menu and palette."}>
+        <Select
+          value={workspace}
+          options={[
+            { value: "", label: "Every Workspace" },
+            ...workspaces.map((w) => ({ value: w.root, label: w.name, tip: w.root })),
+            ...(workspace && !workspaces.some((w) => w.root === workspace) ? [{ value: workspace, label: workspace }] : []),
+          ]}
+          onChange={setWorkspace}
+          label="Workspace"
+        />
+      </FormRow>
       <FormRow compact title="Shortcut" note={note ?? undefined} noteTone="danger">
         <ShortcutField
           keys={keys.map((k) => prettyAccelerator(k) ?? k)}

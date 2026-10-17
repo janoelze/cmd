@@ -887,9 +887,11 @@ await scenario("quick", async () => {
   const save = (command) => win.evaluate((command) => window.cmd.call("quick.save", { command }), command);
   await save({ name: "Say Folder", body: "echo said-{{folder}}", keys: ["Ctrl+Alt+Shift+Q"] });
   await save({ name: "Echo Word", body: "echo word-{{ask:word=hi}}" });
-  const item = () => app.evaluate(({ Menu }) => { const i = Menu.getApplicationMenu()?.getMenuItemById("quick:say-folder"); return i ? { label: i.label, accelerator: i.accelerator ?? null } : null; });
+  await save({ name: "Elsewhere", body: "echo elsewhere", workspace: "/nowhere" });
+  const item = (id = "say-folder") => app.evaluate(({ Menu }, id) => { const i = Menu.getApplicationMenu()?.getMenuItemById(`quick:${id}`); return i ? { label: i.label, accelerator: i.accelerator ?? null } : null; }, id);
   const shown = await until(item, (i) => !!i);
   check(shown?.label === "Say Folder" && shown.accelerator === "Ctrl+Alt+Shift+Q", `Session → Quick Commands lists it with its shortcut (${JSON.stringify(shown)})`);
+  check(!!(await item("echo-word")) && !(await item("elsewhere")), "one kept to another workspace isn't in the menu");
   await menu("file.newTerminal");
   const term = await shellReady();
   await focusIn(term.id);

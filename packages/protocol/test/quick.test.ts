@@ -1,7 +1,7 @@
 // The Quick Commands variable language (quick.ts): what counts as a variable, what is
 // asked for, how values are quoted for a shell, an agent and a URL, and reading the file.
 import { describe, expect, it } from "vitest";
-import { editJsoncItem, fillQuick, parseQuick, quickEnv, quickId, quickMode, readQuickCommands, shellQuote } from "../src/index.ts";
+import { editJsoncItem, fillQuick, parseQuick, quickEnv, quickId, quickInWorkspace, quickMode, readQuickCommands, shellQuote } from "../src/index.ts";
 
 describe("parseQuick", () => {
   it("finds variables and asks, each ask once", () => {
@@ -77,6 +77,25 @@ describe("the rest", () => {
       { id: "a-2", name: "A", body: "b", keys: ["Ctrl+A"] },
     ]);
     expect(r.errors).toEqual(['command 3: needs a "name"', 'B: "target" is one of type, terminal, open']);
+  });
+
+  it("leaves out a command with a key of the wrong type, and takes null as left out", () => {
+    const r = readQuickCommands([
+      { name: "A", body: "a", confirm: "yes" },
+      { name: "B", body: "b", submit: 0 },
+      { name: "C", body: "c", keys: [1] },
+      { name: "D", body: "d", workspace: 3 },
+      { name: "E", body: "e", cwd: null, description: "ok", confirm: true },
+    ]);
+    expect(r.commands).toEqual([{ id: "e", name: "E", body: "e", description: "ok", confirm: true }]);
+    expect(r.errors).toEqual(['A: "confirm" is true or false', 'B: "submit" is true or false', 'C: "keys" is a shortcut or a list of them', 'D: "workspace" is a folder']);
+  });
+
+  it("keeps a scoped command to its workspace's folder", () => {
+    expect(quickInWorkspace({}, undefined)).toBe(true);
+    expect(quickInWorkspace({ workspace: "/src/app/" }, "/src/app")).toBe(true);
+    expect(quickInWorkspace({ workspace: "/src/app" }, "/src/other")).toBe(false);
+    expect(quickInWorkspace({ workspace: "/src/app" }, undefined)).toBe(false);
   });
 
   it("edits one item of a list in its lines, keeping the others and the comments", () => {

@@ -108,4 +108,12 @@ describe("running one", () => {
     expect(((await h()["quick.run"]({ id: "Deploy", confirmed: true })) as { text: string }).text).toBe("make deploy");
     await expect(async () => h()["quick.run"]({ id: "nope" })).rejects.toThrow(/no Quick Command "nope"/);
   });
+
+  it("runs one kept to a workspace only there", async () => {
+    const ws = core.workspaces.open(dir).workspace;
+    const here = save({ name: "Here", body: "make", target: "terminal", workspace: ws.root });
+    expect(((await h()["quick.run"]({ id: here.id, context: { workspaceId: ws.id } })) as { text: string }).text).toBe("make");
+    const there = save({ name: "There", body: "make", target: "terminal", workspace: "/nowhere" });
+    await expect(async () => h()["quick.run"]({ id: there.id, context: { workspaceId: ws.id } })).rejects.toThrow(`"There" only runs in /nowhere`);
+  });
 });
