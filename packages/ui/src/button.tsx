@@ -109,6 +109,19 @@ export const LinkButton = forwardRef<HTMLButtonElement, Native & { tone?: "accen
 });
 
 /**
+ * A small rounded button for a snippet a click puts somewhere: a variable under the field
+ * it goes into ({{branch}} under a command). `mono` for code; the tooltip says what it is.
+ */
+export const Pill = forwardRef<HTMLButtonElement, Native & { mono?: boolean }>(function Pill({ mono, className, ...rest }, ref) {
+  return <button ref={ref} type="button" className={cls("ui-pill", className)} data-mono={mono || undefined} {...rest} />;
+});
+
+/** Pills in a row that wraps. */
+export function PillRow({ children }: { children: ReactNode }) {
+  return <div className="ui-pill-row">{children}</div>;
+}
+
+/**
  * Buttons that belong together. "joined" makes them one control with shared
  * edges (Back | Forward, − | +); "spaced" (default) lays them out in a row with
  * the standard gap, for a dialog's or a section's actions.

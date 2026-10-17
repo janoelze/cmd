@@ -9,7 +9,7 @@
 export { AiField, type AiFieldProps, type AiState } from "./ai.tsx";
 export { ApprovalSheet, type ApprovalAnswer } from "./approval.tsx";
 export { ChatApproval, ChatComposer, ChatLog, ChatMessage, ChatNote, ChatStep, useStickToEnd, type ChatStepState } from "./chat.tsx";
-export { Button, ButtonGroup, IconButton, JumpButton, LinkButton, type ButtonProps, type ButtonVariant, type IconButtonProps, type Size } from "./button.tsx";
+export { Button, ButtonGroup, IconButton, JumpButton, LinkButton, Pill, PillRow, type ButtonProps, type ButtonVariant, type IconButtonProps, type Size } from "./button.tsx";
 export { Checkbox, RadioGroup, Segmented, Select, Switch, TabPanel, Tabs, type Option, type TabItem } from "./choice.tsx";
 export { ClearButton, NumberField, SearchField, SecretField, ShortcutField, TextArea, TextField, type SecretStatus, type TextAreaProps, type TextFieldProps } from "./fields.tsx";
 export { FindBar, findCount, Glyph, Highlight, NO_FIND_OPTIONS, type FindBarHandle, type FindBarProps, type FindOptions, type FindResults } from "./find.tsx";
@@ -22,7 +22,7 @@ export { Ribbon, Timeline, TimelineEntry, type RibbonItem } from "./timeline.tsx
 export { DataGrid, type DataGridProps, type GridCell, type GridColumn, type GridSort, type GridRowInfo } from "./grid.tsx";
 export { Chip, List, ListGroup, ListHeading, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Mark, Panel, PanelBody, PanelHeader, PanelSummary, Twisty, TwistySpace, type ListRowProps } from "./list.tsx";
 export { ICON, Icon, UIProvider, iconNode, type IconProps, type IconWeight } from "./icon.tsx";
-export { Callout, Card, Checklist, CodeBlock, Diff, EmptyState, FeatureList, FormActions, FormRow, FormSection, Group, InfoButton, KeyValue, Prose, QrCode, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar, type Step, type StepState } from "./layout.tsx";
+export { Callout, Card, Checklist, CodeBlock, Diff, EmptyState, FeatureList, FormActions, FormRow, FormSection, Group, InfoButton, KeyValue, PageIntro, Prose, QrCode, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar, type Step, type StepState } from "./layout.tsx";
 export { ConfirmDialog, Dialog, DialogLayer, Menu, Popover, Presence, Toast, Toaster, dismissToast, placePopover, toast, type Align, type MenuItemProps, type ToastOptions } from "./overlay.tsx";
 export { Badge, Kbd, LiveBadge, PageDots, Progress, ProgressRing, Spinner, StatusDot, type DotState, type Tone } from "./status.tsx";
 export { installScrollbars, scrollbarScript, scrolled, scrollbarsMoved, watchScrollbars, PAGE_SCROLLBAR_CSS, SCROLLBAR_CSS, SCROLLBAR_HOLD, type ScrollbarsOptions } from "./scrollbars.ts";

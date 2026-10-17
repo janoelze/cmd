@@ -3,6 +3,7 @@
 // revert on Escape, for values that apply at once. ShortcutField as Settings → Keyboard
 // Shortcuts uses it: click a key to record it again, its corner badge removes it.
 import { useState, type ReactNode } from "react";
+import { Pill, PillRow } from "./button.tsx";
 import { ClearButton, NumberField, SearchField, ShortcutField, TextArea, TextField } from "./fields.tsx";
 import { FormRow, FormSection } from "./layout.tsx";
 import { ProgressRing } from "./status.tsx";
@@ -64,6 +65,26 @@ export const Area = () => {
       <TextArea value={prompt} onChange={setPrompt} placeholder="What should change? ⌘↩ sends" autoGrow={6} onSubmit={() => (setSent(prompt), setPrompt(""))} />
       {sent && <span style={{ color: "var(--text-dim)" }}>Sent: {sent}</span>}
       <TextArea bare rows={2} value="" onChange={() => {}} placeholder="Describe a widget… (bare: the field is the view)" />
+    </div>
+  );
+};
+
+/** Pills under a field put a snippet into it: a command's variables. */
+export const Snippets = () => {
+  const [body, setBody] = useState("git push -u origin ");
+  return (
+    <div style={{ width: 420, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+      <TextArea code rows={2} value={body} onChange={setBody} />
+      <PillRow>
+        {["folder", "file", "selection", "branch", "date"].map((v) => (
+          <Pill key={v} mono data-tip={`Insert {{${v}}}`} onClick={() => setBody((b) => `${b}{{${v}}}`)}>
+            {v}
+          </Pill>
+        ))}
+        <Pill mono disabled>
+          clipboard
+        </Pill>
+      </PillRow>
     </div>
   );
 };

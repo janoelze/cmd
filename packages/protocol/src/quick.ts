@@ -100,11 +100,11 @@ export type QuickEvent = { type: "quick.changed" };
 
 // ---- The variable language -------------------------------------------------------------
 
-/** The variables a body can use, and what each is (Settings' Insert Variable menu). */
+/** The variables a body can use, and what each is (Settings' pills under the command). */
 export const QUICK_VARIABLES = {
   folder: "The selected window's folder, else the workspace's",
   workspace: "The workspace's folder",
-  file: "The selected file (a text window's, a file browser's)",
+  file: "The file in the selected editor or viewer",
   selection: "The selected text in a terminal or editor",
   clipboard: "The clipboard's text",
   branch: "The folder's git branch",

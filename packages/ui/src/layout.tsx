@@ -127,6 +127,24 @@ export function InfoButton({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The top of a settings page whose feature wants a word of explanation (Quick Commands):
+ * what it is and where it shows up, beside the feature's icon, above the page's sections.
+ * A sentence or two; `links` (LinkButtons) for where to go next. Pages that are only
+ * switches don't need one.
+ */
+export function PageIntro({ icon, links, children }: { icon?: string | ReactNode; links?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="ui-page-intro">
+      {icon && <span className="ui-page-intro-icon">{iconNode(icon, ICON.toolbar)}</span>}
+      <div className="ui-page-intro-text">
+        <p>{children}</p>
+        {links && <div className="ui-page-intro-links">{links}</div>}
+      </div>
+    </div>
+  );
+}
+
 /** The top of a sheet that greets or explains (onboarding, a welcome): an icon, a large title and a line under it. */
 export function SheetHeader({ icon, title, subtitle }: { icon?: string | ReactNode; title: ReactNode; subtitle?: ReactNode }) {
   return (

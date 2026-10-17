@@ -1,13 +1,13 @@
 // Settings → Quick Commands (docs/58): the person's commands in the file's order, each with
 // where it goes and its shortcut, moved up and down, and an editor for one: its name, body
-// (with Insert Variable and the body's mistakes under it), target, workspace, shortcut and
+// (with its variables as pills and the body's mistakes under it), target, workspace, shortcut and
 // whether it asks first, in the page's place (Esc or the title bar's back chevron returns to the list).
 // Saved through the core (quick.save), which keeps the file's comments; looks again when the
 // window gets focus, as the file may have been edited by hand.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { parseQuick, QUICK_VARIABLES, type QuickCommand, type QuickList, type QuickTarget, type Workspace } from "@cmd/protocol";
-import { Button, Callout, FormActions, FormRow, FormSection, IconButton, Inline, Segmented, Select, ShortcutField, Stack, Switch, Text, TextArea, TextField } from "@cmd/ui";
+import { Button, Callout, FormActions, FormRow, FormSection, IconButton, Inline, PageIntro, Pill, PillRow, Segmented, Select, ShortcutField, Stack, Switch, Text, TextArea, TextField } from "@cmd/ui";
 import { COMMAND_BY_ID, norm, prettyAccelerator } from "../../../shared/commands.ts";
 import { cmd } from "../lib/bridge.ts";
 import { acceleratorOf, usableShortcut, useKeybindings } from "../lib/keybindings.ts";
@@ -22,7 +22,11 @@ const TARGET_TEXT: Record<QuickTarget, string> = {
   terminal: "Run in a new terminal in the workspace.",
   open: "A URL or path, opened in a cmd window.",
 };
-const ASKS = { "ask:name": "Asks for a value when it runs: {{ask:name=default}}", "pick:name=a,b": "Asks for one of a few: {{pick:env=dev,prod}}" };
+/** Pills that ask when it runs: what they insert, and the part selected to type over (the name). */
+const ASKS = [
+  { label: "ask", text: "{{ask:name}}", select: [6, 10], tip: "Asks for a value when it runs: {{ask:name=default}}" },
+  { label: "pick", text: "{{pick:name=a,b}}", select: [7, 11], tip: "Asks to pick one when it runs: {{pick:env=dev,prod}}" },
+] as const;
 
 /** An error from main or the core without Electron's prefix. */
 const message = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
@@ -56,7 +60,8 @@ export function QuickCommands({
     return () => window.removeEventListener("focus", look);
   }, []);
   useEffect(() => void (newAsk > 0 && setEditing("new")), [newAsk]);
-  useEffect(() => {
+  // Before paint, so the title bar changes with the page.
+  useLayoutEffect(() => {
     onSubpage?.(editing ? { title: editing === "new" ? "New Quick Command" : editing.name, back: () => setEditing(null) } : null);
     return () => onSubpage?.(null);
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -78,6 +83,10 @@ export function QuickCommands({
     );
   return (
     <>
+      <PageIntro icon="bolt">
+        Save the commands and prompts you type every day. <code>{"{{variables}}"}</code> fill in what you’re looking at, like the folder, the selected text or the
+        branch. Run them from Session → Quick Commands, the palette, a shortcut or <code>cmd quick run</code>.
+      </PageIntro>
       {error && (
         <Callout tone="danger" title="Couldn't change Quick Commands">
           {error}
@@ -90,7 +99,7 @@ export function QuickCommands({
       )}
       {!!list?.problems?.length && <Callout tone="warning" title="Some entries aren't Quick Commands">{list.problems.join(" · ")}</Callout>}
       <FormSection title="Quick Commands">
-        {list && !commands.length && <FormRow title="None yet" description="Save the commands and prompts you type every day. Add one with New Quick Command…" />}
+        {list && !commands.length && <FormRow title="None yet" description="Add one with New Quick Command…" />}
         {commands.map((q, i) => (
           <FormRow
             key={q.id}
@@ -109,7 +118,7 @@ export function QuickCommands({
               </Inline>
             }
           >
-            <Inline gap={1.5}>
+            <Inline gap={3}>
               {q.keys?.[0] && <Text tone="dim">{q.keys.map((k) => prettyAccelerator(k)).join(" ")}</Text>}
               <Button size="sm" disabled={!!list?.error} onClick={() => (setError(null), setEditing(q))}>
                 Edit…
@@ -118,7 +127,7 @@ export function QuickCommands({
           </FormRow>
         ))}
       </FormSection>
-      <FormActions hint="Run them from Session → Quick Commands, the palette or “cmd quick run”.">
+      <FormActions>
         <Button disabled={!list || !!list.error} onClick={() => (setError(null), setEditing("new"))}>
           New Quick Command…
         </Button>
@@ -224,15 +233,15 @@ export function QuickEditor({
   }, [recording, onClose]);
 
   /** Insert a variable where the cursor is in the body. */
-  const insert = (v: string) => {
+  /** Insert at the cursor in the body; then the cursor after it, or `select` (offsets in `text`) selected to type over. */
+  const insert = (text: string, select?: readonly [number, number]) => {
     const el = bodyRef.current;
     const at = el ? el.selectionStart : body.length;
     const end = el ? el.selectionEnd : body.length;
-    const text = `{{${v}}}`;
     setBody(body.slice(0, at) + text + body.slice(end));
     requestAnimationFrame(() => {
       el?.focus();
-      el?.setSelectionRange(at + text.length, at + text.length);
+      el?.setSelectionRange(at + (select?.[0] ?? text.length), at + (select?.[1] ?? text.length));
     });
   };
 
@@ -261,8 +270,6 @@ export function QuickEditor({
   };
 
   saveRef.current = () => void save();
-  const variables = [...Object.keys(QUICK_VARIABLES), ...Object.keys(ASKS)];
-  const tips: Record<string, string> = { ...QUICK_VARIABLES, ...ASKS };
   return (
     <div ref={root}>
       <Stack gap={3}>
@@ -285,18 +292,22 @@ export function QuickEditor({
               description={target === "type" ? "A shell command, or a prompt for the agent in the terminal." : target === "open" ? "A URL or a path." : "A shell command."}
               note={problems.join(" · ") || undefined}
               noteTone="danger"
-              accessory={
-                <Select
-                  value={"" as string}
-                  placeholder="Insert Variable"
-                  options={variables.map((v) => ({ value: v, label: `{{${v}}}`, tip: tips[v] }))}
-                  onChange={(v) => insert(v)}
-                  size="sm"
-                  label="Insert Variable"
-                />
-              }
             >
-              <TextArea ref={bodyRef} code value={body} placeholder="git push -u origin {{branch}}" onChange={setBody} onSubmit={() => void save()} rows={3} />
+              <Stack gap={2} grow>
+                <TextArea ref={bodyRef} code value={body} placeholder="git push -u origin {{branch}}" onChange={setBody} onSubmit={() => void save()} rows={3} />
+                <PillRow>
+                  {(Object.keys(QUICK_VARIABLES) as (keyof typeof QUICK_VARIABLES)[]).map((v) => (
+                    <Pill key={v} mono data-tip={`{{${v}}}: ${QUICK_VARIABLES[v]}`} onClick={() => insert(`{{${v}}}`)}>
+                      {v}
+                    </Pill>
+                  ))}
+                  {ASKS.map((a) => (
+                    <Pill key={a.label} mono data-tip={a.tip} onClick={() => insert(a.text, a.select)}>
+                      {a.label}…
+                    </Pill>
+                  ))}
+                </PillRow>
+              </Stack>
             </FormRow>
           </FormSection>
           <FormSection title="Running">

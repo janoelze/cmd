@@ -9,7 +9,7 @@ import { Badge, Kbd } from "./status.tsx";
 import { Button, ButtonGroup, IconButton, JumpButton, LinkButton } from "./button.tsx";
 import { Segmented, Switch } from "./choice.tsx";
 import { NumberField, SecretField, TextArea, TextField } from "./fields.tsx";
-import { Callout, Card, Checklist, Diff, EmptyState, FeatureList, FormActions, FormRow, FormSection, Group, InfoButton, KeyValue, Prose, QrCode, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar } from "./layout.tsx";
+import { Callout, Card, Checklist, Diff, EmptyState, FeatureList, FormActions, FormRow, FormSection, Group, InfoButton, KeyValue, PageIntro, Prose, QrCode, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar } from "./layout.tsx";
 
 /** A setup's steps, titled as things to do: done ones are a line with their value, the first that isn't shows what to do and a way to check again, the rest wait. */
 export const Setup = () => (
@@ -66,6 +66,18 @@ export const Offer = () => (
 );
 
 /** Facts as label and value; mono for data (a widget's permissions). */
+/** A settings page's intro: what the feature is and where it shows up, above its sections. */
+export const Intro = () => (
+  <div style={{ width: 560 }}>
+    <PageIntro icon="bolt" links={<LinkButton onClick={() => {}}>Edit quick-commands.json…</LinkButton>}>
+      Save the commands and prompts you type every day. Run them from Session → Quick Commands, the palette, a shortcut or <code>cmd quick run</code>.
+    </PageIntro>
+    <FormSection title="Quick Commands">
+      <FormRow title="Push Branch" description="Type · git push -u origin {{branch}}" />
+    </FormSection>
+  </div>
+);
+
 export const Facts = () => (
   <div style={{ display: "flex", gap: 24, width: 560 }}>
     <KeyValue
