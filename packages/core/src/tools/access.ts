@@ -138,6 +138,12 @@ export const TOOL_ACCESS: { [M in Method]: Access } = {
   "actions.run": "act", // a risky action is refused unless the person allowed it (actions/service.ts)
   "actions.stop": "act",
   "actions.pin": "never",
+  "quick.list": "never", // no tool runs Quick Commands yet (docs/58)
+  "quick.save": "never",
+  "quick.remove": "never",
+  "quick.move": "never",
+  "quick.run": "never",
+  "quick.resolve": "never",
   "stats.catalog": "never",
   "stats.query": "read",
   "nowPlaying.get": "never",

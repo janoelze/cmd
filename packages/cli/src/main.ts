@@ -16,6 +16,7 @@ import { skewMessage } from "./skew.ts";
 import { exitCode } from "./exit.ts";
 import { hook } from "./hook.ts";
 import { TOOLS_HELP, toolsCommand } from "./tools.ts";
+import { QUICK_HELP, quickCommand } from "./quick.ts";
 
 const HELP = `cmd — terminal + agent workbench
 
@@ -50,7 +51,7 @@ ${STATS_HELP}
                                       --types lists window types
   actions [PATH] [--all] [--json]     how to run the project here: its scripts, make targets, …
                                       (Workspace Actions; --all: hidden ones and history too)
-  actions run NAME [PATH] [--restart] [--yes] run one in a terminal of the folder's workspace (--yes: a risky one)
+  actions run NAME [PATH] [--restart] [--yes] run one in a terminal of the folder's workspace (--yes: a risky one)\n${QUICK_HELP}
   search <query…> [--json] [--limit N]  search past agent sessions
   resume <session-id> [--agent claude|codex|…] [--fork]
   magic <request…> [--help]          build a widget (or a terminal command) from a request
@@ -66,7 +67,7 @@ ${REMOTE_HELP}
 env: ${ENV.socket} (default ${defaultSocketPath()})
 exit: 0 done, 1 failed, 2 bad usage (or a core of another version), 3 not found, 4 turned off, 5 not allowed, 6 the core doesn't have it`;
 
-const COMMANDS = new Set(["mcp", "tools", "tool", "ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "stats", "open", "actions", "search", "resume", "settings", "workspace", "remote", "help"]);
+const COMMANDS = new Set(["mcp", "tools", "tool", "ls", "identify", "new", "spawn", "send", "read", "wait", "kill", "notify", "events", "hook", "hooks", "agents", "journal", "data", "stats", "open", "actions", "quick", "search", "resume", "settings", "workspace", "remote", "help"]);
 
 /**
  * `cmd .`, `cmd ~/src/x`, `cmd ../y`: a folder to open as a workspace. A command name
@@ -140,7 +141,7 @@ const { values: opt, positionals: pos } = parseArgs({
     day: { type: "string" },
     write: { type: "boolean" },
     "no-write": { type: "boolean" },
-    restart: { type: "boolean" },
+    restart: { type: "boolean" }, var: { type: "string", multiple: true }, key: { type: "string", multiple: true }, target: { type: "string" }, // cmd quick
   },
 });
 
@@ -204,6 +205,8 @@ async function run({ client, closed }: Connection): Promise<number> {
       return dataCommand(client, pos, opt);
     case "stats":
       return statsCommand(client, pos, opt);
+    case "quick": // Quick Commands (docs/58)
+      return quickCommand(client, pos, opt, callerPaneId);
     case "identify": {
       const paneId = process.env[ENV.paneId];
       if (!paneId) return fail("not inside a cmd pane");

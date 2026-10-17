@@ -64,6 +64,58 @@ export function editJsonc(text: string, changes: Record<string, unknown>, base =
   return text;
 }
 
+/**
+ * text with item `index` of its top-level list set to value (undefined removes it); `insert`
+ * puts a new item at index (-1: last). A blank text starts from `base`. Items are written on one
+ * line, and edits work in whole lines where the file has one item per line, so the other items,
+ * and the comments between them, stay as they were.
+ */
+export function editJsoncItem(text: string, index: number, value: unknown, o: { insert?: boolean; base?: string } = {}): string {
+  if (!stripComments(text).trim()) text = o.base ?? "[\n]\n";
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const root = parseTree(text);
+  const items = root?.type === "array" ? (root.children ?? []) : null;
+  if (items) {
+    const lineOf = (offset: number) => text.lastIndexOf("\n", offset - 1) + 1;
+    const ownLine = (n: (typeof items)[number]) => !text.slice(lineOf(n.offset), n.offset).trim();
+    const indentOf = (n: (typeof items)[number]) => /^[ \t]*/.exec(text.slice(lineOf(n.offset)))![0];
+    const at = index < 0 ? items.length : index;
+    const node = items[at];
+    if (!o.insert && node && value !== undefined) return text.slice(0, node.offset) + oneLine(value) + text.slice(node.offset + node.length);
+    if (o.insert && node && ownLine(node)) return `${text.slice(0, lineOf(node.offset))}${indentOf(node)}${oneLine(value)},${eol}${text.slice(lineOf(node.offset))}`;
+    const last = items.at(-1);
+    if (o.insert && !node && last) {
+      const end = last.offset + last.length;
+      let lineEnd = text.indexOf("\n", end);
+      if (lineEnd >= 0 && lineEnd < root!.offset + root!.length) {
+        if (text[lineEnd - 1] === "\r") lineEnd--;
+        const tail = text.slice(end, lineEnd);
+        const comma = /^\s*,/.test(tail);
+        if (/^\s*(,\s*)?(\/\/.*|(\/\*.*?\*\/\s*)*)$/.test(tail)) return `${text.slice(0, end)}${comma ? "" : ","}${tail}${eol}${indentOf(last)}${oneLine(value)}${comma ? "," : ""}${text.slice(lineEnd)}`;
+      }
+    }
+    if (!o.insert && node && value === undefined && ownLine(node)) {
+      const end = node.offset + node.length;
+      const lineEnd = text.indexOf("\n", end);
+      const tail = text.slice(end, lineEnd);
+      if (lineEnd >= 0 && /^\s*(,\s*)?(\/\/.*)?$/.test(tail)) {
+        let out = text.slice(0, lineOf(node.offset)) + text.slice(lineEnd + 1);
+        const prev = items[at - 1];
+        if (prev && at === items.length - 1 && !/^\s*,/.test(tail)) {
+          // It was the last item without a trailing comma; now the one before it is.
+          const prevEnd = prev.offset + prev.length;
+          const c = /^\s*,/.exec(text.slice(prevEnd));
+          if (c) out = out.slice(0, prevEnd + c[0].length - 1) + out.slice(prevEnd + c[0].length);
+        }
+        return out;
+      }
+    }
+  }
+  const formattingOptions = { insertSpaces: !/^\t/m.test(text), tabSize: 2, eol };
+  const edits = modify(text, [index], value === undefined ? undefined : MARK, { formattingOptions, isArrayInsertion: !!o.insert });
+  return applyEdits(text, edits.map((e) => ({ ...e, content: e.content.replace(JSON.stringify(MARK), () => oneLine(value)) })));
+}
+
 /** value as one-line JSON text, spaced like hand-written JSON. */
 function oneLine(value: unknown): string {
   // Raw newlines in JSON.stringify's output are all structure (strings escape theirs).

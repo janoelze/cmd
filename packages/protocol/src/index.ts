@@ -23,6 +23,7 @@ export * from "./relay.ts";
 export * from "./summary.ts";
 export * from "./names.ts";
 export * from "./actions.ts";
+export * from "./quick.ts";
 export * from "./operator.ts";
 export * from "./tools.ts";
 export * from "./pages.ts";

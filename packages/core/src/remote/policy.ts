@@ -158,6 +158,12 @@ export const REMOTE_ACCESS: { [M in Method]: Access } = {
   "actions.run": "never",
   "actions.stop": "never",
   "actions.pin": "never",
+  "quick.list": "never", // Quick Commands are the Mac's for now (docs/58)
+  "quick.save": "never",
+  "quick.remove": "never",
+  "quick.move": "never",
+  "quick.run": "never",
+  "quick.resolve": "never",
   "stats.catalog": "never", // stats name commands and hosts; remote gets them with per-class filtering (docs/49)
   "stats.query": "never",
   "nowPlaying.get": "never",
@@ -544,6 +550,7 @@ export function remoteEventVisible(e: CoreEvent, follows: ReadonlySet<string>, w
     case "widget.library":
     case "window.closedChanged": // window.closed and window.reopen aren't remote
     case "actions.changed":
+    case "quick.changed":
     case "stats.changed":
     case "nowPlaying.changed":
     case "operator.changed":

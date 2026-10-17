@@ -7,6 +7,7 @@ import type { CoreContext } from "./context.ts";
 import type { Handlers } from "./handlers.ts";
 import { journalFeature } from "../journal/feature.ts";
 import { actionsFeature } from "../actions/feature.ts";
+import { quickFeature } from "../quick/feature.ts";
 import { timersFeature } from "../windows/timers.ts";
 import { statsFeature } from "../stats/feature.ts";
 import { usageFeature } from "../data/sources/usage.ts";
@@ -28,7 +29,7 @@ export interface Feature {
   dispose?(ctx: CoreContext): void;
 }
 
-export const FEATURES = [journalFeature, actionsFeature, timersFeature, usageFeature, statsFeature, toolsFeature, operatorFeature, nowPlayingFeature] as const satisfies readonly Feature[];
+export const FEATURES = [journalFeature, actionsFeature, quickFeature, timersFeature, usageFeature, statsFeature, toolsFeature, operatorFeature, nowPlayingFeature] as const satisfies readonly Feature[];
 /** The same list, as plain Features (what loops over it need). */
 export const ALL: readonly Feature[] = FEATURES;
 

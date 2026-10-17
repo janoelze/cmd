@@ -11,6 +11,7 @@ import type { ActivityEvent, ActivityExportHeader, AgentCoverage, AgentHome, Age
 import type { JournalMethods } from "./journal.ts";
 import type { SqliteQuery, SqliteResult, SqliteRowsQuery, SqliteSchema } from "./sqlite.ts";
 import type { ActionsEvent, ActionsMethods } from "./actions.ts";
+import type { QuickEvent, QuickMethods } from "./quick.ts";
 import type { StatsEvent, StatsMethods } from "./stats.ts";
 import type { NowPlayingEvent, NowPlayingMethods } from "./nowplaying.ts";
 import type { OperatorEvent, OperatorMethods } from "./operator.ts";
@@ -85,7 +86,7 @@ export interface Placement {
 }
 
 /** Every method: the core's own, plus each feature's (declared in its own file, merged here). */
-export interface Methods extends JournalMethods, ActionsMethods, RemoteMethods, StatsMethods, NowPlayingMethods, OperatorMethods, ToolsMethods, PagesMethods, ArrangeMethods {
+export interface Methods extends JournalMethods, ActionsMethods, QuickMethods, RemoteMethods, StatsMethods, NowPlayingMethods, OperatorMethods, ToolsMethods, PagesMethods, ArrangeMethods {
   /** What a client asks first: which protocol the core speaks and what it can do (CoreHello). */
   "core.hello": { params: {}; result: CoreHello };
   /** Diagnostics for the Settings window's Updates & About page. */
@@ -495,6 +496,7 @@ export type CoreEvent =
   /** The Widget Library changed (a widget made, changed, renamed, deleted, put in or taken out of a workspace). */
   | { type: "widget.library"; entries: WidgetEntry[] }
   | ActionsEvent
+  | QuickEvent
   | StatsEvent
   | NowPlayingEvent
   | OperatorEvent
