@@ -200,13 +200,12 @@ export function pageScrollbars(doc: Document, o: PageScrollbarsOptions, span: ty
   win.__cmdScrollbars = true;
   const HIT = 10;
   const host = doc.createElement("cmd-scrollbars");
-  const fixed = { all: "initial", position: "fixed", inset: "0", "pointer-events": "none", "z-index": "2147483647" };
-  for (const [k, v] of Object.entries(fixed)) {
-    host.style.setProperty(k, v, "important");
-  }
   const shadow = host.attachShadow({ mode: "closed" });
   const sheet = new win.CSSStyleSheet();
+  // The host's own place is set from inside too, not as an inline style (which DevTools would
+  // show, spelled out, on every inspected page): important rules of a shadow tree win over the page's.
   sheet.replaceSync(`
+    :host { all: initial !important; position: fixed !important; inset: 0 !important; pointer-events: none !important; z-index: 2147483647 !important; }
     .bar { position: fixed; pointer-events: none; opacity: 0; transition: opacity 350ms ease-out; }
     .bar.on { opacity: 1; pointer-events: auto; transition-duration: 100ms; }
     .thumb { position: absolute; }

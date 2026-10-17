@@ -27,8 +27,8 @@ const methods = files("packages/protocol/src").flatMap((f) => [...read(f).matchA
 /** Where calls come from: the clients, and the core calling itself (not where methods are declared, handled or listed for remote or Operator access). */
 const callers = [...files("packages/cli/src"), ...files("apps/desktop/src"), ...files("apps/web/src"), ...files("packages/core/src").filter((f) => !/\/handlers\.ts$|\/feature\.ts$|remote\/policy\.ts$|tools\/access\.ts$|kernel\/core\.ts$/.test(f))];
 
-/** The window kinds the core registers (windows/builtin.ts, a feature's scopedWidget) and the views the renderer registers. */
-const coreKinds = new Set(files("packages/core/src").flatMap((f) => [...read(f).matchAll(/^\s+kind: "([a-z-]+)",$/gm), ...read(f).matchAll(/scopedWidget\("([a-z-]+)"/g)].filter(() => /windows\/builtin\.ts$|\/feature\.ts$/.test(f)).map((m) => m[1]!)));
+/** The window kinds the core registers (windows/builtin.ts, windows/browser.ts, a feature's scopedWidget) and the views the renderer registers. */
+const coreKinds = new Set(files("packages/core/src").flatMap((f) => [...read(f).matchAll(/^\s+kind: "([a-z-]+)",$/gm), ...read(f).matchAll(/scopedWidget\("([a-z-]+)"/g)].filter(() => /windows\/(builtin|browser)\.ts$|\/feature\.ts$/.test(f)).map((m) => m[1]!)));
 const views = new Set(files("apps/desktop/src/renderer/src/windows").filter((f) => f.endsWith("register.tsx")).flatMap((f) => [...read(f).matchAll(/registerWindowView\(\{\s*kind: "([a-z-]+)"/g)].map((m) => m[1]!)));
 /** Drawn by the board itself, not through a registered view. */
 const BOARD = ["terminal"];

@@ -214,6 +214,12 @@ const api = {
     ipcRenderer.on("inspector-target", h);
     return () => ipcRenderer.off("inspector-target", h);
   },
+  /** Inspect Element in a browser window's page (main/page-menu.ts): open or show its inspector, which reveals the node. */
+  onInspectElement(fn: (windowId: string) => void): () => void {
+    const h = (_e: unknown, id: string) => fn(id);
+    ipcRenderer.on("inspect-element", h);
+    return () => ipcRenderer.off("inspect-element", h);
+  },
   /** Copy / Select All natively in the focused frame, or in a browser window's page by its WebContents id (main/index.ts). */
   editNative: (op: "copy" | "selectAll", guestId?: number) => ipcRenderer.send("edit-native", op, guestId),
 

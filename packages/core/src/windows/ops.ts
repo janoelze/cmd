@@ -54,7 +54,7 @@ export class WindowOps {
   }
 
   async close(id: WindowId): Promise<void> {
-    // A browser window's inspector (docs/59) goes with it, first, so ⇧⌘T brings the page back first.
+    // A browser window's inspector (docs/59) goes with it.
     for (const w of this.#core.windows.list()) if (w.kind === "inspector" && w.state.for === id) this.#core.windows.close(w.id);
     if (this.#core.panes.get(id)) await this.closeTerminal(id);
     else this.#core.windows.close(id);
@@ -184,7 +184,8 @@ export class WindowOps {
   watchWindows(): void {
     const { windows, closed, store, broadcast } = this.#core;
     windows.on("removed", (id, w) => {
-      if (this.#keepsClosed(w.workspaceId)) {
+      // An inspector (docs/59) isn't one to reopen: Show Inspector opens it again, on its page.
+      if (this.#keepsClosed(w.workspaceId) && w.kind !== "inspector") {
         closed.add({ id, workspaceId: w.workspaceId, kind: w.kind, title: w.title, closedAt: Date.now(), window: w, terminal: null });
         // A Magic draft that never built is deleted with its window (magic/service.ts): nothing to reopen.
         if (w.kind === "magic") queueMicrotask(() => !this.#widgetKept(w) && closed.forget(id));

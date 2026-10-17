@@ -62,7 +62,7 @@ describe("reopening closed windows", () => {
     await core.close();
   });
 
-  it("closes a browser window's inspector with it, and brings the page back first", async () => {
+  it("closes a browser window's inspector with it, and keeps no inspector to reopen", async () => {
     const { core, proj } = setup("inspector");
     const ws = (await core.call("workspace.open", { path: proj })).workspace;
     const browser = await core.call("window.open", { kind: "browser", input: { url: "https://example.com" }, workspaceId: ws.id });
@@ -72,7 +72,7 @@ describe("reopening closed windows", () => {
     const left = core.windows.list().map((w) => w.id);
     expect(left).toContain(other.id);
     expect(left).not.toContain(inspector.id);
-    expect((await core.call("window.closed", { workspaceId: ws.id })).map((c) => c.id)).toEqual([browser.id, inspector.id]);
+    expect((await core.call("window.closed", { workspaceId: ws.id })).map((c) => c.id)).toEqual([browser.id]);
     await core.close();
   });
 

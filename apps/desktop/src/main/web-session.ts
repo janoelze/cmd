@@ -13,7 +13,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { cmdHome, logger } from "@cmd/protocol/node";
 import { allowedAppUrl, type AppPages } from "../shared/app-url.ts";
-import { handleInspectors } from "./inspector.ts";
+import { handleInspectors, isBrowserPage } from "./inspector.ts";
+import { showPageMenu } from "./page-menu.ts";
 import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, INSPECTOR_PARTITION, isAsked, isInspectorFrontend, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type MacAccess, type MacDevice, type SitePermissionRequest } from "./web-policy.ts";
 
 const log = logger("web");
@@ -73,6 +74,8 @@ app.on("web-contents-created", (_e, contents) => {
     if (params.partition !== INSPECTOR_PARTITION && !/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
   });
   if (contents.getType() === "webview") handleWindowOpen(contents);
+  // A browser window's page: right-click shows cmd's menu (main/page-menu.ts).
+  if (contents.getType() === "webview") contents.on("context-menu", (_e, p) => isBrowserPage(contents) && showPageMenu(contents, p));
   // An inspector (docs/59) stays DevTools: its links open as browser windows (handleWindowOpen), it never navigates away.
   if (contents.getType() === "webview" && contents.session === session.fromPartition(INSPECTOR_PARTITION))
     contents.on("will-navigate", (e) => {

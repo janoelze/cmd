@@ -1,12 +1,13 @@
 // Show Inspector (⌥⌘I, docs/59): on a browser window, opens its inspector where it was last
-// opened, or closes it; on an Inspector window, closes it and goes back to the page.
+// opened, or closes it; on an Inspector window, closes it and goes back to the page. And a page's
+// Inspect Element (main/page-menu.ts): its inspector opens, or shows, and reveals the node.
 
 import type { AppWindow } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
 import { select } from "../../lib/selection.ts";
 import { getState } from "../../lib/store.ts";
 import { registerCommands } from "../../shell/commands/registry.ts";
-import { closeInspector, hasPage, inspectorPlace, openInspectorAgain } from "./open.ts";
+import { closeInspector, hasPage, inspectorOf, inspectorPlace, openInspectorAgain } from "./open.ts";
 
 /** The page an Inspector window inspects. */
 const pageOf = (w: AppWindow | undefined): AppWindow | undefined => {
@@ -30,4 +31,13 @@ registerCommands({
       void (inspectorPlace(w) ? closeInspector(w) : openInspectorAgain(w)).catch(() => {});
     },
   },
+});
+
+cmd.onInspectElement((id) => {
+  const page = getState().windows.get(id);
+  if (!page) return;
+  const at = inspectorPlace(page);
+  if (!at) return void openInspectorAgain(page).catch(() => {});
+  const own = at === "window" ? inspectorOf(page.id) : undefined;
+  select(own?.id ?? page.id);
 });

@@ -802,6 +802,37 @@ await scenario("inspector", async () => {
   const gone = await until(inspectors, (l) => l.length === 0, 10_000);
   check(gone.length === 0, "Show Inspector again closes it");
 
+  // Right-click → Inspect Element (main/page-menu.ts): opens the inspector and reveals the node under the pointer.
+  // The menu is native, so main's popup is caught and its item clicked; the right-click itself is real input.
+  await page(`document.body.insertAdjacentHTML("beforeend", '<button id="pick" style="position:fixed;left:10px;top:10px;width:160px;height:40px">pick me</button>'); 0`);
+  const items = await app.evaluate(async ({ Menu, webContents }, port) => {
+    const guest = webContents.getAllWebContents().find((w) => w.getType() === "webview" && w.getURL().startsWith(`http://localhost:${port}`));
+    const shown = new Promise((resolve) => {
+      const popup = Menu.prototype.popup;
+      Menu.prototype.popup = function () {
+        Menu.prototype.popup = popup;
+        resolve(this);
+      };
+    });
+    guest.sendInputEvent({ type: "mouseDown", x: 60, y: 30, button: "right", clickCount: 1 });
+    guest.sendInputEvent({ type: "mouseUp", x: 60, y: 30, button: "right", clickCount: 1 });
+    const menu = await Promise.race([shown, new Promise((r) => setTimeout(() => r(null), 5000))]);
+    if (!menu) return null;
+    menu.items.find((i) => i.label === "Inspect Element")?.click();
+    return menu.items.filter((i) => i.label).map((i) => i.label);
+  }, port);
+  check(items?.includes("Back") && items?.includes("Inspect Element"), `right-click in a page shows its menu (${items})`);
+  const [picked] = await until(inspectors, (l) => l.length === 1, 10_000);
+  await tileIn(picked.id);
+  const SELECTED = `(() => { let out = null; const walk = (r) => { for (const el of r.querySelectorAll("*")) { if (el.shadowRoot) walk(el.shadowRoot); if (!out && el.matches("li.selected")) out = el.textContent; } }; walk(document); return out; })()`;
+  const sel = await until(() => win.evaluate(([s, js]) => document.querySelector(s)?.executeJavaScript(js) ?? null, [`.tile[data-pane="${picked.id}"] webview[data-inspector]`, SELECTED]).catch(() => null), (t) => !!t?.includes("pick"), 20_000).catch(() => null);
+  await shot(win, "inspector-inspect-element.png");
+  const shown = sel?.replace(/\u200b/g, "") ?? ""; // DevTools breaks lines with zero-width spaces
+  check(shown.startsWith('<button id="pick"'), `Inspect Element opens the inspector at the node under the pointer (${shown.slice(0, 40)})`);
+  await select(picked.id);
+  await menu("browser.inspector");
+  await until(inspectors, (l) => l.length === 0, 10_000);
+
   // Inside the page's window, beside the page, which keeps its webview (not reloaded).
   await win.evaluate((id) => window.cmd.call("window.update", { id, state: { inspector: "inside" } }), browserWin.id);
   const inside = await treeIn(`.tile[data-pane="${browserWin.id}"] webview[data-inspector]`);
