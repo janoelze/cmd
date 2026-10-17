@@ -9,18 +9,23 @@
 // creates the webview with the first address entered. A page that fails to load
 // (offline, no server, a certificate this Mac doesn't trust) shows why over the
 // webview, which would otherwise stay white; certificates: main/certificates.ts.
+// Its inspector (docs/59) can show inside, beside the page: the page sits in a Split's main
+// area either way, so opening or closing it never moves (and reloads) the page's webview.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { WebviewTag } from "electron";
 import type { AppWindow, PageActed } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
-import { Button, PAGE_SCROLLBAR_CSS, scrollbarScript, ToolbarAddressField, ToolbarButton, ToolbarGroup, View, ViewState, WebStage, WindowToolbar, type FindResults } from "@cmd/ui";
+import { Button, PAGE_SCROLLBAR_CSS, scrollbarScript, Split, ToolbarAddressField, ToolbarButton, ToolbarGroup, View, ViewState, WebStage, WindowToolbar, type FindResults } from "@cmd/ui";
 import { registerWindowActions, setWindowStatus } from "../../lib/windowActions.ts";
 import { useFind } from "../../lib/find.tsx";
 import { handleEmbedMessage } from "../../lib/embed.ts";
 import { deviceById, type Device } from "./devices.ts";
 import { readPage } from "./pageReader.ts";
 import { actScript } from "./pageActor.ts";
+import { InspectorFrame } from "../inspector/InspectorFrame.tsx";
+import { closeInspector, inspectorPlace, openInspectorAgain } from "../inspector/open.ts";
+import { useStoreValue } from "../../lib/store.ts";
 
 /** Room around an emulated device: sides and bottom, and the top (its caption). */
 const PAD = 16;
@@ -124,6 +129,8 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     const starting = (e: { isMainFrame: boolean; isInPlace: boolean }) => e.isMainFrame && !e.isInPlace && setFailed(null);
     // Pages get the app's scrollbars (drawn over them, and fading), so every window's look the same.
     const ready = () => {
+      // The guest showing the page (a new one after the webview is re-attached), for its inspector.
+      cmd.inspectorGuest(win.id, wv.getWebContentsId());
       // Shown once it has something to show: it fades in over the window's well instead of
       // flashing white (WebStage).
       wv.setAttribute("data-painted", "");
@@ -153,6 +160,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
       wv.removeEventListener("did-stop-loading", stop);
       wv.removeEventListener("dom-ready", ready);
       wv.removeEventListener("ipc-message", reported as never);
+      cmd.inspectorGuest(win.id, null);
     };
   }, [win.id, live]);
 
@@ -219,6 +227,10 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
   }, [live]);
   useEffect(() => registerWindowActions(win.id, { find: live ? find.request : undefined }), [win.id, live, find.request]);
 
+  const inside = win.state.inspector === "inside";
+  // Re-read on every change to the windows: an Inspector window of this page opening or closing.
+  const inspecting = useStoreValue((s) => (s.windows.get(win.id) ? inspectorPlace(s.windows.get(win.id)!) : null));
+
   const retry = () => failed && ref.current?.loadURL(failed.url).catch(() => {});
   const proceed = async () => {
     if (failed && (await cmd.allowCertificate(failed.url))) retry();
@@ -260,12 +272,22 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
               }}
               onEscape={() => ref.current?.focus()}
             />
+            <ToolbarButton
+              icon="chevron.left.forwardslash.chevron.right"
+              label="Inspector"
+              pressed={!!inspecting}
+              disabled={!live}
+              onClick={() => void (inspecting ? closeInspector(win) : openInspectorAgain(win)).catch(() => {})}
+              secondary
+              priority={1}
+            />
             <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url, { from: "user" })} secondary priority={1} />
           </WindowToolbar>
           {find.bar}
         </>
       }
     >
+      <Split side="end" open={inside && live} pane={<InspectorFrame forId={win.id} />} size={{ min: 280, ideal: 460, max: 1400 }}>
       <WebStage
         ref={stage}
         device={!!device}
@@ -301,6 +323,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
           <ViewState state={{ kind: "empty", icon: "globe", title: "New Tab", text: "Type a web address, localhost:3000, or a file path" }} />
         )}
       </WebStage>
+      </Split>
     </View>
   );
 }

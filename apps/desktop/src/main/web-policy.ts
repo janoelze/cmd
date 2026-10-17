@@ -36,8 +36,19 @@ export function permissionVerdict(permission: string, site: string | null, decis
   return kept === undefined ? "ask" : kept ? "allow" : "deny";
 }
 
-/** will-attach-webview: a guest in any other session (or none, the app's own) is refused. */
-export const guestPartitionAllowed = (partition: string | undefined): boolean => partition === BROWSER_PARTITION;
+/** The session of browser windows' inspectors (docs/59, main/inspector.ts): only DevTools' own front end runs there. */
+export const INSPECTOR_PARTITION = "persist:cmd-inspector";
+
+/** The DevTools front end inside Electron, told to talk CDP to main's bridge on this Mac: all an inspector may show. */
+export const isInspectorFrontend = (url: string | undefined): boolean =>
+  /^devtools:\/\/devtools\/bundled\/devtools_app\.html\?ws=127\.0\.0\.1:\d{1,5}\/[0-9a-f]{32}$/.test(url ?? "");
+
+/**
+ * will-attach-webview: a guest in the browser session, or DevTools' front end in the inspector
+ * session; any other session (or none, the app's own) is refused.
+ */
+export const guestPartitionAllowed = (partition: string | undefined, src?: string): boolean =>
+  partition === BROWSER_PARTITION || (partition === INSPECTOR_PARTITION && isInspectorFrontend(src));
 
 /** site-permissions.json as read from disk: only well-formed entries survive. */
 export function parseDecisions(json: unknown): SiteDecisions {

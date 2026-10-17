@@ -9,6 +9,7 @@ import "./image/register.tsx";
 import "./video/register.tsx";
 import "./jam/register.tsx";
 import "./browser/register.tsx";
+import "./inspector/register.tsx";
 import "./files/register.tsx";
 import "./pdf/register.tsx";
 import "./text/register.tsx";

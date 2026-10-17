@@ -160,6 +160,15 @@ describe("window manager", () => {
     expect(wins.update(b.id, { state: { device: null } }).state).toEqual({ url: "http://localhost:3000" });
   });
 
+  it("keeps whether a browser window shows its inspector inside, and opens inspectors only for a window", () => {
+    const { wins } = make(builtins(), {}, path.join(dir, "inspector.sqlite"));
+    const b = wins.open("browser", { url: "example.com" }, workspace);
+    expect(wins.update(b.id, { state: { inspector: "inside" } }).state).toEqual({ url: "https://example.com", inspector: "inside" });
+    expect(wins.update(b.id, { state: { inspector: "elsewhere" } }).state).toEqual({ url: "https://example.com" });
+    expect(wins.open("inspector", { for: b.id }, workspace)).toMatchObject({ kind: "inspector", state: { for: b.id }, title: "Inspector" });
+    expect(() => wins.open("inspector", {}, workspace)).toThrow(/browser window/);
+  });
+
   it("switches a window's type in place (Markdown ⇄ text), keeping its id", () => {
     const { wins } = make(builtins(), {}, path.join(dir, "switch.sqlite"));
     const md = file("readme.md", "# Title");

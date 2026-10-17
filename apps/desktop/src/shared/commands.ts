@@ -108,6 +108,8 @@ export const COMMANDS = spec([
   { id: "view.cycleWidth", label: "Cycle Window Width", keys: ["Ctrl+Cmd+R"], menu: "View/layout" },
   { id: "view.widen", label: "Wider Window", keys: ["Alt+Cmd+Plus", "Alt+Cmd+="], menu: "View/layout" },
   { id: "view.narrow", label: "Narrower Window", keys: ["Alt+Cmd+-"], menu: "View/layout" },
+  // docs/59: a browser window's DevTools; checked while open.
+  { id: "browser.inspector", label: "Show Inspector", keys: ["Alt+Cmd+I"], checkable: "checkbox", menu: "View/browser" },
   { id: "view.toggleEdit", label: "Toggle Preview / Edit", keys: ["Cmd+E"], menu: "View/layout" },
   // Sidebars (docs/21-sidebars.md). view.sidebar keeps its id: keybindings.json uses it.
   { id: "view.sidebar", label: "Show Left Sidebar", keys: ["Ctrl+Cmd+S"], checkable: "checkbox", menu: "View/sidebars" },

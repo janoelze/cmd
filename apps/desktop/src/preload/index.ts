@@ -204,6 +204,16 @@ const api = {
   /** Onboarding steps shown (done or skipped): not shown again at launch. */
   onboardingSeen: (ids: string[]) => ipcRenderer.send("onboarding-seen", ids),
   closeWindow: () => ipcRenderer.send("close-window"),
+  /** A browser window's page is shown by this webview guest now (null: none), for its inspector (main/inspector.ts, docs/59). */
+  inspectorGuest: (windowId: string, guestId: number | null) => ipcRenderer.send("inspector-guest", windowId, guestId),
+  /** The address of a browser window's DevTools front end; the same for the window, so a reload reconnects. */
+  inspectorUrl: (windowId: string): Promise<string> => ipcRenderer.invoke("inspector-url", windowId),
+  /** A browser window's page moved to another guest (or got one): its inspector reconnects. */
+  onInspectorTarget(fn: (windowId: string) => void): () => void {
+    const h = (_e: unknown, id: string) => fn(id);
+    ipcRenderer.on("inspector-target", h);
+    return () => ipcRenderer.off("inspector-target", h);
+  },
   /** Copy / Select All natively in the focused frame, or in a browser window's page by its WebContents id (main/index.ts). */
   editNative: (op: "copy" | "selectAll", guestId?: number) => ipcRenderer.send("edit-native", op, guestId),
 

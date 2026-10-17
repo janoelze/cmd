@@ -54,6 +54,8 @@ export class WindowOps {
   }
 
   async close(id: WindowId): Promise<void> {
+    // A browser window's inspector (docs/59) goes with it, first, so ⇧⌘T brings the page back first.
+    for (const w of this.#core.windows.list()) if (w.kind === "inspector" && w.state.for === id) this.#core.windows.close(w.id);
     if (this.#core.panes.get(id)) await this.closeTerminal(id);
     else this.#core.windows.close(id);
   }

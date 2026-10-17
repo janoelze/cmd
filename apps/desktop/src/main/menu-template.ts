@@ -22,7 +22,7 @@ function layout(mac: boolean, appName: string): Menu[] {
       groups: [["File/new"], ["File/agents"], ["File/windows"], ["File/workspace", { recent: true }], ["File/save"], ["File/files"], ["File/close"], ["File/settings"], ...(mac ? [] : [["App/settings"], [r("quit")]])],
     },
     { label: "Edit", groups: [[r("undo"), r("redo")], [r("cut"), "Edit/copy", r("paste"), "Edit/select"], ["Edit/find"], ["Edit/text", { submenu: "Lines", slot: "Edit/lines" }, { submenu: "Code Folding", slot: "Edit/folding" }], ["Edit/terminal"]] },
-    { label: "View", groups: [["View/layout"], ["View/sidebars"], ["View/palette"], ["View/zoom"], ["View/editor"], [r("togglefullscreen")], ["@developer"]] },
+    { label: "View", groups: [["View/layout"], ["View/sidebars"], ["View/palette"], ["View/zoom"], ["View/editor"], ["View/browser"], [r("togglefullscreen")], ["@developer"]] },
     { label: "Session", groups: [["Session/move"], ["Session/select", "Session/agent"], [{ quick: "Session/quick" }]] },
     { label: "Workspace", groups: [["Workspace/move", "Workspace/select"], ["Workspace/edit"], ["Workspace/actions"], ["Workspace/close"]] },
     { label: "Widgets", groups: [["Widgets/library"], ["Widgets/widget"], ["Widgets/remove"]] },
@@ -84,7 +84,8 @@ export function menuTemplate(send: Send, bindings: Keybindings, o: MenuOptions):
   const part = (p: Part): MenuItemConstructorOptions[] => {
     if (typeof p !== "string" && "quick" in p) return [quickMenu(o, send, bindings, (bySlot.get(p.quick) ?? []).flatMap((c) => items(c, send, bindings)))];
     if (typeof p !== "string") return "recent" in p ? [recentMenu(o)] : "submenu" in p ? [{ label: p.submenu, submenu: (bySlot.get(p.slot) ?? []).flatMap((c) => items(c, send, bindings)) }] : [p];
-    if (p === "@developer") return [{ label: "Developer", submenu: [{ role: "reload" }, { role: "toggleDevTools" }] }];
+    // The app's own DevTools: ⌥⌘I is a browser window's (Show Inspector).
+    if (p === "@developer") return [{ label: "Developer", submenu: [{ role: "reload" }, { role: "toggleDevTools", accelerator: "Alt+Shift+Cmd+I" }] }];
     return (bySlot.get(p) ?? []).flatMap((c) => items(c, send, bindings, o.lists));
   };
   return layout(o.mac, o.appName).map((m) => {

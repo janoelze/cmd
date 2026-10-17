@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type MacAccess, type MacDevice } from "../src/main/web-policy.ts";
+import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, INSPECTOR_PARTITION, isInspectorFrontend, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type MacAccess, type MacDevice } from "../src/main/web-policy.ts";
 
 const SITE = "https://meet.example.com";
 
@@ -46,6 +46,16 @@ describe("will-attach-webview", () => {
   it("refuses a guest in any session but the browser one", () => {
     expect(guestPartitionAllowed(BROWSER_PARTITION)).toBe(true);
     for (const p of [undefined, "", "persist:other", "cmd-widget-preview", "persist:cmd-browser ", "cmd-browser"]) expect(guestPartitionAllowed(p)).toBe(false);
+  });
+
+  it("lets the inspector session show only DevTools' front end talking to this Mac (docs/59)", () => {
+    const front = `devtools://devtools/bundled/devtools_app.html?ws=127.0.0.1:52011/${"a1".repeat(16)}`;
+    expect(isInspectorFrontend(front)).toBe(true);
+    expect(guestPartitionAllowed(INSPECTOR_PARTITION, front)).toBe(true);
+    for (const src of [undefined, "about:blank", "https://example.com", front.replace("127.0.0.1", "example.com"), front + "&x=1", front.replace("devtools_app", "inspector"), `${front.slice(0, -2)}zz`])
+      expect(guestPartitionAllowed(INSPECTOR_PARTITION, src)).toBe(false);
+    // The front end never runs in the browser session's place, nor a page in the inspector's.
+    expect(guestPartitionAllowed("persist:other", front)).toBe(false);
   });
 
   it("forget one answer, or all of a site's, and nothing else (Settings → Browser)", () => {

@@ -16,7 +16,7 @@ let registry: typeof import("../src/renderer/src/shell/commands/registry.ts");
 let palette: typeof import("../src/renderer/src/shell/palette.ts");
 beforeAll(async () => {
   await import("../src/renderer/src/shell/commands/index.ts");
-  for (const k of ["files", "magic", "actions", "text", "operator"]) await import(`../src/renderer/src/windows/${k}/commands.ts`);
+  for (const k of ["files", "magic", "actions", "text", "operator", "inspector"]) await import(`../src/renderer/src/windows/${k}/commands.ts`);
   registry = await import("../src/renderer/src/shell/commands/registry.ts");
   palette = await import("../src/renderer/src/shell/palette.ts");
 });

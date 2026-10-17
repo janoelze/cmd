@@ -13,7 +13,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { cmdHome, logger } from "@cmd/protocol/node";
 import { allowedAppUrl, type AppPages } from "../shared/app-url.ts";
-import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, isAsked, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type MacAccess, type MacDevice, type SitePermissionRequest } from "./web-policy.ts";
+import { handleInspectors } from "./inspector.ts";
+import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, INSPECTOR_PARTITION, isAsked, isInspectorFrontend, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type MacAccess, type MacDevice, type SitePermissionRequest } from "./web-policy.ts";
 
 const log = logger("web");
 const here = import.meta.dirname; // apps/desktop/out/main
@@ -57,7 +58,7 @@ function handleWindowOpen(contents: WebContents): void {
 app.on("web-contents-created", (_e, contents) => {
   contents.on("will-attach-webview", (ev, prefs, params) => {
     // Web content only ever runs in the browser session: never the app's own, where cmd-file: reads media files.
-    if (!guestPartitionAllowed(params.partition)) {
+    if (!guestPartitionAllowed(params.partition, params.src)) {
       log.warn(`refused a guest outside ${BROWSER_PARTITION} (${params.partition || "no partition"})`);
       return ev.preventDefault();
     }
@@ -69,9 +70,16 @@ app.on("web-contents-created", (_e, contents) => {
     prefs.sandbox = true;
     prefs.scrollBounce = true; // pages bounce at their edges, like the rest of the app
     prefs.safeDialogs = true; // a page looping alert() can be stopped
-    if (!/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
+    if (params.partition !== INSPECTOR_PARTITION && !/^(https?|about|file):/i.test(params.src ?? "")) params.src = "about:blank";
   });
   if (contents.getType() === "webview") handleWindowOpen(contents);
+  // An inspector (docs/59) stays DevTools: its links open as browser windows (handleWindowOpen), it never navigates away.
+  if (contents.getType() === "webview" && contents.session === session.fromPartition(INSPECTOR_PARTITION))
+    contents.on("will-navigate", (e) => {
+      if (isInspectorFrontend(e.url)) return;
+      e.preventDefault();
+      if (/^https?:/i.test(e.url)) appWindowOf(contents)?.send("open-url", e.url);
+    });
   // App and utility windows (pop-ups from pages are in the browser session).
   else if (contents.getType() === "window" && contents.session !== session.fromPartition(BROWSER_PARTITION)) guardAppWindow(contents);
 });
@@ -250,6 +258,7 @@ async function withMacAccess(allowed: boolean, mediaTypes: readonly string[] | u
  */
 export function startWebSession(o: { pages: AppPages; appWindows: () => BrowserWindow[] }): void {
   pages = o;
+  handleInspectors(o.appWindows);
   const ses = session.fromPartition(BROWSER_PARTITION);
   ses.setPermissionCheckHandler((_wc, permission, origin) => permissionVerdict(permission, siteOf(origin), isAsked(permission) ? decisions() : {}) === "allow");
   ses.setPermissionRequestHandler((wc, permission, done, details) => {

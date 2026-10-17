@@ -3,54 +3,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { ACTIONS_TITLE } from "@cmd/protocol";
 import type { WindowType, WindowTypes } from "./types.ts";
 import { databaseOf, isSqliteFile } from "../sqlite/service.ts";
 import { scopedWidget } from "./scoped.ts";
 import { FEATURE_TYPES } from "./featured.ts";
+import { browserType, inspectorType } from "./browser.ts";
+
+export { browserType, inspectorType, normalizeUrl } from "./browser.ts";
 
 export const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
-
-/** Accepts "example.com", "localhost:3000", full URLs, file paths (~ expanded); rejects anything else. */
-export function normalizeUrl(input: string): string {
-  const t = input.trim();
-  if (!t) return "about:blank";
-  // file://~/x: Chromium would take "~" for a host and abort the load.
-  const home = t.match(/^file:(?:\/\/)?~(?=$|\/)/i);
-  if (home) return pathToFileURL(os.homedir()).href + t.slice(home[0].length);
-  if (/^(~|\/)/.test(t)) return pathToFileURL(expandHome(t)).href;
-  if (/^(https?|file|about):/i.test(t)) return t;
-  if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(t)) return `http://${t}`;
-  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/|$)/.test(t)) return `https://${t}`;
-  throw new Error(`not a URL: ${input}`);
-}
-
-/** `device`: the emulated device size the page is shown at (an id from the renderer's devices.ts), else the window's size. */
-export const browserType: WindowType<{ url: string; device?: string }> = {
-  kind: "browser",
-  title: "Browser",
-  icon: "globe",
-  opens: {
-    schemes: ["http", "https", "file"],
-    extensions: ["html", "htm", "xhtml", "svg", "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico"],
-  },
-  fromTarget: (t) => ({ url: t.type === "url" ? t.url : pathToFileURL(t.path).href }),
-  create(input) {
-    const url = normalizeUrl(str(input.url) ?? "");
-    return { state: { url }, title: url === "about:blank" ? "New Tab" : url };
-  },
-  update(state, patch) {
-    const next = { ...state };
-    if (str(patch.url) !== undefined) next.url = normalizeUrl(str(patch.url)!);
-    if ("device" in patch) {
-      if (str(patch.device)) next.device = str(patch.device);
-      else delete next.device; // null or "": back to the window's size
-    }
-    return { state: next };
-  },
-};
 
 export const filesType: WindowType<{ path: string }> = {
   kind: "files",
@@ -707,6 +670,7 @@ export const navigatorType: WindowType<Record<string, never>> = {
 export function registerBuiltins(types: WindowTypes): void {
   types.register(terminalType);
   types.register(browserType);
+  types.register(inspectorType);
   types.register(filesType);
   types.register(textType);
   types.register(markdownType);

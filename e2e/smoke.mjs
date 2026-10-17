@@ -211,6 +211,7 @@ const SCENARIOS = {
   "sidebar-search": [],
   browser: [],
   "blank-browser": [],
+  inspector: ["browser"],
   "site-permissions": ["browser"],
   approvals: [],
   quick: [],
@@ -761,6 +762,57 @@ await scenario("blank-browser", async () => {
   } finally {
     await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
   }
+});
+
+// A browser window's inspector (docs/59): DevTools' own front end in a window beside the page,
+// connected to the page through main (main/inspector.ts); then inside the page's window.
+await scenario("inspector", async () => {
+  // The tag names DevTools' Elements tree shows (they live in its shadow roots).
+  const TREE = `(() => { const out = []; const walk = (r) => { for (const el of r.querySelectorAll("*")) { if (el.shadowRoot) walk(el.shadowRoot); if (el.classList?.contains("webkit-html-tag-name")) out.push(el.textContent); } }; walk(document); return out.join(","); })()`;
+  const treeIn = (sel) => until(() => win.evaluate(([sel, js]) => document.querySelector(sel)?.executeJavaScript(js) ?? null, [sel, TREE]).catch(() => null), (t) => !!t?.includes("body"), 20_000).catch(() => null);
+  const inspectors = () => win.evaluate((id) => window.cmd.call("window.list", {}).then((l) => l.filter((w) => w.kind === "inspector" && w.state.for === id)), browserWin.id);
+  const page = (js) => win.evaluate(([id, js]) => document.querySelector(`.tile[data-pane="${id}"] webview:not([data-inspector])`).executeJavaScript(js), [browserWin.id, js]);
+  await select(browserWin.id);
+  await page("window.__kept = 'same page'");
+
+  await menu("browser.inspector");
+  const [ins] = await until(inspectors, (l) => l.length === 1, 10_000);
+  await tileIn(ins.id);
+  const tree = await treeIn(`.tile[data-pane="${ins.id}"] webview[data-inspector]`);
+  await shot(win, "inspector-window.png");
+  check(!!tree, `Show Inspector opens DevTools in a window of its own, showing the page's elements (${tree})`);
+  const order = (await until(homeView, (v) => v["grid.order"]?.includes(ins.id)))["grid.order"];
+  check(order.indexOf(ins.id) === order.indexOf(browserWin.id) + 1, `the inspector goes right after its page on the board (${order.indexOf(browserWin.id)}, ${order.indexOf(ins.id)})`);
+  // Docking the page re-attaches its webview: a new guest, which the inspector reconnects to.
+  const ws = (await homeView()) && (await win.evaluate(() => window.cmd.call("workspace.list", {}).then((l) => l.find((s) => s.home).id)));
+  const arrange = (move) => win.evaluate(([workspaceId, move]) => window.cmd.call("workspace.arrange", { workspaceId, move }), [ws, move]);
+  await page("window.__kept = 'before docking'");
+  await arrange({ op: "dock", id: browserWin.id, side: "right" });
+  await until(() => page("window.__kept").catch(() => null), (k) => k === undefined || k === null, 10_000); // the page reloaded in its new place
+  const again = await treeIn(`.tile[data-pane="${ins.id}"] webview[data-inspector]`);
+  await page("document.body.setAttribute('data-docked', 'yes')");
+  const fresh = await until(() => win.evaluate((sel) => document.querySelector(sel)?.executeJavaScript(`(() => { let hit = false; const walk = (r) => { for (const el of r.querySelectorAll("*")) { if (el.shadowRoot) walk(el.shadowRoot); if (el.classList?.contains("webkit-html-attribute-name") && el.textContent === "data-docked") hit = true; } }; walk(document); return hit; })()`), `.tile[data-pane="${ins.id}"] webview[data-inspector]`).catch(() => false), Boolean, 10_000).catch(() => false);
+  check(!!again && fresh, `after the page is docked, the inspector follows it to its new webview (${again}, ${fresh})`);
+  await arrange({ op: "board", id: browserWin.id });
+  await page("window.__kept = 'same page'").catch(() => {});
+  await until(() => page("window.__kept").catch(() => null), (k) => k === "same page", 10_000);
+  // ⌥⌘I with the inspector selected closes it.
+  await select(ins.id);
+  await menu("browser.inspector");
+  const gone = await until(inspectors, (l) => l.length === 0, 10_000);
+  check(gone.length === 0, "Show Inspector again closes it");
+
+  // Inside the page's window, beside the page, which keeps its webview (not reloaded).
+  await win.evaluate((id) => window.cmd.call("window.update", { id, state: { inspector: "inside" } }), browserWin.id);
+  const inside = await treeIn(`.tile[data-pane="${browserWin.id}"] webview[data-inspector]`);
+  await shot(win, "inspector-inside.png");
+  check(!!inside, `the inspector inside the browser window shows the page's elements (${inside})`);
+  check((await page("window.__kept")) === "same page", "opening it inside doesn't reload the page");
+  await select(browserWin.id);
+  await menu("browser.inspector");
+  await win.locator(`.tile[data-pane="${browserWin.id}"] webview[data-inspector]`).waitFor({ state: "detached", timeout: 10_000 }).catch(expired("inspector inside to close"));
+  const state = await win.evaluate((id) => window.cmd.call("window.list", {}).then((l) => l.find((w) => w.id === id)?.state), browserWin.id);
+  check(!state?.inspector, "Show Inspector again closes the one inside");
 });
 
   // A page asking for the camera and microphone gets cmd's sheet, never a silent grant;
