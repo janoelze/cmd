@@ -9,7 +9,11 @@
 // Only totals are ever shown.
 //
 // `installs` keeps an install's latest version, macOS and arch of the day and
-// `counts` its totals; release health reads `install_versions` and
+// `counts` its totals. An install is active on a day it launched the app,
+// opened a window or started an agent (USED); the core also sends one empty
+// batch a day while it runs, app closed or not, so `installs` alone says which
+// installs were running, not used.
+// release health reads `install_versions` and
 // `version_counts`, which keep each version apart, so an install that updates
 // mid-day doesn't charge the morning's crashes to the evening's version.
 // Crashes an install recorded on an older version arrive in a batch's
@@ -35,6 +39,9 @@ const UNSIGNED_UNTIL = '2026-10-19';
 const IDS_PER_SENDER_PER_DAY = 10;
 /** Batches one sender may send in a minute (an app sends one). */
 const BATCHES_PER_SENDER_PER_MINUTE = 20;
+/** SQL: install i (day, id) was used that day, not only running. */
+const USED = "EXISTS (SELECT 1 FROM counts u WHERE u.day = i.day AND u.id = i.id AND u.n > 0
+    AND (u.name = 'app.launch' OR u.name LIKE 'window.%' OR u.name LIKE 'agent.%'))";
 
 function data_dir(): string
 {
@@ -231,12 +238,13 @@ function summary(int $days = 30): array
 
     $daily = [];
     for ($t = strtotime("$from UTC"); ($d = gmdate('Y-m-d', $t)) <= $today; $t += 86400) $daily[$d] = 0;
-    foreach ($q('SELECT day, COUNT(*) AS n FROM installs WHERE day >= ? GROUP BY day', [$from]) as $r) $daily[$r['day']] = (int) $r['n'];
+    foreach ($q('SELECT day, COUNT(*) AS n FROM installs i WHERE day >= ? AND ' . USED . ' GROUP BY day', [$from]) as $r) $daily[$r['day']] = (int) $r['n'];
+    $active = fn(string $since) => $scalar('SELECT COUNT(DISTINCT id) AS n FROM installs i WHERE day >= ? AND ' . USED, [$since]);
 
     $pairs = fn(array $rows) => array_column(array_map(fn($r) => [$r['k'], (int) $r['n']], $rows), 1, 0);
     $counts = $pairs($q('SELECT name AS k, SUM(n) AS n FROM counts WHERE day >= ? GROUP BY name ORDER BY n DESC', [$from]));
     $users = $pairs($q('SELECT name AS k, COUNT(DISTINCT id) AS n FROM counts WHERE day >= ? GROUP BY name', [$from]));
-    $active30 = $scalar('SELECT COUNT(DISTINCT id) AS n FROM installs WHERE day >= ?', [$from]);
+    $active30 = $active($from);
     // {kind: {count, installs, share}} for the names under a prefix.
     $prefixed = function (string $prefix) use ($counts, $users, $active30): array {
         $out = [];
@@ -277,8 +285,10 @@ function summary(int $days = 30): array
         'from' => $from,
         'to' => $today,
         'activeToday' => $daily[$today] ?? 0,
-        'active7' => $scalar('SELECT COUNT(DISTINCT id) AS n FROM installs WHERE day >= ?', [$week]),
+        'active7' => $active($week),
         'active30' => $active30,
+        // Cores that reported today, used or not (the app closed, an install that stopped updating).
+        'runningToday' => $scalar('SELECT COUNT(*) AS n FROM installs WHERE day = ?', [$today]),
         'installs' => $scalar('SELECT COUNT(DISTINCT id) AS n FROM installs'),
         'launches' => $counts['app.launch'] ?? 0,
         'daily' => $daily,

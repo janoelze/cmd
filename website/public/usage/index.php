@@ -27,6 +27,7 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
   <div class="card tile"><div class="label">Active today</div><div class="value"><?= number_format($s['activeToday']) ?></div></div>
   <div class="card tile"><div class="label">Active, 7 days</div><div class="value"><?= number_format($s['active7']) ?></div></div>
   <div class="card tile"><div class="label">Active, 30 days</div><div class="value"><?= number_format($s['active30']) ?></div></div>
+  <div class="card tile"><div class="label">Running today</div><div class="value"><?= number_format($s['runningToday']) ?></div></div>
   <div class="card tile"><div class="label">Launches, 30 days</div><div class="value"><?= number_format($s['launches']) ?></div></div>
 </div>
 
@@ -43,8 +44,8 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 <div class="grid2">
   <div><h2>Windows opened, 30 days</h2><div class="card"><?php bars($s['windows']) ?></div></div>
   <div><h2>Agents started, 30 days</h2><div class="card"><?php bars($s['agents']) ?></div></div>
-  <div><h2>Versions, installs active in 7 days</h2><div class="card"><?php bars($s['versions']) ?></div></div>
-  <div><h2>macOS, installs active in 30 days</h2><div class="card"><?php bars($macos) ?></div></div>
+  <div><h2>Versions, installs running in 7 days</h2><div class="card"><?php bars($s['versions']) ?></div></div>
+  <div><h2>macOS, installs running in 30 days</h2><div class="card"><?php bars($macos) ?></div></div>
   <div><h2>Processor</h2><div class="card"><?php bars($s['arch']) ?></div></div>
   <div><h2>Crashes by process, 30 days</h2><div class="card"><?php bars($s['crashes'], 'None.') ?></div></div>
 </div>
@@ -71,6 +72,6 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 <?php endif ?>
 </div>
 
-<p class="muted note">Crashes are when a process died or a window went blank; internal errors are ones cmd caught and kept running. A crash is counted with the version that reports it, usually the one that crashed. Days are UTC. <?= number_format($s['installs']) ?> installs seen in total. <a href="?format=json">JSON</a></p>
+<p class="muted note">Active means cmd was opened or used that day: a launch, a window or an agent. Running counts every install whose cmd reported in, used or not, since terminals keep running after the app is closed. Crashes are when a process died or a window went blank; internal errors are ones cmd caught and kept running. A crash is counted with the version that reports it, usually the one that crashed. Days are UTC. <?= number_format($s['installs']) ?> installs seen in total. <a href="?format=json">JSON</a></p>
 <?php
 page_end();
