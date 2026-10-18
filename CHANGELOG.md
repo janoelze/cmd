@@ -2,6 +2,12 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.32.1 — 2026-10-18
+
+### Fixed
+
+- The app opens again: version 0.32.0 quit at launch with a JavaScript error.
+
 ## 0.32.0 — 2026-10-18
 
 ### New
