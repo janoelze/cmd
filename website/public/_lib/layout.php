@@ -98,11 +98,17 @@ kbd { display: inline-block; min-width: 1.6em; padding: 0 0.4em; font: 0.92em/1.
 .bars .fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; min-width: 3px; }
 .bars .n { font-variant-numeric: tabular-nums; color: var(--ink-2); text-align: right; }
 .bars .k, td.tag { font-family: var(--mono); font-size: 0.92em; }
-.daily { display: flex; align-items: flex-end; gap: 3px; height: 90px; }
+.chart { position: relative; height: 160px; }
+.daily { display: flex; align-items: flex-end; gap: 3px; height: 136px; }
 .daily .col { flex: 1; height: 100%; display: flex; align-items: flex-end; }
 .daily .col span { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 1px; }
 .daily .col:hover span { background: var(--link); }
 .axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: var(--fs-xs); margin-top: 4px; }
+/* uPlot's (assets/charts.js): a hairline cursor and a tooltip over the bar. */
+.chart .u-hz .u-cursor-x { border-right: 1px solid var(--ink-3); opacity: 0.5; }
+.chart-tip { position: absolute; top: 0; z-index: 1; pointer-events: none; translate: -50% 0; white-space: nowrap;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: var(--fs-xs); color: var(--ink-2); }
+.chart-tip b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 table { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
 td, th { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--ink-2); font-weight: 500; font-size: var(--fs-sm); }
@@ -239,15 +245,20 @@ function page_end(): void
 <?php
 }
 
-/** A column per day ({day: n}), with the first day, the peak and the last day under it. */
-function days(array $days, string $label): void
+/**
+ * A column per day ({day: n}), with the first day, the peak and the last day
+ * under it; assets/charts.js draws it as a chart, $unit names a day's value in
+ * its tooltip ("installs"). The columns stay without JS.
+ */
+function days(array $days, string $label, string $unit): void
 {
     $max = max($days) ?: 1;
+    echo '<div class="chart" data-days="' . h(json_encode($days)) . '" data-unit="' . h($unit) . '">';
     echo '<div class="daily" role="img" aria-label="' . h($label . ', ' . array_key_first($days) . ' to ' . array_key_last($days)) . '">';
     foreach ($days as $day => $n) {
         echo '<div class="col" title="' . h("$day: $n") . '"><span style="height:' . round($n / $max * 100, 1) . '%"></span></div>';
     }
-    echo '</div><div class="axis"><span>' . h((string) array_key_first($days)) . '</span><span>peak ' . number_format(max($days)) . '</span><span>' . h((string) array_key_last($days)) . '</span></div>';
+    echo '</div><div class="axis"><span>' . h((string) array_key_first($days)) . '</span><span>peak ' . number_format(max($days)) . '</span><span>' . h((string) array_key_last($days)) . '</span></div></div>';
 }
 
 /**

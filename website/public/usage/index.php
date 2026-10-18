@@ -31,10 +31,10 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 </div>
 
 <h2>Active installs per day</h2>
-<div class="card"><?php days($s['daily'], 'Active installs per day') ?></div>
+<div class="card"><?php days($s['daily'], 'Active installs per day', 'installs') ?></div>
 
 <h2>Windows opened per day</h2>
-<div class="card"><?php days($s['windowsDaily'], 'Windows opened per day') ?></div>
+<div class="card"><?php days($s['windowsDaily'], 'Windows opened per day', 'windows') ?></div>
 
 <div class="grid2">
   <div><h2>Windows opened, 30 days</h2><div class="card"><?php bars($s['windows']) ?></div></div>
@@ -68,5 +68,8 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 </div>
 
 <p class="muted note">Active means cmd was opened or used that day: a launch, a window or an agent. Running counts every install whose cmd reported in, used or not, since terminals keep running after the app is closed. Crashes are when a process died or a window went blank; internal errors are ones cmd caught and kept running. A crash is counted with the version that reports it, usually the one that crashed. Days are UTC. <?= number_format($s['installs']) ?> installs seen in total. <a href="?format=json">JSON</a></p>
+<link rel="stylesheet" href="../assets/vendor/uplot/uPlot.min.css">
+<script src="../assets/vendor/uplot/uPlot.iife.min.js"></script>
+<script src="../assets/charts.js"></script>
 <?php
 page_end();
