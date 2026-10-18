@@ -70,7 +70,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "open",
     title: "Opening Files",
-    icon: "arrow-square-out",
+    icon: "folder-open",
     sections: [
       { title: "The open command", items: ["shell.openFolders", "shell.openFiles", "shell.openUrls"] },
       { title: "File types", items: ["open.handlers"] },
@@ -140,7 +140,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "data",
     title: "Data",
-    icon: "hard-drive",
+    icon: "database",
     sections: [
       { title: "What cmd keeps", items: ["data.record.transcripts", "data.record.output", "data.record.browsing", "data.record.actions"] },
       { title: "For how long", items: ["data.keepDays"] },
