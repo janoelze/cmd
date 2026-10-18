@@ -206,9 +206,31 @@ jobs:
             done
           fi
 
-      # The packaged app itself: window, bundled core, a terminal with a prompt.
+      # The packaged app itself, copied out of the checkout as users run it (inside it, Node
+      # finds what app.asar lacks in node_modules; 0.32.0 shipped without ws that way):
+      # window, bundled core, a terminal with a prompt, nothing thrown in main.
       - name: Check the packaged app
         run: node e2e/packaged.mjs
+
+      # The smoke test's scenarios on that packaged app, before anything is published (the
+      # smoke job drives the source build). Skips the two that need a source-only test hook.
+      - name: Smoke test the packaged app
+        timeout-minutes: 12
+        env:
+          CMD_NO_SANDBOX: "1"
+          SHELL: /bin/zsh
+        run: node e2e/smoke.mjs --shards 2 --packaged
+
+      - name: Packaged smoke test screenshots and logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-packaged-mac
+          path: |
+            .cmd-dev/shots
+            .cmd-dev/e2e*/logs
+          include-hidden-files: true
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:

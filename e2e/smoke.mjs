@@ -8,6 +8,8 @@
 // Pages run with Reduce Motion, so glides and fades end at once and checks don't
 // wait out animations (no check here is about motion: e2e/motion.mjs and the kit's
 // Dialog test measure that). E2E_MOTION=1 keeps real motion.
+// --packaged (pnpm e2e:packaged) drives the packaged app in apps/desktop/dist, copied out
+// of the checkout as users run it (e2e/packaged-app.mjs), instead of the build in out/.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -16,6 +18,7 @@ import http from "node:http";
 import { _electron as electron } from "playwright";
 import { connect } from "../packages/protocol/src/node.ts";
 import { corePid, stopCore } from "../scripts/stop-core.mjs";
+import { mainCrashes, packagedApp } from "./packaged-app.mjs";
 import { fitScreen, screenEnv } from "./screen.mjs";
 
 const arg = (name) => {
@@ -29,6 +32,14 @@ const shards = Number(arg("--shards") ?? process.env.E2E_SHARDS ?? 1);
 const shard = arg("--shard")?.split("/").map(Number) ?? null;
 
 const root = path.resolve(import.meta.dirname, "..");
+// The packaged app's executable (E2E_APP, which shards inherit), else the source build.
+if (process.argv.includes("--packaged") && !process.env.E2E_APP) {
+  const packaged = packagedApp();
+  process.env.E2E_APP = packaged.exe;
+  process.on("exit", () => packaged.remove());
+  console.log(`packaged app: ${packaged.exe}`);
+}
+const packagedExe = process.env.E2E_APP;
 const shots = path.join(root, ".cmd-dev", "shots");
 if (!shard) {
   fs.mkdirSync(shots, { recursive: true });
@@ -101,9 +112,9 @@ const require = createRequire(path.join(root, "apps/desktop/package.json"));
 const motion = !!process.env.E2E_MOTION;
 const launch = async () => {
   const app = await electron.launch({
-    executablePath: require("electron"),
+    executablePath: packagedExe ?? require("electron"),
     // Fake camera and microphone (not a fake permission prompt): a page's getUserMedia reaches cmd's sheet without real devices.
-    args: ["--use-fake-device-for-media-stream", path.join(root, "apps/desktop")],
+    args: ["--use-fake-device-for-media-stream", ...(packagedExe ? [] : [path.join(root, "apps/desktop")])],
     env: { ...process.env, CMD_HOME: home, CMD_USAGE_URL: "off", CMD_DEV_KEYS: "off", CMD_NO_SANDBOX: "1", CMD_BACKGROUND: process.env.E2E_VISIBLE ? "" : "1", CMD_MAGIC_UNSANDBOXED: "1", CMD_TRANSCRIPTS_HOME: transcripts, ...screenEnv() },
   });
   // Reduce Motion in every page: the app window, Settings, browser pages (webviews are pages
@@ -281,10 +292,16 @@ const wanted = (() => {
   console.log(`only: ${[...want].join(", ")}`);
   return want;
 })();
+// Scenarios that need a test hook the renderer only installs outside app.asar.
+const SOURCE_ONLY = new Set(["resync", "error-boundary"]);
 async function scenario(name, fn) {
   const needs = SCENARIOS[name];
   if (!needs) throw new Error(`scenario ${name} isn't listed in SCENARIOS`);
   if (wanted && !wanted.has(name)) return void outcome.set(name, "not run");
+  if (packagedExe && SOURCE_ONLY.has(name)) {
+    console.log(`skip - ${name} (its test hook isn't in a packaged app)`);
+    return void outcome.set(name, "not run");
+  }
   const missing = [...needs, ...(name === "onboarding" ? [] : ["onboarding"])].find((n) => outcome.get(n) !== "passed");
   if (missing) {
     console.log(`\n# ${name}\nskipped: needs ${missing}`);
@@ -2494,6 +2511,8 @@ server.close();
 step("closing");
 await Promise.race([closeApp(), new Promise((r) => setTimeout(r, 30_000))]);
 await stopCore(home, { terminals: true });
+// An exception main didn't catch is a bug even when every check passed (0.32.1: bundled ws broke the inspector's relay).
+for (const line of mainCrashes(home)) failures.push({ scenario: "(main process)", error: line.replace(/^\S+ /, "") });
 // Merged into what other shards and runs wrote (a part of a shard's time is its needs, run there too).
 try {
   const tmp = `${timesFile}.${process.pid}`;

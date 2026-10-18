@@ -22,6 +22,7 @@ DEVELOPMENT.md ("Packaging and releases") has the background. This skill is the 
    ```sh
    pnpm typecheck && pnpm test
    pnpm e2e          # builds and drives the real app; ~2 min
+   pnpm e2e:packaged # the same on the packaged app, as users run it (CI runs it too, before publishing)
    ```
    If e2e flags an "outdated" core while another session is editing `packages/core`, that's
    their edits changing the source hash mid-run, not a bug.

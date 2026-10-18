@@ -32,6 +32,7 @@
     "build": "pnpm --filter @cmd/desktop build",
     "icons": "node scripts/make-icons.mjs",
     "e2e": "node scripts/build-if-stale.mjs && node e2e/smoke.mjs --shards 3",
+    "e2e:packaged": "node scripts/build-if-stale.mjs && node scripts/stage-runtime.mjs && pnpm --filter @cmd/desktop exec electron-builder --config electron-builder.dev.yml --dir && node e2e/packaged.mjs && node e2e/smoke.mjs --shards 3 --packaged",
     "e2e:drops": "node scripts/build-if-stale.mjs && node e2e/drops.mjs",
     "e2e:a11y": "node scripts/build-if-stale.mjs && node e2e/a11y-audit.mjs",
     "tour": "node tools/tours/src/run.ts",

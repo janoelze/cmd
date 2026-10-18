@@ -16,6 +16,7 @@ pnpm vitest run packages/core/test/osc.test.ts   # one file
 pnpm vitest run -t "name"                        # one test by name
 pnpm typecheck               # root tsc (packages/*) + desktop tsc
 pnpm e2e                     # build if stale, then Playwright drives the real app in 3 shards (~15 s); E2E_SHOTS=1 for screenshots in .cmd-dev/shots
+pnpm e2e:packaged            # package "cmd dev" (--dir) and run e2e/packaged.mjs and the smoke test on a copy outside the checkout, as users run it (CI does this before publishing). In the Safehouse sandbox a packaged app dies on its Mach port unless packaged with `-c.appId=com.github.Electron`
 pnpm tour <file.tour.ts>     # record a scripted demo video with real input (tours skill; needs the built app and screen access)
 pnpm core                    # run the core directly
 pnpm core:stop               # stop the core of $CMD_HOME, else the dev one; core:stop-all stops every non-release core
