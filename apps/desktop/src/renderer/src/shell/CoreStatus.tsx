@@ -3,7 +3,7 @@
 // PTY host use, a recent stall) with Restart Core and the Task Manager, which
 // has the rest (pids, terminals); About has the debug info.
 
-import { Button, Inline, KeyValue, Popover, Stack, StatusDot, Text } from "@cmd/ui";
+import { Button, ButtonGroup, KeyValue, Popover, Stack, StatusDot, Text } from "@cmd/ui";
 import { useRef, useState } from "react";
 import { runningStep, stepLine, type BootReport, type Stall, type StartupStatus } from "@cmd/protocol";
 import { useCoreBoot } from "./BootSheet.tsx";
@@ -114,14 +114,14 @@ function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; 
       {p.restart.error && <Text tone="warning">{p.restart.error}</Text>}
       {stall && <Text tone="warning">{`Froze ${(stall.ms / 1000).toFixed(1)} s in ${stall.in}.`}</Text>}
       {rows.length > 0 && <KeyValue items={rows} />}
-      <Inline gap={1.5}>
+      <ButtonGroup fill>
         <Button variant={p.health.outdated || p.health.unresponsive || !p.connected ? "primary" : "default"} disabled={p.restart.restarting} onClick={() => void restartCore()}>
           {p.restart.restarting ? "Restarting…" : "Restart Core"}
         </Button>
         <Button onClick={() => cmd.openTaskManager()}>
           Task Manager
         </Button>
-      </Inline>
+      </ButtonGroup>
     </Stack>
   );
 }

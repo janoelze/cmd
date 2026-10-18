@@ -270,6 +270,16 @@ export const Bar = () => (
   </div>
 );
 
+/** Spaced buttons that share the width (fill), as a popover's actions sit edge to edge. */
+export const ButtonsFill = () => (
+  <div style={{ width: 280 }}>
+    <ButtonGroup fill>
+      <Button>Restart Core</Button>
+      <Button>Task Manager</Button>
+    </ButtonGroup>
+  </div>
+);
+
 /** A scroller away from its end: the JumpButton floats in its corner, with a dot once something new arrived. Tap it to toggle the dot; Hide shows it leaving. */
 export const Jump = () => {
   const [unread, setUnread] = useState(true);

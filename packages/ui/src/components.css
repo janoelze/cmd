@@ -163,6 +163,7 @@
 .ui-button-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .ui-button-row[data-align="end"] { justify-content: flex-end; }
 .ui-button-row[data-align="between"] { justify-content: space-between; }
+.ui-button-row[data-fill] > * { flex: 1 1 0; }
 /* Joined: one control. Inner corners square, one hairline between. */
 /* One outline drawn over the buttons (their translucent fill would tint it), and dividers
    that stop 1px short of it: the edges are translucent (a button sits on any surface, so

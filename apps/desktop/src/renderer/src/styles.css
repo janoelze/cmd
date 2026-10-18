@@ -220,6 +220,8 @@ kbd {
 
 /* The core's health (shell/CoreStatus.tsx): the footer line is a button opening the details above it. */
 .core-status { position: relative; flex: 1; min-width: 0; display: flex; margin: 0 -8px; }
+/* The details' status line is trimmed to its caps; a step more keeps its ascenders (d, h, l) off the top, on the inset like the other edges. */
+.core-details > .ui-stack > .ui-text:first-child { margin-top: var(--space-0-5); }
 .core-status-button {
   /* As wide as what it says (hover shows its extent), shrinking with the footer; the row's space stays .core-status's. */
   flex: 0 1 auto;

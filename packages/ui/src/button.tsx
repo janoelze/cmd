@@ -124,11 +124,13 @@ export function PillRow({ children }: { children: ReactNode }) {
 /**
  * Buttons that belong together. "joined" makes them one control with shared
  * edges (Back | Forward, − | +); "spaced" (default) lays them out in a row with
- * the standard gap, for a dialog's or a section's actions.
+ * the standard gap, for a dialog's or a section's actions. "fill" shares the
+ * row's width between them (a popover's actions, edge to edge).
  */
 export function ButtonGroup({
   joined,
   align,
+  fill,
   className,
   children,
   label,
@@ -136,12 +138,14 @@ export function ButtonGroup({
   joined?: boolean;
   /** Spaced groups: push to the end of the row (dialog footers). */
   align?: "start" | "end" | "between";
+  /** Spaced groups: the buttons share the row's width equally. */
+  fill?: boolean;
   className?: string;
   label?: string;
   children: ReactNode;
 }) {
   return (
-    <div role="group" aria-label={label} className={cls(joined ? "ui-button-joined" : "ui-button-row", className)} data-align={align}>
+    <div role="group" aria-label={label} className={cls(joined ? "ui-button-joined" : "ui-button-row", className)} data-align={align} data-fill={fill || undefined}>
       {children}
     </div>
   );
