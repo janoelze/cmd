@@ -1,0 +1,6 @@
+{
+  "$comment": "Pulled releases: installed apps read this file from master before every update check and never download a version listed here (apps/desktop/src/main/update-policy.ts). Add a version with why, push to master, and it stops spreading within minutes. A newer release still replaces it for those who have it.",
+  "versions": {
+    "0.32.0": "Quit at launch: ws wasn't bundled into the app"
+  }
+}

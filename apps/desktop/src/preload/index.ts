@@ -68,7 +68,7 @@ function open(): Promise<Connection> {
   ready = (async () => {
     await checked;
     bootMark("boot:core-checked");
-    // The window opens while the core starts (main/index.ts), so the first
+    // The window opens while the core starts (main/app.ts), so the first
     // attempts fail; retry quickly at first, then back off to 500 ms.
     for (let attempt = 0; ; attempt++) {
       try {
@@ -125,7 +125,7 @@ const api = {
   bounce: () => ipcRenderer.send("bounce"),
   /** A macOS system sound by name (SYSTEM_SOUNDS), e.g. a widget's cmd.sound(). */
   playSound: (name: string) => ipcRenderer.send("play-sound", name),
-  /** A system notification; a newer one with the same tag replaces it (see main/index.ts). */
+  /** A system notification; a newer one with the same tag replaces it (see main/app.ts). */
   notify: (o: { tag: string; title: string; body: string; sound: string | null; paneId: string | null }) =>
     ipcRenderer.send("notify", o),
   closeNotification: (tag: string) => ipcRenderer.send("notify-close", tag),
@@ -220,7 +220,7 @@ const api = {
     ipcRenderer.on("inspect-element", h);
     return () => ipcRenderer.off("inspect-element", h);
   },
-  /** Copy / Select All natively in the focused frame, or in a browser window's page by its WebContents id (main/index.ts). */
+  /** Copy / Select All natively in the focused frame, or in a browser window's page by its WebContents id (main/app.ts). */
   editNative: (op: "copy" | "selectAll", guestId?: number) => ipcRenderer.send("edit-native", op, guestId),
 
   /** Menu bar / Dock menu commands, by command id. */

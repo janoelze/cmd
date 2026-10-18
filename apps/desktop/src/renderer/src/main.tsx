@@ -1,4 +1,4 @@
-// Boot timeline marks (boot:*) are read by the boot benchmark; see also main/index.ts and store.ts.
+// Boot timeline marks (boot:*) are read by the boot benchmark; see also main/app.ts and store.ts.
 performance.mark("boot:renderer-script");
 import { createRoot } from "react-dom/client";
 import { Symbol } from "./components/Symbol.tsx";

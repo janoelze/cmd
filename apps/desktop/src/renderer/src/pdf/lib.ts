@@ -14,5 +14,5 @@ export { pdfjs, EventBus, FindState, LinkTarget, PDFFindController, PDFLinkServi
 const asset = (dir: string) => new URL(`pdfjs/${dir}/`, document.baseURI).href;
 export const ASSETS = { cMapUrl: asset("cmaps"), cMapPacked: true, standardFontDataUrl: asset("standard_fonts"), wasmUrl: asset("wasm"), iccUrl: asset("iccs") };
 
-/** The app's read-only file protocol (main/index.ts), with a token so a reload isn't served from cache. */
+/** The app's read-only file protocol (main/app.ts), with a token so a reload isn't served from cache. */
 export const fileUrl = (p: string) => `cmd-file://local/?path=${encodeURIComponent(p)}&t=${Date.now()}`;

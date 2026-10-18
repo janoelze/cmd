@@ -726,7 +726,7 @@ await scenario("browser", async () => {
   browserWin = await until(() => win.evaluate(() => window.cmd.call("window.list", {})).then((all) => all.find((w) => w.kind === "browser" && w.title === "E2E Page")), Boolean, 15_000);
   check(!!browserWin && browserWin.state.url.startsWith(`http://localhost:${port}`), "browser window loads the page and reports its title");
 
-  // Edit → Select All / Copy reach the page, which is its own WebContents (main/index.ts editNative).
+  // Edit → Select All / Copy reach the page, which is its own WebContents (main/app.ts editNative).
   {
     const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
     await app.evaluate(({ clipboard }) => clipboard.writeText(""));

@@ -116,6 +116,13 @@ spctl -a -t open --context context:primary-signature -vv cmd-*.dmg
 - Don't hand out a `curl … | sh` command for a new `scripts/install.sh` before it's pushed to
   master.
 
+## Pull a bad release
+
+Add it to `updates/blocked-versions.json` with a reason, commit and push master. Installed apps read
+that file before every check and never download a listed version, within minutes, no release needed.
+Apps that already downloaded it keep it until a newer release replaces it, so release the fix
+as well (below). Never delete the release itself (see Rules).
+
 ## Roll back
 
 There is no rolling back in place: installed apps follow the newest non-prerelease and only

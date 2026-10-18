@@ -48,7 +48,7 @@ const PAGES: Record<string, FramePage> = {
 
 export const FRAME_SCHEMES = Object.keys(PAGES);
 
-/** A frame page's own URL: the only place its iframe may navigate (main/index.ts). */
+/** A frame page's own URL: the only place its iframe may navigate (main/app.ts). */
 export const isFramePage = (url: string): boolean => FRAME_SCHEMES.some((s) => url === `${s}://frame/`);
 
 /** A request from one of these pages (they may not ask for permissions or capture). */

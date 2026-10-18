@@ -90,7 +90,7 @@ if (fs.existsSync(notifications)) {
 }
 
 // The SF Symbols renderer (macOS; built by postinstall), run by Electron main
-// (src/main/index.ts). Without it icons fall back to resized bitmaps: smaller and soft.
+// (src/main/app.ts). Without it icons fall back to resized bitmaps: smaller and soft.
 const sfsymbols = path.join(root, "apps/desktop/native/build/sfsymbols");
 if (fs.existsSync(sfsymbols)) {
   fs.mkdirSync(path.join(out, "apps/desktop/native/build"), { recursive: true });

@@ -2,7 +2,7 @@
 // windows share it) and the sources it can tap.
 //   "none"        silence
 //   "mic"         the default input (macOS asks once; NSMicrophoneUsageDescription)
-//   "system"      what the Mac plays (getDisplayMedia with loopback audio, main/index.ts)
+//   "system"      what the Mac plays (getDisplayMedia with loopback audio, main/app.ts)
 //   "window:<id>" a window that makes sound (Jam) and publishes its levels here
 // Microphone and system audio are opened once, while a Visualizer listens, and
 // never played back. A tap reads 1024 samples per channel each frame, the

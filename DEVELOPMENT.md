@@ -101,7 +101,14 @@ Windows builds (x64) are off for now (the `windows` job is `if: false`). When on
 
 Installed apps update themselves from GitHub releases with electron-updater (`apps/desktop/src/main/updater.ts`). It reads `latest-mac.yml` (`latest.yml` on Windows) from the latest non-prerelease, so `-beta` tags never reach users. `electron-builder.yml` has the `publish: github` config that generates that file (and the `.blockmap`s for partial downloads), and CI uploads them with the release. Squirrel.Mac only installs an update whose signature matches the running app, so updating needs Developer ID signed releases, which ad-hoc signed builds can't do.
 
-The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch and every 30 minutes, and logs to `update.log` in the logs folder (see Logs and crash reports).
+The `updates.mode` setting picks `auto` (download in the background, install on quit; the default), `notify` or `off`. The app checks 30 s after launch, every 15 minutes and after waking from sleep, and logs to `update.log` in the logs folder (see Logs and crash reports).
+
+A bad release mustn't spread or stick (`main/update-policy.ts`, `main/updater.ts`):
+
+- **Checks go on after a download.** A newer release found while one waits for a restart is downloaded and replaces it. On macOS a download is ready only once Squirrel.Mac has prepared it (Electron's own `update-downloaded`), which is when Restart Now restarts.
+- **Restart Now checks once more** (up to 8 s) and restarts into the newest version.
+- **The blocklist**, `updates/blocked-versions.json` on master, is read before every check: a version listed there is never downloaded. Pulling a release is a push, not a new release (raw GitHub caches the file for up to 5 minutes). It can't take back a download that is already prepared; only a newer release replaces that.
+- **A version whose app can't load still updates.** Main's entry (`main/index.ts`) only imports `app.ts`; if that fails (0.32.0: a package missing from `app.asar`), it runs `rescue` in `updater.ts`, which finds a newer version and installs it, whatever `updates.mode` says, or says where to download cmd.
 
 An update replaces the app bundle while the old core keeps running. So the packaged app starts the core from a copy of the runtime in `$CMD_HOME/runtime/<build>` (the newest three are kept), and an old core never loads the new version's files. After an update the app shows the usual "core is outdated" prompt.
 
