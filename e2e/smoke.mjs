@@ -841,8 +841,11 @@ await scenario("inspector", async () => {
   // Right-click → Inspect Element (main/page-menu.ts): opens the inspector and reveals the node under the pointer.
   // The menu is native, so main's popup is caught and its item clicked; the right-click itself is real input.
   await page(`document.body.insertAdjacentHTML("beforeend", '<button id="pick" style="position:fixed;left:10px;top:10px;width:160px;height:40px">pick me</button>'); 0`);
-  const items = await app.evaluate(async ({ Menu, webContents }, port) => {
-    const guest = webContents.getAllWebContents().find((w) => w.getType() === "webview" && w.getURL().startsWith(`http://localhost:${port}`));
+  // The page the window shows now: right after docking, an old guest with its URL may still be around.
+  const guestId = await win.evaluate((id) => document.querySelector(`.tile[data-pane="${id}"] webview:not([data-inspector])`)?.getWebContentsId() ?? null, browserWin.id);
+  const items = await app.evaluate(async ({ Menu, webContents }, id) => {
+    const guest = id == null ? null : webContents.fromId(id);
+    if (!guest) return null;
     const shown = new Promise((resolve) => {
       const popup = Menu.prototype.popup;
       Menu.prototype.popup = function () {
@@ -850,13 +853,22 @@ await scenario("inspector", async () => {
         resolve(this);
       };
     });
-    guest.sendInputEvent({ type: "mouseDown", x: 60, y: 30, button: "right", clickCount: 1 });
-    guest.sendInputEvent({ type: "mouseUp", x: 60, y: 30, button: "right", clickCount: 1 });
-    const menu = await Promise.race([shown, new Promise((r) => setTimeout(() => r(null), 5000))]);
+    const click = () => {
+      guest.sendInputEvent({ type: "mouseMove", x: 60, y: 30 });
+      guest.sendInputEvent({ type: "mouseDown", x: 60, y: 30, button: "right", clickCount: 1 });
+      guest.sendInputEvent({ type: "mouseUp", x: 60, y: 30, button: "right", clickCount: 1 });
+    };
+    // A guest that has just been attached may drop the first input it gets: once more if no menu came.
+    click();
+    let menu = await Promise.race([shown, new Promise((r) => setTimeout(() => r(null), 2500))]);
+    if (!menu) {
+      click();
+      menu = await Promise.race([shown, new Promise((r) => setTimeout(() => r(null), 5000))]);
+    }
     if (!menu) return null;
     menu.items.find((i) => i.label === "Inspect Element")?.click();
     return menu.items.filter((i) => i.label).map((i) => i.label);
-  }, port);
+  }, guestId);
   check(items?.includes("Back") && items?.includes("Inspect Element"), `right-click in a page shows its menu (${items})`);
   const [picked] = await until(inspectors, (l) => l.length === 1, 10_000);
   await tileIn(picked.id);

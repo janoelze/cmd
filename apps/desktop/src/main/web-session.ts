@@ -14,7 +14,7 @@ import path from "node:path";
 import { cmdHome, logger } from "@cmd/protocol/node";
 import { allowedAppUrl, type AppPages } from "../shared/app-url.ts";
 import { handleInspectors, isBrowserPage } from "./inspector.ts";
-import { showPageMenu } from "./page-menu.ts";
+import { showPageMenu, trackContextPoints } from "./page-menu.ts";
 import { BROWSER_PARTITION, forgetDecision, guestPartitionAllowed, INSPECTOR_PARTITION, isAsked, isInspectorFrontend, macDevices, macMediaStep, macPrivacyPane, parseDecisions, permissionVerdict, siteOf, type SiteDecisions, type SitePermission, type MacAccess, type MacDevice, type SitePermissionRequest } from "./web-policy.ts";
 
 const log = logger("web");
@@ -262,6 +262,7 @@ async function withMacAccess(allowed: boolean, mediaTypes: readonly string[] | u
 export function startWebSession(o: { pages: AppPages; appWindows: () => BrowserWindow[] }): void {
   pages = o;
   handleInspectors(o.appWindows);
+  trackContextPoints();
   const ses = session.fromPartition(BROWSER_PARTITION);
   ses.setPermissionCheckHandler((_wc, permission, origin) => permissionVerdict(permission, siteOf(origin), isAsked(permission) ? decisions() : {}) === "allow");
   ses.setPermissionRequestHandler((wc, permission, done, details) => {
