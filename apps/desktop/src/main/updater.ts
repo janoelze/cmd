@@ -18,7 +18,7 @@ import { app, autoUpdater as squirrel, dialog, Notification, powerMonitor } from
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 import type { Settings } from "@cmd/protocol";
 import { connect, formatLine, formatValue, LogFile } from "@cmd/protocol/node";
-import { BLOCKLIST_URL, onFound, parseBlocklist } from "./update-policy.ts";
+import { BLOCKLIST_URL, describeUpdateError, onFound, parseBlocklist } from "./update-policy.ts";
 
 const { autoUpdater } = electronUpdater;
 
@@ -268,8 +268,8 @@ export function startUpdater(socketPath: string): void {
     busy = false;
     (downloading = null), (staging = null);
     log("error", err?.message ?? err);
-    (lastCheck = Date.now()), (lastError = err?.message ?? String(err));
-    if (manual) dialog.showErrorBox("cmd could not update", err?.message ?? String(err));
+    (lastCheck = Date.now()), (lastError = describeUpdateError(err?.message ?? String(err)));
+    if (manual) dialog.showErrorBox("cmd could not update", lastError);
     manual = false;
     // Offline is no reason not to restart into what is already downloaded.
     settled();

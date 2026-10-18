@@ -3,11 +3,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { isNewer, onFound, parseBlocklist } from "../src/main/update-policy.ts";
+import { describeUpdateError, isNewer, onFound, parseBlocklist } from "../src/main/update-policy.ts";
 
 const root = path.join(import.meta.dirname, "../../..");
 
 describe("update policy", () => {
+  it("shortens updater errors", () => {
+    const feed =
+      'Cannot parse releases feed: Error: Unable to find latest version on GitHub (https://github.com/janoelze/cmd/releases/latest), please ensure a production release exists: Error: net::ERR_NETWORK_CHANGED\n    at SimpleURLLoaderWrapper.<anonymous> (node:electron/js2c/browser_init:1:137811), XML: <?xml version="1.0"?><feed>';
+    expect(describeUpdateError(feed)).toBe("Couldn't reach GitHub. cmd tries again shortly.");
+    expect(describeUpdateError("HttpError: 403 Forbidden\nrate limit exceeded")).toBe("GitHub is limiting requests. cmd tries again shortly.");
+    expect(describeUpdateError("Code signature did not pass validation\n    at foo (x.js:1:2)")).toBe("Code signature did not pass validation");
+    expect(describeUpdateError("x".repeat(300))).toHaveLength(160);
+  });
+
   it("orders versions", () => {
     expect(isNewer("0.32.1", "0.32.0")).toBe(true);
     expect(isNewer("0.32.0", "0.32.1")).toBe(false);

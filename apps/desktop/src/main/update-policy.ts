@@ -42,3 +42,13 @@ export function isNewer(a: string, b: string): boolean {
 export function onFound(found: string, have: string | null): "download" | "keep" {
   return have === null || isNewer(found, have) ? "download" : "keep";
 }
+
+/** An updater error as one short line for Settings and the dialog: electron-updater's
+ *  messages carry stacks and whole release feeds (update.log keeps them in full). */
+export function describeUpdateError(message: string): string {
+  if (/net::ERR_|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|socket hang up/.test(message))
+    return "Couldn't reach GitHub. cmd tries again shortly.";
+  if (/rate limit|\b(403|429)\b/i.test(message)) return "GitHub is limiting requests. cmd tries again shortly.";
+  const line = (message.split(/\r?\n|, XML:|\s+at\s/)[0] ?? "").trim();
+  return line.length > 160 ? `${line.slice(0, 159)}…` : line || "Unknown error.";
+}
