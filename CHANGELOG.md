@@ -2,6 +2,13 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.32.2 — 2026-10-18
+
+### Improved
+
+- A downloaded update is replaced when a newer one comes out, and Restart Now checks for one first.
+- If an update ever fails to start, cmd finds and installs a fixed version by itself.
+
 ## 0.32.1 — 2026-10-18
 
 ### Fixed
