@@ -51,8 +51,8 @@
             fill: token("--accent"),
             width: 0,
             points: { show: false },
-            // Rounded tops on a square baseline, 2px apart.
-            paths: uPlot.paths.bars({ size: [0.8, 24], gap: 2, radius: [0.25, 0] }),
+            // Rounded on all sides, 2px apart.
+            paths: uPlot.paths.bars({ size: [0.8, 24], gap: 2, radius: [0.25, 0.25] }),
           },
         ],
         hooks: {
