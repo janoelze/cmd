@@ -31,7 +31,7 @@ import { COMMANDS, COMMAND_BY_ID, DEFAULT_KEYBINDINGS, norm, prettyAccelerator, 
 import { IndexRing } from "../components/IndexRing.tsx";
 import { acceleratorOf, usableShortcut, useKeybindings } from "../lib/keybindings.ts";
 import { cmd } from "../lib/bridge.ts";
-import { Button, Callout, EmptyState, FormActions, FormRow, FormSection, IconButton, Inline, List, ListRow, ListRowContent, ListRowIcon, NumberField, Page, ResetButton, SearchField, SecretField, Segmented, Select, ShortcutField, Spinner, Split, Stack, StatusLine, Switch, TextField, TitleBand, View, type IconName } from "@cmd/ui";
+import { Button, Callout, EmptyState, FormActions, FormRow, FormSection, IconButton, Inline, List, ListRow, ListRowContent, ListRowIcon, NumberField, Page, ResetButton, SearchField, SecretField, Segmented, Select, ShortcutField, Spinner, Split, Stack, StatusLine, Switch, TextField, TitleBand, View, type IconName, Icon, ICON } from "@cmd/ui";
 import { useSettings } from "./useSettings.ts";
 import { AiKeyRow, AiProviderChoice } from "../ai/Providers.tsx";
 import { useAiStatus } from "../ai/status.ts";
@@ -244,7 +244,8 @@ export function SettingsWindow() {
                     dim={!!q && !hitPages.has(n.id)}
                     onClick={() => (setQuery(""), setPage(n.id), setScrolled(false))}
                   >
-                    <ListRowIcon icon={n.icon} />
+                    {/* Filled, as macOS draws a settings sidebar's icons. */}
+                    <ListRowIcon icon={<Icon name={n.icon} size={ICON.small} weight="fill" />} />
                     <ListRowContent title={n.title} />
                   </ListRow>
                 ))}
