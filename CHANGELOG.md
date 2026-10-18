@@ -2,6 +2,16 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.32.0 — 2026-10-18
+
+### New
+
+- **Browser inspector.** ⌥⌘I opens the developer tools for a web page, beside it or inside its window, in your cmd theme.
+
+### Improved
+
+- A new window opens right after the one you opened it from, and closing a window selects the next one, like tabs.
+
 ## 0.31.0 — 2026-10-17
 
 ### New

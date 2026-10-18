@@ -13,7 +13,7 @@
     { "title": "Workspace Actions", "text": "How to run, build and test your project, read from its scripts and task files. One click runs it." },
     { "title": "Built-in widgets", "text": "Stats, Jam, Now Playing, Agent Activity and Live Diff across worktrees, in the Widget Library (⇧⌘L)." },
     { "title": "Remote access", "badge": "Beta", "text": "Pair a phone or browser by QR code, end-to-end encrypted. It notifies you while you're away." },
-    { "title": "Web browser", "text": "Beside your terminals, at phone, tablet or desktop size. Sites ask before they use your camera." },
+    { "title": "Web browser", "text": "Beside your terminals, at phone, tablet or desktop size. ⌥⌘I opens its developer tools beside it." },
     { "title": "Files and editor", "text": "A file browser with git status, and an editor. `open README.md` in a shell opens it here." },
     { "title": "Viewers for your files", "text": "Markdown, JSON, PDF, images, video and SQLite open in windows made for them, and follow the file." },
     { "title": "Calm notifications", "text": "Waiting agents, bells and finished commands mark their window until you look. Nothing else nags." },
