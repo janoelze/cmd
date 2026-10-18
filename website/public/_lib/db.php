@@ -239,6 +239,8 @@ function summary(int $days = 30): array
     $daily = [];
     for ($t = strtotime("$from UTC"); ($d = gmdate('Y-m-d', $t)) <= $today; $t += 86400) $daily[$d] = 0;
     foreach ($q('SELECT day, COUNT(*) AS n FROM installs i WHERE day >= ? AND ' . USED . ' GROUP BY day', [$from]) as $r) $daily[$r['day']] = (int) $r['n'];
+    $windowsDaily = array_map(fn() => 0, $daily);
+    foreach ($q("SELECT day, SUM(n) AS n FROM counts WHERE day >= ? AND name LIKE 'window.%' GROUP BY day", [$from]) as $r) $windowsDaily[$r['day']] = (int) $r['n'];
     $active = fn(string $since) => $scalar('SELECT COUNT(DISTINCT id) AS n FROM installs i WHERE day >= ? AND ' . USED, [$since]);
 
     $pairs = fn(array $rows) => array_column(array_map(fn($r) => [$r['k'], (int) $r['n']], $rows), 1, 0);
@@ -292,6 +294,7 @@ function summary(int $days = 30): array
         'installs' => $scalar('SELECT COUNT(DISTINCT id) AS n FROM installs'),
         'launches' => $counts['app.launch'] ?? 0,
         'daily' => $daily,
+        'windowsDaily' => $windowsDaily,
         'versions' => $pairs($q(sprintf($latest, 'version'), [$week])),
         'macos' => $pairs($q(sprintf($latest, 'os'), [$from])),
         'arch' => $pairs($q(sprintf($latest, 'arch'), [$from])),

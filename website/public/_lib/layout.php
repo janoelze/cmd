@@ -239,6 +239,17 @@ function page_end(): void
 <?php
 }
 
+/** A column per day ({day: n}), with the first day, the peak and the last day under it. */
+function days(array $days, string $label): void
+{
+    $max = max($days) ?: 1;
+    echo '<div class="daily" role="img" aria-label="' . h($label . ', ' . array_key_first($days) . ' to ' . array_key_last($days)) . '">';
+    foreach ($days as $day => $n) {
+        echo '<div class="col" title="' . h("$day: $n") . '"><span style="height:' . round($n / $max * 100, 1) . '%"></span></div>';
+    }
+    echo '</div><div class="axis"><span>' . h((string) array_key_first($days)) . '</span><span>peak ' . number_format(max($days)) . '</span><span>' . h((string) array_key_last($days)) . '</span></div>';
+}
+
 /**
  * Labelled horizontal bars, largest first. Rows are numbers, or
  * ['count' => n, 'share' => 0..1] to say what share of installs did it too.

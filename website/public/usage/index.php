@@ -16,7 +16,6 @@ if (($_GET['format'] ?? '') === 'json') {
 
 $macos = [];
 foreach ($s['macos'] as $k => $n) $macos[$k === 'other' ? 'other' : "macOS $k"] = $n;
-$maxDaily = max($s['daily']) ?: 1;
 
 page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 ?>
@@ -32,14 +31,10 @@ page_start('cmd usage', 'Anonymous usage stats of cmd, public.', 'usage/');
 </div>
 
 <h2>Active installs per day</h2>
-<div class="card">
-  <div class="daily" role="img" aria-label="Active installs per day, <?= h($s['from']) ?> to <?= h($s['to']) ?>">
-<?php foreach ($s['daily'] as $day => $n): ?>
-    <div class="col" title="<?= h("$day: $n") ?>"><span style="height:<?= round($n / $maxDaily * 100, 1) ?>%"></span></div>
-<?php endforeach ?>
-  </div>
-  <div class="axis"><span><?= h($s['from']) ?></span><span>peak <?= number_format(max($s['daily'])) ?></span><span><?= h($s['to']) ?></span></div>
-</div>
+<div class="card"><?php days($s['daily'], 'Active installs per day') ?></div>
+
+<h2>Windows opened per day</h2>
+<div class="card"><?php days($s['windowsDaily'], 'Windows opened per day') ?></div>
 
 <div class="grid2">
   <div><h2>Windows opened, 30 days</h2><div class="card"><?php bars($s['windows']) ?></div></div>
