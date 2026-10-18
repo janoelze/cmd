@@ -1,10 +1,11 @@
 // Left end of the footer: the core's connection and health in one line (status
-// light, memory, CPU). Clicking it opens the details (uptime, response time,
-// the core and PTY host processes) with Restart Core and the Task Manager.
+// light, memory, CPU). Clicking it opens the details (uptime, what the core and
+// PTY host use, a recent stall) with Restart Core and the Task Manager, which
+// has the rest (pids, terminals); About has the debug info.
 
 import { Button, Inline, KeyValue, Popover, Stack, StatusDot, Text } from "@cmd/ui";
 import { useRef, useState } from "react";
-import { runningStep, stepLine, type BootReport, type StartupStatus } from "@cmd/protocol";
+import { runningStep, stepLine, type BootReport, type Stall, type StartupStatus } from "@cmd/protocol";
 import { useCoreBoot } from "./BootSheet.tsx";
 import { cmd } from "../lib/bridge.ts";
 import { formatUptime, restartCore, SLOW_MS, useCoreHealth, useRestart, type CoreHealth } from "./coreHealth.ts";
@@ -84,50 +85,35 @@ export function CoreStatus(p: Props) {
   );
 }
 
-/** The longest time the core's thread was blocked since it started, and by what: a row only when there was one. */
-function stallRow(stalls: { at: number; ms: number; in: string }[] | undefined): [string, string, string?][] {
-  if (!stalls?.length) return [];
-  const worst = stalls.reduce((a, b) => (b.ms > a.ms ? b : a));
-  return [["Stalls", `${stalls.length} · longest ${worst.ms} ms`, `in ${worst.in}`]];
+/** Above this, a process's CPU shows beside its memory; below, it is noise. */
+const BUSY_CPU = 5;
+/** A stall this long, this recently, gets a line; older or shorter ones stay in core.info. */
+const STALL_MS = 1000;
+const STALL_RECENT_MS = 5 * 60_000;
+
+/** The longest recent block of the core's thread worth mentioning, if any. */
+function recentStall(stalls: Stall[] | undefined): Stall | null {
+  const recent = (stalls ?? []).filter((s) => s.ms >= STALL_MS && Date.now() - s.at < STALL_RECENT_MS);
+  return recent.length ? recent.reduce((a, b) => (b.ms > a.ms ? b : a)) : null;
 }
 
 function Details(p: { summary: Summary; health: CoreHealth; connected: boolean; restart: { restarting: boolean; error: string | null } }) {
-  const { info, core, ptyHost, latency } = p.health;
-  const proc = (x: { memory: number; cpu: number; pid: number } | null) => (x ? `${formatBytes(x.memory)} · ${x.cpu.toFixed(1)}%` : "—");
-  const rows: [string, string, string?][] = info
+  const { info, core, ptyHost } = p.health;
+  const proc = (x: { memory: number; cpu: number } | null) => (x ? [formatBytes(x.memory), x.cpu >= BUSY_CPU ? `${x.cpu.toFixed(0)}% CPU` : null].filter(Boolean).join(" · ") : "—");
+  const rows: [string, string][] = info
     ? [
         ["Uptime", formatUptime(Date.now() - info.startedAt)],
-        ["Response", latency === null ? "—" : `${latency} ms`],
-        ["Core", proc(core), core ? `pid ${core.pid}` : `pid ${info.pid}`],
-        ["PTY host", info.ptyHost ? proc(ptyHost) : "not running", info.ptyHost ? `pid ${info.ptyHost.pid}` : undefined],
-        ["Terminals", String(info.panes)],
-        ["Clients", String(info.connections)],
-        ["Build", info.build.slice(0, 8) || "—"],
-        ...stallRow(info.stalls),
+        ["Core", proc(core)],
+        ["PTY host", info.ptyHost ? proc(ptyHost) : "not running"],
       ]
     : [];
+  const stall = recentStall(info?.stalls);
   return (
     <Stack gap={2} pad={3}>
-      <Inline gap={1.5}>
-        <StatusDot state={p.summary.led === "ok" ? "success" : p.summary.led} />
-        <Text>{p.summary.detail}</Text>
-      </Inline>
+      <Text>{p.summary.detail}</Text>
       {p.restart.error && <Text tone="warning">{p.restart.error}</Text>}
-      {rows.length > 0 && (
-        <KeyValue
-          items={rows.map(([k, v, sub]) => [
-            k,
-            sub ? (
-              <Inline justify="between" gap={2}>
-                <span>{v}</span>
-                <Text tone="dim">{sub}</Text>
-              </Inline>
-            ) : (
-              v
-            ),
-          ])}
-        />
-      )}
+      {stall && <Text tone="warning">{`Froze ${(stall.ms / 1000).toFixed(1)} s in ${stall.in}.`}</Text>}
+      {rows.length > 0 && <KeyValue items={rows} />}
       <Inline gap={1.5}>
         <Button variant={p.health.outdated || p.health.unresponsive || !p.connected ? "primary" : "default"} disabled={p.restart.restarting} onClick={() => void restartCore()}>
           {p.restart.restarting ? "Restarting…" : "Restart Core"}

@@ -2409,9 +2409,9 @@ await scenario("core-status", async () => {
   check((await button.locator(".ui-dot[data-state=\"success\"]").count()) === 1, `core status is healthy (${await button.textContent()})`);
   await button.click();
   await win.waitForSelector(".core-details .ui-kv");
-  const details = await until(() => win.locator(".core-details").textContent(), (d) => /Uptime/.test(d) && /PTY host\d/.test(d) && /pid \d+/.test(d), 5000);
+  const details = await until(() => win.locator(".core-details").textContent(), (d) => /Uptime/.test(d) && /Core\d/.test(d) && /PTY host\d/.test(d), 5000);
   await shot(win, "7b-core-status.png");
-  check(/Uptime/.test(details) && /PTY host\d/.test(details) && /pid \d+/.test(details), `core details show uptime and both processes (${details})`);
+  check(/Uptime/.test(details) && /Core\d/.test(details) && /PTY host\d/.test(details), `core details show uptime and both processes (${details})`);
   const pidBefore = await win.evaluate(() => window.cmd.call("core.hello", {}).then((h) => h.pid));
   const clients = await win.evaluate(() => window.cmd.call("core.info", {}).then((i) => i.connections));
   const before = await panes();
