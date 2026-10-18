@@ -40,8 +40,10 @@
           y: { range: (_, __, max) => [0, Math.max(max, 4) * 1.08] },
         },
         axes: [
-          { ...axis, size: 24, space: 64, values: (_, ts) => ts.map((t) => day.format(t * 1000)) },
-          { ...axis, size: 36, space: 32, grid: { stroke: token("--line"), width: 1 }, incrs: [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000] },
+          { ...axis, size: 28, gap: 8, space: 64, values: (_, ts) => ts.map((t) => day.format(t * 1000)) },
+          { ...axis, size: 36, space: 32, grid: { stroke: token("--line"), width: 1 },
+            values: (_, ts) => ts.map((n) => (n === 0 ? "" : n.toLocaleString("en"))), // the baseline needs no 0, which sat on the dates
+            incrs: [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000] },
         ],
         series: [
           {},
