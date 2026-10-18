@@ -17,7 +17,7 @@ The built-in types register through exactly the same API a plugin will use.
 export const markdownPreviewType: WindowType<{ path: string }> = {
   kind: "markdown-preview",
   title: "Markdown Preview",
-  icon: "doc.richtext",                       // SF Symbol
+  icon: "article",                            // Phosphor icon
   opens: { extensions: ["md"], priority: 10 }, // beats "text" for .md
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
   create: (input) => ({ state: { path: String(input.path) }, title: path.basename(String(input.path)) }),

@@ -1,5 +1,5 @@
-// Keeping things on whole pixels, so icons after text stay crisp (SF Symbols are
-// bitmaps drawn 1:1: at a fractional x they're resampled and go soft).
+// Keeping things on whole pixels, so icons after text stay crisp (an icon's strokes
+// fall on whole pixels only where its box does: at a fractional x they go soft).
 
 import { useLayoutEffect, type RefObject } from "react";
 

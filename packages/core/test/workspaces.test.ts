@@ -213,11 +213,11 @@ describe("WorkspaceManager", () => {
     expect(() => workspaces.update(HOME_WORKSPACE_ID, { name: "  " })).toThrow();
   });
 
-  it("sets an SF Symbol as the icon; null goes back to the default", () => {
+  it("sets a Phosphor icon as the icon; null goes back to the default", () => {
     const workspaces = new WorkspaceManager(null, fixture("icon").home);
     expect(workspaces.home().icon).toBeNull();
-    expect(workspaces.update(HOME_WORKSPACE_ID, { icon: "leaf.fill" }).icon).toBe("leaf.fill");
-    expect(() => workspaces.update(HOME_WORKSPACE_ID, { icon: "Not A Symbol" })).toThrow(/SF Symbol/);
+    expect(workspaces.update(HOME_WORKSPACE_ID, { icon: "leaf" }).icon).toBe("leaf");
+    expect(() => workspaces.update(HOME_WORKSPACE_ID, { icon: "Not A Symbol" })).toThrow(/not a Phosphor icon/);
     expect(workspaces.update(HOME_WORKSPACE_ID, { icon: null }).icon).toBeNull();
     expect(workspaceIcon(workspaces.home())).toBe("house");
   });

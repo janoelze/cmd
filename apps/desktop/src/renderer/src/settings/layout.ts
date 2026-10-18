@@ -6,6 +6,7 @@
 
 import { SECRETS, SETTINGS_SCHEMA, type AiProvider, type SecretKey, type SecretsStatus, type SettingKey, type Settings } from "@cmd/protocol";
 import { actionsSettings } from "../windows/actions/settings.ts";
+import type { IconName } from "@cmd/ui";
 
 export type ItemKey = SettingKey | SecretKey;
 /** A row; `when` hides it unless it matters for the current settings and keys. */
@@ -17,8 +18,8 @@ export interface Section {
 export interface Page {
   id: string;
   title: string;
-  /** SF Symbol for the sidebar. */
-  icon: string;
+  /** Its icon in the sidebar. */
+  icon: IconName;
   sections: Section[];
 }
 
@@ -30,7 +31,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "appearance",
     title: "Appearance",
-    icon: "paintpalette.fill",
+    icon: "palette",
     sections: [
       { title: "Theme", items: ["theme.appearance", "theme.dark", "theme.light", "theme.dockIcon"] },
       { title: "Fonts", items: ["font.code", "font.codeSize", "font.text", "font.textSize"] },
@@ -40,7 +41,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "windows",
     title: "Windows",
-    icon: "rectangle.on.rectangle.fill",
+    icon: "browsers",
     sections: [
       { title: "Workspaces", items: ["workspaces.ownWindow"] },
       { title: "Layout", items: ["ui.defaultView", "ui.gutter", "ui.paddingX", "ui.paddingY", "ui.windowRadius"] },
@@ -55,7 +56,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "terminal",
     title: "Terminal",
-    icon: "terminal.fill",
+    icon: "terminal-window",
     sections: [
       {
         title: "Display",
@@ -69,7 +70,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "open",
     title: "Opening Files",
-    icon: "arrow.up.forward.app.fill",
+    icon: "arrow-square-out",
     sections: [
       { title: "The open command", items: ["shell.openFolders", "shell.openFiles", "shell.openUrls"] },
       { title: "File types", items: ["open.handlers"] },
@@ -79,7 +80,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "notifications",
     title: "Notifications",
-    icon: "bell.fill",
+    icon: "bell",
     sections: [
       { title: "Notify me when", items: ["notifications.needsInput", "notifications.done", "notifications.longCommand", "notifications.terminalSequences", "notifications.widgets"] },
       { title: "Wording", items: ["notifications.ai"] },
@@ -90,7 +91,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "ai",
     title: "AI & Agents",
-    icon: "sparkles",
+    icon: "sparkle",
     sections: [
       { title: "Providers", items: ["ai.anthropic.apiKey", "ai.openai.apiKey", { key: "ai.provider", when: bothKeys }] },
       {
@@ -117,7 +118,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "remote",
     title: "Remote Access",
-    icon: "smartphone",
+    icon: "device-mobile",
     sections: [
       { items: ["remote.enabled"] },
       { title: "Connection", items: ["remote.access", "remote.relay", "remote.client", "remote.tailscale.port", "remote.url", "remote.port"] },
@@ -128,7 +129,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "magic",
     title: "Magic Widgets",
-    icon: "wand.and.stars.inverse",
+    icon: "magic-wand",
     sections: [
       { title: "While building", items: ["magic.explore", "magic.showSteps"] },
       { title: "Running widgets", items: ["magic.autoFix", "magic.deno"] },
@@ -139,7 +140,7 @@ export const SETTINGS_PAGES: Page[] = [
   {
     id: "data",
     title: "Data",
-    icon: "internaldrive.fill",
+    icon: "hard-drive",
     sections: [
       { title: "What cmd keeps", items: ["data.record.transcripts", "data.record.output", "data.record.browsing", "data.record.actions"] },
       { title: "For how long", items: ["data.keepDays"] },

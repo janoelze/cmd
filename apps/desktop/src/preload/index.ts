@@ -277,9 +277,6 @@ const api = {
   resetKeybindings: (): Promise<void> => ipcRenderer.invoke("reset-keybindings"),
   /** Menu shortcuts off while the Settings window records one. */
   recordShortcut: (on: boolean) => ipcRenderer.send("record-shortcut", on),
-  /** SF Symbols rendered at an exact point size and pixel density; null for unknown names. */
-  sfSymbols: (req: { names: string[]; size: number; weight?: string; scale?: number }): Promise<Record<string, { url: string; w: number; h: number; contain?: boolean } | null>> =>
-    ipcRenderer.invoke("sf-symbols", req),
   onKeybindings(fn: (s: KeybindingsSnapshot) => void): () => void {
     const h = (_e: unknown, s: KeybindingsSnapshot) => fn(s);
     ipcRenderer.on("keybindings", h);

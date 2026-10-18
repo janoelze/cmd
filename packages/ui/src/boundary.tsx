@@ -43,7 +43,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, { failed: boole
       return (
         <View
           scroll={false}
-          state={{ kind: "error", title, text, action: <Button icon="arrow.clockwise" onClick={this.reload}>{reloadLabel}</Button> }}
+          state={{ kind: "error", title, text, action: <Button icon="arrow-clockwise" onClick={this.reload}>{reloadLabel}</Button> }}
         />
       );
     // A new key on Reload remounts the children from scratch.

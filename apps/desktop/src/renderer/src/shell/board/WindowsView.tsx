@@ -1085,7 +1085,7 @@ export function WindowsView(p: Props) {
 export const WindowContent = memo(function WindowContent({ win, focused }: { win: import("@cmd/protocol").AppWindow; focused: boolean }) {
   const view = viewFor(win.kind);
   const broken = useBrokenView(win.id);
-  if (!view) return <EmptyState compact icon="exclamationmark.triangle.fill">No view registered for “{win.kind}” windows.</EmptyState>;
+  if (!view) return <EmptyState compact icon="warning">No view registered for “{win.kind}” windows.</EmptyState>;
   // A view that throws shows a fallback in its own tile; the rest of the window stays live.
   // Reload mounts the view again (a lazy view's chunk is fetched again too).
   return (

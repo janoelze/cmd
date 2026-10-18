@@ -62,7 +62,7 @@ export function Sidebar({ catalog, selection, onSelect }: { catalog: Catalog; se
             <ListSection key={g.key} title={g.title} count={g.components.length + g.stories.length} open={!!q || open.has(g.key)} onToggle={() => toggle(g.key)}>
               {g.components.map((c) => (
                 <ListRow key={c.id} tip={covered.has(c.id) ? undefined : "No story shows it yet"} selected={selection?.kind === "component" && selection.id === c.id} onClick={() => onSelect({ kind: "component", id: c.id })}>
-                  <ListRowIcon icon="square.on.square" tone={covered.has(c.id) ? undefined : "dim"} />
+                  <ListRowIcon icon="copy-simple" tone={covered.has(c.id) ? undefined : "dim"} />
                   <ListRowContent title={c.name} />
                 </ListRow>
               ))}
@@ -71,7 +71,7 @@ export function Sidebar({ catalog, selection, onSelect }: { catalog: Catalog; se
                 const sub = s.group.split("/").slice(1).join("/");
                 return [
                   <ListRow key={s.id} selected={here && !selection.variant} onClick={() => onSelect({ kind: "story", id: s.id })}>
-                    <ListRowIcon icon="rectangle.stack" />
+                    <ListRowIcon icon="stack" />
                     <ListRowContent title={s.title} place={sub || undefined} />
                   </ListRow>,
                   ...(here || q

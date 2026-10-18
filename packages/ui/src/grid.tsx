@@ -94,7 +94,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
               const head = (
                 <>
                   <span className="ui-grid-label">{c.label}</span>
-                  {sorted && <Icon name={sort!.desc ? "chevron.down" : "chevron.up"} size={ICON.disclosure} />}
+                  {sorted && <Icon name={sort!.desc ? "caret-down" : "caret-up"} size={ICON.disclosure} />}
                 </>
               );
               return (
@@ -151,7 +151,7 @@ export function DataGrid({ columns, rows, rowKey, sort, onSort, onRowContextMenu
                               }}
                               onDoubleClick={(e) => e.stopPropagation()}
                             >
-                              <Icon name="chevron.right" size={ICON.disclosure} />
+                              <Icon name="caret-right" size={ICON.disclosure} />
                             </span>
                           )}
                           <span className="ui-grid-label">{spec.node}</span>

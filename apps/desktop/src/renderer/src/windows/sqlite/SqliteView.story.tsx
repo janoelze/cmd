@@ -21,7 +21,7 @@ function Db({ size = "wide", initial = {}, file }: { size?: SizeName; initial?: 
   const path = file ?? db;
   const win = { id: "story-sqlite" as WindowId, kind: "sqlite", workspaceId: "story" as WorkspaceId, state: { path, ...state } } as unknown as AppWindow;
   return (
-    <RefWindow icon="cylinder.split.1x2" name="cmd.sqlite" size={size}>
+    <RefWindow icon="database" name="cmd.sqlite" size={size}>
       {path && <SqliteView win={win} focused update={(s) => setState((o) => ({ ...o, ...s }))} />}
     </RefWindow>
   );

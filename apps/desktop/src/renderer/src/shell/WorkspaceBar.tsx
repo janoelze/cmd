@@ -8,9 +8,8 @@
 
 import { useRef, useState } from "react";
 import { useWholePixelWidth } from "../lib/pixels.ts";
-import { Badge, Menu, StatusDot, type MenuItemProps } from "@cmd/ui";
+import { Badge, Icon, ICON, Menu, type MenuItemProps, StatusDot } from "@cmd/ui";
 import type { Workspace, WorkspaceId } from "@cmd/protocol";
-import { ICON, Symbol } from "../components/Symbol.tsx";
 import { WorkspaceIcon } from "./WorkspaceIcon.tsx";
 import { workspaceDetail } from "../lib/model.ts";
 import { openWorkspace, recentLabels, useRecentWorkspaces } from "./workspaces.tsx";
@@ -93,7 +92,7 @@ export function WorkspaceBar(p: Props) {
             {others.length}
           </Badge>
         )}
-        <Symbol name="chevron.down" size={ICON.disclosure} />
+        <Icon name="caret-down" size={ICON.disclosure} />
       </button>
       <Menu
         anchor={button}

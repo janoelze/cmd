@@ -25,7 +25,7 @@ export const Sorted = () => {
       <TreeHeader sort={sort} onSort={setSort} />
       <Tree>
         {rows.map((r, i) => (
-          <TreeRow key={r.name} depth={0} open={r.folder ? false : undefined} icon={r.folder ? "folder.fill" : "doc"} folder={r.folder} name={r.name} mark={r.mark} tone={r.tone} selected={i === 2} size={fmt(r.size)} date={`${r.date}d ago`} />
+          <TreeRow key={r.name} depth={0} open={r.folder ? false : undefined} icon={r.folder ? "folder" : "file"} folder={r.folder} name={r.name} mark={r.mark} tone={r.tone} selected={i === 2} size={fmt(r.size)} date={`${r.date}d ago`} />
         ))}
       </Tree>
     </div>
@@ -36,11 +36,11 @@ export const Sorted = () => {
 export const Dense = () => (
   <div style={{ width: 260, height: 200, display: "flex", flexDirection: "column" }}>
     <Tree dense>
-      <TreeRow depth={0} open icon="folder.fill" folder name="packages" />
-      <TreeRow depth={1} open icon="folder.fill" folder name="ui" />
-      <TreeRow depth={2} icon="doc" name="tree.tsx" mark="M" tone="modified" selected />
-      <TreeRow depth={2} icon="doc" name="tree.story.tsx" mark="U" tone="added" />
-      <TreeRow depth={1} icon="doc" name=".DS_Store" faded />
+      <TreeRow depth={0} open icon="folder" folder name="packages" />
+      <TreeRow depth={1} open icon="folder" folder name="ui" />
+      <TreeRow depth={2} icon="file" name="tree.tsx" mark="M" tone="modified" selected />
+      <TreeRow depth={2} icon="file" name="tree.story.tsx" mark="U" tone="added" />
+      <TreeRow depth={1} icon="file" name=".DS_Store" faded />
     </Tree>
   </div>
 );
@@ -52,9 +52,9 @@ export const Renaming = () => {
   return (
     <div style={{ width: 320, height: 120, display: "flex", flexDirection: "column" }}>
       <Tree dense>
-        <TreeRow depth={0} icon="doc" name="README.md" />
-        <TreeRow depth={0} icon="doc" selected name={editing ? <TreeRename name={name} onDone={(n) => (setName(n), setEditing(false))} /> : name} onDoubleClick={() => setEditing(true)} />
-        <TreeRow depth={0} icon="folder.fill" folder name="src" />
+        <TreeRow depth={0} icon="file" name="README.md" />
+        <TreeRow depth={0} icon="file" selected name={editing ? <TreeRename name={name} onDone={(n) => (setName(n), setEditing(false))} /> : name} onDoubleClick={() => setEditing(true)} />
+        <TreeRow depth={0} icon="folder" folder name="src" />
       </Tree>
     </div>
   );

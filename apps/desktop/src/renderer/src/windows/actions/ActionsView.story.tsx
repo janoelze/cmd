@@ -67,7 +67,7 @@ function W({ size = "regular", ...p }: Partial<ActionsProps> & { size?: SizeName
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const onToggle = (key: string) => setToggled((t) => (t.has(key) ? new Set([...t].filter((k) => k !== key)) : new Set([...t, key])));
   return (
-    <RefWindow icon="play.rectangle" name="Workspace Actions · cmd" size={size}>
+    <RefWindow icon="monitor-play" name="Workspace Actions · cmd" size={size}>
       <Actions {...base} toggled={toggled} onToggle={onToggle} {...p} />
     </RefWindow>
   );

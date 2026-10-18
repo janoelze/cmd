@@ -7,7 +7,7 @@
 // TreeHeader names the columns above it and sorts by one (the caller sorts).
 
 import { forwardRef, useRef, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
-import { ICON, Icon } from "./icon.tsx";
+import { ICON, Icon, type IconName } from "./icon.tsx";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -40,7 +40,7 @@ export function TreeHeader({ sort, onSort }: { sort: TreeSort; onSort: (s: TreeS
     return (
       <button type="button" className={className} aria-sort={on ? (sort.desc ? "descending" : "ascending") : undefined} onClick={() => onSort({ key, desc: on ? !sort.desc : FIRST[key] })}>
         <span>{label}</span>
-        {on && <Icon name={sort.desc ? "chevron.down" : "chevron.up"} size={ICON.disclosure} />}
+        {on && <Icon name={sort.desc ? "caret-down" : "caret-up"} size={ICON.disclosure} />}
       </button>
     );
   };
@@ -64,8 +64,8 @@ export interface TreeRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "titl
   /** A folder: open or not (a disclosure). Leave it out for a file. */
   open?: boolean;
   onToggle?: () => void;
-  icon: string;
-  /** The icon in the folder colour. */
+  icon: IconName;
+  /** The icon filled, in the folder colour. */
   folder?: boolean;
   /** The name, or a TreeRename in its place. */
   name: ReactNode;
@@ -107,13 +107,13 @@ export const TreeRow = forwardRef<HTMLDivElement, TreeRowProps>(function TreeRow
           onMouseDown={(ev) => ev.stopPropagation()}
           onClick={onToggle}
         >
-          <Icon name="chevron.right" size={ICON.disclosure} />
+          <Icon name="caret-right" size={ICON.disclosure} />
         </button>
       ) : (
         <span />
       )}
       <span className="ui-tree-icon" data-folder={folder || undefined}>
-        <Icon name={icon} size={ICON.row} />
+        <Icon name={icon} size={ICON.row} weight={folder ? "fill" : undefined} />
       </span>
       {typeof name === "string" ? <span className="ui-tree-name">{name}</span> : name}
       <span className="ui-tree-mark" data-tip={markTip}>

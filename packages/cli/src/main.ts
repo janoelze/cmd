@@ -27,7 +27,7 @@ usage: cmd <command> [options]
   workspace [ls] [--all] [--json]         open workspaces (--all: recent ones too)
   workspace which [PATH]                  the workspace a path belongs to
   workspace close|rename|forget [WORKSPACE] [NAME]
-  workspace icon [WORKSPACE] SYMBOL           its icon: an SF Symbol name (- for the default)
+  workspace icon [WORKSPACE] ICON         its icon: a Phosphor icon name, like leaf (- for the default)
                                       SPACE: id prefix, name or folder; default: this terminal's
   ls [--json]                         panes and their agents (tree)
   identify [--json]                   this pane and agent (inside cmd)
@@ -515,9 +515,9 @@ async function workspace(client: Connection["client"]): Promise<number> {
       return out(`renamed to ${next.name}`);
     }
     case "icon": {
-      // `icon SYMBOL` sets this terminal's workspace's icon; `icon SPACE SYMBOL` another's; `-` resets it.
+      // `icon ICON` sets this terminal's workspace's icon; `icon SPACE ICON` another's; `-` resets it.
       const [a, b] = rest;
-      if (!a) return fail("usage: cmd workspace icon [WORKSPACE] SYMBOL");
+      if (!a) return fail("usage: cmd workspace icon [WORKSPACE] ICON");
       const s = await findWorkspace(client, b === undefined ? undefined : a);
       const symbol = b ?? a;
       const next = await client.call("workspace.update", { id: s.id, icon: symbol === "-" ? null : symbol });

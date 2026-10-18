@@ -59,7 +59,7 @@ export function Settings({
       <Button
         size="lg"
         variant="danger"
-        icon="xmark"
+        icon="x"
         onClick={() => {
           if (!confirm) return setConfirm(true);
           onForget();
@@ -99,9 +99,9 @@ function MacList({ current, currentName, onAdd, onSwitch }: { current: string; c
               aria-current={here || undefined}
               onClick={() => onSwitch(m.key)}
             >
-              <ListRowIcon icon="laptopcomputer" />
+              <ListRowIcon icon="laptop" />
               <ListRowContent title={here ? (currentName ?? m.name) : m.name} detail={here ? "Open now" : used(m.lastUsed)} />
-              <ListRowEnd>{here ? <Icon name="checkmark" /> : undefined}</ListRowEnd>
+              <ListRowEnd>{here ? <Icon name="check" /> : undefined}</ListRowEnd>
             </ListRow>
           );
         })}

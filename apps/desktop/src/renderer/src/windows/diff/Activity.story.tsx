@@ -149,7 +149,7 @@ const LANES: Lane[] = RAW.map((l) => ({ ...l, files: l.files.map((f) => ({ ...f,
 
 function W({ size = "regular", lanes = LANES, lens, open }: { size?: SizeName; lanes?: Lane[]; lens?: "agents" | "files"; open?: string }) {
   return (
-    <RefWindow icon="plusminus" name="Changes · cmd" size={size}>
+    <RefWindow icon="plus-minus" name="Changes · cmd" size={size}>
       <ActivityView lanes={lanes} initialLens={lens} initialSelected={open} />
     </RefWindow>
   );
@@ -175,7 +175,7 @@ function Real({ dir }: { dir: string }) {
   const agents = useStoreValue((s) => s.agents);
   const lanes = useMemo(() => (data ? lanesOf(data, agents.values(), Date.now()) : []), [data, agents]);
   return (
-    <RefWindow icon="plusminus" name="Changes · cmd" size="regular">
+    <RefWindow icon="plus-minus" name="Changes · cmd" size="regular">
       <ActivityView lanes={lanes} load={(lane, rel) => cmd.call("git.fileVersions", { top: lane.top!, file: rel, base: lane.base ?? null })} />
     </RefWindow>
   );

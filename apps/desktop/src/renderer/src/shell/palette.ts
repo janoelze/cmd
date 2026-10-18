@@ -87,16 +87,16 @@ export async function searchAll(text: string, show: (items: PaletteItem[]) => vo
     );
   await Promise.all([
     part("names", cmd.call("search.files", { text, workspaceId: st.workspaceId, cwd, limit: 8, part: "names" }), (r) =>
-      r.hits.map((h) => (named.add(h.path), { id: `f-${h.path}`, group: "Files", icon: "doc", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path, "user") })),
+      r.hits.map((h) => (named.add(h.path), { id: `f-${h.path}`, group: "Files", icon: "file", label: base(h.path), meta: dirIn(h.path, h.root), run: () => void openPath(h.path, "user") })),
     ),
     part("lines", cmd.call("search.files", { text, workspaceId: st.workspaceId, cwd, limit: 20, part: "lines" }), (r) =>
-      r.hits.map((h) => ({ id: `l-${h.path}:${h.line}`, group: "Files", icon: "text.alignleft", label: `${base(h.path)}:${h.line}`, meta: dirIn(h.path, h.root), snippet: h.text, run: () => void openFileAt(h.path, h.line!, h.column, text.trim()) })),
+      r.hits.map((h) => ({ id: `l-${h.path}:${h.line}`, group: "Files", icon: "text-align-left", label: `${base(h.path)}:${h.line}`, meta: dirIn(h.path, h.root), snippet: h.text, run: () => void openFileAt(h.path, h.line!, h.column, text.trim()) })),
     ),
     part("sessions", cmd.call("search.query", { text, limit: 8 }), (hits) =>
       hits.map((h) => ({
         id: `h-${h.agent}-${h.sessionId}`,
         group: "Past sessions",
-        icon: "clock.arrow.circlepath",
+        icon: "clock-counter-clockwise",
         label: h.title || "(untitled session)",
         meta: meta(h.agent, h.cwd && shortPath(h.cwd), h.branch, h.updatedAt && ago(h.updatedAt, now), h.fuzzy && "~"),
         snippet: h.snippet,
@@ -110,7 +110,7 @@ export async function searchAll(text: string, show: (items: PaletteItem[]) => vo
           return [{
             id: `c-${h.command}-${h.cwd}`,
             group: "Commands",
-            icon: "terminal",
+            icon: "terminal-window",
             label: h.command,
             meta: meta(h.cwd && shortPath(h.cwd), h.exitCode ? `exit ${h.exitCode}` : null, h.runs > 1 && `${h.runs}×`, ago(h.at, now)),
             snippet: h.snippet,
@@ -121,7 +121,7 @@ export async function searchAll(text: string, show: (items: PaletteItem[]) => vo
           const host = /^https?:\/\/([^/]+)/.exec(h.url)?.[1] ?? h.url;
           return [{ id: `p-${h.url}`, group: "Pages", icon: "globe", label: h.title || h.url, meta: meta(host, ago(h.at, now)), run: () => openLink(h.url) }];
         }
-        return [{ id: `o-${h.path}`, group: "Opened files", icon: "doc", label: base(h.path), meta: meta(shortPath(h.path.slice(0, h.path.lastIndexOf("/"))), ago(h.at, now)), run: () => void openPath(h.path, "user") }];
+        return [{ id: `o-${h.path}`, group: "Opened files", icon: "file", label: base(h.path), meta: meta(shortPath(h.path.slice(0, h.path.lastIndexOf("/"))), ago(h.at, now)), run: () => void openPath(h.path, "user") }];
       }),
     ),
   ]);
@@ -134,8 +134,8 @@ export function lineItems(query: string, c: CommandContext): PaletteItem[] {
   if (!text || !query.startsWith(LINE_PREFIX)) return [];
   const lines = text.lines();
   const m = /^:\s*(\d+)(?::(\d+))?\s*$/.exec(query);
-  if (!m) return [{ id: "text.line", group: "Go to Line", label: `Type a line number, 1 to ${lines}`, icon: "arrow.right.to.line", run: () => {} }];
+  if (!m) return [{ id: "text.line", group: "Go to Line", label: `Type a line number, 1 to ${lines}`, icon: "arrow-line-right", run: () => {} }];
   const line = Math.min(Math.max(1, Number(m[1])), lines);
   const column = m[2] ? Math.max(1, Number(m[2])) : undefined;
-  return [{ id: "text.line", group: "Go to Line", label: column ? `Go to line ${line}, column ${column}` : `Go to line ${line}`, icon: "arrow.right.to.line", run: () => text.goToLine(line, column) }];
+  return [{ id: "text.line", group: "Go to Line", label: column ? `Go to line ${line}, column ${column}` : `Go to line ${line}`, icon: "arrow-line-right", run: () => text.goToLine(line, column) }];
 }

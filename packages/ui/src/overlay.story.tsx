@@ -20,7 +20,7 @@ export const Workspaces = () => {
   const [ws, setWs] = useState<Workspace>("work");
   return (
     <div style={{ height: 300 }}>
-      <Button ref={anchor} trailing="chevron.up.chevron.down" onClick={() => setOpen(!open)}>
+      <Button ref={anchor} trailing="caret-up-down" onClick={() => setOpen(!open)}>
         {WORKSPACES[ws]}
       </Button>
       <Menu
@@ -29,9 +29,9 @@ export const Workspaces = () => {
         onClose={() => setOpen(false)}
         items={[
           "Workspaces",
-          { label: "Work", detail: "4 windows · 2 agents", icon: "terminal", checked: ws === "work", shortcut: "⌃1", onSelect: () => setWs("work") },
+          { label: "Work", detail: "4 windows · 2 agents", icon: "terminal-window", checked: ws === "work", shortcut: "⌃1", onSelect: () => setWs("work") },
           { label: "Home", detail: "1 window", icon: "house", checked: ws === "home", shortcut: "⌃2", onSelect: () => setWs("home") },
-          { label: "Side project", icon: "sparkles", checked: ws === "side", shortcut: "⌃3", onSelect: () => setWs("side") },
+          { label: "Side project", icon: "sparkle", checked: ws === "side", shortcut: "⌃3", onSelect: () => setWs("side") },
           null,
           { label: "New Workspace…", icon: "plus", onSelect: () => toast("New Workspace") },
           { label: "Delete Workspace", icon: "trash", danger: true, onSelect: () => toast("Deleted", { tone: "danger", action: { label: "Undo", run: () => toast("Restored") } }) },
@@ -48,7 +48,7 @@ export const Inline = () => {
   const [ws, setWs] = useState<Workspace>("work");
   return (
     <div style={{ height: 280, width: 480, display: "flex", justifyContent: "center" }}>
-      <Button ref={anchor} trailing="chevron.down" onClick={() => setOpen(!open)}>
+      <Button ref={anchor} trailing="caret-down" onClick={() => setOpen(!open)}>
         {WORKSPACES[ws]}
       </Button>
       <Menu
@@ -61,9 +61,9 @@ export const Inline = () => {
         width="content"
         maxWidth={400}
         items={[
-          { label: "Work", detail: "~/src/work", icon: "terminal", checked: ws === "work", shortcut: "⌃1", onSelect: () => setWs("work") },
+          { label: "Work", detail: "~/src/work", icon: "terminal-window", checked: ws === "work", shortcut: "⌃1", onSelect: () => setWs("work") },
           { label: "Home", detail: "~", icon: "house", checked: ws === "home", accessory: <StatusDot state="needs" size="sm" />, shortcut: "⌃2", onSelect: () => setWs("home") },
-          { label: "Side project", detail: "~/src/side-project", icon: "sparkles", checked: ws === "side", accessory: <StatusDot state="unseen" size="sm" />, shortcut: "⌃3", onSelect: () => setWs("side") },
+          { label: "Side project", detail: "~/src/side-project", icon: "sparkle", checked: ws === "side", accessory: <StatusDot state="unseen" size="sm" />, shortcut: "⌃3", onSelect: () => setWs("side") },
           { label: "fl-studio-canonical-store-migration", detail: "~/src/fl-studio-canonical-store-migration · worktree of fl-studio-store", icon: "folder", checked: ws === "long", shortcut: "⌃4", onSelect: () => setWs("long") },
           null,
           { label: "Open Workspace…", icon: "plus", shortcut: "⌘O", onSelect: () => toast("Open Workspace") },
@@ -79,7 +79,7 @@ export const Card = () => {
   const [open, setOpen] = useState(true);
   return (
     <div style={{ height: 220 }}>
-      <Button ref={anchor} icon="info.circle" onClick={() => setOpen(!open)}>
+      <Button ref={anchor} icon="info" onClick={() => setOpen(!open)}>
         Core details
       </Button>
       <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} width={280}>
@@ -146,10 +146,10 @@ export const Confirm = () => {
 export const Toasts = () => (
   <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", width: 360 }}>
     <Toast onDismiss={() => {}}>Copied path</Toast>
-    <Toast tone="success" icon="checkmark.circle.fill" onDismiss={() => {}}>
+    <Toast tone="success" icon="check-circle" onDismiss={() => {}}>
       Widget rebuilt
     </Toast>
-    <Toast tone="warning" icon="exclamationmark.triangle.fill" action={{ label: "Undo", run: () => {} }} onDismiss={() => {}}>
+    <Toast tone="warning" icon="warning" action={{ label: "Undo", run: () => {} }} onDismiss={() => {}}>
       Window closed
     </Toast>
   </div>
@@ -159,7 +159,7 @@ export const Toasts = () => (
 export const Toasting = () => (
   <div style={{ display: "flex", gap: "var(--space-2)" }}>
     <Button onClick={() => toast("Copied path")}>Plain</Button>
-    <Button onClick={() => toast("Widget rebuilt", { tone: "success", icon: "checkmark.circle.fill" })}>Success</Button>
+    <Button onClick={() => toast("Widget rebuilt", { tone: "success", icon: "check-circle" })}>Success</Button>
     <Button onClick={() => toast("Window closed", { action: { label: "Undo", run: () => toast("Reopened") } })}>With action</Button>
     <Toaster />
   </div>
@@ -203,7 +203,7 @@ export const Sheets = () => {
         actions={
           <>
             <Button onClick={close}>Cancel</Button>
-            <Button variant="primary" disabled={!msg.trim()} onClick={() => (close(), setMsg(""), toast("Thanks!", { tone: "success", icon: "checkmark.circle.fill" }))}>
+            <Button variant="primary" disabled={!msg.trim()} onClick={() => (close(), setMsg(""), toast("Thanks!", { tone: "success", icon: "check-circle" }))}>
               Send
             </Button>
           </>
@@ -264,11 +264,11 @@ export const Sheets = () => {
           </Button>
         }
       >
-        <SheetHeader icon="command.square.fill" title="Welcome to cmd" subtitle="Terminals and coding agents, side by side." />
+        <SheetHeader icon="command" title="Welcome to cmd" subtitle="Terminals and coding agents, side by side." />
         <FeatureList
           items={[
-            { icon: "rectangle.3.group", title: "A workspace per project", description: "Terminals, agents, a browser and an editor as windows." },
-            { icon: "wand.and.stars", title: "Magic widgets", description: "Ask for a window and an agent builds it." },
+            { icon: "layout", title: "A workspace per project", description: "Terminals, agents, a browser and an editor as windows." },
+            { icon: "magic-wand", title: "Magic widgets", description: "Ask for a window and an agent builds it." },
           ]}
         />
       </Dialog>
@@ -283,7 +283,7 @@ export const Sheets = () => {
         toolbar={<SearchField fill size="lg" value="" placeholder="Search widgets" onChange={() => {}} autoFocus />}
         aside="Right-click a widget to rename, duplicate or delete it"
         actions={
-          <Button variant="primary" icon="sparkles" onClick={close}>
+          <Button variant="primary" icon="sparkle" onClick={close}>
             New Widget
           </Button>
         }

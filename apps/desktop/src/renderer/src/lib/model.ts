@@ -1,7 +1,7 @@
 // View-model helpers: sidebar rows, agent trees, labels.
 
 import { bucketOf, kindLabel, needsAttention, placeAgainst, type Agent, type AppWindow, type Attention, type MagicStatus, type Pane, type GitPlace, type PaneId, type Workspace, type WorkspaceId } from "@cmd/protocol";
-import type { DotState } from "@cmd/ui";
+import type { DotState, IconName } from "@cmd/ui";
 import type { State } from "./store.ts";
 import { typeFor, viewFor } from "../windows/registry.ts";
 
@@ -254,7 +254,7 @@ export interface WindowFields {
   light?: Led;
   /** Windows and terminals with news or a status: tints their icon (and gives a sidebar row its status line). */
   tone?: DotState;
-  icon: string;
+  icon: IconName;
 }
 
 export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: number): WindowFields {
@@ -281,7 +281,7 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
             : undefined,
       dirty: live?.dirty,
       tone: attn ? (attn.urgent ? "needs" : "unseen") : ws?.tone ? TONE_LIGHT[ws.tone] : undefined,
-      icon: d.icon || type?.icon || "macwindow",
+      icon: d.icon || type?.icon || "app-window",
     };
   } else {
     const a = r.agent;
@@ -304,7 +304,7 @@ export function fieldsOf(r: SidebarRow, live: LiveStatus | undefined, now: numbe
       status: a ? agentStatus(a, now) : attn ? { text: attn.text, key: `attention:${attn.kind}` } : undefined,
       light: a ? ledOf(a) : undefined,
       tone: !a && attn ? (attn.urgent ? "needs" : "unseen") : undefined,
-      icon: "terminal",
+      icon: "terminal-window",
     };
   }
   // Rule 2: no repeats (a shell named after its process, a page titled with its host).

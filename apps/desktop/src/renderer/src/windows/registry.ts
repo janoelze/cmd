@@ -5,6 +5,7 @@
 import { createContext, createElement, lazy, Suspense, type ComponentType } from "react";
 import type { AppWindow, WindowTypeInfo } from "@cmd/protocol";
 import type { MenuEntry } from "../lib/context.ts";
+import { iconOr, type IconName } from "@cmd/ui";
 
 export interface WindowViewProps {
   win: AppWindow;
@@ -22,7 +23,7 @@ export interface WindowView {
    * name already say it). Kind comes from the type; Status and Dirty from
    * the window's live status (setWindowStatus).
    */
-  describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null; icon?: string };
+  describe?(win: AppWindow): { name?: string; place?: string; kind?: string | null; icon?: IconName };
   /** Its toolbar shows the Place (an address, a path): the title bar leaves it out; sidebar rows keep it. */
   placeInToolbar?: boolean;
   /** Context-menu entries for the title bar and sidebar row. */
@@ -73,23 +74,26 @@ export function viewFor(kind: string): WindowView | undefined {
   return views.get(kind);
 }
 
+/** A window type from the core, its icon checked (a plugin's may name one that isn't). */
+export type TypeInfo = Omit<WindowTypeInfo, "icon"> & { icon: IconName };
+
 /** Type info from the core (title, icon) for kinds without a registered view too. */
-let typeInfo = new Map<string, WindowTypeInfo>();
+let typeInfo = new Map<string, TypeInfo>();
 export function setWindowTypes(types: WindowTypeInfo[]): void {
-  typeInfo = new Map(types.map((t) => [t.kind, t]));
+  typeInfo = new Map(types.map((t) => [t.kind, { ...t, icon: iconOr(t.icon, "app-window") }]));
 }
-export function typeFor(kind: string): WindowTypeInfo | undefined {
+export function typeFor(kind: string): TypeInfo | undefined {
   return typeInfo.get(kind);
 }
 
 /** Files no window type opens, by what they hold. */
-const FILE_ICONS: [RegExp, string][] = [
+const FILE_ICONS: [RegExp, IconName][] = [
   [/\.(mp3|m4a|wav|aiff?|flac|ogg|opus|aac|caf|mid|midi)$/i, "waveform"],
-  [/\.(mkv|avi|wmv|flv|mpe?g|3gp)$/i, "film"],
-  [/\.(heic|heif|tiff?|raw|dng|cr2|nef|psd)$/i, "photo"],
-  [/\.(zip|tar|gz|tgz|bz2|xz|zst|7z|rar)$/i, "doc.zipper"],
-  [/\.(ttf|otf|woff2?)$/i, "textformat"],
-  [/\.(txt|log|ya?ml|toml|ini|env|csv|tsv|xml|html?|css|scss|[cm]?[jt]sx?|swift|zig|rs|go|py|rb|php|java|kt|c|cc|cpp|h|hpp|m|sh|zsh|fish|sql|lua|vue|svelte)$/i, "doc.text"],
+  [/\.(mkv|avi|wmv|flv|mpe?g|3gp)$/i, "film-strip"],
+  [/\.(heic|heif|tiff?|raw|dng|cr2|nef|psd)$/i, "image"],
+  [/\.(zip|tar|gz|tgz|bz2|xz|zst|7z|rar)$/i, "file-zip"],
+  [/\.(ttf|otf|woff2?)$/i, "text-aa"],
+  [/\.(txt|log|ya?ml|toml|ini|env|csv|tsv|xml|html?|css|scss|[cm]?[jt]sx?|swift|zig|rs|go|py|rb|php|java|kt|c|cc|cpp|h|hpp|m|sh|zsh|fish|sql|lua|vue|svelte)$/i, "file-text"],
 ];
 
 /**
@@ -98,14 +102,14 @@ const FILE_ICONS: [RegExp, string][] = [
  * icon along; else what it holds (audio, an archive), else a plain document. Only
  * dedicated viewers count (a priority), not the browser's claim on HTML.
  */
-export function fileIcon(name: string): string {
+export function fileIcon(name: string): IconName {
   const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
-  let best: WindowTypeInfo | undefined;
+  let best: TypeInfo | undefined;
   for (const t of typeInfo.values()) {
     const p = t.opens.priority ?? 0;
     if (p > 0 && t.opens.extensions?.includes(ext) && p > (best?.opens.priority ?? 0)) best = t;
   }
-  return best?.icon ?? FILE_ICONS.find(([re]) => re.test(name))?.[1] ?? "doc";
+  return best?.icon ?? FILE_ICONS.find(([re]) => re.test(name))?.[1] ?? "file";
 }
 
 /** Typed access to a window's state. */

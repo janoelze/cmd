@@ -6,7 +6,7 @@
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, iconNode, type IconLike } from "./icon.tsx";
 import { Button, IconButton } from "./button.tsx";
 import type { Tone } from "./status.tsx";
 import { WindowBar } from "./window.tsx";
@@ -166,7 +166,7 @@ export interface MenuItemProps {
   label: ReactNode;
   /** A second line, dim. */
   detail?: ReactNode;
-  icon?: string | ReactNode;
+  icon?: IconLike;
   shortcut?: string;
   /** Before the shortcut, at the row's end: a status dot, say. */
   accessory?: ReactNode;
@@ -319,7 +319,7 @@ export function Menu({
                 })
               }
             >
-              {marks === "check" && <span className="ui-menu-check">{it.checked && iconNode("checkmark", ICON.control, "bold")}</span>}
+              {marks === "check" && <span className="ui-menu-check">{it.checked && iconNode("check", ICON.control, "bold")}</span>}
               {it.icon != null && <span className="ui-menu-icon">{iconNode(it.icon, ICON.row)}</span>}
               <span className="ui-menu-text">
                 <span className="ui-menu-label">{it.label}</span>
@@ -446,7 +446,7 @@ export function Dialog({
   /** Lines under the title and above the actions, like the palette's: for content that scrolls between them. */
   divided?: boolean;
   /** Dressed as one of the app's windows: a title bar with its icon and name (and a title, larger, under it if given). `close: false` leaves out its close button; `status` sits at its right. */
-  window?: { icon?: string | ReactNode; name: string; close?: boolean; /** Dim, at the bar's right: how long something has left. */ status?: ReactNode };
+  window?: { icon?: IconLike; name: string; close?: boolean; /** Dim, at the bar's right: how long something has left. */ status?: ReactNode };
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
@@ -511,13 +511,13 @@ export function Dialog({
         {win && (
           <WindowBar icon={win.icon} name={win.name}>
             {win.status != null && <span className="ui-window-bar-meta">{win.status}</span>}
-            {dismissable && win.close !== false && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
+            {dismissable && win.close !== false && <IconButton icon="x" size="sm" label="Close" onClick={onClose} />}
           </WindowBar>
         )}
         {title && (
           <div className="ui-dialog-head">
             <div className="ui-dialog-title">{title}</div>
-            {dismissable && !win && <IconButton icon="xmark" size="sm" label="Close" onClick={onClose} />}
+            {dismissable && !win && <IconButton icon="x" size="sm" label="Close" onClick={onClose} />}
           </div>
         )}
         {toolbar && <div className="ui-dialog-bar">{toolbar}</div>}
@@ -595,7 +595,7 @@ export interface ToastOptions {
   action?: { label: string; run: () => void };
   /** ms; 0 keeps it until dismissed. Default 4000. */
   duration?: number;
-  icon?: string | ReactNode;
+  icon?: IconLike;
 }
 interface ToastEntry extends ToastOptions {
   id: number;
@@ -664,7 +664,7 @@ export function Toast({
   leaving,
 }: {
   tone?: Tone;
-  icon?: string | ReactNode;
+  icon?: IconLike;
   children: ReactNode;
   action?: { label: string; run: () => void };
   onDismiss?: () => void;
@@ -682,7 +682,7 @@ export function Toast({
           {action.label}
         </Button>
       )}
-      {onDismiss && <IconButton icon="xmark" size="sm" label="Dismiss" onClick={onDismiss} />}
+      {onDismiss && <IconButton icon="x" size="sm" label="Dismiss" onClick={onDismiss} />}
     </div>
   );
 }

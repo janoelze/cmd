@@ -1,17 +1,15 @@
 // Workspaces (docs/11-workspaces.md): constants and helpers shared by core, CLI and UI.
 
 import type { GitPlace, Workspace } from "./model.ts";
+import { ICON_NAMES } from "./icons.gen.ts";
 
 /** The workspace that always exists, rooted at the home folder; it catches everything without a better workspace. */
 export const HOME_WORKSPACE_ID = "home";
 
-/** A workspace's icon: its own SF Symbol, else a house for Home and a folder for the rest. */
+/** A workspace's icon: its own Phosphor icon, else a house for Home and a folder for the rest (also for a name that's no icon, as SF Symbol names from before the switch are). */
 export function workspaceIcon(s: { icon: string | null; home: boolean }): string {
-  return s.icon ?? (s.home ? "house" : "folder");
+  return s.icon && ICON_NAMES.has(s.icon) ? s.icon : s.home ? "house" : "folder";
 }
-
-/** SF Symbol names: lowercase words joined by dots. */
-export const ICON_NAME = /^[a-z0-9]+(\.[a-z0-9]+)*$/;
 
 /**
  * Where something is, as far as it differs from its workspace (docs/35): null in

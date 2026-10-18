@@ -8,7 +8,7 @@
 // window-design skill's chart window (stats with sparklines, then tables), so
 // ResourcesView.story.tsx can show every state.
 
-import { DataGrid, LinkButton, Mark, Pane, Panes, Sparkline, Stat, StatusLine, Text, Tiles, View } from "@cmd/ui";
+import { DataGrid, LinkButton, Mark, Pane, Panes, Sparkline, Stat, StatusLine, Text, Tiles, View, type IconName } from "@cmd/ui";
 import { useEffect, useState } from "react";
 import type { Pane as TermPane, PaneId, ProcessStat } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
@@ -60,7 +60,7 @@ export const pct = (n: number) => `${share(n)}%`;
 export interface TerminalUse extends Use {
   id: PaneId;
   name: string;
-  icon: string;
+  icon: IconName;
   /** Its largest processes, by name. */
   top: string[];
   processes: number;
@@ -103,7 +103,7 @@ export function Resources(p: ResourcesProps) {
         p.terminals === null
           ? { kind: "loading" }
           : terminals.length === 0 && !p.app
-            ? { kind: "empty", icon: "gauge.with.dots.needle.33percent", title: "Nothing running", text: p.all ? "Open a terminal and what runs in it shows up here." : "Open a terminal in this workspace and what runs in it shows up here." }
+            ? { kind: "empty", icon: "gauge", title: "Nothing running", text: p.all ? "Open a terminal and what runs in it shows up here." : "Open a terminal in this workspace and what runs in it shows up here." }
             : null
       }
       footer={
@@ -149,8 +149,8 @@ export function Resources(p: ResourcesProps) {
             <DataGrid
               columns={columns("Part")}
               rows={[
-                [<Mark key="m" icon="macwindow" />, "App", ...values(p.app)],
-                [<Mark key="m" icon="gearshape.2" />, { node: "Background", tip: "Keeps your terminals and agents running while the app is closed" }, ...values(p.background)],
+                [<Mark key="m" icon="app-window" />, "App", ...values(p.app)],
+                [<Mark key="m" icon="gear-six" />, { node: "Background", tip: "Keeps your terminals and agents running while the app is closed" }, ...values(p.background)],
               ]}
             />
           </Pane>

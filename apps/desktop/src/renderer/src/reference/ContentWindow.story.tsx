@@ -22,16 +22,16 @@ function Doc({ size = "wide", loading }: { size?: SizeName; loading?: boolean })
   const [q, setQ] = useState("");
   const [at, setAt] = useState("today");
   return (
-    <RefWindow icon="doc.richtext" name="40-window-design.md" size={size}>
+    <RefWindow icon="article" name="40-window-design.md" size={size}>
       <View
         scroll={false}
         state={loading ? { kind: "loading" } : null}
         toolbar={
           <WindowToolbar label="Document">
-            <ToolbarButton icon="sidebar.left" label={outline ? "Hide Outline" : "Show Outline"} pressed={outline} onClick={() => setOutline((v) => !v)} priority={2} />
+            <ToolbarButton icon="sidebar-simple" label={outline ? "Hide Outline" : "Show Outline"} pressed={outline} onClick={() => setOutline((v) => !v)} priority={2} />
             <ToolbarSpacer />
             <ToolbarSearchField value={q} onChange={setQ} placeholder="Find" minWidth={80} />
-            <ToolbarButton icon="pencil" label="Edit" shortcut="⌘E" secondary priority={1} />
+            <ToolbarButton icon="pencil-simple" label="Edit" shortcut="⌘E" secondary priority={1} />
           </WindowToolbar>
         }
         footer={<StatusLine end={<span>~/src/cmd/docs</span>}>2,140 words · 9 min read</StatusLine>}

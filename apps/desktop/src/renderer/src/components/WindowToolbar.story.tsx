@@ -3,24 +3,7 @@
 // selected and at rest. The toolbars here are the specs the views follow.
 // Fields: Fields shows the three kinds (text, search, address) at rest and in use.
 
-import {
-  ToolbarAddressField,
-  ToolbarButton,
-  ToolbarField,
-  ToolbarGroup,
-  ToolbarMenu,
-  ToolbarPath,
-  ToolbarSearchField,
-  ToolbarSegmented,
-  ToolbarSeparator,
-  ToolbarSpacer,
-  ToolbarText,
-  Window,
-  WindowBar,
-  WindowBody,
-  WindowFrame,
-  WindowToolbar,
-} from "@cmd/ui";
+import { ToolbarAddressField, ToolbarButton, ToolbarField, ToolbarGroup, ToolbarMenu, ToolbarPath, ToolbarSearchField, ToolbarSegmented, ToolbarSeparator, ToolbarSpacer, ToolbarText, Window, WindowBar, WindowBody, WindowFrame, WindowToolbar, type IconName } from "@cmd/ui";
 import { useState, type ReactNode } from "react";
 
 const WIDTHS = [220, 320, 480, 640];
@@ -30,12 +13,12 @@ function Browser() {
   return (
     <WindowToolbar label="Browser">
       <ToolbarGroup>
-        <ToolbarButton icon="chevron.left" label="Back" shortcut="⌘[" />
-        <ToolbarButton icon="chevron.right" label="Forward" shortcut="⌘]" disabled />
-        <ToolbarButton icon="arrow.clockwise" label="Reload" shortcut="⌘R" priority={2} />
+        <ToolbarButton icon="caret-left" label="Back" shortcut="⌘[" />
+        <ToolbarButton icon="caret-right" label="Forward" shortcut="⌘]" disabled />
+        <ToolbarButton icon="arrow-clockwise" label="Reload" shortcut="⌘R" priority={2} />
       </ToolbarGroup>
       <ToolbarAddressField value={url} onSubmit={setUrl} placeholder="Search or enter address" minWidth={90} />
-      <ToolbarButton icon="safari" label="Open in Default Browser" secondary priority={1} />
+      <ToolbarButton icon="compass" label="Open in Default Browser" secondary priority={1} />
     </WindowToolbar>
   );
 }
@@ -46,13 +29,13 @@ function Files() {
   const segs = ["~", "src", "cmd", "apps", "desktop"].map((s, i) => ({ key: String(i), label: s }));
   return (
     <WindowToolbar label="Files">
-      <ToolbarButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" />
+      <ToolbarButton icon="caret-up" label="Enclosing Folder" shortcut="⌘↑" />
       <ToolbarPath segments={segs} onSelect={() => {}} onMenu={() => {}} tip="~/src/cmd/apps/desktop" />
       <ToolbarSpacer />
-      <ToolbarButton icon="arrow.triangle.branch" label="Changes Only" showLabel pressed={changes} badge="12" onClick={() => setChanges((c) => !c)} priority={4} />
-      <ToolbarButton icon="bookmark" label="Bookmarks" menu secondary priority={2} />
-      <ToolbarButton icon={hidden ? "eye" : "eye.slash"} label={hidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={hidden} onClick={() => setHidden((h) => !h)} secondary priority={1} />
-      <ToolbarButton icon="terminal" label="New Terminal Here" secondary priority={3} />
+      <ToolbarButton icon="git-branch" label="Changes Only" showLabel pressed={changes} badge="12" onClick={() => setChanges((c) => !c)} priority={4} />
+      <ToolbarButton icon="bookmark-simple" label="Bookmarks" menu secondary priority={2} />
+      <ToolbarButton icon={hidden ? "eye" : "eye-slash"} label={hidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={hidden} onClick={() => setHidden((h) => !h)} secondary priority={1} />
+      <ToolbarButton icon="terminal-window" label="New Terminal Here" secondary priority={3} />
     </WindowToolbar>
   );
 }
@@ -61,19 +44,19 @@ function Pdf() {
   const [sidebar, setSidebar] = useState(false);
   return (
     <WindowToolbar label="PDF">
-      <ToolbarButton icon="sidebar.left" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={sidebar} onClick={() => setSidebar((s) => !s)} priority={2} />
+      <ToolbarButton icon="sidebar-simple" label={sidebar ? "Hide Sidebar" : "Show Sidebar"} pressed={sidebar} onClick={() => setSidebar((s) => !s)} priority={2} />
       <ToolbarField defaultValue="3" aria-label="Page" align="center" minWidth={36} maxWidth={44} />
       <ToolbarText priority={0}>of 24</ToolbarText>
       <ToolbarSpacer />
       <ToolbarGroup>
-        <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" priority={1} />
+        <ToolbarButton icon="magnifying-glass-minus" label="Zoom Out" shortcut="⌘−" priority={1} />
         <ToolbarMenu label="Zoom" onClick={() => {}} priority={3}>
           125%
         </ToolbarMenu>
-        <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" priority={1} />
+        <ToolbarButton icon="magnifying-glass-plus" label="Zoom In" shortcut="⌘+" priority={1} />
       </ToolbarGroup>
       <ToolbarSeparator />
-      <ToolbarButton icon="magnifyingglass" label="Find" shortcut="⌘F" />
+      <ToolbarButton icon="magnifying-glass" label="Find" shortcut="⌘F" />
     </WindowToolbar>
   );
 }
@@ -104,20 +87,20 @@ function Editor() {
         ]}
       />
       <ToolbarSpacer />
-      <ToolbarButton icon="checkmark" label="Done" shortcut="⌘E" showLabel />
+      <ToolbarButton icon="check" label="Done" shortcut="⌘E" showLabel />
     </WindowToolbar>
   );
 }
 
-const KINDS: { name: string; icon: string; bar: () => ReactNode }[] = [
+const KINDS: { name: string; icon: IconName; bar: () => ReactNode }[] = [
   { name: "GitHub · Pull requests", icon: "globe", bar: Browser },
   { name: "desktop", icon: "folder", bar: Files },
-  { name: "manual.pdf", icon: "doc.richtext", bar: Pdf },
-  { name: "Event Stream", icon: "waveform.path.ecg", bar: Events },
-  { name: "Weather", icon: "sparkles", bar: Editor },
+  { name: "manual.pdf", icon: "article", bar: Pdf },
+  { name: "Event Stream", icon: "heartbeat", bar: Events },
+  { name: "Weather", icon: "sparkle", bar: Editor },
 ];
 
-function Win({ width, icon, name, selected, children }: { width: number; icon: string; name: string; selected?: boolean; children: ReactNode }) {
+function Win({ width, icon, name, selected, children }: { width: number; icon: IconName; name: string; selected?: boolean; children: ReactNode }) {
   return (
     <Window selected={selected} style={{ width, height: 92, position: "relative", flex: "none" }}>
       <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>

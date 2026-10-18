@@ -84,7 +84,7 @@ function Uses({ uses, onOpen }: { uses: Use[]; onOpen: (story: string, variant?:
         <List>
           {uses.slice(LIVE).map(({ story, variant }) => (
             <ListRow key={`${story.id}/${variant.name}`} onClick={() => onOpen(story.id, variant.name)}>
-              <ListRowIcon icon="rectangle.stack" />
+              <ListRowIcon icon="stack" />
               <ListRowContent title={`${story.title} › ${variant.name}`} place={story.group} />
             </ListRow>
           ))}

@@ -19,7 +19,7 @@ const LINES = [
 
 function W({ size = "regular", lines = LINES, scope = "workspace" }: { size?: SizeName; lines?: ActivityLine[]; scope?: "all" | "workspace" }) {
   return (
-    <RefWindow icon="person.2" name="Agent Activity" size={size}>
+    <RefWindow icon="users" name="Agent Activity" size={size}>
       <AgentActivityView lines={lines} scope={scope} onNew={noop} />
     </RefWindow>
   );

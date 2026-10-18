@@ -196,7 +196,7 @@ export function StatDetail({ result: r, range, by, onBy, onRange, onBack, now = 
   const many = r?.stat.dims.find((d) => d.many);
   const toolbar = (
     <WindowToolbar label="Stat">
-      <ToolbarButton icon="chevron.left" label="Stats" showLabel secondary onClick={onBack} />
+      <ToolbarButton icon="caret-left" label="Stats" showLabel secondary onClick={onBack} />
       <ToolbarSegmented label="Range" value={range} onChange={onRange} options={RANGES} />
       <ToolbarSpacer />
       {dims.length > 0 && <ToolbarSegmented label="Split by" value={by ?? ""} onChange={(v) => onBy(v || null)} options={[{ value: "", label: "Total" }, ...dims.slice(0, 3).map((d) => ({ value: d.id, label: d.title }))]} />}

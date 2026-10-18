@@ -86,7 +86,7 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
   return (
     <>
       <WindowToolbar label="Find" floating={p.floating} className="ui-find">
-        {rep && <ToolbarButton icon={rep.open ? "chevron.down" : "chevron.right"} label={rep.open ? "Hide Replace" : "Show Replace"} shortcut="⌥⌘F" onClick={() => rep.onOpen(!rep.open)} />}
+        {rep && <ToolbarButton icon={rep.open ? "caret-down" : "caret-right"} label={rep.open ? "Hide Replace" : "Show Replace"} shortcut="⌥⌘F" onClick={() => rep.onOpen(!rep.open)} />}
         <ToolbarSearchField
           ref={input}
           value={p.query}
@@ -104,10 +104,10 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
         {can("wholeWord") && <ToolbarButton icon={<Glyph>ab</Glyph>} label="Whole Words" pressed={p.options.wholeWord} onClick={() => toggle("wholeWord")} priority={2} className="ui-glyph-word" />}
         {can("regex") && <ToolbarButton icon={<Glyph>.*</Glyph>} label="Regular Expression" pressed={p.options.regex} onClick={() => toggle("regex")} priority={1} />}
         <ToolbarGroup>
-          <ToolbarButton icon="chevron.up" label="Previous" shortcut="⇧⌘G" disabled={!p.query || none} onClick={() => p.onStep(-1)} />
-          <ToolbarButton icon="chevron.down" label="Next" shortcut="⌘G" disabled={!p.query || none} onClick={() => p.onStep(1)} />
+          <ToolbarButton icon="caret-up" label="Previous" shortcut="⇧⌘G" disabled={!p.query || none} onClick={() => p.onStep(-1)} />
+          <ToolbarButton icon="caret-down" label="Next" shortcut="⌘G" disabled={!p.query || none} onClick={() => p.onStep(1)} />
         </ToolbarGroup>
-        <ToolbarButton icon="xmark" label="Close" shortcut="⎋" onClick={p.onClose} />
+        <ToolbarButton icon="x" label="Close" shortcut="⎋" onClick={p.onClose} />
       </WindowToolbar>
       {rep?.open && (
         <WindowToolbar label="Replace" className="ui-find ui-find-replace">

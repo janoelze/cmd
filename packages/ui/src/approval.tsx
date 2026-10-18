@@ -9,6 +9,7 @@ import { Segmented } from "./choice.tsx";
 import { TextField } from "./fields.tsx";
 import { CodeBlock } from "./layout.tsx";
 import { Dialog, Menu } from "./overlay.tsx";
+import type { IconLike } from "./icon.tsx";
 
 /** How long a Return right after the sheet appears is ignored: an Enter already being typed into a terminal mustn't approve unread. */
 const GUARD_MS = 300;
@@ -59,7 +60,7 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
   /** False while it fades out (Presence). */
   open?: boolean;
   /** The asker, in the sheet's title bar: an icon, a name, and where (the workspace, Remote Access). */
-  who: { icon?: string | ReactNode; name: string; context?: string };
+  who: { icon?: IconLike; name: string; context?: string };
   title: ReactNode;
   why?: ReactNode;
   exact?: ReactNode;
@@ -138,7 +139,7 @@ export function ApprovalSheet<S extends string = string, C extends string = stri
                 <Button disabled={busy} onClick={no}>
                   {deny}
                 </Button>
-                <Button ref={denyMore} icon="chevron.down" disabled={busy} aria-label="More ways to deny" aria-haspopup="menu" onClick={() => setMenu(true)} />
+                <Button ref={denyMore} icon="caret-down" disabled={busy} aria-label="More ways to deny" aria-haspopup="menu" onClick={() => setMenu(true)} />
               </ButtonGroup>
             ) : (
               <Button disabled={busy} onClick={no}>

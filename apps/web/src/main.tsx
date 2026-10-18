@@ -4,7 +4,6 @@
 // sizes apply (pointer: coarse).
 
 import { createRoot } from "react-dom/client";
-import { UIProvider } from "@cmd/ui";
 import "@cmd/ui/ui.css";
 import { App } from "./App.tsx";
 import { startTheme } from "./theme.ts";
@@ -26,9 +25,4 @@ vv?.addEventListener("scroll", follow);
 window.addEventListener("resize", follow);
 follow();
 
-// No icon renderer: the kit draws its Lucide outlines (SF Symbols are Apple's own).
-createRoot(document.getElementById("root")!).render(
-  <UIProvider>
-    <App />
-  </UIProvider>,
-);
+createRoot(document.getElementById("root")!).render(<App />);

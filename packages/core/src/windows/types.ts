@@ -28,7 +28,7 @@ export interface WindowType<S extends Record<string, unknown> = Record<string, u
   kind: string;
   /** "Browser", "Files", … */
   title: string;
-  /** SF Symbol name. */
+  /** Phosphor icon name. */
   icon: string;
   /**
    * "window" (default): where you work; File menu, `open`, routing.

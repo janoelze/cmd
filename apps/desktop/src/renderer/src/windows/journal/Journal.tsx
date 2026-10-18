@@ -170,7 +170,7 @@ export function Journal({
       inset
       state={
         empty && onSetUpAi
-          ? { kind: "empty", icon: "sparkles", title: "Your journal needs AI", text: "cmd writes up what happened from your agents, terminals and git. Add an API key and it starts with the last few days.", action: <Button onClick={onSetUpAi}>Set Up AI…</Button> }
+          ? { kind: "empty", icon: "sparkle", title: "Your journal needs AI", text: "cmd writes up what happened from your agents, terminals and git. Add an API key and it starts with the last few days.", action: <Button onClick={onSetUpAi}>Set Up AI…</Button> }
           : empty
             ? { kind: "empty", icon: "book", title: "Nothing yet", text: "What you and your agents do in this workspace shows up here, a few lines a day." }
             : null
@@ -200,7 +200,7 @@ export function Journal({
         )}
         {days.map((d) => (
           <Stack key={d.date} gap={2}>
-            <Heading title={dayName(d.date, now)} note={d.entries.length > 0 ? `${time(Math.min(...d.entries.map((e) => e.start)))}–${time(Math.max(...d.entries.map((e) => e.end)))}` : undefined} action={onRefresh && d === days[0] ? <IconButton size="sm" icon="arrow.clockwise" label="Write Again" onClick={onRefresh} /> : undefined} />
+            <Heading title={dayName(d.date, now)} note={d.entries.length > 0 ? `${time(Math.min(...d.entries.map((e) => e.start)))}–${time(Math.max(...d.entries.map((e) => e.end)))}` : undefined} action={onRefresh && d === days[0] ? <IconButton size="sm" icon="arrow-clockwise" label="Write Again" onClick={onRefresh} /> : undefined} />
             <Text>{d.headline}</Text>
             {d.entries.length > 0 && <DayRibbon day={d} picked={picked} onPick={pick} />}
             <Timeline>

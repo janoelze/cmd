@@ -2,13 +2,13 @@
 // toolbar row (PDF, browser, text) and floating over content without a toolbar
 // (terminals), at the widths windows get, in each state. Live finds in real text.
 
-import { FindBar, NO_FIND_OPTIONS, ToolbarAddressField, ToolbarButton, ToolbarGroup, Window, WindowBar, WindowBody, WindowFrame, WindowToolbar, type FindOptions, type FindResults } from "@cmd/ui";
+import { FindBar, NO_FIND_OPTIONS, ToolbarAddressField, ToolbarButton, ToolbarGroup, Window, WindowBar, WindowBody, WindowFrame, WindowToolbar, type FindOptions, type FindResults, type IconName } from "@cmd/ui";
 import { useMemo, useState, type ReactNode } from "react";
 
 const WIDTHS = [220, 320, 480, 640];
 const noop = () => {};
 
-function Win({ width, height = 120, icon, name, selected = true, children }: { width: number; height?: number; icon: string; name: string; selected?: boolean; children: ReactNode }) {
+function Win({ width, height = 120, icon, name, selected = true, children }: { width: number; height?: number; icon: IconName; name: string; selected?: boolean; children: ReactNode }) {
   return (
     <Window selected={selected} style={{ width, height, position: "relative", flex: "none" }}>
       <WindowBody style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -24,8 +24,8 @@ function BrowserBar() {
   return (
     <WindowToolbar label="Browser">
       <ToolbarGroup>
-        <ToolbarButton icon="chevron.left" label="Back" shortcut="⌘[" />
-        <ToolbarButton icon="chevron.right" label="Forward" shortcut="⌘]" disabled />
+        <ToolbarButton icon="caret-left" label="Back" shortcut="⌘[" />
+        <ToolbarButton icon="caret-right" label="Forward" shortcut="⌘]" disabled />
       </ToolbarGroup>
       <ToolbarAddressField value="https://github.com/janoelze/cmd" onSubmit={noop} minWidth={90} />
     </WindowToolbar>
@@ -66,7 +66,7 @@ export const Docked = () => (
     </Row>
     <Row>
       {WIDTHS.map((w) => (
-        <Win key={w} width={w} icon="doc.text" name="search.ts">
+        <Win key={w} width={w} icon="file-text" name="search.ts">
           <Bar query="SearchView" results={{ index: 0, count: 6 }} />
           <Body />
         </Win>
@@ -80,7 +80,7 @@ export const Floating = () => (
   <Stage>
     <Row>
       {[360, 640].map((w) => (
-        <Win key={w} width={w} height={140} icon="terminal" name="zsh — cmd">
+        <Win key={w} width={w} height={140} icon="terminal-window" name="zsh — cmd">
           <Terminal>
             <Bar floating query="test" results={{ index: 0, count: 12, more: true }} />
           </Terminal>
@@ -105,11 +105,11 @@ export const States = () => (
       ] as const
     ).map(([name, p]) => (
       <Row key={name}>
-        <Win width={480} height={92} icon="doc.text" name={name}>
+        <Win width={480} height={92} icon="file-text" name={name}>
           <Bar {...p} />
           <Body />
         </Win>
-        <Win width={480} height={92} icon="doc.text" name={`${name}, at rest`} selected={false}>
+        <Win width={480} height={92} icon="file-text" name={`${name}, at rest`} selected={false}>
           <Bar {...p} />
           <Body />
         </Win>
@@ -146,7 +146,7 @@ export const Live = () => {
   parts.push(TEXT.slice(at));
   return (
     <Stage>
-      <Win width={560} height={220} icon="doc.richtext" name="CLAUDE.md">
+      <Win width={560} height={220} icon="article" name="CLAUDE.md">
         <FindBar query={query} onQuery={(q) => (setQuery(q), setIndex(0))} options={options} onOptions={setOptions} results={{ index: current, count: ranges.length }} onStep={(d) => setIndex((i) => i + d)} onClose={() => setQuery("")} />
         <div style={{ flex: 1, padding: "10px 14px", lineHeight: 1.5, color: "var(--text)", background: "var(--well)" }}>{parts}</div>
       </Win>

@@ -131,7 +131,7 @@ function removedFromDesk(win: AppWindow): void {
   if (!widgetId || !win.state.revision || getState().ui["widgets.removedHint"]) return;
   setUi("widgets.removedHint", true);
   toast(`Removed “${win.title}” from the board. It's in your Widget Library.`, {
-    icon: "sparkles",
+    icon: "sparkle",
     duration: 8000,
     action: { label: "Undo", run: () => void addWidget(`magic:${widgetId}`, win.workspaceId).catch(() => {}) },
   });

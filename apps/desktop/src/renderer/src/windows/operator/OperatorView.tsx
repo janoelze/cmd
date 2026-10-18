@@ -8,7 +8,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import type { OperatorConversation, OperatorItem, WindowId } from "@cmd/protocol";
-import { AiField, Button, Callout, ChatApproval, ChatComposer, ChatLog, ChatMessage, ChatNote, ChatStep, CodeBlock, Stack, Text, ToolbarButton, ToolbarSpacer, View, WindowToolbar, useStickToEnd } from "@cmd/ui";
+import { AiField, Button, Callout, ChatApproval, ChatComposer, ChatLog, ChatMessage, ChatNote, ChatStep, CodeBlock, Stack, Text, ToolbarButton, ToolbarSpacer, View, WindowToolbar, useStickToEnd, type IconName } from "@cmd/ui";
 import { showContextMenu } from "../../lib/context.ts";
 import { useAiStatus } from "../../ai/status.ts";
 import { showSetup } from "../../onboarding/Onboarding.tsx";
@@ -21,20 +21,20 @@ import { operatorCall, useOperator } from "./operator.ts";
 
 type Tool = Extract<OperatorItem, { kind: "tool" }>;
 
-/** Each tool's icon (SF Symbols). */
-const ICONS: Record<string, string> = {
+/** Each tool's icon. */
+const ICONS: Record<string, IconName> = {
   look: "eye",
-  read: "text.alignleft",
+  read: "text-align-left",
   run: "play",
-  agent: "person.badge.plus",
+  agent: "user-plus",
   wait: "hourglass",
   type: "keyboard",
-  edit: "pencil",
-  open: "plus.rectangle",
-  close: "xmark.rectangle",
-  focus: "scope",
-  search: "magnifyingglass",
-  events: "clock.arrow.circlepath",
+  edit: "pencil-simple",
+  open: "plus-square",
+  close: "x-square",
+  focus: "crosshair",
+  search: "magnifying-glass",
+  events: "clock-counter-clockwise",
 };
 
 /** What the conversation shows, in order: messages, single steps, runs of looks folded into one row. */
@@ -105,10 +105,10 @@ export function Operator(p: OperatorProps) {
           bodyRef={body}
           toolbar={
             <WindowToolbar label="Operator">
-              <ToolbarButton icon="square.and.pencil" label="New Conversation" disabled={!p.conv?.items.length} onClick={p.onNew} />
+              <ToolbarButton icon="note-pencil" label="New Conversation" disabled={!p.conv?.items.length} onClick={p.onNew} />
               <ToolbarSpacer />
-              <ToolbarButton icon="checkmark.shield" label="Remembered Approvals" menu onClick={p.onGrants} />
-              <ToolbarButton icon="clock.arrow.circlepath" label="Past Conversations" menu onClick={p.onPast} />
+              <ToolbarButton icon="shield-check" label="Remembered Approvals" menu onClick={p.onGrants} />
+              <ToolbarButton icon="clock-counter-clockwise" label="Past Conversations" menu onClick={p.onPast} />
             </WindowToolbar>
           }
           state={
@@ -123,7 +123,7 @@ export function Operator(p: OperatorProps) {
         </View>
         <ChatComposer>
           {p.needsAi && (
-            <Callout compact tone="accent" icon="sparkles" actions={<Button size="sm" onClick={() => showSetup(["ai"])}>Set Up AI…</Button>}>
+            <Callout compact tone="accent" icon="sparkle" actions={<Button size="sm" onClick={() => showSetup(["ai"])}>Set Up AI…</Button>}>
               The Operator needs an AI model. Connect Anthropic or OpenAI first.
             </Callout>
           )}
@@ -262,7 +262,7 @@ function Step({ item, quiet }: { item: Tool; quiet?: boolean }) {
   const input = Object.keys(item.input).length ? JSON.stringify(item.input, null, 2) : null;
   return (
     <ChatStep
-      icon={ICONS[item.tool] ?? "gearshape"}
+      icon={ICONS[item.tool] ?? "gear"}
       title={item.why}
       state={item.state}
       quiet={quiet}

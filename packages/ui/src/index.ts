@@ -1,6 +1,6 @@
 // @cmd/ui: cmd's controls and the tokens they're drawn with. Import the styles
-// once per page ("@cmd/ui/ui.css"), wrap the app in <UIProvider icon={…}> to
-// draw icons natively, and build views from these instead of new CSS. The
+// once per page ("@cmd/ui/ui.css") and build views from these instead of new
+// CSS; icons are Phosphor's, by name (icon.tsx). The
 // UI Workbench (pnpm workbench, docs/48) shows every component, its stories beside it.
 //
 // Themes: "@cmd/ui/themes" (registry, applyTheme) and "@cmd/ui/themes/builtin"
@@ -21,7 +21,7 @@ export { formatTime, Scrubber, TimeBar, type ScrubberProps, type TimeBarProps, t
 export { Ribbon, Timeline, TimelineEntry, type RibbonItem } from "./timeline.tsx";
 export { DataGrid, type DataGridProps, type GridCell, type GridColumn, type GridSort, type GridRowInfo } from "./grid.tsx";
 export { Chip, List, ListGroup, ListHeading, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Mark, Panel, PanelBody, PanelHeader, PanelSummary, Twisty, TwistySpace, type ListRowProps } from "./list.tsx";
-export { ICON, Icon, UIProvider, iconNode, type IconProps, type IconWeight } from "./icon.tsx";
+export { ICON, ICONS, Icon, glyphPx, iconNode, iconOr, isIconName, type IconLike, type IconName, type IconProps, type IconWeight } from "./icon.tsx";
 export { Callout, Card, Checklist, CodeBlock, Diff, EmptyState, FeatureList, FormActions, FormRow, FormSection, Group, InfoButton, KeyValue, PageIntro, Prose, QrCode, ResetButton, SectionHeading, Separator, SheetHeader, Spacer, Toolbar, type Step, type StepState } from "./layout.tsx";
 export { ConfirmDialog, Dialog, DialogLayer, Menu, Popover, Presence, Toast, Toaster, dismissToast, placePopover, toast, type Align, type MenuItemProps, type ToastOptions } from "./overlay.tsx";
 export { Badge, Kbd, LiveBadge, PageDots, Progress, ProgressRing, Spinner, StatusDot, type DotState, type Tone } from "./status.tsx";

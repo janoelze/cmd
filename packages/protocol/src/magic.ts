@@ -76,7 +76,7 @@ export interface MagicState {
   prompt: string;
   phase: "empty" | "working" | "ready" | "error";
   kind?: "widget" | "terminal";
-  /** SF Symbol the widget's manifest picked (shown instead of sparkles). */
+  /** Phosphor icon the widget's manifest picked (shown instead of sparkle). */
   icon?: string;
   /** The widget this window shows ($CMD_HOME/widgets/<id>), v2 windows. Its own id: widgets outlive windows, and several windows can show one. */
   widgetId?: string;

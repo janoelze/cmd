@@ -53,7 +53,7 @@ function Step({ step }: { step: BootStep }) {
 
 export function BootSheet({ open = true, report }: { open?: boolean; report: BootReport }) {
   return (
-    <Dialog open={open} onClose={() => {}} dismissable={false} position="center" width={420} window={{ icon: "arrow.triangle.2.circlepath", name: "Getting Ready", close: false }}>
+    <Dialog open={open} onClose={() => {}} dismissable={false} position="center" width={420} window={{ icon: "arrows-clockwise", name: "Getting Ready", close: false }}>
       <Stack gap={8}>
         <Text balance>This version brings your records up to date. It happens once.</Text>
         <Stack gap={3}>

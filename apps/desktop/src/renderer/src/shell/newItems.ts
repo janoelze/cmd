@@ -7,14 +7,15 @@ import type { WidgetEntry } from "@cmd/protocol";
 import { COMMAND_BY_ID, prettyAccelerator, type CommandId, type Keybindings } from "../../../shared/commands.ts";
 import type { PaletteItem } from "./Palette.tsx";
 import { openPath } from "../lib/actions.ts";
+import { iconOr, type IconName } from "@cmd/ui";
 
 export const NEW_GROUPS = ["Open", "Windows", "Widgets"];
 
-const WINDOWS: { id: CommandId; icon: string }[] = [
-  { id: "file.newTerminal", icon: "terminal" },
+const WINDOWS: { id: CommandId; icon: IconName }[] = [
+  { id: "file.newTerminal", icon: "terminal-window" },
   { id: "file.newBrowser", icon: "globe" },
   { id: "file.newFiles", icon: "folder" },
-  { id: "file.newText", icon: "doc.text" },
+  { id: "file.newText", icon: "file-text" },
 ];
 
 /** The windows and widgets, in the order New… lists them. */
@@ -34,7 +35,7 @@ export function newItems(library: WidgetEntry[], bindings: Keybindings, run: (id
     id: e.ref,
     group: "Widgets",
     label: e.title,
-    icon: e.icon,
+    icon: iconOr(e.icon, "sparkle"),
     run: () => add(e.ref),
   }));
   return [...windows, ...widgets];
@@ -44,7 +45,7 @@ export function newItems(library: WidgetEntry[], bindings: Keybindings, run: (id
 export function openItems(query: string, group: string, o: { icon?: boolean } = {}): PaletteItem[] {
   const t = openableTarget(query);
   if (!t) return [];
-  const icon = o.icon ? { icon: t.kind === "url" ? "globe" : "folder" } : {};
+  const icon: { icon?: IconName } = o.icon ? { icon: t.kind === "url" ? "globe" : "folder" } : {};
   return [{ id: `open-${t.kind}`, group, label: `Open ${t.value}`, hint: t.kind, ...icon, run: () => void openPath(t.value, "user") }];
 }
 
@@ -53,8 +54,8 @@ export function magicItem(query: string, bindings: Keybindings, make: (prompt?: 
   const q = query.trim();
   if (openableTarget(q)) return [];
   return q
-    ? [{ id: "magic-prompt", group: "Widgets", label: `Make “${q}” with Magic`, icon: "sparkles", run: () => make(q) }]
-    : [{ id: "file.newMagic", group: "Widgets", label: "New Widget with Magic", icon: "sparkles", hint: prettyAccelerator(bindings["file.newMagic"]?.[0]), run: () => make() }];
+    ? [{ id: "magic-prompt", group: "Widgets", label: `Make “${q}” with Magic`, icon: "sparkle", run: () => make(q) }]
+    : [{ id: "file.newMagic", group: "Widgets", label: "New Widget with Magic", icon: "sparkle", hint: prettyAccelerator(bindings["file.newMagic"]?.[0]), run: () => make() }];
 }
 
 /** Does typed text look like a URL or a path we can open? */

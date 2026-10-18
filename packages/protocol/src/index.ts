@@ -12,6 +12,7 @@ export * from "./boot.ts";
 export * from "./version.ts";
 export * from "./attention.ts";
 export * from "./workspace.ts";
+export * from "./icons.gen.ts";
 export * from "./settings.ts";
 export * from "./settings-migrations.ts";
 export * from "./jsonc.ts";

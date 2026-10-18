@@ -18,7 +18,7 @@ const LIVE: MagicLive = {
 
 function W({ size = "regular", children }: { size?: SizeName; children: React.ReactNode }) {
   return (
-    <RefWindow icon="sparkles" name="New Widget" size={size}>
+    <RefWindow icon="sparkle" name="New Widget" size={size}>
       {children}
     </RefWindow>
   );

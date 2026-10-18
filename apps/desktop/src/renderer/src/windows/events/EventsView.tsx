@@ -195,7 +195,7 @@ export function EventsView({ win }: WindowViewProps) {
       <PanelBody>
         {shown.map(row)}
         {shown.length === 0 && (
-          <EmptyState compact icon="waveform.path.ecg" title={rows.length ? "Nothing matches" : "Nothing recorded yet"}>
+          <EmptyState compact icon="heartbeat" title={rows.length ? "Nothing matches" : "Nothing recorded yet"}>
             {rows.length ? "Change the filter, or show the classes you hid." : "Events show up here as cmd records them."}
           </EmptyState>
         )}

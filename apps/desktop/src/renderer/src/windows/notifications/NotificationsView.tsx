@@ -5,7 +5,7 @@
 // every workspace's; those about nothing in particular show in every workspace. A click
 // goes to the terminal or window it is about.
 
-import { EmptyState, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Panel, PanelBody } from "@cmd/ui";
+import { EmptyState, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Panel, PanelBody, type IconName } from "@cmd/ui";
 import { useEffect, useMemo, useState } from "react";
 import { notificationOf, type AppNotification } from "@cmd/protocol";
 import { copy } from "../../lib/actions.ts";
@@ -15,15 +15,15 @@ import { goTo, scopeOf } from "../../lib/widgets.ts";
 import type { WindowViewProps } from "../registry.ts";
 import { shortAgo } from "../../components/SidebarRows.tsx";
 
-const ICONS: Record<AppNotification["source"], string> = {
-  "agent-input": "person.crop.circle.badge.questionmark",
-  "agent-done": "person.crop.circle.badge.checkmark",
+const ICONS: Record<AppNotification["source"], IconName> = {
+  "agent-input": "user-circle-dashed",
+  "agent-done": "user-circle-check",
   bell: "bell",
-  terminal: "terminal",
-  command: "terminal",
+  terminal: "terminal-window",
+  command: "terminal-window",
   cli: "bell",
-  widget: "sparkles",
-  summary: "doc.text",
+  widget: "sparkle",
+  summary: "file-text",
   timer: "timer",
 };
 

@@ -3,7 +3,7 @@
 // screen with one thing to say (pairing, offline, not paired).
 
 import type { ReactNode } from "react";
-import { EmptyState, type DotState } from "@cmd/ui";
+import { EmptyState, type DotState, type IconName } from "@cmd/ui";
 
 /** needs (orange), unseen (green), working (blue), done, idle: the sidebar's lights. */
 export type Light = Extract<DotState, "needs" | "unseen" | "working" | "done" | "idle">;
@@ -17,7 +17,7 @@ export function ago(t: number): string {
 }
 
 /** A whole screen with one thing to say: pairing, offline, not paired. */
-export function Center({ icon, title, children, action }: { icon: string; title: string; children?: ReactNode; action?: ReactNode }) {
+export function Center({ icon, title, children, action }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="center">
       <EmptyState icon={icon} title={title} action={action}>

@@ -19,7 +19,7 @@ const FILES: DiffFile[] = [
 function W({ size = "regular", files = FILES, state = "ok" as const }: { size?: SizeName; files?: DiffFile[]; state?: "loading" | "noRepo" | "ok" }) {
   const [list, setList] = useState(files);
   return (
-    <RefWindow icon="plusminus" name="Changes · cmd" size={size}>
+    <RefWindow icon="plus-minus" name="Changes · cmd" size={size}>
       <LiveDiffView state={state} dir={DIR} files={list} truncated={false} onToggle={(rel, open) => setList((l) => l.map((f) => (f.rel === rel ? { ...f, open } : f)))} onOpen={() => {}} onChoose={() => {}} />
     </RefWindow>
   );

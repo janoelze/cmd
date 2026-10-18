@@ -58,7 +58,7 @@ const zoomOf = (v: unknown): number | undefined => (typeof v === "number" && Num
 export const textType: WindowType<{ path: string; dir?: string; draft?: string; reveal?: Reveal; pos?: TextPos; zoom?: number }> = {
   kind: "text",
   title: "Text Editor",
-  icon: "doc.text",
+  icon: "file-text",
   opens: {
     text: true,
     extensions: [
@@ -103,7 +103,7 @@ export const textType: WindowType<{ path: string; dir?: string; draft?: string; 
 export const markdownType: WindowType<{ path: string }> = {
   kind: "markdown",
   title: "Markdown",
-  icon: "doc.richtext",
+  icon: "article",
   // Same specificity as text's extension match; priority makes .md open here.
   opens: { extensions: ["md", "markdown", "mdx"], priority: 10 },
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
@@ -127,7 +127,7 @@ export const markdownType: WindowType<{ path: string }> = {
 export const jsonType: WindowType<{ path: string; reveal?: { line: number; at: number } }> = {
   kind: "json",
   title: "JSON",
-  icon: "curlybraces",
+  icon: "brackets-curly",
   // Same specificity as text's extension match; priority makes these open here.
   opens: { extensions: ["json", "jsonc", "jsonl", "ndjson", "geojson", "har", "webmanifest"], priority: 10 },
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
@@ -167,7 +167,7 @@ export interface PdfState extends Record<string, unknown> {
 export const pdfType: WindowType<PdfState> = {
   kind: "pdf",
   title: "PDF",
-  icon: "doc.richtext",
+  icon: "article",
   // Before the browser, which used to show PDFs.
   opens: { extensions: ["pdf"], priority: 10 },
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
@@ -197,7 +197,7 @@ export const pdfType: WindowType<PdfState> = {
 export const terminalType: WindowType<{ paneId: string }> = {
   kind: "terminal",
   title: "Terminal",
-  icon: "terminal",
+  icon: "terminal-window",
   create() {
     throw new Error("terminal windows are created by the pane manager");
   },
@@ -211,7 +211,7 @@ export const terminalType: WindowType<{ paneId: string }> = {
 export const magicType: WindowType<{ prompt: string; phase: string; widgetId?: string }> = {
   kind: "magic",
   title: "Magic Widget",
-  icon: "sparkles",
+  icon: "sparkle",
   role: "widget",
   description: "Describe what you want to see, and watch it being made.",
   create(input) {
@@ -232,7 +232,7 @@ export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "avif", "b
 export const imageType: WindowType<{ path: string; zoom?: "fit" | number }> = {
   kind: "image",
   title: "Image",
-  icon: "photo",
+  icon: "image",
   // The browser matches the same extensions; priority makes images open here.
   opens: { extensions: IMAGE_EXTENSIONS, priority: 10 },
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
@@ -267,7 +267,7 @@ const imageZoom = (v: unknown): "fit" | number | undefined => (v === "fit" ? "fi
 export const sqliteType: WindowType<{ path: string; table?: string; tab?: string; sql?: string }> = {
   kind: "sqlite",
   title: "SQLite",
-  icon: "cylinder.split.1x2",
+  icon: "database",
   opens: { extensions: ["sqlite", "sqlite3", "db", "db3", "sqlite-wal", "sqlite-shm", "db-wal", "db-shm"], priority: 10 },
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
   create(input) {
@@ -298,7 +298,7 @@ export const VIDEO_EXTENSIONS = ["mp4", "m4v", "mov", "webm"];
 export const videoType: WindowType<{ path: string; t?: number; rate?: number; loop?: boolean; muted?: boolean }> = {
   kind: "video",
   title: "Video",
-  icon: "film",
+  icon: "film-strip",
   // The browser plays the same files; priority makes videos open here.
   opens: { extensions: VIDEO_EXTENSIONS, priority: 10 },
   fromTarget: (t) => ({ path: t.type === "path" ? t.path : "" }),
@@ -330,7 +330,7 @@ export const videoType: WindowType<{ path: string; t?: number; rate?: number; lo
 export const agentsType: WindowType<{ scope: "workspace" | "all" }> = {
   kind: "agents",
   title: "Agent Activity",
-  icon: "person.2",
+  icon: "users",
   role: "widget",
   description: "Every agent at a glance: who is working, who waits for you, what just finished.",
   create(input) {
@@ -341,9 +341,9 @@ export const agentsType: WindowType<{ scope: "workspace" | "all" }> = {
   },
 };
 
-export const commandsType = scopedWidget("commands", "Commands", "terminal", "Every command your terminals ran: how long it took and whether it worked.", ["failedOnly"]);
+export const commandsType = scopedWidget("commands", "Commands", "terminal-window", "Every command your terminals ran: how long it took and whether it worked.", ["failedOnly"]);
 export const notificationsType = scopedWidget("notifications", "Notifications", "bell", "The notifications cmd sent, including the ones you missed.");
-export const resourcesType = scopedWidget("resources", "Resources", "gauge.with.dots.needle.33percent", "What each terminal uses: CPU and memory of everything running in it.");
+export const resourcesType = scopedWidget("resources", "Resources", "gauge", "What each terminal uses: CPU and memory of everything running in it.");
 
 /**
  * Event Stream, a developer widget: every event cmd records, as it's recorded
@@ -353,7 +353,7 @@ export const resourcesType = scopedWidget("resources", "Resources", "gauge.with.
 export const eventsType: WindowType<{ hidden: string[]; paused: boolean }> = {
   kind: "events",
   title: "Event Stream",
-  icon: "waveform.path.ecg",
+  icon: "heartbeat",
   role: "widget",
   tags: ["developer"],
   description: "Everything cmd records, as it happens: to see what it captures while you work.",
@@ -499,7 +499,7 @@ const versionsOf = (v: unknown): JamVersion[] =>
 export const jamType: WindowType<{ code: string; path: string; versions: JamVersion[] }> = {
   kind: "jam",
   title: "Jam",
-  icon: "music.note",
+  icon: "music-note",
   role: "widget",
   description: "Make music with code, and ask the AI for changes as it plays.",
   opens: { extensions: ["strudel"], priority: 10 },
@@ -526,7 +526,7 @@ export const jamType: WindowType<{ code: string; path: string; versions: JamVers
 export const diffType: WindowType<{ path: string }> = {
   kind: "diff",
   title: "Live Diff",
-  icon: "plusminus",
+  icon: "plus-minus",
   role: "widget",
   description: "The uncommitted changes in a folder's repository, updated as files change.",
   create(input) {
@@ -551,7 +551,7 @@ export const diffType: WindowType<{ path: string }> = {
 export const actionsType: WindowType<{ path?: string; follow?: boolean; toggled?: string[] }> = {
   kind: "actions",
   title: ACTIONS_TITLE,
-  icon: "play.rectangle",
+  icon: "monitor-play",
   role: "widget",
   description: "The project's scripts and commands, one click away: dev servers, tests, builds and deploys.",
   create(input) {
@@ -628,7 +628,7 @@ export function parseYouTube(input: string): YouTubeRef | null {
 export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
   kind: "youtube",
   title: "YouTube",
-  icon: "play.rectangle",
+  icon: "monitor-play",
   role: "widget",
   description: "Paste a YouTube link, video id or embed code and watch it here.",
   create(input) {
@@ -659,7 +659,7 @@ export const youtubeType: WindowType<YouTubeRef & { fill?: boolean }> = {
 export const navigatorType: WindowType<Record<string, never>> = {
   kind: "navigator",
   title: "Navigator",
-  icon: "sidebar.left",
+  icon: "sidebar-simple",
   role: "widget",
   description: "Search, and everything open in this workspace: agents, windows, widgets and recent sessions.",
   create() {

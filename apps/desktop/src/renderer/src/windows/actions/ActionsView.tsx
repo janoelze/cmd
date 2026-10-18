@@ -9,7 +9,7 @@
 // skill's actions window: the filter in the toolbar, the main action first, grouped
 // sections, where it runs in the footer), so ActionsView.story.tsx can show every state.
 
-import { Button, Callout, CodeBlock, ConfirmDialog, Icon, IconButton, LinkButton, List, ListGroup, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Spinner, StatusLine, ToolbarSearchField, View, type ViewStateSpec, WindowToolbar } from "@cmd/ui";
+import { Button, Callout, CodeBlock, ConfirmDialog, Icon, IconButton, LinkButton, List, ListGroup, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, ListSection, ListValue, Spinner, StatusLine, ToolbarSearchField, View, type ViewStateSpec, WindowToolbar, type IconName } from "@cmd/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type ActionKind, type ActionRun, type ActionsList, type PaneId, type WorkspaceId, type WorkspaceAction } from "@cmd/protocol";
 import { cmd } from "../../lib/bridge.ts";
@@ -22,16 +22,16 @@ import { onActionsChanged, useStore } from "../../lib/store.ts";
 import { durationText, goTo, setWidgetState, useWidgetStatus } from "../../lib/widgets.ts";
 import type { WindowViewProps } from "../registry.ts";
 
-const KIND: Record<ActionKind, { title: string; icon: string }> = {
+const KIND: Record<ActionKind, { title: string; icon: IconName }> = {
   dev: { title: "Dev", icon: "play" },
-  test: { title: "Test", icon: "checkmark.circle" },
+  test: { title: "Test", icon: "check-circle" },
   build: { title: "Build", icon: "hammer" },
-  check: { title: "Check", icon: "checklist" },
-  run: { title: "Other", icon: "terminal" },
-  setup: { title: "Setup", icon: "wrench.and.screwdriver" },
-  deploy: { title: "Deploy", icon: "paperplane" },
+  check: { title: "Check", icon: "list-checks" },
+  run: { title: "Other", icon: "terminal-window" },
+  setup: { title: "Setup", icon: "wrench" },
+  deploy: { title: "Deploy", icon: "paper-plane-tilt" },
   clean: { title: "Clean", icon: "trash" },
-  agent: { title: "Agent Skills", icon: "sparkles" },
+  agent: { title: "Agent Skills", icon: "sparkle" },
 };
 const AGENT_TITLE: Record<string, string> = { claude: "Claude", codex: "Codex", gemini: "Gemini", qwen: "Qwen", copilot: "Copilot" };
 
@@ -130,7 +130,7 @@ export function Actions(p: ActionsProps) {
         onClick={() => (on ? p.onShow(r!.paneId) : p.onRun(a))}
         onContextMenu={() => p.onMenu(a)}
       >
-        <ListRowIcon icon={a.history ? "clock.arrow.circlepath" : a.source.kind === "readme" ? "doc.text" : KIND[a.kind].icon} light={on ? "working" : bad ? "danger" : undefined} />
+        <ListRowIcon icon={a.history ? "clock-counter-clockwise" : a.source.kind === "readme" ? "file-text" : KIND[a.kind].icon} light={on ? "working" : bad ? "danger" : undefined} />
         <ListRowContent title={a.name} mono detail={a.description ? a.description : a.history ? `${a.history.runs}× in this folder` : a.command} tone={bad ? "danger" : undefined} />
         <ListRowEnd>
           {url && (
@@ -146,7 +146,7 @@ export function Actions(p: ActionsProps) {
             </LinkButton>
           ))}
           {big && !on && (
-            <Button size="sm" variant="primary" icon="play.fill" onClick={(e) => (e.stopPropagation(), p.onRun(a))}>
+            <Button size="sm" variant="primary" icon="play" onClick={(e) => (e.stopPropagation(), p.onRun(a))}>
               Run
             </Button>
           )}
@@ -154,11 +154,11 @@ export function Actions(p: ActionsProps) {
         <ListRowActions>
           {on ? (
             <>
-              {a.long && <IconButton size="sm" icon="arrow.clockwise" label="Restart" onClick={() => p.onRun(a, { restart: true })} />}
-              <IconButton size="sm" icon="stop.fill" label="Stop" onClick={() => p.onStop(a)} />
+              {a.long && <IconButton size="sm" icon="arrow-clockwise" label="Restart" onClick={() => p.onRun(a, { restart: true })} />}
+              <IconButton size="sm" icon="stop" label="Stop" onClick={() => p.onStop(a)} />
             </>
           ) : big ? undefined : (
-            <IconButton size="sm" icon={a.args ? "text.cursor" : "play.fill"} label={a.args ? "Type in Terminal" : "Run"} onClick={() => p.onRun(a)} />
+            <IconButton size="sm" icon={a.args ? "cursor-text" : "play"} label={a.args ? "Type in Terminal" : "Run"} onClick={() => p.onRun(a)} />
           )}
         </ListRowActions>
       </ListRow>
@@ -179,9 +179,9 @@ export function Actions(p: ActionsProps) {
   const q = query.trim().toLowerCase();
   const matches = q ? all.filter((a) => [a.name, a.command, a.description ?? "", a.package ?? ""].some((t) => t.toLowerCase().includes(q))) : [];
   const state: ViewStateSpec | null =
-    !p.root ? { kind: "empty", icon: "play.rectangle", title: "No folder", text: "This workspace has no folder." }
+    !p.root ? { kind: "empty", icon: "monitor-play", title: "No folder", text: "This workspace has no folder." }
     : !list ? (p.error ? { kind: "error", title: "Can't read this folder", text: p.error } : { kind: "loading" })
-    : all.length === 0 ? { kind: "empty", icon: "play.rectangle", title: "No scripts here", text: `Nothing to run in ${shortPath(list.root)} yet. Scripts in package.json, a Makefile, a justfile and similar files show up here.` }
+    : all.length === 0 ? { kind: "empty", icon: "monitor-play", title: "No scripts here", text: `Nothing to run in ${shortPath(list.root)} yet. Scripts in package.json, a Makefile, a justfile and similar files show up here.` }
     : q && !matches.length ? { kind: "noResults", title: "No matches", text: `Nothing here is called “${query}”.`, action: <Button onClick={() => setQuery("")}>Clear Filter</Button> }
     : null;
 
@@ -192,7 +192,7 @@ export function Actions(p: ActionsProps) {
       end={
         p.showWhere && list.checkout ? (
           <span data-tip={`Actions of ${shortPath(list.root)}: they run there`}>
-            <Icon name="arrow.triangle.branch" size={11} /> {list.checkout.branch ?? "detached"} · {shortPath(list.root)}
+            <Icon name="git-branch" size={11} /> {list.checkout.branch ?? "detached"} · {shortPath(list.root)}
           </span>
         ) : undefined
       }

@@ -4,7 +4,7 @@
 
 import { useId, type MouseEvent, type ReactNode } from "react";
 import { RowLabels } from "./labels.ts";
-import { ICON, Icon, iconNode } from "./icon.tsx";
+import { ICON, Icon, iconNode, type IconLike, type IconName } from "./icon.tsx";
 import { IconButton } from "./button.tsx";
 import { useTooltip } from "./tooltips.tsx";
 import type { Tone } from "./status.tsx";
@@ -122,7 +122,7 @@ export function InfoButton({ children }: { children: ReactNode }) {
   const tip = useTooltip<HTMLButtonElement>(() => <div className="ui-info-card">{children}</div>);
   return (
     <button ref={tip} type="button" className="ui-info-button" aria-label="More Info">
-      {iconNode("info.circle", 12)}
+      {iconNode("info", 12)}
     </button>
   );
 }
@@ -133,7 +133,7 @@ export function InfoButton({ children }: { children: ReactNode }) {
  * A sentence or two; `links` (LinkButtons) for where to go next. Pages that are only
  * switches don't need one.
  */
-export function PageIntro({ icon, links, children }: { icon?: string | ReactNode; links?: ReactNode; children: ReactNode }) {
+export function PageIntro({ icon, links, children }: { icon?: IconLike; links?: ReactNode; children: ReactNode }) {
   return (
     <div className="ui-page-intro">
       {icon && <span className="ui-page-intro-icon">{iconNode(icon, ICON.toolbar)}</span>}
@@ -146,7 +146,7 @@ export function PageIntro({ icon, links, children }: { icon?: string | ReactNode
 }
 
 /** The top of a sheet that greets or explains (onboarding, a welcome): an icon, a large title and a line under it. */
-export function SheetHeader({ icon, title, subtitle }: { icon?: string | ReactNode; title: ReactNode; subtitle?: ReactNode }) {
+export function SheetHeader({ icon, title, subtitle }: { icon?: IconLike; title: ReactNode; subtitle?: ReactNode }) {
   return (
     <header className="ui-sheet-header">
       {icon && <span className="ui-sheet-header-icon">{iconNode(icon, 40)}</span>}
@@ -157,7 +157,7 @@ export function SheetHeader({ icon, title, subtitle }: { icon?: string | ReactNo
 }
 
 /** What something offers, one feature a line: a large icon, a title and a line under it (a welcome sheet). */
-export function FeatureList({ items }: { items: readonly { icon: string | ReactNode; title: ReactNode; description?: ReactNode }[] }) {
+export function FeatureList({ items }: { items: readonly { icon: IconLike; title: ReactNode; description?: ReactNode }[] }) {
   return (
     <ul className="ui-features">
       {items.map((f, i) => (
@@ -183,7 +183,7 @@ export interface Step {
   action?: ReactNode;
 }
 
-const STEP_ICON: Record<StepState, string> = { done: "checkmark.circle.fill", failed: "xmark.circle.fill", todo: "circle" };
+const STEP_ICON: Record<StepState, IconName> = { done: "check-circle", failed: "x-circle", todo: "circle" };
 const STEP_LABEL: Record<StepState, string> = { done: "Done", failed: "Failed", todo: "To do" };
 
 /**
@@ -202,7 +202,7 @@ export function Checklist({ steps }: { steps: readonly Step[] }) {
           return (
             <li key={i} className="ui-row ui-step" data-state={s.state} data-at={at} data-compact={open ? undefined : ""} aria-current={at === "current" ? "step" : undefined}>
               <span className="ui-step-mark" role="img" aria-label={STEP_LABEL[s.state]}>
-                <Icon name={STEP_ICON[s.state]} size={ICON.row + 2} />
+                <Icon name={STEP_ICON[s.state]} size={ICON.row + 2} weight={s.state === "todo" ? undefined : "fill"} />
               </span>
               <div className="ui-row-text">
                 <div className="ui-row-title">{s.title}</div>
@@ -234,7 +234,7 @@ export function Group({ children, className }: { children: ReactNode; className?
 
 /** The reset glyph beside a changed setting's title. */
 export function ResetButton({ onClick, label = "Reset to default" }: { onClick: () => void; label?: string }) {
-  return <IconButton className="ui-reset" icon="arrow.uturn.backward" iconSize={9} size="sm" label={label} onClick={onClick} />;
+  return <IconButton className="ui-reset" icon="arrow-u-up-left" iconSize={9} size="sm" label={label} onClick={onClick} />;
 }
 
 // ── headings, bars, lines ──────────────────────────────
@@ -325,12 +325,12 @@ export function CodeBlock({ children, maxHeight = 180, tone }: { children: React
   );
 }
 
-const TONE_ICON: Record<Tone, string> = {
-  neutral: "info.circle",
-  accent: "info.circle",
-  success: "checkmark.circle.fill",
-  warning: "exclamationmark.triangle.fill",
-  danger: "exclamationmark.triangle.fill",
+const TONE_ICON: Record<Tone, IconName> = {
+  neutral: "info",
+  accent: "info",
+  success: "check-circle",
+  warning: "warning",
+  danger: "warning",
 };
 
 /**
@@ -353,8 +353,8 @@ export function Callout({
   children?: ReactNode;
   actions?: ReactNode;
   onDismiss?: () => void;
-  /** An SF Symbol name, a node, or false for none; by default the tone's. */
-  icon?: string | ReactNode | false;
+  /** An icon, a node, or false for none; by default the tone's. */
+  icon?: IconLike | false;
   /** Full width along a view's edge, not a box: the top (a line under it) or "bottom" (a line over it). */
   banner?: boolean | "bottom";
   /** One small line (under a widget, in a narrow pane). */
@@ -363,13 +363,13 @@ export function Callout({
 }) {
   return (
     <div className={cls("ui-callout", className)} data-tone={tone} data-banner={banner === "bottom" ? "bottom" : banner ? "top" : undefined} data-compact={compact || undefined} role={tone === "danger" || tone === "warning" ? "alert" : "status"}>
-      {icon !== false && <span className="ui-callout-icon">{iconNode(icon ?? TONE_ICON[tone], ICON.row)}</span>}
+      {icon !== false && <span className="ui-callout-icon">{iconNode(icon ?? TONE_ICON[tone], ICON.row, icon || tone === "neutral" || tone === "accent" ? undefined : "fill")}</span>}
       <div className="ui-callout-text">
         {title && <div className="ui-callout-title">{title}</div>}
         {children && <div className="ui-callout-body">{children}</div>}
       </div>
       {actions && <div className="ui-callout-actions">{actions}</div>}
-      {onDismiss && <IconButton icon="xmark" size="sm" label="Dismiss" onClick={onDismiss} />}
+      {onDismiss && <IconButton icon="x" size="sm" label="Dismiss" onClick={onDismiss} />}
     </div>
   );
 }
@@ -384,7 +384,7 @@ export function EmptyState({
   className,
   onMouseDown,
 }: {
-  icon?: string | ReactNode;
+  icon?: IconLike;
   title?: ReactNode;
   children?: ReactNode;
   action?: ReactNode;

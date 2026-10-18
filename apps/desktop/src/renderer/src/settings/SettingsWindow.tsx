@@ -31,7 +31,7 @@ import { COMMANDS, COMMAND_BY_ID, DEFAULT_KEYBINDINGS, norm, prettyAccelerator, 
 import { IndexRing } from "../components/IndexRing.tsx";
 import { acceleratorOf, usableShortcut, useKeybindings } from "../lib/keybindings.ts";
 import { cmd } from "../lib/bridge.ts";
-import { Button, Callout, EmptyState, FormActions, FormRow, FormSection, IconButton, Inline, List, ListRow, ListRowContent, ListRowIcon, NumberField, Page, ResetButton, SearchField, SecretField, Segmented, Select, ShortcutField, Spinner, Split, Stack, StatusLine, Switch, TextField, TitleBand, View } from "@cmd/ui";
+import { Button, Callout, EmptyState, FormActions, FormRow, FormSection, IconButton, Inline, List, ListRow, ListRowContent, ListRowIcon, NumberField, Page, ResetButton, SearchField, SecretField, Segmented, Select, ShortcutField, Spinner, Split, Stack, StatusLine, Switch, TextField, TitleBand, View, type IconName } from "@cmd/ui";
 import { useSettings } from "./useSettings.ts";
 import { AiKeyRow, AiProviderChoice } from "../ai/Providers.tsx";
 import { useAiStatus } from "../ai/status.ts";
@@ -47,8 +47,8 @@ import { allThemes } from "@cmd/ui/themes";
 import { itemKey, itemShown, settingsPages, type Item, type ItemKey, type Page as SettingsPage } from "./layout.ts";
 
 const PAGES: SettingsPage[] = settingsPages();
-type Nav = { id: string; title: string; icon: string };
-const NAV: Nav[] = [...PAGES, { id: "browser", title: "Browser", icon: "globe.fill" }, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard.fill" }, { id: "quick", title: "Quick Commands", icon: "bolt.fill" }, { id: "about", title: "Updates & About", icon: "info.circle.fill" }];
+type Nav = { id: string; title: string; icon: IconName };
+const NAV: Nav[] = [...PAGES, { id: "browser", title: "Browser", icon: "globe" }, { id: "keyboard", title: "Keyboard Shortcuts", icon: "keyboard" }, { id: "quick", title: "Quick Commands", icon: "lightning" }, { id: "about", title: "Updates & About", icon: "info" }];
 
 const APPLIES_NOTE = { newTerminals: "Applies to new terminals.", firstLaunch: "Applies on first launch." } as const;
 const COMMAND_GROUPS: Record<string, string> = { app: "App", file: "File", edit: "Edit", view: "View", session: "Sessions", workspace: "Workspaces", help: "Help" };
@@ -251,7 +251,7 @@ export function SettingsWindow() {
               </List>
             </Stack>
             <Stack pad="inset" align="start">
-              <Button variant="ghost" icon="curlybraces" onClick={() => cmd.openSettingsFile(snap.path)} disabled={!snap.path} data-tip={snap.path}>
+              <Button variant="ghost" icon="brackets-curly" onClick={() => cmd.openSettingsFile(snap.path)} disabled={!snap.path} data-tip={snap.path}>
                 Open settings.json
               </Button>
             </Stack>
@@ -390,7 +390,7 @@ function ModelRow(p: { k: SettingKey; provider: AiProvider; tier: AiTier; value:
         <span data-tip={current?.id}>
           <Select value={value} options={options} labels={labels} onChange={(v) => p.ctx.save(p.k, v)} />
         </span>
-        <IconButton variant="default" icon="arrow.clockwise" iconSize={10} label="List the Models Again" disabled={s.loading} onClick={() => s.load(true)} />
+        <IconButton variant="default" icon="arrow-clockwise" iconSize={10} label="List the Models Again" disabled={s.loading} onClick={() => s.load(true)} />
       </Inline>
     </FormRow>
   );

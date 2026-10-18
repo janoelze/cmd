@@ -9,7 +9,7 @@ const win = { id: "story-yt" as WindowId, kind: "youtube", workspaceId: "story" 
 
 function W({ size = "regular" }: { size?: SizeName }) {
   return (
-    <RefWindow icon="play.rectangle" name="YouTube" size={size}>
+    <RefWindow icon="monitor-play" name="YouTube" size={size}>
       <YouTubeView win={win} focused={false} />
     </RefWindow>
   );

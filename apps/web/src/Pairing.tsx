@@ -46,11 +46,11 @@ export function AddMac({ title, onPair, onCancel }: { title: string; onPair: (fr
     );
   return (
     <Center
-      icon="qrcode.viewfinder"
+      icon="qr-code"
       title={title}
       action={
         <div className="pair-actions">
-          <Button size="lg" variant="primary" icon="qrcode.viewfinder" onClick={() => (setNote(null), setThere(null), setScanning(true))}>
+          <Button size="lg" variant="primary" icon="qr-code" onClick={() => (setNote(null), setThere(null), setScanning(true))}>
             Scan Code
           </Button>
           {paste ? (
@@ -73,7 +73,7 @@ export function AddMac({ title, onPair, onCancel }: { title: string; onPair: (fr
               </Button>
             </form>
           ) : (
-            <Button size="lg" variant="ghost" icon="doc.on.clipboard" onClick={() => setPaste(true)}>
+            <Button size="lg" variant="ghost" icon="clipboard-text" onClick={() => setPaste(true)}>
               Paste Link
             </Button>
           )}
@@ -218,7 +218,7 @@ export function PairLink({ onPair }: { onPair: () => void }) {
               <h2>As an App on Your Home Screen</h2>
               <ol className="steps">
                 <li>
-                  Tap Share <Icon name="square.and.arrow.up" size={15} />, then Add to Home Screen.
+                  Tap Share <Icon name="export" size={15} />, then Add to Home Screen.
                 </li>
                 <li>Open cmd from your Home Screen.</li>
                 <li>Tap Scan Code and scan the code on your Mac again.</li>

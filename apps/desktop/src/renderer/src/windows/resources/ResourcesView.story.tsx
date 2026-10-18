@@ -5,9 +5,10 @@
 import type { PaneId } from "@cmd/protocol";
 import { AllSizes, RefWindow, series, type SizeName } from "../../reference/RefWindow.tsx";
 import { Resources, type ResourcesProps, type TerminalUse } from "./ResourcesView.tsx";
+import { type IconName } from "@cmd/ui";
 
 const MB = 1024 * 1024;
-const term = (n: number, name: string, icon: string, cpu: number, memory: number, top: string[], processes: number, workspace?: string): TerminalUse => ({ id: `p${n}` as PaneId, name, icon, cpu, memory: memory * MB, top, processes, workspace });
+const term = (n: number, name: string, icon: IconName, cpu: number, memory: number, top: string[], processes: number, workspace?: string): TerminalUse => ({ id: `p${n}` as PaneId, name, icon, cpu, memory: memory * MB, top, processes, workspace });
 
 const TERMINALS = [
   term(1, "Claude · window design", "sparkle", 92, 812, ["claude", "node", "rg"], 9),
@@ -24,7 +25,7 @@ const base: ResourcesProps = { terminals: TERMINALS, history, app: { cpu: 8.2, m
 
 function W({ size = "regular", ...p }: Partial<ResourcesProps> & { size?: SizeName }) {
   return (
-    <RefWindow icon="gauge.with.dots.needle.33percent" name="Resources · cmd" size={size}>
+    <RefWindow icon="gauge" name="Resources · cmd" size={size}>
       <Resources {...base} {...p} />
     </RefWindow>
   );

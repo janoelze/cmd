@@ -1,7 +1,7 @@
 {
   "flat files in packages/core/src": 2,
   "flat files in apps/desktop/src/renderer/src": 1,
-  "entries in apps/desktop/src/renderer/src/components": 11,
+  "entries in apps/desktop/src/renderer/src/components": 10,
   "files over 600 lines in packages/cli": 0,
   "files over 600 lines in packages/core": 6,
   "files over 600 lines in packages/protocol": 0,
@@ -19,7 +19,7 @@
   "lines in packages/core/src/terminals/panes.ts": 854,
   "lines in packages/core/src/windows/builtin.ts": 697,
   "lines in packages/ui/src/overlay.tsx": 689,
-  "lines in apps/desktop/src/main/app.ts": 965,
+  "lines in apps/desktop/src/main/app.ts": 878,
   "lines in apps/desktop/src/renderer/src/lib/store.ts": 627,
   "lines in apps/desktop/src/renderer/src/shell/board/WindowsView.tsx": 1216,
   "lines in apps/desktop/src/renderer/src/windows/files/FilesView.tsx": 718,

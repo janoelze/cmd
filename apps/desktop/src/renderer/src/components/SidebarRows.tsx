@@ -2,11 +2,10 @@
 // transcript index (HistoryRow) and closed windows (ClosedRow), in the
 // Navigator's ListSections.
 
-import { Chip, Highlight, IconButton, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, Text, Twisty, TwistySpace } from "@cmd/ui";
+import { Chip, Highlight, ICON, IconButton, ListRow, ListRowActions, ListRowContent, ListRowEnd, ListRowIcon, Text, Twisty, TwistySpace } from "@cmd/ui";
 import { memo, type ReactNode } from "react";
 import type { ClosedWindow, PaneId, SearchHit, WindowId } from "@cmd/protocol";
 import { usePersisted, useStoreValue } from "../lib/store.ts";
-import { ICON } from "./Symbol.tsx";
 import { DirtyDot, Slot } from "./Slot.tsx";
 import { useFields } from "../shell/TileTitle.tsx";
 import { ago, cleanTitle, labelOf, project, shortPath, whereOf, windowIdOf, type SidebarRow } from "../lib/model.ts";
@@ -105,7 +104,7 @@ export const SessionRow = memo(function SessionRow(props: {
           {winId && (
             <IconButton
               size="sm"
-              icon="xmark"
+              icon="x"
               iconSize={ICON.disclosure}
               label="Close"
               onClick={(e) => {
@@ -144,7 +143,7 @@ export function HistoryRow(p: { hit: SearchHit; now: number; onOpen: (h: SearchH
       tip={[h.title, h.cwd ? shortPath(h.cwd) : null, `${h.agent} · ${h.sessionId}`].filter(Boolean).join("\n")}
       onClick={() => p.onOpen(h)}
     >
-      <ListRowIcon icon="clock.arrow.circlepath" tone="dim" />
+      <ListRowIcon icon="clock-counter-clockwise" tone="dim" />
       <ListRowContent title={h.title || "(untitled session)"} place={!p.rich && where ? where : undefined} detail={p.rich ? detail : undefined} />
       <ListRowEnd>
         {h.updatedAt && (
@@ -175,7 +174,7 @@ export function ClosedRow(p: { win: ClosedWindow; now: number; onOpen: (id: Wind
       tip={[title, w.cwd ? shortPath(w.cwd) : null, "Click to reopen"].filter(Boolean).join("\n")}
       onClick={() => p.onOpen(w.id)}
     >
-      <ListRowIcon icon={w.kind === "terminal" ? "terminal" : (typeFor(w.kind)?.icon ?? "macwindow")} tone="dim" />
+      <ListRowIcon icon={w.kind === "terminal" ? "terminal-window" : (typeFor(w.kind)?.icon ?? "app-window")} tone="dim" />
       <ListRowContent title={title} place={w.cwd ? project(w.cwd) : undefined} />
       <ListRowEnd>
         <Text size="xs" tone="dim">

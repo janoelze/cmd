@@ -19,7 +19,7 @@ export const Commands = () => {
           <List>
             <ListSection title="Running" count={1}>
               <ListRow>
-                <ListRowIcon icon="terminal" light="working" />
+                <ListRowIcon icon="terminal-window" light="working" />
                 <ListRowContent mono title="pnpm dev" detail="Running · 4 min" />
                 <ListRowEnd>
                   <Chip hue={200}>cmd</Chip>
@@ -28,18 +28,18 @@ export const Commands = () => {
             </ListSection>
             <ListSection title="Finished" count={3} open={open} onToggle={() => setOpen((o) => !o)}>
               <ListRow>
-                <ListRowIcon icon="terminal" light="danger" />
+                <ListRowIcon icon="terminal-window" light="danger" />
                 <ListRowContent mono title="pnpm test" detail="Failed · exit 1 · 12 s" tone="danger" />
                 <ListRowEnd>
                   <Chip hue={200}>cmd</Chip>
                   <ListValue>2m</ListValue>
                 </ListRowEnd>
                 <ListRowActions>
-                  <IconButton size="sm" icon="arrow.clockwise" label="Run Again" />
+                  <IconButton size="sm" icon="arrow-clockwise" label="Run Again" />
                 </ListRowActions>
               </ListRow>
               <ListRow selected>
-                <ListRowIcon icon="terminal" />
+                <ListRowIcon icon="terminal-window" />
                 <ListRowContent mono title="git status" detail="0.2 s" />
                 <ListRowEnd>
                   <ListValue>5m</ListValue>
@@ -69,19 +69,19 @@ export const Nested = () => {
         <ListHeading title="Agents" count={3} />
         <ListRow>
           <Twisty open={open} onToggle={() => setOpen(!open)} />
-          <ListRowIcon icon="sparkles" light="working" />
+          <ListRowIcon icon="sparkle" light="working" />
           <ListRowContent title="Review the branch" detail="2 subagents" />
         </ListRow>
         {open && (
           <>
             <ListRow depth={1}>
               <TwistySpace />
-              <ListRowIcon icon="sparkles" light="done" />
+              <ListRowIcon icon="sparkle" light="done" />
               <ListRowContent title="Read the diff" />
             </ListRow>
             <ListRow depth={1}>
               <TwistySpace />
-              <ListRowIcon icon="sparkles" light="needs" />
+              <ListRowIcon icon="sparkle" light="needs" />
               <ListRowContent title="Run the tests" tone="needs" detail="Wants to run pnpm test" />
             </ListRow>
           </>
@@ -94,9 +94,9 @@ export const Nested = () => {
 /** Mark outside a row (a table's status cell): an icon, the light in its place, a dim one. */
 export const Marks = () => (
   <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "center" }}>
-    <Mark icon="terminal" />
-    <Mark icon="terminal" light="working" />
-    <Mark icon="terminal" light="needs" />
+    <Mark icon="terminal-window" />
+    <Mark icon="terminal-window" light="working" />
+    <Mark icon="terminal-window" light="needs" />
     <Mark icon="clock" tone="dim" />
     <Chip hue={30}>side-project</Chip>
     <Chip hue={280} tip="A worktree of cmd">cmd-workbench</Chip>

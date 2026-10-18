@@ -47,7 +47,7 @@ export function Now({ conn, model, workspaceId, onWorkspace, onOpen }: { conn: C
       )}
       <main className="now">
         {groups.length === 0 ? (
-          <EmptyState icon="terminal" title={`Nothing running${workspaceId ? ` in ${workspaceName(workspaceId)}` : ""}`}>
+          <EmptyState icon="terminal-window" title={`Nothing running${workspaceId ? ` in ${workspaceName(workspaceId)}` : ""}`}>
             {control ? "Start a terminal or a Claude session below." : null}
           </EmptyState>
         ) : (
@@ -63,16 +63,16 @@ export function Now({ conn, model, workspaceId, onWorkspace, onOpen }: { conn: C
       {(control || needs.length > 0) && (
         <footer className="actions">
           {needs.length > 0 && (
-            <Button size="lg" variant="primary" icon="bolt" onClick={() => onOpen(needs[0]!.paneId)}>
+            <Button size="lg" variant="primary" icon="lightning" onClick={() => onOpen(needs[0]!.paneId)}>
               Next
             </Button>
           )}
           {control && (
             <>
-              <Button size="lg" icon="terminal" disabled={busy} onClick={() => void start("terminal")}>
+              <Button size="lg" icon="terminal-window" disabled={busy} onClick={() => void start("terminal")}>
                 Terminal
               </Button>
-              <Button size="lg" icon="sparkles" disabled={busy} onClick={() => void start("claude")}>
+              <Button size="lg" icon="sparkle" disabled={busy} onClick={() => void start("claude")}>
                 Claude
               </Button>
             </>
@@ -93,7 +93,7 @@ function Row({ it, showWorkspace, onOpen }: { it: Item; showWorkspace: boolean; 
       onClick={() => onOpen(it.paneId)}
       onKeyDown={(e) => e.key === "Enter" && onOpen(it.paneId)}
     >
-      <ListRowIcon icon={it.agent ? "sparkles" : "terminal"} light={it.light === "idle" ? undefined : it.light} />
+      <ListRowIcon icon={it.agent ? "sparkle" : "terminal-window"} light={it.light === "idle" ? undefined : it.light} />
       <ListRowContent title={it.title} place={place} detail={it.detail ? (place ? `${place} · ${it.detail}` : it.detail) : undefined} tone={it.group === "needs" ? "needs" : undefined} />
       <ListRowEnd><span className="when">{ago(it.since)}</span></ListRowEnd>
     </ListRow>

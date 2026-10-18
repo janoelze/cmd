@@ -185,9 +185,9 @@ export function LiveDiffView(p: { state: "loading" | "noRepo" | "ok"; dir: strin
         p.state === "loading"
           ? { kind: "loading" }
           : p.state === "noRepo"
-            ? { kind: "empty", icon: "plusminus", title: "Not in a Git repository", text: shortPath(p.dir), action: <Button onClick={p.onChoose}>Choose Folder…</Button> }
+            ? { kind: "empty", icon: "plus-minus", title: "Not in a Git repository", text: shortPath(p.dir), action: <Button onClick={p.onChoose}>Choose Folder…</Button> }
             : !p.files.length
-              ? { kind: "empty", icon: "checkmark.circle", title: "Nothing uncommitted", text: shortPath(p.dir) }
+              ? { kind: "empty", icon: "check-circle", title: "Nothing uncommitted", text: shortPath(p.dir) }
               : null
       }
     >

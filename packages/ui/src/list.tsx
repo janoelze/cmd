@@ -6,7 +6,7 @@
 
 import { useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type MouseEvent, type ReactNode } from "react";
 import { timing, useFlip } from "./motion.ts";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, iconNode, type IconLike } from "./icon.tsx";
 import { StatusDot, type DotState } from "./status.tsx";
 
 const cls = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
@@ -47,7 +47,7 @@ export function PanelHeader({
       {onTitleClick ? (
         <button type="button" className="ui-panel-title" data-tip={titleTip} onClick={onTitleClick}>
           {label}
-          {iconNode("chevron.down", ICON.disclosure)}
+          {iconNode("caret-down", ICON.disclosure)}
         </button>
       ) : (
         <span className="ui-panel-title" data-tip={titleTip}>
@@ -85,7 +85,7 @@ export function ListHeading({ title, count, open, onToggle, tone }: { title: Rea
     >
       <span className="ui-list-heading-title">{title}</span>
       {count !== undefined && <span className="ui-list-count">{count}</span>}
-      {collapsible && <span className={cls("ui-twisty", open && "open")}>{iconNode("chevron.right", ICON.disclosure)}</span>}
+      {collapsible && <span className={cls("ui-twisty", open && "open")}>{iconNode("caret-right", ICON.disclosure)}</span>}
     </div>
   );
 }
@@ -169,7 +169,7 @@ export function ListGroup({ children }: { children: ReactNode }) {
 }
 
 /** An icon that gives way to a status light when there is one; `tone` colours the icon (needs: orange; dim: a past session's). A row's (ListRowIcon) or a table cell's. */
-export function Mark({ icon, light, tone }: { icon: string | ReactNode; light?: DotState; tone?: DotState | "dim" }) {
+export function Mark({ icon, light, tone }: { icon: IconLike; light?: DotState; tone?: DotState | "dim" }) {
   return (
     <span className={cls("ui-mark", light && "has-light")} data-tone={tone}>
       <span className="ui-mark-icon">{iconNode(icon, ICON.small)}</span>
@@ -224,7 +224,7 @@ export function ListRow({ selected, active, dim, depth, className, onClick, onDo
 }
 
 /** A row's icon (Mark): it gives way to a status light; `tone` colours it. */
-export function ListRowIcon(p: { icon: string | ReactNode; light?: DotState; tone?: DotState | "dim" }) {
+export function ListRowIcon(p: { icon: IconLike; light?: DotState; tone?: DotState | "dim" }) {
   return <Mark {...p} />;
 }
 
@@ -272,7 +272,7 @@ export function Twisty({ open, onToggle }: { open: boolean; onToggle: () => void
         onToggle();
       }}
     >
-      {iconNode("chevron.right", ICON.disclosure)}
+      {iconNode("caret-right", ICON.disclosure)}
     </button>
   );
 }

@@ -8,18 +8,17 @@ import { useKeybindings } from "../lib/keybindings.ts";
 import { formatBytes, usageLabel } from "../lib/model.ts";
 import { useStoreValue } from "../lib/store.ts";
 import { Slot } from "../components/Slot.tsx";
-import { ICON } from "../components/Symbol.tsx";
 import { RemoteIndicator } from "../components/Remote.tsx";
 import { CoreStatus } from "./CoreStatus.tsx";
-import { IconButton, useTooltip } from "@cmd/ui";
+import { ICON, IconButton, useTooltip, type IconName } from "@cmd/ui";
 import { useSyncExternalStore } from "react";
 import { countRender } from "../lib/perf.ts";
 
-const ICONS: Record<"palette" | "settings" | "feedback" | "whatsNew", string> = {
+const ICONS: Record<"palette" | "settings" | "feedback" | "whatsNew", IconName> = {
   palette: "command",
-  settings: "gearshape",
-  feedback: "bubble.left",
-  whatsNew: "sparkles",
+  settings: "gear",
+  feedback: "chat",
+  whatsNew: "sparkle",
 };
 
 // The footer's centre: where the strip view puts its page dots (WindowsView), so its
@@ -54,7 +53,7 @@ export function StatusBar({ pane, run, connected, error }: Props) {
   const usage = pane?.usage ?? null;
   const usageTip = useTooltip(() => usage && <UsageTip usage={usage} />);
   const key = (id: CommandId) => prettyAccelerator(keys.bindings[id]?.[0]);
-  const btn = (id: CommandId, icon: string, label: string) => <IconButton key={id} icon={icon} label={label} shortcut={key(id)} iconSize={ICON.bar} onClick={() => run(id)} />;
+  const btn = (id: CommandId, icon: IconName, label: string) => <IconButton key={id} icon={icon} label={label} shortcut={key(id)} iconSize={ICON.bar} onClick={() => run(id)} />;
 
   return (
     <footer className="statusbar">

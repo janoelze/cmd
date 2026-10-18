@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { HOME_WORKSPACE_ID, ICON_NAME, type Workspace, type WorkspaceId } from "@cmd/protocol";
+import { HOME_WORKSPACE_ID, ICON_NAMES, type Workspace, type WorkspaceId } from "@cmd/protocol";
 import type { Store } from "../kernel/store.ts";
 import { placeOf } from "../lib/checkout.ts";
 import { canonical, deepest, gitRoot, nameFor } from "./paths.ts";
@@ -160,7 +160,7 @@ export class WorkspaceManager extends EventEmitter<{ updated: [Workspace]; remov
       s.name = name;
     }
     if (patch.icon !== undefined) {
-      if (patch.icon !== null && (patch.icon.length > 64 || !ICON_NAME.test(patch.icon))) throw new Error(`not an SF Symbol name: ${patch.icon}`);
+      if (patch.icon !== null && !ICON_NAMES.has(patch.icon)) throw new Error(`not a Phosphor icon name: ${patch.icon}`);
       s.icon = patch.icon;
     }
     if (patch.order !== undefined) s.order = patch.order;

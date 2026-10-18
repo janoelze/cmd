@@ -7,7 +7,7 @@
 // --window-* tokens (tokens.css), which an app maps to its settings.
 
 import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, iconNode, type IconLike } from "./icon.tsx";
 
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -43,7 +43,7 @@ export function WindowFrame({ className, ...rest }: DivProps) {
 }
 
 /** The title bar. Children are the app's: an icon, the name, info; or `icon` and `name` for a plain one. */
-export const WindowBar = forwardRef<HTMLDivElement, DivProps & { icon?: string | ReactNode; name?: ReactNode }>(function WindowBar({ icon, name, className, children, ...rest }, ref) {
+export const WindowBar = forwardRef<HTMLDivElement, DivProps & { icon?: IconLike; name?: ReactNode }>(function WindowBar({ icon, name, className, children, ...rest }, ref) {
   return (
     <div ref={ref} className={cls("ui-window-bar", className)} {...rest}>
       {icon && <span className="ui-window-bar-icon">{iconNode(icon, ICON.small)}</span>}
@@ -58,7 +58,7 @@ export function WindowBarMenu({ className, children, ...rest }: ButtonHTMLAttrib
   return (
     <button type="button" className={cls("ui-window-bar-menu", className)} {...rest}>
       {children}
-      {iconNode("chevron.down", ICON.disclosure)}
+      {iconNode("caret-down", ICON.disclosure)}
     </button>
   );
 }

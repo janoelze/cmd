@@ -13,7 +13,7 @@ const fails: VideoApi = { saveTrim: () => new Promise((_, no) => setTimeout(() =
 function Vid({ rel = ".cmd-dev/fixtures/sample.mp4", size = "wide", trim, api = works }: { rel?: string; size?: SizeName; trim?: TrimRange; api?: VideoApi | null }) {
   const path = useRepoFile(rel);
   return (
-    <RefWindow icon="film" name={rel.split("/").pop()!} size={size}>
+    <RefWindow icon="film-strip" name={rel.split("/").pop()!} size={size}>
       {path && <VideoView win={storyWindow("video", { path })} focused={false} api={api ?? undefined} initialTrim={trim} />}
     </RefWindow>
   );

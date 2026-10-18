@@ -6,9 +6,9 @@ import { registerWindowView, setWindowTypes } from "../src/renderer/src/windows/
 // Window title fields (docs/10-window-titles.md): one meaning per field, for every type.
 
 setWindowTypes([
-  { kind: "text", title: "Text Editor", icon: "doc.text" },
+  { kind: "text", title: "Text Editor", icon: "file-text" },
   { kind: "browser", title: "Browser", icon: "globe" },
-  { kind: "magic", title: "Magic Widget", icon: "sparkles" },
+  { kind: "magic", title: "Magic Widget", icon: "sparkle" },
 ] as never);
 registerWindowView({ kind: "text", View: () => null, describe: () => ({ place: "~/src/cmd" }) });
 registerWindowView({ kind: "browser", View: () => null, describe: (w) => ({ name: w.title, place: "github.com" }) });
@@ -22,7 +22,7 @@ const win = (w: Partial<AppWindow>): AppWindow => ({ id: "w1", kind: "text", tit
 describe("window fields", () => {
   it("shell: process name, cwd as place, type icon, no light or status", () => {
     const f = fieldsOf(row({ pane: pane() }), undefined, 0);
-    expect(f).toMatchObject({ name: "zsh", place: "~/src/cmd", icon: "terminal" });
+    expect(f).toMatchObject({ name: "zsh", place: "~/src/cmd", icon: "terminal-window" });
     expect(f.kind).toBeUndefined(); // same as the name
     expect(f.light).toBeUndefined();
     expect(f.status).toBeUndefined();
@@ -43,7 +43,7 @@ describe("window fields", () => {
   it("shell with an attention marker: its text as status, a tinted icon until seen", () => {
     const at = 0;
     const bell = fieldsOf(row({ pane: pane({ attention: { kind: "bell", text: "Bell", urgent: true, at } }) }), undefined, 0);
-    expect(bell).toMatchObject({ status: { text: "Bell", key: "attention:bell" }, tone: "needs", icon: "terminal" });
+    expect(bell).toMatchObject({ status: { text: "Bell", key: "attention:bell" }, tone: "needs", icon: "terminal-window" });
     const done = fieldsOf(row({ pane: pane({ attention: { kind: "command", text: "make finished · 42s", urgent: false, at } }) }), undefined, 0);
     expect(done).toMatchObject({ status: { text: "make finished · 42s" }, tone: "unseen" });
   });
@@ -58,9 +58,9 @@ describe("window fields", () => {
   });
 
   it("widget: the icon its build picked, else the type's; news tints it, never a light", () => {
-    expect(fieldsOf(row({ win: win({ kind: "magic", title: "Weather" }) }), undefined, 0).icon).toBe("sparkles");
-    const f = fieldsOf(row({ win: win({ kind: "magic", title: "Weather", state: { icon: "cloud.sun", attention: { kind: "notification", text: "Rain soon", urgent: true, at: 0 } } }) }), undefined, 0);
-    expect(f).toMatchObject({ icon: "cloud.sun", tone: "needs", status: { text: "Rain soon" } });
+    expect(fieldsOf(row({ win: win({ kind: "magic", title: "Weather" }) }), undefined, 0).icon).toBe("sparkle");
+    const f = fieldsOf(row({ win: win({ kind: "magic", title: "Weather", state: { icon: "cloud-sun", attention: { kind: "notification", text: "Rain soon", urgent: true, at: 0 } } }) }), undefined, 0);
+    expect(f).toMatchObject({ icon: "cloud-sun", tone: "needs", status: { text: "Rain soon" } });
     expect(f.light).toBeUndefined();
   });
 
@@ -82,7 +82,7 @@ describe("window fields", () => {
 
   it("windows: kind is the type, status and dirty come from the live status", () => {
     const f = fieldsOf(row({ win: win({}) }), { label: "Edited", key: "edited", dirty: true }, 0);
-    expect(f).toMatchObject({ name: "README.md", kind: "text editor", place: "~/src/cmd", icon: "doc.text", dirty: true, status: { text: "Edited", key: "edited" } });
+    expect(f).toMatchObject({ name: "README.md", kind: "text editor", place: "~/src/cmd", icon: "file-text", dirty: true, status: { text: "Edited", key: "edited" } });
   });
 
   it("a status without a key is keyed by its text", () => {

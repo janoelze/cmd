@@ -8,7 +8,7 @@ import { checkWidget, previewWidget, runWidgetData, type VerifyContext } from ".
 import type { ToolOutput, ToolSpec } from "./tools.ts";
 import { lintBody } from "./lint.ts";
 import { WIDGET_FILES } from "../widgets/store.ts";
-import { CURRENT_KIT, kitVersion } from "@cmd/protocol";
+import { CURRENT_KIT, ICON_NAMES, kitVersion } from "@cmd/protocol";
 
 const why = { type: "string", description: 'A few words for the person saying what this step does, e.g. "Writing the view".' };
 const obj = (props: Record<string, unknown>, required: string[]) => ({ type: "object", properties: { why, ...props }, required: ["why", ...required], additionalProperties: false });
@@ -180,5 +180,10 @@ function afterWrite(c: VerifyContext, p: string, state: WidgetToolState): string
   const m = c.store.manifest(c.id);
   if (!m.ok) return ` But it isn't valid: ${m.errors.join("; ")}`;
   state.onManifest?.(m.manifest.title, m.manifest.icon);
+  let named: unknown;
+  try {
+    named = (JSON.parse(c.store.read(c.id, p) ?? "{}") as { icon?: unknown }).icon;
+  } catch {}
+  if (typeof named === "string" && !ICON_NAMES.has(named.trim())) return ` But its icon "${named}" is not a Phosphor icon name, so it shows the default; pick one that exists (like "cloud-sun").`;
   return "";
 }

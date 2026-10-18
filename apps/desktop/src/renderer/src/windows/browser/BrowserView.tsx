@@ -257,9 +257,9 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
         <>
           <WindowToolbar label="Browser">
             <ToolbarGroup>
-              <ToolbarButton icon="chevron.left" label="Back" disabled={!nav.back} onClick={() => ref.current?.goBack()} />
-              <ToolbarButton icon="chevron.right" label="Forward" disabled={!nav.forward} onClick={() => ref.current?.goForward()} />
-              <ToolbarButton icon={loading ? "xmark" : "arrow.clockwise"} label={loading ? "Stop" : "Reload"} disabled={!live} onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())} priority={2} />
+              <ToolbarButton icon="caret-left" label="Back" disabled={!nav.back} onClick={() => ref.current?.goBack()} />
+              <ToolbarButton icon="caret-right" label="Forward" disabled={!nav.forward} onClick={() => ref.current?.goForward()} />
+              <ToolbarButton icon={loading ? "x" : "arrow-clockwise"} label={loading ? "Stop" : "Reload"} disabled={!live} onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())} priority={2} />
             </ToolbarGroup>
             <ToolbarAddressField
               ref={input}
@@ -273,7 +273,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
               onEscape={() => ref.current?.focus()}
             />
             <ToolbarButton
-              icon="chevron.left.forwardslash.chevron.right"
+              icon="code"
               label="Inspector"
               pressed={!!inspecting}
               disabled={!live}
@@ -281,7 +281,7 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
               secondary
               priority={1}
             />
-            <ToolbarButton icon="safari" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url, { from: "user" })} secondary priority={1} />
+            <ToolbarButton icon="compass" label="Open in Default Browser" disabled={!live} onClick={() => url && cmd.openPath(url, { from: "user" })} secondary priority={1} />
           </WindowToolbar>
           {find.bar}
         </>

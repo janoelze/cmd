@@ -273,7 +273,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
   return (
     <div className="term-screen" style={{ background: colors.background }}>
       <header className="bar term-bar">
-        <IconButton icon="chevron.left" size="lg" label="Back to Now" onClick={onBack} />
+        <IconButton icon="caret-left" size="lg" label="Back to Now" onClick={onBack} />
         <div className="term-head">
           <div className="term-name">
             <StatusDot state={item.light} size="sm" /> <span>{item.title}</span>
@@ -287,7 +287,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
             {sizedBy && <span className="term-sized">&nbsp;· {sizedBy}</span>}
           </div>
         </div>
-        <IconButton icon="ellipsis" size="lg" label="More" onClick={() => setMenu(true)} />
+        <IconButton icon="dots-three" size="lg" label="More" onClick={() => setMenu(true)} />
       </header>
       <div className="term">
         <div className="term-view" ref={view}>
@@ -296,7 +296,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
         <Presence when={vs.selection}>
           {(_, open) => (
             <div className="term-float" data-motion="pop" data-closing={!open || undefined}>
-              <Button size="lg" variant="primary" icon="doc.on.doc" onClick={() => void copy()}>
+              <Button size="lg" variant="primary" icon="copy" onClick={() => void copy()}>
                 Copy
               </Button>
               <Button size="lg" onClick={() => term.current?.viewport.clearSelection()}>
@@ -319,7 +319,7 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
             {KEYS.map((k) => (
               <Key key={k.label} label={k.label} name={k.name} repeat={k.repeat} onKey={() => write(k.data)} />
             ))}
-            <Button size="sm" className="key" icon="doc.on.clipboard" aria-label="Paste" onMouseDown={keep} onClick={() => void paste()} />
+            <Button size="sm" className="key" icon="clipboard-text" aria-label="Paste" onMouseDown={keep} onClick={() => void paste()} />
           </div>
           <form className="compose" onSubmit={(e) => (e.preventDefault(), void submit())}>
             <IconButton icon="keyboard" size="lg" label="Type into the terminal" onClick={() => term.current?.t.focus()} />
@@ -335,8 +335,8 @@ export function TerminalScreen({ conn, item, control, onBack, fit = false }: Ter
               autoCorrect="off"
               spellCheck={false}
             />
-            <IconButton icon="return" size="lg" pressed={enter} label="Press Return after sending" onMouseDown={keep} onClick={() => setEnter(!enter)} />
-            <Button type="submit" size="lg" variant="primary" icon="arrow.up" disabled={(!text && !enter) || sending} aria-label={enter ? "Send" : "Send without Return"} />
+            <IconButton icon="arrow-elbow-down-left" size="lg" pressed={enter} label="Press Return after sending" onMouseDown={keep} onClick={() => setEnter(!enter)} />
+            <Button type="submit" size="lg" variant="primary" icon="arrow-up" disabled={(!text && !enter) || sending} aria-label={enter ? "Send" : "Send without Return"} />
           </form>
         </div>
       ) : (
@@ -405,7 +405,7 @@ function TerminalMenu(p: {
   const [confirm, setConfirm] = useState(false);
   const size: ReactNode = (
     <ListRow>
-      <ListRowIcon icon="textformat" />
+      <ListRowIcon icon="text-aa" />
       <ListRowContent title="Text Size" detail={`${p.textSize} px on this phone`} />
       <ListRowEnd>
         <ButtonGroup joined>
@@ -426,7 +426,7 @@ function TerminalMenu(p: {
   return (
     <div className="menu-rows">
       <ListRow role="button" onClick={() => p.onFit(!p.fitting)}>
-        <ListRowIcon icon={p.fitting ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"} tone={p.fitting ? "accent" : undefined} />
+        <ListRowIcon icon={p.fitting ? "arrows-in-simple" : "arrows-out-simple"} tone={p.fitting ? "accent" : undefined} />
         <ListRowContent
           title={p.fitting ? "Use the Mac's Size" : "Fit to This Phone"}
           detail={
@@ -447,7 +447,7 @@ function TerminalMenu(p: {
           p.onClosed();
         }}
       >
-        <ListRowIcon icon="xmark" tone="danger" />
+        <ListRowIcon icon="x" tone="danger" />
         <ListRowContent title={confirm ? "Tap Again to Close" : "Close Terminal"} detail="Ends what runs in it, on the Mac too" tone="danger" />
       </ListRow>
     </div>

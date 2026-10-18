@@ -5,7 +5,7 @@ description: Design, redesign or restyle a piece of cmd's UI (a dialog, sheet, f
 
 # Prototyping UI in the UI Workbench
 
-The UI Workbench (`apps/desktop/src/renderer/workbench.html`, dev builds only; docs/48) shows every component and story inside the real Electron app: the app's styles, the kit, native SF Symbols, the real preload and a real core. Nothing is a mock, so whatever you change in a story's component *is* the change in the app; there is no porting step afterwards. The user watches the window while you edit, HMR updates it, and you take screenshots of the same window to check your work.
+The UI Workbench (`apps/desktop/src/renderer/workbench.html`, dev builds only; docs/48) shows every component and story inside the real Electron app: the app's styles, the kit, its icons, the real preload and a real core. Nothing is a mock, so whatever you change in a story's component *is* the change in the app; there is no porting step afterwards. The user watches the window while you edit, HMR updates it, and you take screenshots of the same window to check your work.
 
 Everything it shows is read from the sources (a catalog the TypeScript checker builds as the dev server runs, `renderer/src/workbench/catalog/`): a component's page (its JSDoc, a matrix of its union and boolean props, a playground with a control per prop, the story variants that render it, its props with types and defaults) and a story's page (every variant, each with the comment above its export). Nothing is registered by hand.
 

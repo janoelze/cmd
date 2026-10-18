@@ -124,7 +124,7 @@ function Ask({ id, focused }: { id: string; focused: boolean }) {
     <View
       state={{
         kind: "empty",
-        icon: "play.rectangle",
+        icon: "monitor-play",
         title: "YouTube",
         action: (
           <Stack gap={1}>

@@ -9,7 +9,7 @@ import { ImageView } from "./image-view.tsx";
 function Img({ rel = "docs/screenshots/hero-dark.png", size = "wide", zoom }: { rel?: string; size?: SizeName; zoom?: "fit" | number }) {
   const path = useRepoFile(rel);
   return (
-    <RefWindow icon="photo" name={rel.split("/").pop()!} size={size}>
+    <RefWindow icon="image" name={rel.split("/").pop()!} size={size}>
       {path && <ImageView win={storyWindow("image", { path, zoom })} focused={false} />}
     </RefWindow>
   );

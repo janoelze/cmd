@@ -155,7 +155,7 @@ export function SqliteView({ win, focused: _focused, update }: WindowViewProps &
             onClick={() => set({ table: t.name })}
             onContextMenu={() => tableMenu(t)}
           >
-            <ListRowIcon icon="tablecells" />
+            <ListRowIcon icon="table" />
             <ListRowContent title={t.name} mono />
             <ListRowEnd>{t.rows !== null && <ListValue>{n(t.rows)}</ListValue>}</ListRowEnd>
           </ListRow>
@@ -182,7 +182,7 @@ export function SqliteView({ win, focused: _focused, update }: WindowViewProps &
   return (
     <View
       scroll={false}
-      state={!schema ? (error ? { kind: "error", title: "Couldn't read this database", text: error, action: <Button icon="arrow.clockwise" onClick={() => void load()}>Try Again</Button> } : { kind: "loading" }) : null}
+      state={!schema ? (error ? { kind: "error", title: "Couldn't read this database", text: error, action: <Button icon="arrow-clockwise" onClick={() => void load()}>Try Again</Button> } : { kind: "loading" }) : null}
       toolbar={
         <WindowToolbar label="Database">
           <ToolbarSegmented label="Show" value={tab} options={TABS.map((t) => ({ value: t.id, label: t.label }))} onChange={(t) => set({ tab: t })} />
@@ -310,7 +310,7 @@ function ContentTab({ file, table, version, onBar }: { file: string; table: Sqli
           state={
             applied
               ? { kind: "noResults", title: "No rows match", text: `Nothing in ${table.name} contains “${applied}”.`, action: <Button onClick={() => setFilter("")}>Clear Filter</Button> }
-              : { kind: "empty", icon: "tablecells", title: "No rows", text: `${table.name} is empty.` }
+              : { kind: "empty", icon: "table", title: "No rows", text: `${table.name} is empty.` }
           }
         />
       ) : (
@@ -436,8 +436,8 @@ function QueryTab({ win, file, version, onBar, update }: { win: WindowViewProps[
       onBar({
         tools: (
           <>
-            {result && result.rows.length > 0 && <ToolbarButton icon="doc.on.doc" label="Copy as CSV" secondary priority={1} onClick={() => copy(csvOf(result.columns, result.rows))} />}
-            <ToolbarButton icon="play.fill" label="Run" showLabel shortcut="⌘↩" disabled={!sql.trim() || busy} onClick={() => void run()} priority={3} />
+            {result && result.rows.length > 0 && <ToolbarButton icon="copy" label="Copy as CSV" secondary priority={1} onClick={() => copy(csvOf(result.columns, result.rows))} />}
+            <ToolbarButton icon="play" label="Run" showLabel shortcut="⌘↩" disabled={!sql.trim() || busy} onClick={() => void run()} priority={3} />
           </>
         ),
         status: busy ? "Running…" : result ? `${rowsLabel(result.rows.length)}${result.truncated ? " shown" : ""} · ${result.took || "under 1"} ms` : null,
@@ -459,10 +459,10 @@ function QueryTab({ win, file, version, onBar, update }: { win: WindowViewProps[
         rows.length ? (
           <DataGrid mono numbered columns={columns} rows={rows} onRowContextMenu={(i) => rowMenu(result.columns, result.rows[i]!)} />
         ) : (
-          <ViewState state={{ kind: "empty", icon: "tablecells", title: "No rows", text: "The statement ran and returned nothing." }} />
+          <ViewState state={{ kind: "empty", icon: "table", title: "No rows", text: "The statement ran and returned nothing." }} />
         )
       ) : (
-        !error && <ViewState state={{ kind: "empty", icon: "play.fill", title: "Run a statement", text: "SELECT and WITH work. The database is opened read-only, so nothing here can change it." }} />
+        !error && <ViewState state={{ kind: "empty", icon: "play", title: "Run a statement", text: "SELECT and WITH work. The database is opened read-only, so nothing here can change it." }} />
       )}
     </>
   );

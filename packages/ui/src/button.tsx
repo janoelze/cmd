@@ -9,7 +9,7 @@
 // Sizes follow the control heights (--control-h-sm / -h / -h-lg).
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, iconNode, type IconLike, type IconName } from "./icon.tsx";
 import { Spinner } from "./status.tsx";
 import { usePresence } from "./motion.ts";
 
@@ -21,10 +21,10 @@ type Native = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type">;
 export interface ButtonProps extends Native {
   variant?: ButtonVariant;
   size?: Size;
-  /** An SF Symbol name or a node, before the label. */
-  icon?: string | ReactNode;
+  /** An icon or a node, before the label. */
+  icon?: IconLike;
   /** After the label (a chevron for a button that opens a menu). */
-  trailing?: string | ReactNode;
+  trailing?: IconLike;
   /** Shows a spinner in place of the icon and disables the button. */
   busy?: boolean;
   /** Shown as pressed (a toggle that is on). */
@@ -52,14 +52,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     >
       {busy ? <Spinner size={size === "lg" ? 14 : 12} /> : iconNode(icon, size === "sm" ? ICON.small : ICON.row)}
       {children != null && <span className="ui-button-label">{children}</span>}
-      {iconNode(trailing, ICON.control, "semibold")}
+      {iconNode(trailing, ICON.control, "bold")}
     </button>
   );
 });
 
 export interface IconButtonProps extends Native {
-  /** An SF Symbol name or a node. */
-  icon: string | ReactNode;
+  /** An icon or a node. */
+  icon: IconLike;
   /** Required: the tooltip and the accessible name. */
   label: string;
   /** Its shortcut, shown in the tooltip. */
@@ -161,14 +161,14 @@ export function JumpButton({
   open,
   unread,
   label = "Jump to Latest",
-  icon = "arrow.down",
+  icon = "arrow-down",
   onClick,
   className,
 }: {
   open: boolean;
   unread?: boolean;
   label?: string;
-  icon?: string;
+  icon?: IconName;
   onClick: () => void;
   className?: string;
 }) {

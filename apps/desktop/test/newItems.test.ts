@@ -10,7 +10,7 @@ const { platformDefaults } = await import("../src/shared/commands.ts");
 
 const MAC = platformDefaults(true);
 const entry = (ref: string, source: "yours" | "builtin", usedAt?: number): WidgetEntry =>
-  ({ ref, source, kind: source === "yours" ? "magic" : ref.slice(5), title: ref, icon: "sparkles", windows: [], usedAt }) as WidgetEntry;
+  ({ ref, source, kind: source === "yours" ? "magic" : ref.slice(5), title: ref, icon: "sparkle", windows: [], usedAt }) as WidgetEntry;
 
 describe("New… items", () => {
   const library = [entry("type:timer", "builtin"), entry("magic:a", "yours", 1), entry("type:diff", "builtin"), entry("magic:b", "yours", 2)];

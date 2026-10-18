@@ -12,7 +12,7 @@ import { NowPlayingStream, sendNowPlaying } from "./adapter.ts";
 export const nowPlayingType: WindowType<Record<string, never>> = {
   kind: "nowplaying",
   title: "Now Playing",
-  icon: "music.note",
+  icon: "music-note",
   role: "widget",
   description: "The cover and track your Mac is playing, with its controls.",
   create: () => ({ state: {}, title: "Now Playing" }),

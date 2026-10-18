@@ -2,7 +2,7 @@
 // starts, how often its data runs, what its data.ts may touch, and the settings
 // a person can change. The same file a widget store would publish.
 
-import { KIT_FILES, kitVersion } from "@cmd/protocol";
+import { ICON_NAMES, KIT_FILES, kitVersion } from "@cmd/protocol";
 import { POLICY, declarable } from "../data/policy.ts";
 
 export type WidgetSize = "s" | "m" | "l" | "wide";
@@ -23,7 +23,7 @@ export interface WidgetManifest {
   cmd: 2;
   kind: "widget" | "terminal";
   title: string;
-  /** SF Symbol for the window's title bar and the navigator ("cloud.sun", "lock.shield"); absent: sparkles. */
+  /** Phosphor icon for the window's title bar and the navigator ("cloud-sun", "shield-check"); absent: sparkle. */
   icon?: string;
   description?: string;
   size: WidgetSize;
@@ -66,8 +66,10 @@ export function parseManifest(v: unknown): { ok: true; manifest: WidgetManifest 
   if (!kind) errors.push('kind must be "widget" or "terminal"');
   const title = typeof m.title === "string" ? m.title.trim().slice(0, 120) : "";
   if (!title) errors.push("title is required");
-  const icon = typeof m.icon === "string" ? m.icon.trim() : undefined;
-  if (icon && !/^[a-z0-9]+(\.[a-z0-9]+)*$/.test(icon)) errors.push(`icon: "${icon}" is not an SF Symbol name (like "cloud.sun.fill")`);
+  // A name that's no Phosphor icon is left out (the default shows) rather than failing the
+  // widget: widgets made before the switch from SF Symbols name theirs the old way.
+  const named = typeof m.icon === "string" ? m.icon.trim() : undefined;
+  const icon = named && ICON_NAMES.has(named) ? named : undefined;
   const size = m.size === "s" || m.size === "m" || m.size === "l" || m.size === "wide" ? m.size : "m";
   const refreshRaw = typeof m.refresh === "number" && Number.isFinite(m.refresh) && m.refresh >= 0 ? m.refresh : 0;
   const refresh = refreshRaw === 0 ? 0 : Math.max(MIN_REFRESH, Math.round(refreshRaw));

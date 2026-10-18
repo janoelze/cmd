@@ -6,7 +6,7 @@
 // is kept in localStorage, so shots and remounts show the current tuning; the panel
 // prints it as the CSS it would become.
 
-import { Button, Segmented, Select, Switch, ToolbarButton, ToolbarGroup, ToolbarSearchField, ToolbarSpacer, Window, WindowBar, WindowBody, WindowFrame, WindowToolbar } from "@cmd/ui";
+import { Button, Segmented, Select, Switch, ToolbarButton, ToolbarGroup, ToolbarSearchField, ToolbarSpacer, Window, WindowBar, WindowBody, WindowFrame, WindowToolbar, type IconName } from "@cmd/ui";
 import { allThemes, themeVars, useTheme } from "@cmd/ui/themes";
 import type { Theme } from "@cmd/ui/themes/types";
 import { useState, type CSSProperties, type ReactNode } from "react";
@@ -101,7 +101,7 @@ const themed = (t: Theme, r: Recipe) => ({ ...ROOT, ...themeVars(t), ...recipeVa
 
 const LINES = ["~/src/cmd master", "❯ pnpm test", " ✓ packages/core/test/osc.test.ts (42)", " ✓ packages/ui/test/tokens.test.ts (9)", " Test Files  2 passed", "❯ "];
 
-function Shell({ r, name, icon, selected, toolbar = true, width, height }: { r: Recipe; name: string; icon: string; selected?: boolean; toolbar?: boolean; width: number | string; height: number }) {
+function Shell({ r, name, icon, selected, toolbar = true, width, height }: { r: Recipe; name: string; icon: IconName; selected?: boolean; toolbar?: boolean; width: number | string; height: number }) {
   const dimTop = r.dimScope === "content" ? `calc(var(--window-bar-h) + ${toolbar ? "var(--toolbar-h)" : "0px"})` : "0px";
   const tint = selected && TINT[r.tint] ? { background: `color-mix(in srgb, var(--ring-color) ${TINT[r.tint]}%, var(--window-bar-bg))` } : undefined;
   return (
@@ -111,12 +111,12 @@ function Shell({ r, name, icon, selected, toolbar = true, width, height }: { r: 
         {toolbar && (
           <WindowToolbar label={name}>
             <ToolbarGroup>
-              <ToolbarButton icon="chevron.left" label="Back" />
-              <ToolbarButton icon="chevron.right" label="Forward" />
+              <ToolbarButton icon="caret-left" label="Back" />
+              <ToolbarButton icon="caret-right" label="Forward" />
             </ToolbarGroup>
             <ToolbarSpacer />
             <ToolbarSearchField value="" onChange={() => {}} placeholder="Find" minWidth={70} />
-            <ToolbarButton icon="sidebar.right" label="Inspector" />
+            <ToolbarButton icon="sidebar-simple" label="Inspector" />
           </WindowToolbar>
         )}
         <div style={{ flex: 1, padding: "var(--space-1-5) var(--inset)", font: "var(--text-sm) var(--font-mono)", color: "var(--text)", lineHeight: 1.5, whiteSpace: "pre", overflow: "hidden" }}>
@@ -141,7 +141,7 @@ function Scene({ theme, r, height, label }: { theme: Theme; r: Recipe; height: n
       {label && <div style={{ font: "500 var(--text-xs) var(--font-ui)", color: "var(--text-dim)" }}>{label}</div>}
       <div style={{ display: "flex", gap: 10, minWidth: 0 }}>
         <Shell r={r} name="Files" icon="folder" toolbar={false} width={height * 0.45} height={height} />
-        <Shell r={r} name="zsh" icon="terminal" selected width="auto" height={height} />
+        <Shell r={r} name="zsh" icon="terminal-window" selected width="auto" height={height} />
         <Shell r={r} name="claude" icon="sparkle" width="auto" height={height} />
       </div>
     </div>

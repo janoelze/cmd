@@ -18,8 +18,8 @@ import { countRender } from "../lib/perf.ts";
 import { dragFiles, dragLink } from "../lib/drags.ts";
 import { useActingMark } from "../lib/acting.ts";
 
-/** SF Symbol for a window kind (from the core's window type registry). */
-export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "macwindow";
+/** The icon for a window kind (from the core's window type registry). */
+export const iconFor = (kind: string) => typeFor(kind)?.icon ?? "app-window";
 
 /** The file or folder a window shows, if any: what dragging its Mark drags. */
 export function fileOf(row: SidebarRow): string | null {

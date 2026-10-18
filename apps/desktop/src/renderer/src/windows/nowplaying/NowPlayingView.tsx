@@ -30,8 +30,8 @@ export function NowPlayingView({ win }: WindowViewProps) {
 function NoCover() {
   return (
     <div className="np-nocover">
-      <Icon name="music.note" size={40} weight="light" className="np-nocover-lg" />
-      <Icon name="music.note" size={18} className="np-nocover-sm" />
+      <Icon name="music-note" size={40} weight="light" className="np-nocover-lg" />
+      <Icon name="music-note" size={18} className="np-nocover-sm" />
     </div>
   );
 }
@@ -48,7 +48,7 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
   const reported = useMemo(() => (np ? nowPlayingPosition(np) : null), [np]);
 
   if (np === undefined) return <View />;
-  if (np === null) return <View state={{ kind: "empty", icon: "music.note", title: "Nothing playing", text: "Play something in Music, Spotify or a browser and it shows here." }} />;
+  if (np === null) return <View state={{ kind: "empty", icon: "music-note", title: "Nothing playing", text: "Play something in Music, Spotify or a browser and it shows here." }} />;
   const pos = nowPlayingPosition(np, now);
   return (
     <View>
@@ -72,9 +72,9 @@ export function NowPlayingCard({ np, onControl }: { np: NowPlaying | null | unde
             </div>
           )}
           <div className="np-controls">
-            <IconButton icon="backward.fill" label="Previous" onClick={() => onControl({ command: "previous" })} />
-            <IconButton icon={np.playing ? "pause.fill" : "play.fill"} label={np.playing ? "Pause" : "Play"} onClick={() => onControl({ command: "toggle" })} />
-            <IconButton icon="forward.fill" label="Next" onClick={() => onControl({ command: "next" })} />
+            <IconButton icon="skip-back" label="Previous" onClick={() => onControl({ command: "previous" })} />
+            <IconButton icon={np.playing ? "pause" : "play"} label={np.playing ? "Pause" : "Play"} onClick={() => onControl({ command: "toggle" })} />
+            <IconButton icon="skip-forward" label="Next" onClick={() => onControl({ command: "next" })} />
           </div>
         </div>
       </div>

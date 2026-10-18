@@ -36,7 +36,7 @@ body { background: var(--bg); color: var(--text); font: var(--text-base) / 1.35 
 .choice p { margin: 0; color: var(--text-dim); }
 .choice > .ui-button { margin-top: var(--space-1); }
 .steps { margin: 0; padding-left: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); color: var(--text); }
-.steps .sf { vertical-align: text-bottom; color: var(--accent); }
+.steps .ui-icon { vertical-align: text-bottom; color: var(--accent); }
 
 /* The camera, full screen, with a square to aim at and the hint under it. */
 .scanner { position: fixed; inset: 0; z-index: 30; background: var(--bg); }

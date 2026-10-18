@@ -230,16 +230,16 @@ export function ImageView({ win, focused }: WindowViewProps) {
       scroll={false}
       toolbar={
         <WindowToolbar label="Image">
-          <ToolbarButton icon="chevron.left" label="Previous Image" shortcut="←" disabled={index <= 0} onClick={() => go(index - 1)} priority={2} />
-          <ToolbarButton icon="chevron.right" label="Next Image" shortcut="→" disabled={index < 0 || index >= siblings.length - 1} onClick={() => go(index + 1)} priority={2} />
+          <ToolbarButton icon="caret-left" label="Previous Image" shortcut="←" disabled={index <= 0} onClick={() => go(index - 1)} priority={2} />
+          <ToolbarButton icon="caret-right" label="Next Image" shortcut="→" disabled={index < 0 || index >= siblings.length - 1} onClick={() => go(index + 1)} priority={2} />
           {siblings.length > 1 && index >= 0 && <ToolbarText>{`${index + 1} of ${siblings.length}`}</ToolbarText>}
           <ToolbarSpacer />
           <ToolbarSeparator />
-          <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!nat} onClick={() => step(-1)} priority={1} />
+          <ToolbarButton icon="magnifying-glass-minus" label="Zoom Out" shortcut="⌘−" disabled={!nat} onClick={() => step(-1)} priority={1} />
           <ToolbarMenu label="Zoom" disabled={!nat} onClick={zoomMenu} priority={3}>
             {zoom === "fit" ? "Fit" : pct(zoom)}
           </ToolbarMenu>
-          <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!nat} onClick={() => step(1)} priority={1} />
+          <ToolbarButton icon="magnifying-glass-plus" label="Zoom In" shortcut="⌘+" disabled={!nat} onClick={() => step(1)} priority={1} />
         </WindowToolbar>
       }
     >

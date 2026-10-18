@@ -3,7 +3,7 @@
   "kit": 3,
   "kind": "widget",
   "title": "CI · acme/shop",
-  "icon": "checkmark.seal",
+  "icon": "seal-check",
   "size": "m",
   "refresh": 60,
   "permissions": { "net": [], "run": ["gh"], "env": [], "read": [] },

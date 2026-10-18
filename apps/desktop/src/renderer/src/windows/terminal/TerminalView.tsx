@@ -75,7 +75,7 @@ export const TerminalView = memo(function TerminalView(p: { paneId: PaneId; focu
       />
       {progress && <ProgressBar p={progress} />}
       {sizedBy && (
-        <Toast className="term-sized" icon="iphone" action={{ label: "Take Back", run: () => void cmd.call("pane.reclaim", { paneId }).then(() => terminals.focus(paneId)) }}>
+        <Toast className="term-sized" icon="device-mobile" action={{ label: "Take Back", run: () => void cmd.call("pane.reclaim", { paneId }).then(() => terminals.focus(paneId)) }}>
           Sized for {sizedBy} · {cols}×{rows}
         </Toast>
       )}

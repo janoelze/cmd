@@ -11,7 +11,7 @@
 import type * as React from "react";
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { IconButton } from "./button.tsx";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, iconNode, type IconName } from "./icon.tsx";
 import { Spinner, type Tone } from "./status.tsx";
 import { GLIDE_MS, timing, usePresence } from "./motion.ts";
 import type { SpaceStep, TextSize } from "./tokens.gen.ts";
@@ -66,7 +66,7 @@ export function Hide({ below, above, children }: { below?: "narrow" | "regular";
 /** What a view shows instead of its content. */
 export type ViewStateSpec =
   | { kind: "loading"; title?: ReactNode }
-  | { kind: "empty"; icon?: string; title: ReactNode; text?: ReactNode; action?: ReactNode }
+  | { kind: "empty"; icon?: IconName; title: ReactNode; text?: ReactNode; action?: ReactNode }
   | { kind: "noResults"; title?: ReactNode; text?: ReactNode; action?: ReactNode }
   | { kind: "error"; title: ReactNode; text?: ReactNode; action?: ReactNode };
 
@@ -82,7 +82,7 @@ export function ViewState({ state }: { state: ViewStateSpec }) {
         {state.title && <div className="ui-viewstate-text">{state.title}</div>}
       </div>
     );
-  const icon = state.kind === "empty" ? state.icon : state.kind === "noResults" ? "magnifyingglass" : "exclamationmark.triangle";
+  const icon = state.kind === "empty" ? state.icon : state.kind === "noResults" ? "magnifying-glass" : "warning";
   const title = state.kind === "noResults" ? (state.title ?? "No results") : state.title;
   return (
     <div className="ui-viewstate" data-kind={state.kind} role={state.kind === "error" ? "alert" : undefined}>
@@ -125,7 +125,7 @@ export function TitleBand({ title, line, back }: { title?: ReactNode; line?: boo
     <header className="ui-title-band" data-line={line || undefined}>
       {title != null && (
         <h1 className="ui-page">
-          {back && <IconButton className="ui-title-band-back" icon="chevron.left" label={back.label} shortcut="Esc" onClick={back.onClick} />}
+          {back && <IconButton className="ui-title-band-back" icon="caret-left" label={back.label} shortcut="Esc" onClick={back.onClick} />}
           {title}
         </h1>
       )}

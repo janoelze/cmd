@@ -150,7 +150,7 @@ function Changes({ win, info, working, onRun }: { win: AppWindow; info: MagicWid
         </Inline>
       </FormSection>
       <FormSection title="Versions" aside={info?.edited ? "files edited since the last version" : undefined} plain>
-        {!revisions.length && <EmptyState compact icon="clock.arrow.circlepath" title="No versions yet" />}
+        {!revisions.length && <EmptyState compact icon="clock-counter-clockwise" title="No versions yet" />}
         <List>
           {revisions.map((r) => {
             const current = r.n === s.revision;

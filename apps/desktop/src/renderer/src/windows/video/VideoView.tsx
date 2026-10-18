@@ -164,7 +164,7 @@ export function VideoView({ win, focused, api = realApi, initialTrim }: WindowVi
   const kept = trim ? trim.end - trim.start : 0;
   const bar = (
     <WindowToolbar label="Video" bottom>
-      <ToolbarButton icon={playing ? "pause.fill" : "play.fill"} label={playing ? "Pause" : "Play"} shortcut="Space" disabled={!duration} onClick={toggle} />
+      <ToolbarButton icon={playing ? "pause" : "play"} label={playing ? "Pause" : "Play"} shortcut="Space" disabled={!duration} onClick={toggle} />
       {trim ? (
         <>
           <ToolbarText priority={1}>
@@ -184,7 +184,7 @@ export function VideoView({ win, focused, api = realApi, initialTrim }: WindowVi
           </ToolbarMenu>
           <ToolbarGroup>
             <ToolbarButton icon="repeat" label="Loop" pressed={loop} onClick={() => (setLoop(!loop), save({ loop: !loop }))} priority={1} />
-            <ToolbarButton icon={muted ? "speaker.slash" : "speaker.wave.2"} label={muted ? "Unmute" : "Mute"} pressed={muted} onClick={() => (setMuted(!muted), save({ muted: !muted }))} priority={1} />
+            <ToolbarButton icon={muted ? "speaker-slash" : "speaker-high"} label={muted ? "Unmute" : "Mute"} pressed={muted} onClick={() => (setMuted(!muted), save({ muted: !muted }))} priority={1} />
           </ToolbarGroup>
           <ToolbarButton icon="scissors" label="Trim" shortcut="⌘T" disabled={!duration || !trimmable} tip={trimmable ? undefined : "WebM videos can't be trimmed"} onClick={startTrim} priority={3} />
         </>

@@ -19,8 +19,8 @@ export const Conversation = () => (
         <ChatStep icon="play" title="Running the tests" state="done" target="pnpm test" onTarget={() => {}} time="14.2s">
           <CodeBlock>{"pnpm test\n✗ 2 failed, 312 passed"}</CodeBlock>
         </ChatStep>
-        <ChatStep icon="text.alignleft" title="Reading the failures" state="done" quiet target="pnpm test" onTarget={() => {}} time="0.2s" />
-        <ChatStep icon="person.badge.plus" title="Starting Claude on the failing parser test" state="running" target="Claude · parser" onTarget={() => {}} />
+        <ChatStep icon="text-align-left" title="Reading the failures" state="done" quiet target="pnpm test" onTarget={() => {}} time="0.2s" />
+        <ChatStep icon="user-plus" title="Starting Claude on the failing parser test" state="running" target="Claude · parser" onTarget={() => {}} />
       </Stack>
       <ChatMessage from="agent" copy="Two tests fail in `osc.test.ts`. Claude is on it in its own terminal; I'll tell you when it's done.">
         <p>
@@ -63,7 +63,7 @@ export const Steps = () => (
       <ChatStep icon="eye" title="Looking at the board" state="done" quiet time="0.1s" />
       <ChatStep icon="play" title="Running the dev server" state="running" target="pnpm dev" onTarget={() => {}} />
       <ChatStep icon="keyboard" title="Typing the migration command" state="waiting" target="zsh — api" onTarget={() => {}} />
-      <ChatStep icon="xmark.circle" title="Closing the build terminal" state="failed" target="build" time="0.0s">
+      <ChatStep icon="x-circle" title="Closing the build terminal" state="failed" target="build" time="0.0s">
         <CodeBlock tone="danger">w6 is closed: look again</CodeBlock>
       </ChatStep>
       <ChatStep icon="keyboard" title="Typing rm -rf dist" state="denied" target="zsh — api" />

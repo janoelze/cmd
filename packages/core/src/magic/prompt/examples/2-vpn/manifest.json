@@ -3,7 +3,7 @@
   "kit": 3,
   "kind": "widget",
   "title": "VPN",
-  "icon": "lock.shield",
+  "icon": "shield-check",
   "size": "s",
   "refresh": 10,
   "permissions": { "net": [], "run": ["ifconfig", "netstat", "scutil"], "env": [], "read": [] }

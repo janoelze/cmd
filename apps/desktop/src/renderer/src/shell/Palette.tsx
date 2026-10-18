@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SearchStatus } from "@cmd/protocol";
-import { Highlight, ICON, iconNode, reducedMotion, timing } from "@cmd/ui";
+import { Highlight, ICON, iconNode, reducedMotion, timing, type IconName } from "@cmd/ui";
 import { IndexRing } from "../components/IndexRing.tsx";
 
 export interface PaletteItem {
@@ -8,8 +8,8 @@ export interface PaletteItem {
   /** "Commands", "Sessions", "Workspaces", "Windows", "Widgets"… */
   group: string;
   label: string;
-  /** SF Symbol before the label. */
-  icon?: string;
+  /** The icon before the label. */
+  icon?: IconName;
   hint?: string;
   /** Second line (search results): agent · folder · when. */
   meta?: string;

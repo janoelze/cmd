@@ -11,7 +11,7 @@ const FIXTURE = "apps/desktop/src/renderer/src/reference/fixtures/manual.pdf";
 function Pdf({ rel = FIXTURE, size = "wide", state = {} }: { rel?: string; size?: SizeName; state?: Record<string, unknown> }) {
   const path = useRepoFile(rel);
   return (
-    <RefWindow icon="doc.richtext" name={rel.split("/").pop()!} size={size}>
+    <RefWindow icon="article" name={rel.split("/").pop()!} size={size}>
       {path && <PdfView win={storyWindow("pdf", { path, ...state })} focused={false} />}
     </RefWindow>
   );

@@ -76,7 +76,7 @@ export function QuickSheet({
     <Dialog
       open={open}
       onClose={onClose}
-      window={{ icon: "bolt", name: command.name }}
+      window={{ icon: "lightning", name: command.name }}
       width={520}
       position="center"
       divided

@@ -483,7 +483,7 @@ await scenario("chrome", async () => {
   // Icons sit on whole pixels, exactly centred in their buttons.
   const offsets = await win.locator(".statusbar :is(.ui-icon-button, .ui-seg button)").evaluateAll((btns) =>
     btns.map((b) => {
-      const s = b.querySelector(".sf").getBoundingClientRect();
+      const s = b.querySelector(".ui-icon").getBoundingClientRect();
       const r = b.getBoundingClientRect();
       return [s.left - r.left - (r.right - s.right), s.top - r.top - (r.bottom - s.bottom), s.width % 1, s.height % 1];
     }),
@@ -2463,7 +2463,7 @@ await scenario("workspaces", async () => {
   check(rows[0]?.includes("Home") && rows[1]?.includes("proj"), `the switcher's menu keeps the switcher's order, not recency (${rows.join(" | ")})`);
   await shot(win, "8-workspace-menu.png");
   await win.keyboard.press("Escape");
-  // Change Icon…: the grid picker sets an SF Symbol on the workspace, shown in the switcher.
+  // Change Icon…: the grid picker sets a Phosphor icon on the workspace, shown in the switcher.
   await win.evaluate((id) => window.cmd.call("workspace.update", { id, icon: null }), "home");
   await menu("workspace.icon");
   await win.locator(".icon-picker").waitFor();

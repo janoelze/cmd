@@ -49,8 +49,8 @@ function Inspector({ run }: { run: Run }) {
         />
       </Pane>
       <Inline gap={1.5} wrap>
-        <Button icon="arrow.clockwise">Run Again</Button>
-        <Button variant="ghost" icon="doc.text">Logs</Button>
+        <Button icon="arrow-clockwise">Run Again</Button>
+        <Button variant="ghost" icon="file-text">Logs</Button>
       </Inline>
     </Stack>
   );
@@ -73,7 +73,7 @@ function Runs({ state, size = "wide", initialQuery = "" }: { state?: ViewStateSp
     rows.length === 0 ? { kind: "noResults", text: `Nothing matches “${q}”.`, action: <Button onClick={() => (setQ(""), setFilter("all"))}>Clear Filter</Button> } : undefined;
 
   return (
-    <RefWindow icon="checklist" name="CI Runs · cmd" size={size}>
+    <RefWindow icon="list-checks" name="CI Runs · cmd" size={size}>
       <View
         toolbar={
           <WindowToolbar label="Runs">
@@ -89,8 +89,8 @@ function Runs({ state, size = "wide", initialQuery = "" }: { state?: ViewStateSp
               ]}
             />
             <ToolbarSpacer />
-            <ToolbarButton icon="arrow.clockwise" label="Refresh" shortcut="⌘R" secondary priority={1} />
-            <ToolbarButton icon="sidebar.right" label={inspector ? "Hide Inspector" : "Show Inspector"} pressed={inspector} onClick={() => setInspector((v) => !v)} priority={3} />
+            <ToolbarButton icon="arrow-clockwise" label="Refresh" shortcut="⌘R" secondary priority={1} />
+            <ToolbarButton icon="sidebar-simple" label={inspector ? "Hide Inspector" : "Show Inspector"} pressed={inspector} onClick={() => setInspector((v) => !v)} priority={3} />
           </WindowToolbar>
         }
         footer={
@@ -131,6 +131,6 @@ function Runs({ state, size = "wide", initialQuery = "" }: { state?: ViewStateSp
 export const Default = () => <Runs />;
 export const Sizes = () => <AllSizes render={(s) => <Runs size={s} />} />;
 export const Loading = () => <Runs state={{ kind: "loading" }} />;
-export const Empty = () => <Runs state={{ kind: "empty", icon: "checklist", title: "No runs yet", text: "Runs show here once this repository's workflows start.", action: <Button>Open Workflows</Button> }} />;
+export const Empty = () => <Runs state={{ kind: "empty", icon: "list-checks", title: "No runs yet", text: "Runs show here once this repository's workflows start.", action: <Button>Open Workflows</Button> }} />;
 export const NoResults = () => <Runs initialQuery="deploy" />;
-export const Failed = () => <Runs state={{ kind: "error", title: "Couldn’t load runs", text: "GitHub didn’t answer. Check your connection and try again.", action: <Button icon="arrow.clockwise">Try Again</Button> }} />;
+export const Failed = () => <Runs state={{ kind: "error", title: "Couldn’t load runs", text: "GitHub didn’t answer. Check your connection and try again.", action: <Button icon="arrow-clockwise">Try Again</Button> }} />;

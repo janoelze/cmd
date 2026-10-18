@@ -59,10 +59,10 @@ export const Progresses = () => {
 export const Live = () => (
   <div style={{ display: "flex", gap: "var(--space-5)", alignItems: "center" }}>
     <span style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-      zsh <LiveBadge icon="iphone" tip="Watched from iPhone" />
+      zsh <LiveBadge icon="device-mobile" tip="Watched from iPhone" />
     </span>
     <span style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-      claude <LiveBadge icon="iphone" note="typed from iPhone" tip="Watched from iPhone" />
+      claude <LiveBadge icon="device-mobile" note="typed from iPhone" tip="Watched from iPhone" />
     </span>
   </div>
 );

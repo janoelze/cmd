@@ -387,14 +387,14 @@ export function JamView({ win }: WindowViewProps) {
     <div className="jam">
       <WindowToolbar>
         <ToolbarGroup>
-          <ToolbarButton icon={mode === "playing" ? "pause.fill" : "play.fill"} label={mode === "playing" ? "Pause" : "Play"} showLabel onClick={togglePlay} />
-          <ToolbarButton icon="stop.fill" label="Stop" shortcut="⌘." disabled={mode === "stopped"} onClick={stop} />
-          <ToolbarButton icon="arrow.clockwise" label="Update" shortcut="⌘R" showLabel tone={dirty ? "accent" : undefined} disabled={!dirty} onClick={() => void play()} />
+          <ToolbarButton icon={mode === "playing" ? "pause" : "play"} label={mode === "playing" ? "Pause" : "Play"} showLabel onClick={togglePlay} />
+          <ToolbarButton icon="stop" label="Stop" shortcut="⌘." disabled={mode === "stopped"} onClick={stop} />
+          <ToolbarButton icon="arrow-clockwise" label="Update" shortcut="⌘R" showLabel tone={dirty ? "accent" : undefined} disabled={!dirty} onClick={() => void play()} />
         </ToolbarGroup>
         <ToolbarSpacer />
         <ToolbarButton
           ref={renderButton}
-          icon="square.and.arrow.down"
+          icon="download-simple"
           label="Render to Audio"
           priority={2}
           pressed={renderOpen}

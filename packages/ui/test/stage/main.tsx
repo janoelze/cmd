@@ -1,6 +1,6 @@
 // The kit's stories in a plain browser, for tests (docs/48): one variant of a story file in
 // src/ on an empty page, as an app window holds it (the kit's styles, a theme, tooltips,
-// scrollbars; Lucide icons, no bridge). ?story=<file name>&variant=<export>&theme=<id>
+// scrollbars, icons; no bridge). ?story=<file name>&variant=<export>&theme=<id>
 // (?story=overlay&variant=Sheets&theme=dark). The UI Workbench shows the same stories in the
 // real app; this page is for Chromium in tests (stories.test.ts, dialog.test.ts).
 // A test can change the URL in place (history.replaceState, then a "stage:url" event) and

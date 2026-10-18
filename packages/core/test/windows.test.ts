@@ -101,7 +101,7 @@ describe("window type registry", () => {
     const preview: WindowType<{ path: string }> = {
       kind: "markdown-preview",
       title: "Markdown Preview",
-      icon: "doc.richtext",
+      icon: "article",
       opens: { extensions: ["md"], priority: 20 },
       fromTarget: (tg) => ({ path: tg.type === "path" ? tg.path : "" }),
       create: (input) => ({ state: { path: String(input.path) }, title: "Preview" }),
@@ -113,7 +113,7 @@ describe("window type registry", () => {
     const { wins } = make(t, {}, path.join(dir, "plugin.sqlite"));
     const w = wins.openTarget(path.join(dir, "notes.md"), workspace)!;
     expect(w).toMatchObject({ kind: "markdown-preview", title: "Preview", state: { path: path.join(dir, "notes.md") } });
-    expect(t.info().find((i) => i.kind === "markdown-preview")).toMatchObject({ icon: "doc.richtext", opens: { extensions: ["md"] } });
+    expect(t.info().find((i) => i.kind === "markdown-preview")).toMatchObject({ icon: "article", opens: { extensions: ["md"] } });
   });
 
   it("gives the shell the same rules", () => {

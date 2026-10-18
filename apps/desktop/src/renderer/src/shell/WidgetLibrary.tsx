@@ -5,7 +5,7 @@
 // an avatar: a built-in widget's icon, else the widget's initial, in a colour
 // of its own from its name (as projects' chips in the sidebar).
 
-import { Button, Callout, Dialog, EmptyState, IconButton, Presence, SearchField, SectionHeading, TextField, iconNode } from "@cmd/ui";
+import { Button, Callout, Dialog, EmptyState, IconButton, Presence, SearchField, SectionHeading, TextField, iconNode, iconOr } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WidgetEntry } from "@cmd/protocol";
 import { cmd } from "../lib/bridge.ts";
@@ -92,7 +92,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
   const card = (e: WidgetEntry) => (
     <div key={e.ref} className="wl-card" role="button" tabIndex={0} onClick={() => void add(e)} onKeyDown={(k) => k.key === "Enter" && void add(e)} onContextMenu={(ev) => (ev.preventDefault(), menu(e))}>
       <span className="wl-avatar" data-source={e.source} style={{ ["--hue" as string]: projectHue(e.title) }}>
-        {e.source === "builtin" ? iconNode(e.icon, 20) : <span className="wl-initial">{initial(e.title)}</span>}
+        {e.source === "builtin" ? iconNode(iconOr(e.icon, "sparkle"), 20) : <span className="wl-initial">{initial(e.title)}</span>}
       </span>
       <span className="wl-head">
         <span className="wl-title">
@@ -101,7 +101,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
         <span className="wl-source">{sourceOf(e)}</span>
       </span>
       {(e.description || e.request) && <span className="wl-desc">{e.description || e.request}</span>}
-      <IconButton className="wl-more" icon="ellipsis" size="sm" label="More" onClick={(ev) => (ev.stopPropagation(), menu(e))} />
+      <IconButton className="wl-more" icon="dots-three" size="sm" label="More" onClick={(ev) => (ev.stopPropagation(), menu(e))} />
     </div>
   );
 
@@ -109,7 +109,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
     <Dialog
       open={open}
       onClose={onClose}
-      window={{ icon: "square.grid.2x2", name: "Widget Library" }}
+      window={{ icon: "squares-four", name: "Widget Library" }}
       width={720}
       height={640}
       position="center"
@@ -131,7 +131,7 @@ export function WidgetLibrary({ open = true, onClose }: { open?: boolean; onClos
       }
       aside="Right-click a widget to rename, duplicate or delete it"
       actions={
-        <Button variant="primary" icon="sparkles" onClick={make}>
+        <Button variant="primary" icon="sparkle" onClick={make}>
           New Widget
         </Button>
       }

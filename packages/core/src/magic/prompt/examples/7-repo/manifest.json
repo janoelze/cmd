@@ -3,7 +3,7 @@
   "kit": 3,
   "kind": "widget",
   "title": "shop · changes",
-  "icon": "arrow.triangle.branch",
+  "icon": "git-branch",
   "size": "l",
   "refresh": 30,
   "permissions": { "net": [], "run": ["git"], "env": [], "read": [] },

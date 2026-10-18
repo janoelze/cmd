@@ -142,7 +142,7 @@ export const AiField = forwardRef<HTMLTextAreaElement, AiFieldProps>(function Ai
           {trail(TRAIL)}
         </span>
         <span className="ui-ai-mark" aria-hidden>
-          <Icon name={settling && state === "done" ? "checkmark" : "sparkles"} size={GLYPHS[size].mark} weight={settling && state === "done" ? "semibold" : undefined} />
+          <Icon name={settling && state === "done" ? "check" : "sparkle"} size={GLYPHS[size].mark} weight={settling && state === "done" ? "bold" : undefined} />
         </span>
         <textarea
           ref={area}
@@ -160,11 +160,11 @@ export const AiField = forwardRef<HTMLTextAreaElement, AiFieldProps>(function Ai
         />
         {working && onStop ? (
           <button type="button" className="ui-ai-send" data-stop aria-label="Stop" data-tip="Stop (Esc)" onClick={onStop}>
-            <Icon name="stop.fill" size={GLYPHS[size].stop} />
+            <Icon name="stop" size={GLYPHS[size].stop} />
           </button>
         ) : (
           <button type="button" className="ui-ai-send" aria-label="Send" data-tip="Send (↩)" disabled={!canSend} onMouseDown={(e) => e.preventDefault()} onClick={send}>
-            <Icon name="arrow.up" size={GLYPHS[size].send} weight="semibold" />
+            <Icon name="arrow-up" size={GLYPHS[size].send} weight="bold" />
           </button>
         )}
       </div>
@@ -175,7 +175,7 @@ export const AiField = forwardRef<HTMLTextAreaElement, AiFieldProps>(function Ai
       {state === "error" && (error || action) && (
         <div className="ui-ai-error" role="alert">
           <span className="ui-ai-glyph">
-            <Icon name="exclamationmark.triangle.fill" size={ICON.control - 1} />
+            <Icon name="warning" size={ICON.control - 1} />
           </span>
           <span className="ui-ai-error-text" data-tip={typeof error === "string" && error.length > 60 ? error : undefined}>
             {error}

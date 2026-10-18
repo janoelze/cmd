@@ -4,12 +4,11 @@
 // is in, with what access, watching which windows; disconnect in one click),
 // and the notifications that go with them.
 
-import { Badge, Button, IconButton, Inline, ListRow, ListRowContent, ListRowEnd, ListRowIcon, LiveBadge, Popover, Separator, Spacer, Stack, Text, useTooltip } from "@cmd/ui";
+import { Badge, Button, Icon, ICON, IconButton, Inline, ListRow, ListRowContent, ListRowEnd, ListRowIcon, LiveBadge, Popover, Separator, Spacer, Stack, Text, useTooltip } from "@cmd/ui";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { RemoteStatus } from "@cmd/protocol";
 import { cmd } from "../lib/bridge.ts";
 import { getState, useStoreValue } from "../lib/store.ts";
-import { ICON, Symbol } from "./Symbol.tsx";
 import { scopeLabel } from "./PairPrompt.tsx";
 
 export { PairSheet } from "./PairPrompt.tsx";
@@ -43,7 +42,7 @@ export function RemoteBadge({ id, compact = false }: { id: string | null; compac
   const typed = useStoreValue((s) => (id ? s.remoteInput.get(id) : undefined));
   if (!watchers.length && !typed) return null;
   return (
-    <LiveBadge icon="iphone" note={typed && !compact ? `typed from ${typed}` : undefined} tip={typed ? `${typed} typed here` : `Watched from ${watchers.join(", ")}`} />
+    <LiveBadge icon="device-mobile" note={typed && !compact ? `typed from ${typed}` : undefined} tip={typed ? `${typed} typed here` : `Watched from ${watchers.join(", ")}`} />
   );
 }
 
@@ -79,7 +78,7 @@ export function RemoteIndicator() {
         className="remote-indicator"
         tone={tone}
         pulse={asking}
-        icon={names.length ? "iphone.radiowaves.left.and.right" : "iphone"}
+        icon={names.length ? "broadcast" : "device-mobile"}
         label={tip}
         // The rich tooltip (tipRef) stands in for the plain one.
         data-tip={undefined}
@@ -102,7 +101,7 @@ function RemoteTip({ status }: { status: RemoteStatus }) {
       {status.state === "error" && status.error && <div className="tip-dim">{status.error}</div>}
       {requests.map((r) => (
         <Inline key={r.requestId} gap={2} align="start">
-          <Symbol name="iphone" size={ICON.small} />
+          <Icon name="device-mobile" size={ICON.small} />
           <span>
             <b>{r.name}</b> is waiting for you to allow it
           </span>
@@ -110,7 +109,7 @@ function RemoteTip({ status }: { status: RemoteStatus }) {
       ))}
       {sessions.map((s) => (
         <Inline key={s.id} gap={2} align="start">
-          <Symbol name="iphone.radiowaves.left.and.right" size={ICON.small} />
+          <Icon name="broadcast" size={ICON.small} />
           <span>
             <b>{s.name}</b> <Badge tone={s.scope === "control" ? "accent" : "neutral"}>{scopeLabel(s.scope)}</Badge>
             <div className="tip-dim">
@@ -146,13 +145,13 @@ function RemotePopover({ anchor, status, onClose }: { anchor: RefObject<HTMLElem
         <div>
           {status.requests.map((r) => (
             <ListRow key={r.requestId}>
-              <ListRowIcon icon="iphone" />
+              <ListRowIcon icon="device-mobile" />
               <ListRowContent title={<span><b>{r.name}</b> is waiting for you to allow it</span>} />
             </ListRow>
           ))}
           {sessions.map((s) => (
             <ListRow key={s.id}>
-              <ListRowIcon icon="iphone.radiowaves.left.and.right" />
+              <ListRowIcon icon="broadcast" />
               <ListRowContent
                 title={
                   <span>

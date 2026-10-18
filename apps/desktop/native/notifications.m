@@ -1,6 +1,6 @@
 // Whether macOS lets cmd show notifications, and asking it to (Settings →
 // Notifications, src/main/notify-permission.ts). A Node-API addon, not a helper
-// process like sfsymbols: macOS answers for the app that asks, so this runs in
+// process: macOS answers for the app that asks, so this runs in
 // Electron main. Built by scripts/postinstall.mjs with plain clang; Node-API is
 // a stable C ABI, so the few functions used are declared here instead of
 // needing Node's or Electron's headers.

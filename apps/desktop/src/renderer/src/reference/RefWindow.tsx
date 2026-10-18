@@ -4,13 +4,13 @@
 // where it has to hold up: a narrow strip, a regular tile, a wide one.
 // The contents are built from @cmd/ui only; these files hold no view CSS.
 
-import { Window, WindowBar, WindowBody, WindowFrame } from "@cmd/ui";
+import { Window, WindowBar, WindowBody, WindowFrame, type IconName } from "@cmd/ui";
 import type { ReactNode } from "react";
 
 export const SIZES = { narrow: [320, 520], regular: [560, 460], wide: [900, 560] } as const;
 export type SizeName = keyof typeof SIZES;
 
-export function RefWindow({ icon, name, size = "wide", children }: { icon: string; name: string; size?: SizeName | readonly [number, number]; children: ReactNode }) {
+export function RefWindow({ icon, name, size = "wide", children }: { icon: IconName; name: string; size?: SizeName | readonly [number, number]; children: ReactNode }) {
   const [width, height] = typeof size === "string" ? SIZES[size] : size;
   return (
     <Window selected style={{ width, height, position: "relative", flex: "none" }}>

@@ -25,7 +25,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, iconNode, type IconLike, type IconName } from "./icon.tsx";
 import { Menu, type MenuItemProps } from "./overlay.tsx";
 
 const cls = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
@@ -33,7 +33,7 @@ const cls = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).j
 /** What the ⋯ menu shows for an item that moved there. */
 interface OverflowEntry {
   label: string;
-  icon?: string | ReactNode;
+  icon?: IconLike;
   shortcut?: string;
   checked?: boolean;
   disabled?: boolean;
@@ -146,7 +146,7 @@ export function WindowToolbar({
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((o) => !o)}
         >
-          {iconNode("ellipsis", ICON.toolbar)}
+          {iconNode("dots-three", ICON.toolbar)}
         </button>
       </div>
       <Menu anchor={more} open={menuOpen && entries.length > 0} onClose={() => setMenuOpen(false)} items={entries} align="end" width={220} label="More" />
@@ -158,7 +158,7 @@ export function WindowToolbar({
 
 export interface ToolbarButtonProps extends ItemProps {
   /** Without one, it's a text button: the label always shows. */
-  icon?: string | ReactNode;
+  icon?: IconLike;
   /** The tooltip, the accessible name, its ⋯ menu entry, and its text where `showLabel`. */
   label: string;
   shortcut?: string;
@@ -207,27 +207,27 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(f
       {p.icon !== undefined && iconNode(p.icon, ICON.toolbar)}
       {p.icon === undefined ? <span className="ui-tb-text">{p.label}</span> : p.showLabel && <span className="ui-tb-label">{p.label}</span>}
       {p.badge != null && <span className="ui-tb-badge">{p.badge}</span>}
-      {p.menu && <span className="ui-tb-chevron">{iconNode("chevron.down", ICON.disclosure)}</span>}
+      {p.menu && <span className="ui-tb-chevron">{iconNode("caret-down", ICON.disclosure)}</span>}
     </button>
   );
 });
 
 /** Text that is a button: a zoom level that opens its menu, a branch. */
-export function ToolbarMenu(p: ItemProps & { children: ReactNode; label: string; icon?: string | ReactNode; disabled?: boolean; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; className?: string }) {
+export function ToolbarMenu(p: ItemProps & { children: ReactNode; label: string; icon?: IconLike; disabled?: boolean; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; className?: string }) {
   const own = useRef<HTMLButtonElement>(null);
   const key = useOverflow(p.priority === undefined ? null : { label: p.label, icon: p.icon, disabled: p.disabled, run: () => own.current?.click() });
   return (
     <button ref={own} type="button" className={cls("ui-tb-button ui-tb-menu", p.className)} {...itemAttrs(key, p)} aria-haspopup data-tip={p.label} aria-label={p.label} disabled={p.disabled} onClick={p.onClick}>
       {p.icon && iconNode(p.icon, ICON.toolbar)}
       <span className="ui-tb-text">{p.children}</span>
-      <span className="ui-tb-chevron">{iconNode("chevron.down", ICON.disclosure)}</span>
+      <span className="ui-tb-chevron">{iconNode("caret-down", ICON.disclosure)}</span>
     </button>
   );
 }
 
 export interface ToolbarFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   /** An icon inside, at the start (a magnifying glass for a filter). */
-  icon?: string;
+  icon?: IconName;
   /** The narrowest it gets, in px (default 80). */
   minWidth?: number;
   /** As wide as it gets, in px; without one it takes the room left. */
@@ -258,7 +258,7 @@ export const ToolbarSearchField = forwardRef<
   return (
     <ToolbarField
       ref={ref}
-      icon="magnifyingglass"
+      icon="magnifying-glass"
       className={cls("ui-tb-search", className)}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -274,7 +274,7 @@ export const ToolbarSearchField = forwardRef<
           {end}
           {value && (
             <button type="button" className="ui-tb-field-clear" aria-label="Clear" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => onChange("")}>
-              {iconNode("xmark.circle.fill", ICON.control + 2)}
+              {iconNode("x-circle", ICON.control + 2, "fill")}
             </button>
           )}
         </>
@@ -368,7 +368,7 @@ export function ToolbarSegmented<T extends string>({
   label,
 }: {
   value: T;
-  options: readonly { value: T; label: string; icon?: string; shortcut?: string; badge?: ReactNode }[];
+  options: readonly { value: T; label: string; icon?: IconName; shortcut?: string; badge?: ReactNode }[];
   onChange: (v: T) => void;
   label: string;
 }) {
@@ -381,7 +381,7 @@ export function ToolbarSegmented<T extends string>({
     <button ref={pop} type="button" className="ui-tb-button ui-tb-seg-pop" aria-haspopup aria-expanded={open} aria-label={label} data-tip={label} onClick={() => setOpen((o) => !o)}>
       {current?.icon && iconNode(current.icon, ICON.toolbar)}
       <span className="ui-tb-text">{current?.label}</span>
-      <span className="ui-tb-chevron">{iconNode("chevron.down", ICON.disclosure)}</span>
+      <span className="ui-tb-chevron">{iconNode("caret-down", ICON.disclosure)}</span>
     </button>
     <Menu anchor={pop} open={open} onClose={() => setOpen(false)} label={label} width={180} items={options.map((o) => ({ label: o.label, icon: o.icon, shortcut: o.shortcut, checked: o.value === value, onSelect: () => onChange(o.value) }))} />
     <div className="ui-tb-seg" role="radiogroup" aria-label={label}>
@@ -419,7 +419,7 @@ export function ToolbarPath({ segments, onSelect, onMenu, tip }: { segments: rea
         const last = i === segments.length - 1;
         return (
           <span key={s.key} className="ui-tb-path-seg" data-last={last || undefined}>
-            {i > 0 && <span className="ui-tb-path-sep">{iconNode("chevron.right", ICON.disclosure)}</span>}
+            {i > 0 && <span className="ui-tb-path-sep">{iconNode("caret-right", ICON.disclosure)}</span>}
             <button type="button" className="ui-tb-path-button" onClick={(e) => (last && onMenu ? onMenu(e) : onSelect(s.key))}>
               {s.label}
             </button>

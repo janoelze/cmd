@@ -1,53 +1,53 @@
-// A workspace's icon (an SF Symbol, marked with a dot when something
+// A workspace's icon (a Phosphor icon, marked with a dot when something
 // in it needs you or finished unseen) and the picker that sets it: a filterable
-// grid of symbols, or any SF Symbol name typed in full.
+// grid of icons, searched further among every Phosphor icon by name.
 
-import { Dialog, EmptyState, LinkButton } from "@cmd/ui";
+import { Dialog, EmptyState, Icon, ICON, ICONS, iconOr, LinkButton, type IconName } from "@cmd/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ICON_NAME, workspaceIcon, type Workspace } from "@cmd/protocol";
+import { workspaceIcon, type Workspace } from "@cmd/protocol";
 import { cmd } from "../lib/bridge.ts";
-import { ICON, Symbol } from "../components/Symbol.tsx";
 
 export function WorkspaceIcon(p: { workspace: Workspace; attention?: "needs" | "unseen"; size?: number }) {
   return (
     <span className={`workspace-icon ${p.attention ? `attn-${p.attention}` : ""}`}>
-      <Symbol name={workspaceIcon(p.workspace)} size={p.size ?? ICON.row} />
+      <Icon name={iconOr(workspaceIcon(p.workspace), "folder")} size={p.size ?? ICON.row} />
     </span>
   );
 }
 
-/** The grid: SF Symbol names, with extra words to find them by after a space. */
-const SYMBOLS = [
-  "house home", "folder", "terminal shell console", "chevron.left.forwardslash.chevron.right code html", "curlybraces code json",
-  "hammer build", "wrench.and.screwdriver tools", "gearshape settings config", "cpu chip", "memorychip",
-  "server.rack backend", "externaldrive disk", "cloud", "globe web site", "network",
-  "antenna.radiowaves.left.and.right", "arrow.triangle.branch git", "point.3.connected.trianglepath.dotted graph", "cube 3d", "shippingbox package",
-  "archivebox", "tray inbox", "doc.text document", "book docs", "books.vertical library",
-  "newspaper blog", "bookmark", "tag", "flag", "flag.checkered",
-  "bell", "envelope mail", "bubble.left.and.bubble.right chat", "paperplane send", "phone",
-  "person user", "person.2 team", "briefcase work", "building.2 company office", "storefront shop",
-  "cart shop", "creditcard payment", "dollarsign.circle money", "chart.bar stats", "chart.line.uptrend.xyaxis growth",
-  "chart.pie", "tablecells spreadsheet", "checklist todo", "list.bullet", "calendar",
-  "clock time", "map", "mappin", "location", "airplane travel",
-  "car", "bicycle", "tram", "sailboat", "mountain.2",
+/** The grid: Phosphor icons, with extra words to find them by after a space. */
+const GRID = [
+  "house home", "folder", "terminal-window shell console", "code html", "brackets-curly json",
+  "hammer build", "wrench tools", "gear settings config", "cpu chip", "memory",
+  "hard-drives server backend", "hard-drive disk", "cloud", "globe web site", "network",
+  "broadcast", "git-branch", "graph", "cube 3d", "package",
+  "archive", "tray inbox", "file-text document", "book docs", "books library",
+  "newspaper blog", "bookmark-simple", "tag", "flag", "flag-checkered",
+  "bell", "envelope mail", "chats chat", "paper-plane-tilt send", "phone",
+  "user person", "users team", "briefcase work", "buildings company office", "storefront shop",
+  "shopping-cart shop", "credit-card payment", "currency-circle-dollar money", "chart-bar stats", "chart-line-up growth",
+  "chart-pie", "table spreadsheet", "list-checks todo", "list-bullets", "calendar",
+  "clock time", "map-trifold", "map-pin", "navigation-arrow location", "airplane travel",
+  "car", "bicycle", "tram", "sailboat", "mountains",
   "tent camping", "leaf", "tree", "flame fire", "drop water",
-  "bolt lightning", "snowflake", "sun.max", "moon night", "star",
-  "heart", "sparkles ai", "wand.and.stars magic", "lightbulb idea", "brain ai",
-  "atom science", "flask lab", "testtube.2 test", "function math", "number",
-  "graduationcap school", "pencil", "paintbrush design", "paintpalette color", "scissors",
-  "photo image", "camera", "video", "film movie", "tv",
-  "display monitor", "laptopcomputer mac", "iphone mobile", "applewatch", "keyboard",
-  "gamecontroller game", "puzzlepiece plugin", "music.note", "headphones audio", "waveform sound",
-  "mic", "pianokeys", "guitars", "theatermasks", "trophy",
+  "lightning", "snowflake", "sun", "moon night", "star",
+  "heart", "sparkle ai", "magic-wand", "lightbulb idea", "brain ai",
+  "atom science", "flask lab", "test-tube", "function math", "hash number",
+  "graduation-cap school", "pencil-simple", "paint-brush design", "palette color", "scissors",
+  "image photo", "camera", "video-camera", "film-strip movie", "television tv",
+  "monitor display", "laptop mac", "device-mobile phone", "watch", "keyboard",
+  "game-controller game", "puzzle-piece plugin", "music-note", "headphones audio", "waveform sound",
+  "microphone", "piano-keys", "guitar", "mask-happy theatre", "trophy",
   "crown", "gift", "lock security", "key", "shield",
-  "eye", "magnifyingglass search", "ladybug bug", "ant", "tortoise slow",
-  "hare fast", "pawprint", "fish", "bird", "cup.and.saucer coffee",
-  "fork.knife food", "dumbbell fitness", "figure.run", "cross.case health", "app",
-  "square.grid.2x2 apps", "circle.hexagongrid", "square.stack.3d.up layers", "rectangle.3.group", "sparkle",
+  "eye", "magnifying-glass search", "bug", "bug-beetle", "rabbit fast",
+  "paw-print", "cat", "dog", "fish", "bird",
+  "coffee", "fork-knife food", "barbell fitness", "person-simple-run", "first-aid-kit health",
+  "app-window", "squares-four apps", "hexagon", "stack layers", "layout",
 ].map((s) => {
   const [name, ...words] = s.split(" ");
-  return { name: name!, words: `${name!.replace(/\./g, " ")} ${words.join(" ")}` };
+  return { name: name as IconName, words: `${name!.replace(/-/g, " ")} ${words.join(" ")}` };
 });
+const ALL = Object.keys(ICONS) as IconName[];
 
 const COLS = 10;
 
@@ -56,19 +56,21 @@ export function WorkspaceIconPicker(p: { open?: boolean; workspace: Workspace; o
   const [query, setQuery] = useState("");
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const hits = q ? SYMBOLS.filter((s) => q.split(/\s+/).every((w) => s.words.includes(w))).map((s) => s.name) : SYMBOLS.map((s) => s.name);
-    // Any SF Symbol, typed in full.
-    if (q && ICON_NAME.test(q) && !hits.includes(q)) hits.unshift(q);
+    if (!q) return GRID.map((s) => s.name);
+    const words = q.split(/[\s-]+/);
+    const hits = GRID.filter((s) => words.every((w) => s.words.includes(w))).map((s) => s.name);
+    // Then every other Phosphor icon whose name has the words.
+    for (const name of ALL) if (!hits.includes(name) && words.every((w) => name.includes(w))) hits.push(name);
     return hits;
   }, [query]);
-  const [active, setActive] = useState(() => Math.max(0, shown.indexOf(current)));
+  const [active, setActive] = useState(() => Math.max(0, shown.indexOf(current as IconName)));
   const grid = useRef<HTMLDivElement>(null);
   useEffect(() => setActive((a) => (query ? 0 : a)), [query]);
   useEffect(() => {
     grid.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
-  const set = (icon: string | null) => {
+  const set = (icon: IconName | null) => {
     p.onClose();
     void cmd.call("workspace.update", { id: p.workspace.id, icon }).catch(() => {});
   };
@@ -88,7 +90,7 @@ export function WorkspaceIconPicker(p: { open?: boolean; workspace: Workspace; o
       <input
         autoFocus
         className="palette-input"
-        placeholder={`Icon for ${p.workspace.name}: search, or type an SF Symbol name`}
+        placeholder={`Icon for ${p.workspace.name}: search`}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={onKeyDown}
@@ -105,10 +107,10 @@ export function WorkspaceIconPicker(p: { open?: boolean; workspace: Workspace; o
             onMouseEnter={() => setActive(i)}
             onClick={() => set(name)}
           >
-            <Symbol name={name} size={16} />
+            <Icon name={name} size={16} />
           </button>
         ))}
-        {!shown.length && <EmptyState compact>No icon matches. Type a full SF Symbol name, like “leaf.fill”.</EmptyState>}
+        {!shown.length && <EmptyState compact>No icon matches. Try another word, like “leaf”.</EmptyState>}
       </div>
       <footer className="palette-foot">
         <span className="icon-picker-name">{shown[active] ?? ""}</span>

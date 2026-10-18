@@ -3,7 +3,7 @@
   "kit": 3,
   "kind": "terminal",
   "title": "System errors",
-  "icon": "exclamationmark.triangle",
+  "icon": "warning",
   "size": "l",
   "refresh": 0,
   "command": "log stream --predicate 'messageType == error' --style compact"

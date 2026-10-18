@@ -15,7 +15,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { Button, IconButton, LinkButton } from "./button.tsx";
 import { TextField } from "./fields.tsx";
 import { Inline, Stack, Text } from "./frame.tsx";
-import { ICON, iconNode } from "./icon.tsx";
+import { ICON, iconNode, type IconName } from "./icon.tsx";
 import { Callout, CodeBlock } from "./layout.tsx";
 import { Spinner } from "./status.tsx";
 
@@ -47,7 +47,7 @@ function CopyButton({ text }: { text: string }) {
   }, [done]);
   return (
     <div className="ui-chat-msg-actions">
-      <IconButton size="sm" icon={done ? "checkmark" : "doc.on.doc"} label={done ? "Copied" : "Copy"} onClick={() => void navigator.clipboard.writeText(text).then(() => setDone(true), () => {})} />
+      <IconButton size="sm" icon={done ? "check" : "copy"} label={done ? "Copied" : "Copy"} onClick={() => void navigator.clipboard.writeText(text).then(() => setDone(true), () => {})} />
     </div>
   );
 }
@@ -55,17 +55,17 @@ function CopyButton({ text }: { text: string }) {
 export type ChatStepState = "running" | "waiting" | "done" | "failed" | "denied";
 
 /**
- * One step the agent took, drawn quieter than the conversation: `icon` (an SF Symbol; a spinner
+ * One step the agent took, drawn quieter than the conversation: `icon` (an icon; a spinner
  * while it runs, a warning when it failed), `title` (its why),
  * `target` (a chip for the window it is about; clicking it goes there), `time` at the end. With
  * `children`, a click opens them under the row (the input and result). `quiet`: a step that only looked.
  */
-export function ChatStep({ icon, title, state, target, onTarget, time, quiet, children }: { icon: string; title: ReactNode; state: ChatStepState; target?: ReactNode; onTarget?: () => void; time?: ReactNode; quiet?: boolean; children?: ReactNode }) {
+export function ChatStep({ icon, title, state, target, onTarget, time, quiet, children }: { icon: IconName; title: ReactNode; state: ChatStepState; target?: ReactNode; onTarget?: () => void; time?: ReactNode; quiet?: boolean; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="ui-chat-step" data-state={state} data-quiet={quiet || undefined} data-open={open || undefined}>
       <div className={cls("ui-chat-step-row", children != null && "has-detail")} onClick={children != null ? () => setOpen(!open) : undefined}>
-        <span className="ui-chat-step-icon">{state === "running" ? <Spinner size={10} /> : iconNode(state === "failed" ? "exclamationmark.triangle" : icon, ICON.small)}</span>
+        <span className="ui-chat-step-icon">{state === "running" ? <Spinner size={10} /> : iconNode(state === "failed" ? "warning" : icon, ICON.small)}</span>
         <span className="ui-chat-step-title">{title}</span>
         {target != null && (
           <button
@@ -81,7 +81,7 @@ export function ChatStep({ icon, title, state, target, onTarget, time, quiet, ch
           </button>
         )}
         {time != null && <span className="ui-chat-step-time">{time}</span>}
-        {children != null && <span className="ui-chat-step-twisty">{iconNode(open ? "chevron.down" : "chevron.right", ICON.small)}</span>}
+        {children != null && <span className="ui-chat-step-twisty">{iconNode(open ? "caret-down" : "caret-right", ICON.small)}</span>}
       </div>
       {open && <div className="ui-chat-step-detail">{children}</div>}
     </div>
@@ -96,7 +96,7 @@ export function ChatStep({ icon, title, state, target, onTarget, time, quiet, ch
 export function ChatApproval({ title, exact, always, onAnswer, busy }: { title: ReactNode; exact?: ReactNode; always?: string; onAnswer: (allow: boolean, reason?: string, remember?: boolean) => void; busy?: boolean }) {
   const [why, setWhy] = useState<string | null>(null);
   return (
-    <Callout tone="accent" icon="hand.raised" title={title}>
+    <Callout tone="accent" icon="hand-palm" title={title}>
       <Stack gap={2}>
         {exact != null && <CodeBlock>{exact}</CodeBlock>}
         {why === null ? (

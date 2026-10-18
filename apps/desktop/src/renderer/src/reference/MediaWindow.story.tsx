@@ -14,15 +14,15 @@ function Viewer({ size = "wide", empty }: { size?: SizeName; empty?: boolean }) 
   const i = PICS.findIndex((p) => p.key === sel);
   const pic = PICS[i]!;
   return (
-    <RefWindow icon="photo" name={`${pic.label} · Photos`} size={size}>
+    <RefWindow icon="image" name={`${pic.label} · Photos`} size={size}>
       <View
         scroll={false}
-        state={empty ? { kind: "empty", icon: "photo.on.rectangle", title: "No pictures here", text: "Drop images on this window, or open a folder that has some.", action: <Button>Open Folder…</Button> } : null}
+        state={empty ? { kind: "empty", icon: "images", title: "No pictures here", text: "Drop images on this window, or open a folder that has some.", action: <Button>Open Folder…</Button> } : null}
         toolbar={
           <WindowToolbar label="Viewer">
             <ToolbarGroup>
-              <ToolbarButton icon="chevron.left" label="Previous" shortcut="←" disabled={i === 0} onClick={() => setSel(PICS[i - 1]!.key)} />
-              <ToolbarButton icon="chevron.right" label="Next" shortcut="→" disabled={i === PICS.length - 1} onClick={() => setSel(PICS[i + 1]!.key)} />
+              <ToolbarButton icon="caret-left" label="Previous" shortcut="←" disabled={i === 0} onClick={() => setSel(PICS[i - 1]!.key)} />
+              <ToolbarButton icon="caret-right" label="Next" shortcut="→" disabled={i === PICS.length - 1} onClick={() => setSel(PICS[i + 1]!.key)} />
             </ToolbarGroup>
             <ToolbarText priority={1}>
               {i + 1} of {PICS.length}
@@ -31,9 +31,9 @@ function Viewer({ size = "wide", empty }: { size?: SizeName; empty?: boolean }) 
             <ToolbarMenu label="Zoom" onClick={() => {}} priority={2}>
               Fit
             </ToolbarMenu>
-            <ToolbarButton icon="rotate.right" label="Rotate" shortcut="⌘R" secondary priority={1} />
-            <ToolbarButton icon="square.and.arrow.up" label="Share" secondary priority={0} />
-            <ToolbarButton icon="info.circle" label={info ? "Hide Info" : "Show Info"} shortcut="⌘I" pressed={info} onClick={() => setInfo((v) => !v)} priority={3} />
+            <ToolbarButton icon="arrow-clockwise" label="Rotate" shortcut="⌘R" secondary priority={1} />
+            <ToolbarButton icon="export" label="Share" secondary priority={0} />
+            <ToolbarButton icon="info" label={info ? "Hide Info" : "Show Info"} shortcut="⌘I" pressed={info} onClick={() => setInfo((v) => !v)} priority={3} />
           </WindowToolbar>
         }
       >

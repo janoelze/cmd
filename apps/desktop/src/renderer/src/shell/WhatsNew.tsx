@@ -49,7 +49,7 @@ export function WhatsNew({ open = true, releases, onClose, onLink }: { open?: bo
     <Dialog
       open={open}
       onClose={onClose}
-      window={{ icon: "sparkles", name: "What's New" }}
+      window={{ icon: "sparkle", name: "What's New" }}
       width={560}
       position="center"
       divided

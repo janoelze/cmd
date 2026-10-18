@@ -22,6 +22,7 @@
     "workbench": "node scripts/workbench.mjs",
     "phone": "node --no-warnings tools/phone/src/cli.ts",
     "tokens": "node packages/ui/tokens/build.ts",
+    "symbols": "node packages/ui/icons/build.ts",
     "design-debt": "UPDATE_DESIGN_DEBT=1 vitest run apps/desktop/test/design-css.test.ts",
     "layout-debt": "UPDATE_LAYOUT_DEBT=1 vitest run test/layout.test.ts test/imports.test.ts",
     "remote:device": "node --no-warnings packages/cli/src/remote-device.ts",

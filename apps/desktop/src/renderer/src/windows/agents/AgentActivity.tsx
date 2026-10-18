@@ -4,7 +4,7 @@
 // the two never disagree; a click goes to the agent's terminal. The counts are
 // the title bar's status, and its menu switches the scope.
 
-import { Button, type DotState, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, Stack, Text, View } from "@cmd/ui";
+import { Button, type DotState, List, ListRow, ListRowContent, ListRowEnd, ListRowIcon, Stack, Text, View, type IconName } from "@cmd/ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { bucketOf, type Agent } from "@cmd/protocol";
 import { newAgent, selectPane } from "../../lib/actions.ts";
@@ -102,7 +102,7 @@ export interface ActivityLine {
   key: string;
   /** Subagents sit under their host. */
   depth: number;
-  icon: string;
+  icon: IconName;
   light?: DotState;
   name: ReactNode;
   status?: ReactNode;
@@ -121,7 +121,7 @@ export function AgentActivityView({ lines, scope, onNew }: { lines: ActivityLine
       state={
         lines.length
           ? null
-          : { kind: "empty", icon: "person.2", title: scope === "all" ? "No agents running" : "No agents in this workspace", text: "Agents you start show up here as they work.", action: <Button onClick={onNew}>New Claude Session</Button> }
+          : { kind: "empty", icon: "users", title: scope === "all" ? "No agents running" : "No agents in this workspace", text: "Agents you start show up here as they work.", action: <Button onClick={onNew}>New Claude Session</Button> }
       }
     >
       <List>

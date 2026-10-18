@@ -14,7 +14,7 @@ export function InspectorView({ win }: WindowViewProps) {
   const close = <Button onClick={() => void cmd.call("window.close", { id: win.id }).catch(() => {})}>Close</Button>;
   const state =
     !forId || page?.kind !== "browser"
-      ? { kind: "empty" as const, icon: "chevron.left.forwardslash.chevron.right", title: "Page Closed", text: "The browser window this inspected is closed.", action: close }
+      ? { kind: "empty" as const, icon: "code" as const, title: "Page Closed", text: "The browser window this inspected is closed.", action: close }
       : null;
   return (
     <View scroll={false} state={state}>

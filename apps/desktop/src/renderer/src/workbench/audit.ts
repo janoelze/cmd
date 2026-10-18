@@ -49,7 +49,7 @@ function ink(el: Element): Box[] {
     if (!(n instanceof Element)) return;
     const cs = getComputedStyle(n);
     if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return;
-    // Drawn things: SVG, images, fields, icons (masks, as SF Symbols are drawn), and small filled or outlined shapes (a status dot's parts, a spinner).
+    // Drawn things: SVG, images, fields, icons (glyphs of the icon font), and small filled or outlined shapes (a status dot's parts, a spinner).
     const empty = !n.children.length && !n.textContent?.trim();
     const filled = empty && (cs.maskImage !== "none" || cs.webkitMaskImage !== "none" || cs.backgroundImage !== "none" || ((cs.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(cs.borderTopWidth) > 0) && n.getBoundingClientRect().width < 40));
     if (filled || n instanceof SVGSVGElement || n.tagName === "IMG" || n.tagName === "CANVAS" || n.tagName === "INPUT") {

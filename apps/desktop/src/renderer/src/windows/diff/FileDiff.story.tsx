@@ -41,7 +41,7 @@ function W(p: Partial<FileDiffProps> & { size?: "regular" | "wide" }) {
   const nav = useRef<FileDiffHandle>(null);
   const [place, setPlace] = useState({ count: 0, at: -1 });
   return (
-    <RefWindow icon="plusminus" name="LiveDiff.tsx" size={p.size ?? "regular"}>
+    <RefWindow icon="plus-minus" name="LiveDiff.tsx" size={p.size ?? "regular"}>
       <Stack pad={2}>
       <Inline justify="between">
         <Text size="sm" tone="dim">

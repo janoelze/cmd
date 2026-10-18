@@ -37,7 +37,7 @@ export interface AccessModeInfo {
   /** The remote.access value that picks it. */
   id: string;
   title: string;
-  /** SF Symbol name. */
+  /** Phosphor icon name. */
   icon: string;
   description: string;
   /** The settings it uses, in the order Settings → Remote Access shows them under Connection. */

@@ -29,8 +29,8 @@ export const Underline = () => {
       value={tab}
       onChange={setTab}
       items={[
-        { id: "general", label: "General", icon: "gearshape" },
-        { id: "appearance", label: "Appearance", icon: "paintpalette" },
+        { id: "general", label: "General", icon: "gear" },
+        { id: "appearance", label: "Appearance", icon: "palette" },
         { id: "keyboard", label: "Keyboard", icon: "keyboard" },
       ]}
     />

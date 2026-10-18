@@ -42,7 +42,7 @@ import { useFind } from "../../lib/find.tsx";
 import { sorted, useDrawnRows, when } from "./rows.ts";
 import { domFindable } from "../../lib/find-dom.ts";
 
-const iconFor = (e: FileEntry) => (e.kind === "dir" ? "folder.fill" : fileIcon(e.name));
+const iconFor = (e: FileEntry) => (e.kind === "dir" ? "folder" : fileIcon(e.name));
 
 interface Row {
   entry: FileEntry;
@@ -617,12 +617,12 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
       toolbar={
         <>
           <WindowToolbar label="Files">
-            <ToolbarButton icon="chevron.up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />
+            <ToolbarButton icon="caret-up" label="Enclosing Folder" shortcut="⌘↑" disabled={!rootParent} onClick={rootUp} />
             <ToolbarPath segments={crumbs.map((c) => ({ key: c.path, label: c.name }))} onSelect={setRoot} onMenu={folderMenu} tip={root} />
             <ToolbarSpacer />
             {git && (
               <ToolbarButton
-                icon="arrow.triangle.branch"
+                icon="git-branch"
                 label={branchLabel}
                 tip={branchTitle}
                 showLabel
@@ -632,12 +632,12 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
                 priority={5}
               />
             )}
-            <ToolbarButton icon="doc.badge.plus" label="New File" onClick={() => void create("file", root)} priority={4} />
-            <ToolbarButton icon="folder.badge.plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} priority={4} />
-            <ToolbarButton icon="rectangle.compress.vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} secondary priority={1} />
-            <ToolbarButton icon={isBookmarked(root) ? "bookmark.fill" : "bookmark"} label="Bookmarks" menu onClick={() => void showContextMenu(bookmarkEntries())} secondary priority={2} />
-            <ToolbarButton icon={showHidden ? "eye" : "eye.slash"} label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={showHidden} onClick={() => setShowHidden((h) => !h)} secondary priority={2} />
-            <ToolbarButton icon="terminal" label="New Terminal Here" onClick={() => void newTerminalIn(root)} secondary priority={3} />
+            <ToolbarButton icon="file-plus" label="New File" onClick={() => void create("file", root)} priority={4} />
+            <ToolbarButton icon="folder-plus" label="New Folder" shortcut="⇧⌘N" onClick={() => void create("dir", root)} priority={4} />
+            <ToolbarButton icon="arrows-in-line-vertical" label="Collapse All" disabled={!anyOpen} onClick={collapseAll} secondary priority={1} />
+            <ToolbarButton icon={isBookmarked(root) ? "bookmark-simple" : "bookmark-simple"} label="Bookmarks" menu onClick={() => void showContextMenu(bookmarkEntries())} secondary priority={2} />
+            <ToolbarButton icon={showHidden ? "eye" : "eye-slash"} label={showHidden ? "Hide Hidden Files" : "Show Hidden Files"} pressed={showHidden} onClick={() => setShowHidden((h) => !h)} secondary priority={2} />
+            <ToolbarButton icon="terminal-window" label="New Terminal Here" onClick={() => void newTerminalIn(root)} secondary priority={3} />
           </WindowToolbar>
           {find.bar}
         </>
@@ -665,7 +665,7 @@ export function FilesView({ win, focused }: { win: AppWindow; focused: boolean }
         }}
       >
         {/* Inside the tree, so an empty folder still takes drops and its menu. */}
-        {error ? <ViewState state={{ kind: "error", title: "Can't read this folder", text: error }} /> : empty && <ViewState state={{ kind: "empty", icon: showChanges ? "checkmark.circle" : "folder", title: empty }} />}
+        {error ? <ViewState state={{ kind: "error", title: "Can't read this folder", text: error }} /> : empty && <ViewState state={{ kind: "empty", icon: showChanges ? "check-circle" : "folder", title: empty }} />}
         {rows.slice(0, shown).map(({ entry: e, depth, label }) => {
           const dir = e.kind === "dir";
           const g = gitOf(e.path);

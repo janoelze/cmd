@@ -83,7 +83,7 @@ export function QuickCommands({
     );
   return (
     <>
-      <PageIntro icon="bolt.fill">
+      <PageIntro icon="lightning">
         Save the commands and prompts you type every day. <code>{"{{variables}}"}</code> fill in what you’re looking at, like the folder, the selected text or the
         branch. Run them from Session → Quick Commands, the palette, a shortcut or <code>cmd quick run</code>.
       </PageIntro>
@@ -113,8 +113,8 @@ export function QuickCommands({
             }
             accessory={
               <Inline gap={0.5}>
-                <IconButton size="sm" icon="chevron.up" label="Move Up" disabled={i === 0 || !!list?.error} onClick={() => act(cmd.call("quick.move", { id: q.id, before: commands[i - 1]!.id }))} />
-                <IconButton size="sm" icon="chevron.down" label="Move Down" disabled={i === commands.length - 1 || !!list?.error} onClick={() => act(cmd.call("quick.move", { id: q.id, before: commands[i + 2]?.id ?? null }))} />
+                <IconButton size="sm" icon="caret-up" label="Move Up" disabled={i === 0 || !!list?.error} onClick={() => act(cmd.call("quick.move", { id: q.id, before: commands[i - 1]!.id }))} />
+                <IconButton size="sm" icon="caret-down" label="Move Down" disabled={i === commands.length - 1 || !!list?.error} onClick={() => act(cmd.call("quick.move", { id: q.id, before: commands[i + 2]?.id ?? null }))} />
               </Inline>
             }
           >

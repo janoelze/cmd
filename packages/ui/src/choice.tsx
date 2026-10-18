@@ -8,15 +8,15 @@
 
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { useRowLabel } from "./labels.ts";
-import { ICON, Icon, iconNode } from "./icon.tsx";
+import { ICON, Icon, iconNode, type IconLike } from "./icon.tsx";
 import type { Size } from "./button.tsx";
 
-export type Option<T extends string> = T | { value: T; label?: ReactNode; icon?: string | ReactNode; disabled?: boolean; tip?: string; shortcut?: string };
+export type Option<T extends string> = T | { value: T; label?: ReactNode; icon?: IconLike; disabled?: boolean; tip?: string; shortcut?: string };
 
 interface Opt<T extends string> {
   value: T;
   label: ReactNode;
-  icon?: string | ReactNode;
+  icon?: IconLike;
   disabled?: boolean;
   tip?: string;
   shortcut?: string;
@@ -88,7 +88,7 @@ export function Checkbox({
   return (
     <label className="ui-check" data-disabled={disabled || undefined}>
       <button type="button" role="checkbox" aria-checked={state} className="ui-check-box" disabled={disabled} onClick={() => onChange(!checked)}>
-        {mixed ? <span className="ui-check-dash" /> : checked && <Icon name="checkmark" size={9} weight="bold" />}
+        {mixed ? <span className="ui-check-dash" /> : checked && <Icon name="check" size={9} weight="bold" />}
       </button>
       {children != null && (
         <span className="ui-check-text">
@@ -205,7 +205,7 @@ export function Segmented<T extends string>({
 export interface TabItem<T extends string> {
   id: T;
   label: ReactNode;
-  icon?: string | ReactNode;
+  icon?: IconLike;
   /** A count, or "dot" for "something here wants you". */
   badge?: number | "dot";
   /** The badge's tone. */
@@ -317,7 +317,7 @@ export function Select<T extends string>({
           </option>
         ))}
       </select>
-      <Icon name="chevron.up.chevron.down" size={ICON.control} weight="semibold" />
+      <Icon name="caret-up-down" size={ICON.control} weight="bold" />
     </span>
   );
 }

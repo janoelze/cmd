@@ -52,13 +52,13 @@ export const Failed = () => (
 export const Offer = () => (
   <div style={{ display: "flex", flexDirection: "column", gap: 12, width: 460 }}>
     <Card>
-      <SheetHeader icon="sparkles" title="Connect an AI provider" subtitle="Magic widgets and notification summaries use it." />
+      <SheetHeader icon="sparkle" title="Connect an AI provider" subtitle="Magic widgets and notification summaries use it." />
     </Card>
     <Card>
       <FeatureList
         items={[
-          { icon: "rectangle.3.group", title: "A workspace per project", description: "Terminals, agents, a browser and an editor as windows." },
-          { icon: "terminal", title: "Agents in your terminals", description: "The one that needs you is on top." },
+          { icon: "layout", title: "A workspace per project", description: "Terminals, agents, a browser and an editor as windows." },
+          { icon: "terminal-window", title: "Agents in your terminals", description: "The one that needs you is on top." },
         ]}
       />
     </Card>
@@ -69,7 +69,7 @@ export const Offer = () => (
 /** A settings page's intro: what the feature is and where it shows up, above its sections. */
 export const Intro = () => (
   <div style={{ width: 560 }}>
-    <PageIntro icon="bolt.fill" links={<LinkButton onClick={() => {}}>Edit quick-commands.json…</LinkButton>}>
+    <PageIntro icon="lightning" links={<LinkButton onClick={() => {}}>Edit quick-commands.json…</LinkButton>}>
       Save the commands and prompts you type every day. Run them from Session → Quick Commands, the palette, a shortcut or <code>cmd quick run</code>.
     </PageIntro>
     <FormSection title="Quick Commands">
@@ -220,11 +220,11 @@ export const Callouts = () => {
 /** Nothing here yet: what goes here and how to start; compact in a smaller place. */
 export const Empty = () => (
   <div style={{ width: 420, display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-    <EmptyState icon="safari" title="Blank page" action={<Button>Open a URL</Button>}>
+    <EmptyState icon="compass" title="Blank page" action={<Button>Open a URL</Button>}>
       Type an address, or drop a link here.
     </EmptyState>
     <Separator />
-    <EmptyState compact icon="clock.arrow.circlepath" title="No versions yet">
+    <EmptyState compact icon="clock-counter-clockwise" title="No versions yet">
       Each change you ask for is kept here, so you can go back.
     </EmptyState>
   </div>
@@ -257,14 +257,14 @@ export const Bar = () => (
   <div style={{ width: 560, borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--separator)" }}>
     <Toolbar>
       <ButtonGroup joined>
-        <IconButton variant="default" icon="chevron.left" label="Back" />
-        <IconButton variant="default" icon="chevron.right" label="Forward" />
+        <IconButton variant="default" icon="caret-left" label="Back" />
+        <IconButton variant="default" icon="caret-right" label="Forward" />
       </ButtonGroup>
-      <IconButton icon="arrow.clockwise" label="Reload" shortcut="⌘R" />
+      <IconButton icon="arrow-clockwise" label="Reload" shortcut="⌘R" />
       <TextField value="https://github.com/janoelze/cmd" fill onChange={() => {}} size="sm" />
       <Separator vertical />
       <Spacer />
-      <IconButton icon="arrow.up.forward.app" label="Open in Browser" />
+      <IconButton icon="arrow-square-out" label="Open in Browser" />
     </Toolbar>
     <div style={{ height: 48, background: "var(--well)" }} />
   </div>

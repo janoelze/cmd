@@ -102,7 +102,7 @@ export function App() {
 
   switch (screen.kind) {
     case "loading":
-      return <Center icon="terminal" title="cmd" />;
+      return <Center icon="terminal-window" title="cmd" />;
     case "add": {
       const back = screen.back;
       return (
@@ -120,10 +120,10 @@ export function App() {
       if (screen.error)
         return (
           <Center
-            icon="xmark.octagon"
+            icon="warning-octagon"
             title="Couldn't pair"
             action={
-              <Button size="lg" variant="primary" icon="qrcode.viewfinder" onClick={() => setScreen({ kind: "add", back })}>
+              <Button size="lg" variant="primary" icon="qr-code" onClick={() => setScreen({ kind: "add", back })}>
                 Scan Again
               </Button>
             }
@@ -263,7 +263,7 @@ function Paired({ conn, pane: first, onAdd, onSwitch, onForget }: { conn: Connec
       <>
         {phase.kind === "offline" ? (
           <Center
-            icon="wifi.slash"
+            icon="wifi-slash"
             title={`${conn.identity.name ?? "Your Mac"} is offline`}
             action={
               <>
@@ -275,7 +275,7 @@ function Paired({ conn, pane: first, onAdd, onSwitch, onForget }: { conn: Connec
             {offlineText(phase)}
           </Center>
         ) : (
-          <Center icon="terminal" title="Connecting…" action={tryAgain || undefined} />
+          <Center icon="terminal-window" title="Connecting…" action={tryAgain || undefined} />
         )}
         {others}
       </>
@@ -304,7 +304,7 @@ function Paired({ conn, pane: first, onAdd, onSwitch, onForget }: { conn: Connec
                 <StatusDot state={phase.kind === "online" ? "success" : phase.kind === "offline" ? "warning" : "off"} size="sm" /> {model.host}
               </span>
             </div>
-            <IconButton icon="gearshape" size="lg" label="Settings" onClick={() => setSettings(true)} />
+            <IconButton icon="gear" size="lg" label="Settings" onClick={() => setSettings(true)} />
           </header>
           {phase.kind === "offline" && (
             <Callout tone="warning" banner>

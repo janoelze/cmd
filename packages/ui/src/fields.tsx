@@ -8,7 +8,7 @@
 // never does).
 
 import { forwardRef, useEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent, type ReactNode, type TextareaHTMLAttributes } from "react";
-import { ICON, Icon, iconNode } from "./icon.tsx";
+import { ICON, Icon, iconNode, type IconLike, type IconName } from "./icon.tsx";
 import type { Size } from "./button.tsx";
 import { Spinner } from "./status.tsx";
 import { useRowLabel } from "./labels.ts";
@@ -26,8 +26,8 @@ export interface TextFieldProps extends InputProps {
   size?: Size;
   /** Commands, paths, keys: the mono font. */
   code?: boolean;
-  /** An SF Symbol name or a node inside the field, at the start. */
-  icon?: string | ReactNode;
+  /** An icon or a node inside the field, at the start. */
+  icon?: IconLike;
   /** Inside the field at the end: a unit, a count, a clear button. */
   end?: ReactNode;
   /** CSS width; default 240px (fill: 100%). */
@@ -85,7 +85,7 @@ export const SearchField = forwardRef<HTMLInputElement, Omit<TextFieldProps, "on
         ref={ref}
         {...rest}
         className={cls("ui-search", rest.className)}
-        icon="magnifyingglass"
+        icon="magnifying-glass"
         value={value}
         placeholder={placeholder}
         onChange={onChange}
@@ -114,7 +114,7 @@ export const SearchField = forwardRef<HTMLInputElement, Omit<TextFieldProps, "on
 export function ClearButton({ label = "Clear", onClick }: { label?: string; onClick: () => void }) {
   return (
     <button type="button" className="ui-clear" aria-label={label} tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>
-      <Icon name="xmark.circle.fill" size={ICON.control + 3} />
+      <Icon name="x-circle" size={ICON.control + 3} weight="fill" />
     </button>
   );
 }
@@ -250,10 +250,10 @@ export function NumberField({
       </span>
       <span className="ui-stepper">
         <button type="button" tabIndex={-1} aria-label="Increase" disabled={disabled || (max !== undefined && value >= max)} onClick={(e) => bump(1, e.shiftKey)}>
-          <Icon name="chevron.up" size={7} weight="bold" />
+          <Icon name="caret-up" size={7} weight="bold" />
         </button>
         <button type="button" tabIndex={-1} aria-label="Decrease" disabled={disabled || (min !== undefined && value <= min)} onClick={(e) => bump(-1, e.shiftKey)}>
-          <Icon name="chevron.down" size={7} weight="bold" />
+          <Icon name="caret-down" size={7} weight="bold" />
         </button>
       </span>
     </span>
@@ -264,11 +264,11 @@ export function NumberField({
 export interface SecretStatus {
   tone: "success" | "warning" | "danger";
   label: string;
-  /** SF Symbol name; by default the tone's. */
-  icon?: string;
+  /** By default the tone's. */
+  icon?: IconName;
   tip?: string;
 }
-const STATUS_ICON = { success: "checkmark.circle.fill", warning: "exclamationmark.circle.fill", danger: "xmark.circle.fill" } as const;
+const STATUS_ICON: Record<"success" | "warning" | "danger", IconName> = { success: "check-circle", warning: "warning-circle", danger: "x-circle" };
 
 /**
  * A secret (an API key, a token): never shown. The field stays where it is in
@@ -379,14 +379,14 @@ export function SecretField({
       ) : (
         shown && (
           <span className="ui-secret-part" data-tone={shown.tone} data-tip={shown.tip}>
-            <Icon name={shown.icon ?? STATUS_ICON[shown.tone]} size={ICON.row} />
+            <Icon name={shown.icon ?? STATUS_ICON[shown.tone]} size={ICON.row} weight={shown.icon ? undefined : "fill"} />
             {shown.label}
           </span>
         )
       )}
       {stored && (
         <button type="button" className="ui-secret-part ui-secret-remove" aria-label="Remove" data-tip="Remove" onClick={() => onSave(null)}>
-          <Icon name="xmark" size={ICON.control} weight="bold" />
+          <Icon name="x" size={ICON.control} weight="bold" />
         </button>
       )}
       {!stored && !busy && !live && (
@@ -429,7 +429,7 @@ export function ShortcutField({ keys, recording, onRecord, onRemove }: {
               {k}
             </kbd>
             <button type="button" className="ui-shortcut-remove" data-tip="Remove" aria-label={`Remove ${k}`} onClick={() => onRemove(i)}>
-              <Icon name="xmark" size={7} weight="bold" />
+              <Icon name="x" size={7} weight="bold" />
             </button>
           </span>
         ),
@@ -438,7 +438,7 @@ export function ShortcutField({ keys, recording, onRecord, onRemove }: {
         rec
       ) : (
         <button type="button" className="ui-shortcut-add" data-tip={add} aria-label={add} onClick={() => onRecord(keys.length)}>
-          <Icon name="plus" size={ICON.control} weight="semibold" />
+          <Icon name="plus" size={ICON.control} weight="bold" />
         </button>
       )}
     </span>

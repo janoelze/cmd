@@ -7,7 +7,7 @@ import { View } from "./frame.tsx";
 /** Throws while `broken`. */
 function Fragile({ broken }: { broken: boolean }): ReactNode {
   if (broken) throw new Error("This view broke on purpose (a story)");
-  return <View state={{ kind: "empty", icon: "checkmark.circle", title: "Working again" }} />;
+  return <View state={{ kind: "empty", icon: "check-circle", title: "Working again" }} />;
 }
 
 const Box = ({ w, children }: { w: number; children: ReactNode }) => <div style={{ width: w, height: 240, display: "flex", borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--separator)" }}>{children}</div>;

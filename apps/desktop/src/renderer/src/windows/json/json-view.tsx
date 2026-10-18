@@ -383,12 +383,12 @@ export function JsonView({ win, focused }: WindowViewProps) {
 
   const alt = useRef(false);
   const body = () => {
-    if (error) return <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState>;
+    if (error) return <EmptyState compact icon="warning">{error}</EmptyState>;
     if (!read) return null;
     if (read.truncated && flavor !== "jsonl")
       return (
         <EmptyState
-          icon="curlybraces"
+          icon="brackets-curly"
           title="Too big for a tree"
           action={
             <>
@@ -408,7 +408,7 @@ export function JsonView({ win, focused }: WindowViewProps) {
       const at = parsed.error;
       return (
         <EmptyState
-          icon="exclamationmark.triangle.fill"
+          icon="warning"
           title="This isn't valid JSON"
           action={
             <Button size="sm" onClick={() => edit(at.line)}>

@@ -19,7 +19,7 @@ function Md({ rel, size = "wide" }: { rel: string; size?: SizeName }) {
   const path = useRepoFile(rel);
   const win = { id: `story-md-${rel}` as WindowId, kind: "markdown", workspaceId: "story" as WorkspaceId, state: { path } } as unknown as AppWindow;
   return (
-    <RefWindow icon="doc.richtext" name={rel.split("/").pop()!} size={size}>
+    <RefWindow icon="article" name={rel.split("/").pop()!} size={size}>
       {path && <MarkdownView win={win} focused={false} />}
     </RefWindow>
   );

@@ -84,11 +84,11 @@ export function Timer(p: { phase: "idle" | "running" | "paused" | "done"; durati
         <WindowToolbar label="Timer">
           {set && <ToolbarSegmented label="Duration" value={String(p.duration / 60)} options={PRESETS.map((m) => ({ value: String(m), label: m < 60 ? `${m}m` : `${m / 60}h` }))} onChange={(v) => p.onDuration(Number(v) * 60)} />}
           <ToolbarSpacer />
-          {(p.phase === "paused" || p.phase === "done") && <ToolbarButton icon="arrow.counterclockwise" label="Reset" onClick={() => p.onAction("reset")} />}
+          {(p.phase === "paused" || p.phase === "done") && <ToolbarButton icon="arrow-counter-clockwise" label="Reset" onClick={() => p.onAction("reset")} />}
           {p.phase === "running" ? (
-            <ToolbarButton icon="pause.fill" label="Pause" showLabel onClick={() => p.onAction("pause")} />
+            <ToolbarButton icon="pause" label="Pause" showLabel onClick={() => p.onAction("pause")} />
           ) : (
-            <ToolbarButton icon="play.fill" label={p.phase === "paused" ? "Resume" : p.phase === "done" ? "Start Again" : "Start"} showLabel tone="accent" onClick={() => p.onAction("start")} />
+            <ToolbarButton icon="play" label={p.phase === "paused" ? "Resume" : p.phase === "done" ? "Start Again" : "Start"} showLabel tone="accent" onClick={() => p.onAction("start")} />
           )}
         </WindowToolbar>
       }

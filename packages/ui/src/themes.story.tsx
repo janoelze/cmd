@@ -30,7 +30,7 @@ export const All = () => {
               <Switch size="sm" checked={on} onChange={setOn} label="On" />
             </div>
             <Segmented size="sm" value={seg} onChange={setSeg} options={["grid", "strip", "focus"]} labels={{ grid: "Grid", strip: "Strip", focus: "Focus" }} />
-            <TextField size="sm" value="" placeholder="Search" icon="magnifyingglass" fill onChange={() => {}} />
+            <TextField size="sm" value="" placeholder="Search" icon="magnifying-glass" fill onChange={() => {}} />
             <div style={{ display: "flex", gap: "var(--space-1-5)" }}>
               <Badge tone="accent">accent</Badge>
               <Badge tone="success">ok</Badge>

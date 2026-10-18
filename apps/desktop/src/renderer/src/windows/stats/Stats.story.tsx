@@ -58,7 +58,7 @@ function Page({ size = "wide", range: start = "week", data, error }: { size?: Si
   const [by, setBy] = useState<string | null>("agent");
   const d = data === undefined ? week(range) : data;
   return (
-    <RefWindow icon="chart.bar.xaxis" name="Stats" size={size}>
+    <RefWindow icon="chart-bar" name="Stats" size={size}>
       {open && d ? <StatDetail result={{ ...d.time!, stat: { ...d.time!.stat }, series: by ? d.time!.series : [{ key: "total", label: "Total", values: d.time!.buckets.map((_, i) => d.time!.series.reduce((a, s) => a + (s.values[i] ?? 0), 0)), total: d.time!.total }], ranking: d.projects!.ranking }} range={range} by={by} onBy={setBy} onRange={setRange} onBack={() => setOpen(null)} now={NOW} /> : <Stats range={range} data={d} error={error} onRange={setRange} onOpen={setOpen} onRetry={() => {}} now={NOW} />}
     </RefWindow>
   );
@@ -80,7 +80,7 @@ export const Failed = () => <Page data={null} error="The core didn't answer." />
 export const Detail = () => {
   const d = week();
   return (
-    <RefWindow icon="chart.bar.xaxis" name="Stats" size="wide">
+    <RefWindow icon="chart-bar" name="Stats" size="wide">
       <StatDetail result={{ ...d.time!, ranking: d.projects!.ranking }} range="week" by="agent" onBy={() => {}} onRange={() => {}} onBack={() => {}} now={NOW} />
     </RefWindow>
   );

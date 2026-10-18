@@ -28,7 +28,7 @@ function Ask({ ask, open, count }: { ask: ToolActivity; open: boolean; count: nu
   return (
     <ApprovalSheet<ApprovalScope, string>
       open={open}
-      who={{ icon: ask.callerKind === "operator" ? "brain" : "terminal", name: ask.caller, context: workspace ?? undefined }}
+      who={{ icon: ask.callerKind === "operator" ? "brain" : "terminal-window", name: ask.caller, context: workspace ?? undefined }}
       title={a.title}
       why={ask.why !== ask.tool ? ask.why : undefined}
       exact={a.exact || undefined}

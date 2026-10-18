@@ -121,8 +121,7 @@ function usageKey(): string {
 const bundleWorkspace = { externalizeDeps: { exclude: ["@cmd/protocol"] } };
 
 export default defineConfig({
-  // The packaged app ships no node_modules for main: Lucide's icons (@cmd/ui/lucide),
-  // electron-updater, ws (the inspector's CDP relay), and the Visualizer's and Jam's libraries (as text, main/frames.ts) are bundled too.
+  // The packaged app ships no node_modules for main: electron-updater, ws (the inspector's CDP relay), and the Visualizer's and Jam's libraries (as text, main/frames.ts) are bundled too.
   // The crash report and feedback webhooks (main/crash.ts, main/feedback.ts) and the
   // usage stats key come from the environment at build time (CI secrets), so they
   // aren't in the repository.
@@ -136,7 +135,7 @@ export default defineConfig({
       "process.env.WS_NO_BUFFER_UTIL": '"1"',
       "process.env.WS_NO_UTF_8_VALIDATE": '"1"',
     },
-    build: { externalizeDeps: { exclude: ["@cmd/protocol", "@cmd/ui", "lucide-static", "electron-updater", "butterchurn", "butterchurn-presets", "@strudel/web", "ws"] } },
+    build: { externalizeDeps: { exclude: ["@cmd/protocol", "@cmd/ui", "electron-updater", "butterchurn", "butterchurn-presets", "@strudel/web", "ws"] } },
   },
   // Two preloads: the app's (index) and browser pages' (guest). CommonJS, because
   // browser pages are sandboxed and sandboxed preloads can't be ES modules.

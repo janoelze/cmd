@@ -3,16 +3,16 @@
 // window title; at the right end Search (the palette's search), a divider,
 // Show Sidebars, the view modes, a divider and New…, as plain buttons like the footer's.
 
-import { ICON, IconButton } from "@cmd/ui";
+import { ICON, IconButton, type IconName } from "@cmd/ui";
 import { prettyAccelerator, type CommandId } from "../../../shared/commands.ts";
 import { useKeybindings } from "../lib/keybindings.ts";
 import type { ViewMode } from "./board/layouts.ts";
 
-const MODES: { value: ViewMode; icon: string; tip: string }[] = [
+const MODES: { value: ViewMode; icon: IconName; tip: string }[] = [
   { value: "focus", icon: "rectangle", tip: "Focus" },
-  { value: "grid", icon: "square.grid.2x2", tip: "Grid" },
-  { value: "strip", icon: "rectangle.split.3x1", tip: "Strip" },
-  { value: "canvas", icon: "rectangle.3.group", tip: "Canvas" },
+  { value: "grid", icon: "squares-four", tip: "Grid" },
+  { value: "strip", icon: "columns", tip: "Strip" },
+  { value: "canvas", icon: "layout", tip: "Canvas" },
 ];
 
 interface Props {
@@ -32,10 +32,10 @@ export function TopBar(p: Props) {
       <div className="topbar-lead" />
       <div className="topbar-center">{p.workspaceBar}</div>
       <div className="topbar-trail">
-        <IconButton icon="magnifyingglass" label="Search" shortcut={prettyAccelerator(keys.bindings["view.search"]?.[0])} iconSize={ICON.bar} onClick={() => p.run("view.search")} />
+        <IconButton icon="magnifying-glass" label="Search" shortcut={prettyAccelerator(keys.bindings["view.search"]?.[0])} iconSize={ICON.bar} onClick={() => p.run("view.search")} />
         <span className="bar-sep" aria-hidden />
         <IconButton
-          icon="sidebar.left"
+          icon="sidebar-simple"
           label={p.sidebars ? "Hide Sidebars" : "Show Sidebars"}
           shortcut={prettyAccelerator(keys.bindings["view.sidebars"]?.[0])}
           iconSize={ICON.bar}

@@ -382,7 +382,7 @@ export function TextView({ win, focused }: { win: AppWindow; focused: boolean })
         </Callout>
       )}
       {find.bar}
-      {error && <EmptyState compact icon="exclamationmark.triangle.fill">{error}</EmptyState>}
+      {error && <EmptyState compact icon="warning">{error}</EmptyState>}
       <div className="textwin-editor" ref={host} />
     </div>
   );

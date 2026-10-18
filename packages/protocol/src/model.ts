@@ -24,7 +24,7 @@ export interface Workspace {
   /** Its folder is gone (a removed worktree, a deleted folder); checked every little while. */
   gone?: boolean;
   home: boolean;
-  /** SF Symbol name; null: the default (workspaceIcon). */
+  /** Phosphor icon name; null: the default (workspaceIcon). */
   icon: string | null;
   /** Position in the switcher (⌘1–9); user-chosen, never reshuffled by recency. */
   order: number;
@@ -319,7 +319,7 @@ export interface OpenRuleInfo {
 export interface WindowTypeInfo {
   kind: WindowKind;
   title: string;
-  /** SF Symbol name. */
+  /** Phosphor icon name. */
   icon: string;
   opens: OpenRuleInfo;
   /** "window": where you work (File menu); "widget": shows something at a glance (the Widget Library). docs/16-widgets.md. */
@@ -339,7 +339,7 @@ export interface WidgetEntry {
   kind: WindowKind;
   title: string;
   description?: string;
-  /** SF Symbol name. */
+  /** Phosphor icon name. */
   icon: string;
   /** Built-in widgets' tags ("developer"). */
   tags?: string[];
@@ -496,7 +496,7 @@ export interface RemoteAccessMode {
   /** Its remote.access value. */
   id: string;
   title: string;
-  /** SF Symbol name. */
+  /** Phosphor icon name. */
   icon: string;
   description: string;
   /** The settings it uses, in the order Settings shows them. */

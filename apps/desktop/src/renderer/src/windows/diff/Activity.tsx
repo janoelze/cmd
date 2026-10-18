@@ -143,12 +143,12 @@ function DiffPane({ e, change, place, onPlace, onWhose, onClose, load }: { e: En
               {whole && hunks > 1 && (
                 <Inline gap={0.5}>
                   <Text size="sm" tone="dim">{`${Math.max(1, place.at + 1)} of ${hunks}`}</Text>
-                  <IconButton icon="chevron.up" label="Previous Change" size="sm" onClick={() => nav.current?.prev()} />
-                  <IconButton icon="chevron.down" label="Next Change" size="sm" onClick={() => nav.current?.next()} />
+                  <IconButton icon="caret-up" label="Previous Change" size="sm" onClick={() => nav.current?.prev()} />
+                  <IconButton icon="caret-down" label="Next Change" size="sm" onClick={() => nav.current?.next()} />
                 </Inline>
               )}
               {e.changes.length > 1 && <Segmented size="sm" label="Whose change" value={lane.id} options={e.changes.map((c) => ({ value: c.lane.id, label: c.lane.name }))} onChange={onWhose} />}
-              <IconButton icon="xmark" label="Close" shortcut="Esc" size="sm" onClick={onClose} />
+              <IconButton icon="x" label="Close" shortcut="Esc" size="sm" onClick={onClose} />
             </Inline>
           </Inline>
           {same && (
@@ -367,7 +367,7 @@ export function ActivityView({ lanes, initialLens = "agents", initialSelected = 
           </StatusLine>
         )
       }
-      state={!lanes.length ? { kind: "empty", icon: "checkmark.circle", title: "Nothing changed" } : null}
+      state={!lanes.length ? { kind: "empty", icon: "check-circle", title: "Nothing changed" } : null}
       scroll={false}
     >
       <Split side="bottom" open={!!(picked && change)} pane={shownDiff.current && <DiffPane e={shownDiff.current.e} change={shownDiff.current.change} place={place} onPlace={setPlace} load={load} onWhose={setWhose} onClose={() => setSel(null)} />} size={{ min: 120, ideal: 300, max: 2000 }}>

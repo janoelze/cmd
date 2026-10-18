@@ -91,7 +91,7 @@ describe("manifest", () => {
     expect(r.manifest).toMatchObject({ kind: "widget", size: "m", refresh: 2, permissions: { net: ["api.x.com"], run: ["ifconfig"], env: [], read: [], events: [] } });
     expect(parseManifest({ title: "Agents", permissions: { events: ["agents", "agents", "transcripts"] } })).toMatchObject({ ok: true, manifest: { permissions: { events: ["agents", "transcripts"] } } });
     expect(r.manifest.icon).toBeUndefined();
-    expect(parseManifest({ title: "VPN", icon: " lock.shield " })).toMatchObject({ manifest: { icon: "lock.shield" } });
+    expect(parseManifest({ title: "VPN", icon: " shield-check " })).toMatchObject({ manifest: { icon: "shield-check" } });
     expect(configValues(r.manifest, { city: "" })).toEqual({ city: "Lisbon" });
     expect(configValues(r.manifest, { city: "Porto", token: "x" })).toEqual({ city: "Porto" });
   });
@@ -105,7 +105,6 @@ describe("manifest", () => {
     expect(bad({ title: "x", permissions: { run: ["/usr/bin/python3"] } })[0]).toMatch(/run anything/);
     expect(bad({ title: "x", permissions: { net: ["a b"] } })[0]).toMatch(/not a host/);
     expect(bad({ title: "x", kind: "terminal" })[0]).toMatch(/command/);
-    expect(bad({ title: "x", icon: "Cloud Sun" })[0]).toMatch(/SF Symbol/);
     expect(bad({ kind: "widget" })[0]).toMatch(/title/);
     expect(bad({ title: "x", media: ["http://radio.example"] })[0]).toMatch(/https origin/);
     expect(bad({ title: "x", permissions: { events: ["prompts"] } })[0]).toMatch(/not a class of events/);
@@ -697,7 +696,7 @@ describe.skipIf(noDeno)("Magic widgets in the core", () => {
     const all = () => core.handlers["widget.list"]({}) as unknown as { ref: string; title: string; source: string; windows: string[]; shot?: string }[];
     const list = () => all().filter((e) => e.source === "yours");
     const ref = `magic:${String(state().widgetId)}`;
-    expect(list()).toEqual([expect.objectContaining({ ref, source: "yours", kind: "magic", title: "Count", icon: "sparkles", windows: [id] })]);
+    expect(list()).toEqual([expect.objectContaining({ ref, source: "yours", kind: "magic", title: "Count", icon: "sparkle", windows: [id] })]);
     // Built-in widgets first: every widget type but Magic itself.
     expect(all().slice(0, 3)).toEqual([
       expect.objectContaining({ ref: "type:agents", source: "builtin", title: "Agent Activity", windows: [] }),

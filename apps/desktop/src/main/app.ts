@@ -20,7 +20,6 @@ import { contextTemplate } from "./menu-template.ts";
 import { TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
 import { applyMenuState, buildMenu, commandSender } from "./menu.ts";
 import { buildInstance, readFlavor } from "./flavor.ts";
-import { lucideSymbol, type SymbolImage } from "@cmd/ui/lucide";
 import { appMetrics } from "./metrics.ts";
 import { savedAppearance, setAppearance, themeQuery, type Appearance } from "./appearance.ts";
 import { isSettings, isUtility, openUtility, utilityWindow } from "./utility.ts";
@@ -738,92 +737,6 @@ ipcMain.on("record-shortcut", (e, on: boolean) => {
   refreshMenu();
   if (on) e.sender.once("destroyed", () => ((recordingShortcut = false), refreshMenu()));
 });
-// SF Symbols, rendered natively at the exact point size and pixel density the UI
-// shows them (native/sfsymbols.swift), so they stay crisp. PNG data URLs, black
-// template images; the UI tints them via CSS masks.
-const SF_HELPER = path.join(repoRoot, "apps/desktop/native/build/sfsymbols");
-const symbolCache = new Map<string, SymbolImage>();
-/** Helper runs in flight, by symbol key: concurrent requests for the same symbols share one. */
-const symbolRuns = new Map<string, Promise<void>>();
-
-// Rendered symbols are kept on disk (per macOS release and helper build), so a
-// launch doesn't wait for the helper (about 0.5 s cold) before the first paint.
-const symbolStamp = (() => {
-  try {
-    return `${os.release()}-${fs.statSync(SF_HELPER).mtimeMs}`;
-  } catch {
-    return null;
-  }
-})();
-const symbolFile = path.join(app.getPath("userData"), "sf-symbols.json");
-try {
-  const saved = JSON.parse(fs.readFileSync(symbolFile, "utf8")) as { stamp: string; symbols: Record<string, SymbolImage> };
-  if (symbolStamp && saved.stamp === symbolStamp) for (const [k, v] of Object.entries(saved.symbols)) symbolCache.set(k, v);
-} catch {}
-let symbolSave: ReturnType<typeof setTimeout> | undefined;
-function saveSymbols(): void {
-  if (!symbolStamp) return;
-  clearTimeout(symbolSave);
-  symbolSave = setTimeout(() => {
-    const body = JSON.stringify({ stamp: symbolStamp, symbols: Object.fromEntries(symbolCache) });
-    void fs.promises.writeFile(symbolFile, body).catch(() => {});
-  }, 1000);
-}
-
-async function renderSymbols(names: string[], size: number, weight: string, scale: number): Promise<Record<string, SymbolImage>> {
-  const key = (n: string) => `${n}@${size}@${weight}@${scale}`;
-  const missing = names.filter((n) => !symbolCache.has(key(n)));
-  // SF Symbols are macOS-only (and Apple-only by licence): Lucide icons elsewhere
-  // (CMD_LUCIDE_ICONS=1 shows them on macOS too, to check the mapping).
-  if (process.platform !== "darwin" || process.env.CMD_LUCIDE_ICONS === "1") {
-    for (const n of missing) symbolCache.set(key(n), lucideSymbol(n, size, weight));
-    return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
-  }
-  if (missing.length && symbolStamp) {
-    // Off the main thread: a synchronous spawn here held up every window's first paint.
-    const todo = missing.filter((n) => !symbolRuns.has(key(n)));
-    if (todo.length) {
-      const run = new Promise<void>((resolve) => {
-        execFile(SF_HELPER, [String(size), weight, String(scale), ...todo], { encoding: "utf8", timeout: 5000, maxBuffer: 64 << 20 }, (_err, stdout) => {
-          try {
-            const out = JSON.parse(stdout || "{}") as Record<string, { png: string; w: number; h: number }>;
-            for (const n of todo) {
-              const o = out[n];
-              symbolCache.set(key(n), o ? { url: `data:image/png;base64,${o.png}`, w: o.w, h: o.h } : null);
-            }
-            saveSymbols();
-          } catch {
-            // fall through to the fallback below
-          }
-          for (const n of todo) symbolRuns.delete(key(n));
-          resolve();
-        });
-      });
-      for (const n of todo) symbolRuns.set(key(n), run);
-    }
-    await Promise.all(missing.map((n) => symbolRuns.get(key(n))));
-  }
-  for (const n of missing) {
-    if (symbolCache.has(key(n))) continue;
-    // Fallback without the helper: Electron's image, resized (high quality) to the exact size.
-    const img = nativeImage.createFromNamedImage(n);
-    if (img.isEmpty()) {
-      symbolCache.set(key(n), null);
-      continue;
-    }
-    // Same square, even-sided box as the helper; the image is fitted inside (mask contain).
-    const side = Math.ceil(size / 2) * 2;
-    const { width, height } = img.getSize();
-    const k = side / Math.max(width, height);
-    const px = img.resize({ width: Math.round(width * k * scale), height: Math.round(height * k * scale), quality: "best" });
-    symbolCache.set(key(n), { url: px.toDataURL(), w: side, h: side, contain: true });
-  }
-  return Object.fromEntries(names.map((n) => [n, symbolCache.get(key(n)) ?? null]));
-}
-
-ipcMain.handle("sf-symbols", (_e, req: { names: string[]; size: number; weight?: string; scale?: number }) =>
-  renderSymbols(req.names, req.size, req.weight ?? "regular", Math.max(1, Math.min(3, Math.round(req.scale ?? 2)))),
-);
 ipcMain.on("open-keybindings", () => void openForUser(ensureKeybindingsFile()));
 ipcMain.on("open-docs", () => void openForUser(path.join(repoRoot, "docs", "00-overview.md")));
 ipcMain.on("focus", (e) => {

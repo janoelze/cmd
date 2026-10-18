@@ -92,14 +92,14 @@ export function CommandsView({ win }: WindowViewProps) {
         onClick={() => goTo(r.paneId, r.workspaceId)}
         onContextMenu={() => rowMenu(r)}
       >
-        <ListRowIcon icon="terminal" light={r.endedAt === null ? "working" : bad ? "danger" : undefined} />
+        <ListRowIcon icon="terminal-window" light={r.endedAt === null ? "working" : bad ? "danger" : undefined} />
         <ListRowContent title={r.command ?? "Command"} mono detail={[state, workspace].filter(Boolean).join(" · ")} tone={bad ? "danger" : undefined} />
         <ListRowEnd>
           {where && <Chip hue={where.hue}>{where.text}</Chip>}
           {r.endedAt !== null && <ListValue>{shortAgo(r.endedAt, now)}</ListValue>}
         </ListRowEnd>
         <ListRowActions>
-          <IconButton size="sm" icon="arrow.clockwise" label="Run Again" disabled={!canRerun(r)} onClick={() => rerun(r)} />
+          <IconButton size="sm" icon="arrow-clockwise" label="Run Again" disabled={!canRerun(r)} onClick={() => rerun(r)} />
         </ListRowActions>
       </ListRow>
     );
@@ -119,7 +119,7 @@ export function CommandsView({ win }: WindowViewProps) {
           </ListSection>
         )}
         {runs.length === 0 && (
-          <EmptyState compact icon="terminal" title={failedOnly ? "Nothing failed" : "No commands yet"}>
+          <EmptyState compact icon="terminal-window" title={failedOnly ? "Nothing failed" : "No commands yet"}>
             {failedOnly ? "Commands that fail show up here." : scope === "all" ? "Commands you run in terminals show up here." : "Commands you run in this workspace's terminals show up here."}
           </EmptyState>
         )}

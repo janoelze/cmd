@@ -43,15 +43,6 @@ if (process.platform === "darwin") {
   }
 }
 
-// Build the desktop app's native SF Symbols renderer (crisp icons at exact sizes).
-try {
-  const dir = path.resolve("apps/desktop/native");
-  fs.mkdirSync(path.join(dir, "build"), { recursive: true });
-  execFileSync("/usr/bin/xcrun", ["swiftc", "-O", "-o", path.join(dir, "build/sfsymbols"), path.join(dir, "sfsymbols.swift")], { stdio: "inherit" });
-} catch (err) {
-  console.warn("postinstall: could not build sfsymbols (icons fall back to resized bitmaps):", err.message);
-}
-
 // Build the desktop app's notification permission addon (native/notifications.m).
 if (process.platform === "darwin") {
   try {

@@ -288,14 +288,14 @@ export function PdfView({ win, focused }: WindowViewProps) {
             <ToolbarText priority={0}>of {pages || "–"}</ToolbarText>
             <ToolbarSpacer />
             <ToolbarGroup>
-              <ToolbarButton icon="minus.magnifyingglass" label="Zoom Out" shortcut="⌘−" disabled={!pages} onClick={() => zoomBy(-1)} priority={1} />
+              <ToolbarButton icon="magnifying-glass-minus" label="Zoom Out" shortcut="⌘−" disabled={!pages} onClick={() => zoomBy(-1)} priority={1} />
               <ToolbarMenu label="Zoom" disabled={!pages} onClick={zoomMenu} priority={3}>
                 {zoomLabel(zoom.scale, zoom.preset)}
               </ToolbarMenu>
-              <ToolbarButton icon="plus.magnifyingglass" label="Zoom In" shortcut="⌘+" disabled={!pages} onClick={() => zoomBy(1)} priority={1} />
+              <ToolbarButton icon="magnifying-glass-plus" label="Zoom In" shortcut="⌘+" disabled={!pages} onClick={() => zoomBy(1)} priority={1} />
             </ToolbarGroup>
             <ToolbarSeparator />
-            <ToolbarButton icon="magnifyingglass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => find.request(finding ? "close" : "open")} />
+            <ToolbarButton icon="magnifying-glass" label="Find" shortcut="⌘F" disabled={!pages} pressed={finding} onClick={() => find.request(finding ? "close" : "open")} />
           </WindowToolbar>
           {find.bar}
         </>

@@ -220,7 +220,7 @@ export function Ask(p: { text: string; onText: (t: string) => void; onAsk: (prom
     <View
       state={{
         kind: "empty",
-        icon: "sparkles",
+        icon: "sparkle",
         title: "New Widget",
         text: "Ask for something to keep an eye on: a question, a URL, some JSON, a command.",
         action: (
@@ -240,7 +240,7 @@ export function Ask(p: { text: string; onText: (t: string) => void; onAsk: (prom
               <Callout
                 compact
                 tone="accent"
-                icon="sparkles"
+                icon="sparkle"
                 actions={
                   <Button size="sm" onClick={() => showSetup(["ai"])}>
                     Set Up AI…
@@ -334,7 +334,7 @@ export function StepList({ live, steps }: { live?: MagicLive; steps?: MagicStep[
       ))}
       {live?.repair && (
         <ListRow>
-          <ListRowIcon icon="arrow.triangle.2.circlepath" tone="dim" />
+          <ListRowIcon icon="arrows-clockwise" tone="dim" />
           <ListRowContent title={live.repair} />
         </ListRow>
       )}
@@ -378,7 +378,7 @@ export function mediaRequest(origins: string[], onAnswer: (allow: boolean) => vo
   const named = hosts.length > 3 ? `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} more` : hosts.join(", ");
   return {
     kind: "empty",
-    icon: "play.rectangle",
+    icon: "monitor-play",
     title: `Play media from ${named}?`,
     text: "This widget streams audio, video or images from the web. They stay blocked until you allow them.",
     action: (
@@ -396,7 +396,7 @@ export function mediaRequest(origins: string[], onAnswer: (allow: boolean) => vo
 function runtimeRequest(onAnswer: (yes: boolean) => void): ViewStateSpec {
   return {
     kind: "empty",
-    icon: "arrow.down.circle",
+    icon: "arrow-circle-down",
     title: "Download Deno?",
     text: "Widgets with live data need it. It's 40 MB, downloaded once.",
     action: (
@@ -533,7 +533,7 @@ export function TerminalOffer({ win, command }: { win: AppWindow; command: strin
     <ViewState
       state={{
         kind: "empty",
-        icon: "terminal",
+        icon: "terminal-window",
         title: "A command to run",
         text: "Opens a terminal with it typed in; press Return to run it.",
         action: (

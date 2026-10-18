@@ -13,7 +13,7 @@ function W({ size = "regular", np }: { size?: SizeName | readonly [number, numbe
   const [at] = useState(Date.now);
   np = np && { ...np, at };
   return (
-    <RefWindow icon="music.note" name="Now Playing" size={size}>
+    <RefWindow icon="music-note" name="Now Playing" size={size}>
       <NowPlayingCard np={np} onControl={() => {}} />
     </RefWindow>
   );

@@ -1,5 +1,5 @@
 // The UI Workbench (apps/desktop/src/renderer/workbench.html, docs/48): every component
-// and story, read from the sources, in the real app (styles, SF Symbols, preload, core),
+// and story, read from the sources, in the real app (styles, icons, preload, core),
 // with HMR. It runs on its own instance (.cmd-dev/workbench, or $CMD_WORKBENCH_HOME)
 // and exposes the DevTools protocol, so these commands drive the open window. A target
 // is a story (shell/feedback, or its old id feedback) or a component (ui/Button).
@@ -10,7 +10,7 @@
 // Shots crop to the component (a dialog, else what the stage shows) with a margin, or to
 // the page as far as it shows; --themes all: the target in every theme, one image of the
 // whole grid. The window is yours to size and move, so its size and display vary. They
-// are always 2x: the window is emulated at 2x for the shot (SF Symbols re-render), then restored.
+// are always 2x: the window is emulated at 2x for the shot, then restored.
 //   pnpm workbench matrix <story> [--themes a,b,c]   every variant × themes, into .cmd-dev/shots/wb
 //   pnpm workbench eval '<js>'                    run JS in the window (await works), print the result
 //   pnpm workbench audit [story] [variant] [--theme id]   (or audit --all: every story, its Sizes too) where each window's content sits against its
@@ -201,7 +201,7 @@ async function show(page, { story: target, variant, theme, mode }) {
     process.exit(1);
   }
   if (theme) await page.waitForFunction((t) => document.body.dataset.theme === t, theme, { timeout: 10000 });
-  await page.waitForTimeout(400); // fonts, SF Symbols, entry animations
+  await page.waitForTimeout(400); // fonts, entry animations
   const { ready, hmrError } = await page.evaluate(() => ({ ...document.body.dataset }));
   if (hmrError) console.error(`workbench: the window shows the code from before the last edit, which doesn't compile:\n${hmrError}`);
   return ready;

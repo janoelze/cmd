@@ -61,7 +61,7 @@ export const browserType: WindowType<{ url: string; device?: string; inspector?:
 export const inspectorType: WindowType<{ for: string }> = {
   kind: "inspector",
   title: "Inspector",
-  icon: "chevron.left.forwardslash.chevron.right",
+  icon: "code",
   create(input) {
     const of = str(input.for);
     if (!of) throw new Error("an inspector needs the browser window it inspects");

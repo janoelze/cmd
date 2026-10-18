@@ -18,7 +18,7 @@ import { formatBytes } from "../lib/model.ts";
 import { countRender } from "../lib/perf.ts";
 
 const POLL_MS = 2000;
-export const ICON = "gauge.with.dots.needle.33percent";
+export const ICON = "gauge";
 
 export interface Snapshot {
   app: AppProcess[];
@@ -218,8 +218,8 @@ export function TaskManagerView({ snap, error, onShow, onEnd }: TaskManagerViewP
       toolbar={
         <WindowToolbar label="Task Manager">
           <ToolbarSpacer />
-          <ToolbarButton icon="macwindow" label="Show" showLabel disabled={!sel?.pane} onClick={() => show(sel)} />
-          <ToolbarButton icon="xmark.circle" label="End Terminal" showLabel tone="danger" disabled={!sel?.pane} onClick={() => end(sel)} />
+          <ToolbarButton icon="app-window" label="Show" showLabel disabled={!sel?.pane} onClick={() => show(sel)} />
+          <ToolbarButton icon="x-circle" label="End Terminal" showLabel tone="danger" disabled={!sel?.pane} onClick={() => end(sel)} />
         </WindowToolbar>
       }
       footer={

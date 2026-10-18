@@ -124,5 +124,5 @@ export function quickItems(c: CommandContext): PaletteItem[] {
   const ctx = quickContext(c);
   return here(c)
     .filter((q) => quickApplies(q, ctx))
-    .map((q) => ({ id: `q-${q.id}`, group: QUICK_TITLE, icon: "bolt", label: q.name, meta: q.description || q.body, hint: prettyAccelerator(q.keys?.[0]), run: () => void runQuickCommand(q.id) }));
+    .map((q) => ({ id: `q-${q.id}`, group: QUICK_TITLE, icon: "lightning", label: q.name, meta: q.description || q.body, hint: prettyAccelerator(q.keys?.[0]), run: () => void runQuickCommand(q.id) }));
 }

@@ -25,7 +25,7 @@ function Dashboard({ size = "wide" }: { size?: SizeName }) {
   const [range, setRange] = useState<"1h" | "24h" | "7d">("1h");
   const top = Math.max(...PROCS.map((p) => p.mem));
   return (
-    <RefWindow icon="gauge.with.dots.needle.33percent" name="Resources" size={size}>
+    <RefWindow icon="gauge" name="Resources" size={size}>
       <View
         inset
         toolbar={
