@@ -2,12 +2,16 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
-## 0.32.3 — 2026-10-18
+## 0.32.3 — 2026-10-19
 
 ### Improved
 
 - New icons throughout the app, sharper at every size.
 - Core details in the status bar show uptime, memory and recent slowdowns at a glance, with Restart Core and Task Manager below.
+
+### Fixed
+
+- A failed update check says why in one short line, instead of a wall of error text in Settings.
 
 ## 0.32.2 — 2026-10-18
 
