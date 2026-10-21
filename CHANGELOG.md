@@ -2,6 +2,13 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.32.5 — 2026-10-21
+
+### Fixed
+
+- ⌘R refreshes only the selected window, as View → Refresh Window; reloading the whole app moved to ⌥⇧⌘R.
+- Swiping sideways over a text window scrolls the board again.
+
 ## 0.32.4 — 2026-10-20
 
 ### Fixed
