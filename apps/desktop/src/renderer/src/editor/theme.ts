@@ -9,8 +9,9 @@ export const appTheme = (fontFamily: string, fontSize: number, dark: boolean) =>
   EditorView.theme(
     {
       "&": { height: "100%", color: "var(--text)", backgroundColor: "var(--well)", fontSize: `${fontSize}px` },
-      // No rubber band: a bounce drags the sticky gutter along with the text, sideways and at the ends.
-      ".cm-scroller": { fontFamily, lineHeight: "1.5", overscrollBehavior: "none" },
+      // No rubber band at the ends (a bounce drags the sticky gutter along). Sideways the scroller
+      // chains as usual: a swipe it can't use, short lines or at an edge, scrolls the strip.
+      ".cm-scroller": { fontFamily, lineHeight: "1.5", overscrollBehaviorY: "none" },
       ".cm-content": { caretColor: "var(--syn-cursor)", padding: "8px 0 32px" },
       ".cm-line": { padding: "0 12px 0 10px" },
       ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--syn-cursor)", borderLeftWidth: "2px" },

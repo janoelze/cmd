@@ -246,6 +246,7 @@ const SCENARIOS = {
   "close-idle": ["tabs"],
   reopen: [],
   strip: ["terminals"],
+  "text-sideways": [],
   marker: ["terminals"],
   sidebars: ["marker"],
   restart: ["marker"],
@@ -2317,6 +2318,65 @@ await scenario("strip", async () => {
   check(widths && Object.keys(widths).length >= 1, "strip widths are remembered");
   } finally {
     await menu("view.grid");
+  }
+});
+
+// A sideways swipe over a text window scrolls the strip, unless the editor
+// scrolls that way itself (a long line, no wrap): then the editor takes it first.
+await scenario("text-sideways", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const dir = path.join(home, "sideways-fixture");
+  fs.mkdirSync(dir, { recursive: true });
+  const opened = [];
+  const wrap = (await call("settings.get")).settings["editor.wordWrap"];
+  try {
+    for (const [name, text] of [["short.txt", "short\nlines\n"], ["long.txt", `${"a long line ".repeat(80)}\nshort\n`], ["other.txt", "x\n"]]) {
+      fs.writeFileSync(path.join(dir, name), text);
+      const w = await call("window.openTarget", { target: path.join(dir, name) });
+      opened.push(w.id);
+      await tileIn(w.id);
+      await win.waitForSelector(`.tile[data-pane="${w.id}"] .cm-content`, { state: "attached", timeout: 10_000 });
+    }
+    await call("settings.set", { key: "editor.wordWrap", value: false });
+    await menu("view.strip");
+    await win.waitForSelector(".main.mode-strip");
+    const strip = () => win.evaluate(() => document.querySelector(".windows-scroller").scrollLeft);
+    const room = () => win.evaluate(() => { const s = document.querySelector(".windows-scroller"); return s.scrollWidth - s.clientWidth; });
+    check((await until(room, (r) => r > 100)) > 100, "the strip is wider than the pane");
+    const scroller = (id) => `.tile[data-pane="${id}"] .cm-scroller`;
+    // Reveal the window, point at its text, and scroll sideways towards the side the strip has
+    // room on. `ready(dx)` runs before the wheel.
+    const swipe = async (id, ready = async () => {}) => {
+      await select(id);
+      await still(500);
+      const b = await win.locator(scroller(id)).boundingBox();
+      await win.mouse.move(b.x + b.width / 2, b.y + 12);
+      const dx = (await strip()) < (await room()) - 100 ? 180 : -180;
+      await ready(dx);
+      const before = await strip();
+      await win.mouse.wheel(dx, 0);
+      return before;
+    };
+    const [short, long] = opened;
+    let before = await swipe(short);
+    const moved = await until(strip, (o) => Math.abs(o - before) > 1, 3000);
+    check(Math.abs(moved - before) > 1, `sideways scrolling over a text window with short lines scrolls the strip (${Math.round(before)} → ${Math.round(moved)})`);
+
+    // The long line: the editor starts at the end it can scroll away from.
+    const editorX = () => win.evaluate((sel) => document.querySelector(sel).scrollLeft, scroller(long));
+    let start = 0;
+    before = await swipe(long, async (dx) => {
+      await until(() => win.evaluate((sel) => { const s = document.querySelector(sel); return s.scrollWidth - s.clientWidth; }, scroller(long)), (w) => w > 200);
+      start = await win.evaluate(([sel, end]) => { const s = document.querySelector(sel); s.scrollLeft = end ? s.scrollWidth : 0; return s.scrollLeft; }, [scroller(long), dx < 0]);
+    });
+    const ex = await until(editorX, (x) => Math.abs(x - start) > 1, 3000);
+    await still(300);
+    const after = await strip();
+    check(Math.abs(ex - start) > 1 && Math.abs(after - before) <= 1, `with a long unwrapped line the editor scrolls sideways, not the strip (editor ${Math.round(start)} → ${Math.round(ex)}, strip ${Math.round(before)} → ${Math.round(after)})`);
+  } finally {
+    await call("settings.set", { key: "editor.wordWrap", value: wrap }).catch(() => {});
+    await menu("view.grid");
+    for (const id of opened) await call("window.close", { id }).catch(() => {});
   }
 });
 
