@@ -52,7 +52,6 @@ export const COMMANDS = spec([
   { id: "widget.library", label: "Widget Library…", keys: ["Shift+Cmd+L"], menu: "Widgets/library" },
   { id: "file.newMagic", label: "New Widget with Magic…", keys: ["Shift+Cmd+M"], menu: "Widgets/library" },
   { id: "view.magicChange", label: "Change Widget…", keys: ["Cmd+L"], menu: "Widgets/widget" },
-  { id: "view.magicRefresh", label: "Refresh Widget", keys: ["Cmd+R"], menu: "Widgets/widget" },
   { id: "view.magicStop", label: "Stop Making Widget", keys: ["Cmd+."], menu: "Widgets/widget" },
   { id: "widget.remove", label: "Remove from Board", menu: "Widgets/remove" },
   { id: "file.save", label: "Save", keys: ["Cmd+S"], menu: "File/save" },
@@ -108,6 +107,8 @@ export const COMMANDS = spec([
   { id: "view.cycleWidth", label: "Cycle Window Width", keys: ["Ctrl+Cmd+R"], menu: "View/layout" },
   { id: "view.widen", label: "Wider Window", keys: ["Alt+Cmd+Plus", "Alt+Cmd+="], menu: "View/layout" },
   { id: "view.narrow", label: "Narrower Window", keys: ["Alt+Cmd+-"], menu: "View/layout" },
+  // The selected window's Refresh (a page, a widget's data, a table); the id is from when only widgets had it.
+  { id: "view.magicRefresh", label: "Refresh Window", keys: ["Cmd+R"], menu: "View/window" },
   // docs/59: a browser window's DevTools; checked while open.
   { id: "browser.inspector", label: "Show Inspector", keys: ["Alt+Cmd+I"], checkable: "checkbox", menu: "View/browser" },
   { id: "view.toggleEdit", label: "Toggle Preview / Edit", keys: ["Cmd+E"], menu: "View/layout" },

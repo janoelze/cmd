@@ -22,7 +22,7 @@ function layout(mac: boolean, appName: string): Menu[] {
       groups: [["File/new"], ["File/agents"], ["File/windows"], ["File/workspace", { recent: true }], ["File/save"], ["File/files"], ["File/close"], ["File/settings"], ...(mac ? [] : [["App/settings"], [r("quit")]])],
     },
     { label: "Edit", groups: [[r("undo"), r("redo")], [r("cut"), "Edit/copy", r("paste"), "Edit/select"], ["Edit/find"], ["Edit/text", { submenu: "Lines", slot: "Edit/lines" }, { submenu: "Code Folding", slot: "Edit/folding" }], ["Edit/terminal"]] },
-    { label: "View", groups: [["View/layout"], ["View/sidebars"], ["View/palette"], ["View/zoom"], ["View/editor"], ["View/browser"], [r("togglefullscreen")], ["@developer"]] },
+    { label: "View", groups: [["View/layout"], ["View/sidebars"], ["View/palette"], ["View/zoom"], ["View/editor"], ["View/window", "View/browser"], [r("togglefullscreen")], ["@developer"]] },
     { label: "Session", groups: [["Session/move"], ["Session/select", "Session/agent"], [{ quick: "Session/quick" }]] },
     { label: "Workspace", groups: [["Workspace/move", "Workspace/select"], ["Workspace/edit"], ["Workspace/actions"], ["Workspace/close"]] },
     { label: "Widgets", groups: [["Widgets/library"], ["Widgets/widget"], ["Widgets/remove"]] },

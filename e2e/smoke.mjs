@@ -803,7 +803,7 @@ await scenario("refresh", async () => {
     // As the focused app window would (a role acts on it; in the background no window is focused).
     const focused = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
     item?.click(undefined, focused, focused?.webContents);
-    return item ? item.id || item.role || item.label : null;
+    return item ? `${item.label} (${item.id || item.role})` : null;
   }, [acc, win.url()]);
   const opened = [];
   try {
@@ -822,7 +822,7 @@ await scenario("refresh", async () => {
     const reloaded = await until(() => page(b.id, "window.__mark ?? 0"), (m) => m === 0);
     const alive = await win.evaluate(() => window.__e2eAlive ?? 0).catch(() => 0);
     const kept = await page(a.id, "window.__mark ?? 0");
-    check(reloaded === 0 && kept === 1 && alive === 1, `⌘R reloads the selected page only (${hit}: selected ${reloaded ? "kept" : "reloaded"}, other ${kept ? "kept" : "reloaded"}, app ${alive ? "kept" : "reloaded"})`);
+    check(hit === "Refresh Window (view.magicRefresh)" && reloaded === 0 && kept === 1 && alive === 1, `⌘R reloads the selected page only (${hit}: selected ${reloaded ? "kept" : "reloaded"}, other ${kept ? "kept" : "reloaded"}, app ${alive ? "kept" : "reloaded"})`);
   } finally {
     for (const w of opened) await call("window.close", { id: w.id }).catch(() => {});
   }

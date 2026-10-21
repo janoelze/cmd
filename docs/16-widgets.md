@@ -62,7 +62,7 @@ The library is ⇧⌘L, as Xcode's Library is: L for Library. ⌥⌘M looks natu
 
 
 - **File** starts with **New…** (⌘N), then holds windows only: Terminal (⌘T), Claude, Codex, Browser, File Browser, Text.
-- A **Widgets** menu (after Workspace, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Refresh Widget, Stop Making Widget, Remove from Board. The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
+- A **Widgets** menu (after Workspace, before Window) holds Widget Library…, New Widget with Magic…, then the selected widget's commands: Change Widget…, Stop Making Widget, Remove from Board. (Refresh Widget became View → Refresh Window, ⌘R, for every window that refreshes; its id stays `view.magicRefresh`.) The Magic View-menu items moved here; their ids (`file.newMagic`, `view.magic*`) stay, since keybindings.json uses them. Edit stays ⌘E in View (Toggle Preview / Edit), which already serves every window.
 - The top bar's + is New…, as ⌘N is.
 
 ### New…

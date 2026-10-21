@@ -38,6 +38,8 @@ describe("the menu bar", () => {
     // A role without an accelerator takes Electron's default (reload: ⌘R).
     for (const i of dev) expect(i.accelerator && !keys.has(norm(i.accelerator)), String(i.role)).toBe(true);
     expect(mac["view.magicRefresh"]).toEqual(["Cmd+R"]);
+    const view = flat((menuTemplate(() => {}, mac, { mac: true, appName: "cmd" }).find((m) => m.label === "View")!.submenu as MenuItemConstructorOptions[]));
+    expect(view.find((i) => i.id === "view.magicRefresh")).toMatchObject({ label: "Refresh Window", accelerator: "Cmd+R" });
   });
 
   it("lists the open workspaces under ⌃1–9 and the closed ones in File → Open Recent", () => {

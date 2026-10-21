@@ -97,7 +97,7 @@ Every shortcut is a menu-bar item. Remap them under Settings → Keyboard Shortc
 | ⇧⌘T | reopen the last closed window where it was (a terminal comes back in its folder, running nothing) |
 | ⌘F, ⌘G / ⇧⌘G | find in the window (a terminal's scrollback, a page, a file), next / previous |
 | ⌥⌘F | find and replace in the text editor |
-| ⌘R | browser: reload the page |
+| ⌘R | refresh the selected window: reload a page, update a widget's data |
 | ⌥⌘I | browser: show or close the inspector (DevTools) |
 | ⌃G, ⌘/, ⌥↑ / ⌥↓, ⌥Z | text editor: go to line, comment, move lines, word wrap (more in Edit › Lines and Code Folding) |
 | ⌘↑ / ⌘↓ | jump to the previous / next prompt |

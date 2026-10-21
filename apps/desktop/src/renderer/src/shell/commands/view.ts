@@ -46,6 +46,7 @@ registerCommands({
   "view.cycleWidth": width(nextPreset),
   "view.widen": width((f) => stepFraction(f, 1, MIN_WIDTH / window.innerWidth)),
   "view.narrow": width((f) => stepFraction(f, -1, MIN_WIDTH / window.innerWidth)),
+  "view.magicRefresh": { when: (c) => !!c.actions?.refresh, run: (c) => c.actions?.refresh?.() },
   "view.toggleEdit": { run: (c) => (c.actions?.toggleEdit ? c.actions.toggleEdit() : c.window && togglePreview(c.window)) },
   "view.sidebar": { run: () => toggleSide("left"), checked: (c) => shown(c, "left") },
   "view.rightSidebar": { when: (c) => !!c.board.docks.right.id, run: () => toggleSide("right"), checked: (c) => shown(c, "right") },
