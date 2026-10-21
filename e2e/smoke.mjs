@@ -222,6 +222,7 @@ const SCENARIOS = {
   "sidebar-search": [],
   browser: [],
   "blank-browser": [],
+  refresh: [],
   inspector: ["browser"],
   "site-permissions": ["browser"],
   approvals: [],
@@ -778,6 +779,52 @@ await scenario("blank-browser", async () => {
   check((await blankView.count()) === 0, "a blank window gets its page once given an address");
   } finally {
     await win.evaluate((id) => window.cmd.call("window.close", { id }), blankWin.id);
+  }
+});
+
+// ⌘R refreshes the selected window only: two browser pages, each with a mark; the one ⌘R
+// reaches loses its mark, the other and the app itself keep theirs (a Developer → Reload on
+// ⌘R once reloaded the whole app). Synthetic keys bypass the native menu, so the key goes to
+// the item macOS would give it: the first one in the menu bar's order that takes it.
+await scenario("refresh", async () => {
+  const call = (m, p = {}) => win.evaluate(([m, p]) => window.cmd.call(m, p), [m, p]);
+  const press = (acc) => app.evaluate(({ BrowserWindow, Menu }, [acc, url]) => {
+    const norm = (a) => (a ?? "").replace(/CommandOrControl|CmdOrCtrl|Command/g, "Cmd").split("+").map((k) => k.toLowerCase()).sort().join("+");
+    const walk = (items) => {
+      for (const i of items) {
+        const keys = i.registerAccelerator !== false && (i.visible || i.acceleratorWorksWhenHidden) && (i.accelerator ?? i.getDefaultRoleAccelerator?.());
+        if (i.enabled && keys && norm(keys) === norm(acc)) return i;
+        const sub = i.submenu && walk(i.submenu.items);
+        if (sub) return sub;
+      }
+      return null;
+    };
+    const item = walk(Menu.getApplicationMenu().items);
+    // As the focused app window would (a role acts on it; in the background no window is focused).
+    const focused = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL() === url);
+    item?.click(undefined, focused, focused?.webContents);
+    return item ? item.id || item.role || item.label : null;
+  }, [acc, win.url()]);
+  const opened = [];
+  try {
+    for (const q of ["a", "b"]) opened.push(await call("window.open", { kind: "browser", input: { url: `http://localhost:${port}/?${q}` } }));
+    const [a, b] = opened;
+    const page = (id, js) => win.evaluate(([id, js]) => document.querySelector(`.tile[data-pane="${id}"] webview`)?.executeJavaScript(js) ?? null, [id, js]).catch(() => null);
+    for (const w of opened) {
+      await tileIn(w.id);
+      const title = await until(() => page(w.id, "document.title"), (t) => t === "E2E Page", 15_000);
+      check(title === "E2E Page", `a browser window loads its page (${title})`);
+      await page(w.id, "window.__mark = 1");
+    }
+    await win.evaluate(() => (window.__e2eAlive = 1));
+    await select(b.id);
+    const hit = await press("Cmd+R");
+    const reloaded = await until(() => page(b.id, "window.__mark ?? 0"), (m) => m === 0);
+    const alive = await win.evaluate(() => window.__e2eAlive ?? 0).catch(() => 0);
+    const kept = await page(a.id, "window.__mark ?? 0");
+    check(reloaded === 0 && kept === 1 && alive === 1, `⌘R reloads the selected page only (${hit}: selected ${reloaded ? "kept" : "reloaded"}, other ${kept ? "kept" : "reloaded"}, app ${alive ? "kept" : "reloaded"})`);
+  } finally {
+    for (const w of opened) await call("window.close", { id: w.id }).catch(() => {});
   }
 });
 

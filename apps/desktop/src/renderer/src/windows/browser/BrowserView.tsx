@@ -225,7 +225,8 @@ export function BrowserView({ win, focused }: { win: AppWindow; focused: boolean
     wv.addEventListener("did-stop-loading", loaded);
     return () => (wv.removeEventListener("found-in-page", found as never), void wv.removeEventListener("did-stop-loading", loaded));
   }, [live]);
-  useEffect(() => registerWindowActions(win.id, { find: live ? find.request : undefined }), [win.id, live, find.request]);
+  // ⌘R (Refresh): this page only.
+  useEffect(() => registerWindowActions(win.id, { find: live ? find.request : undefined, refresh: live ? () => ref.current?.reload() : undefined }), [win.id, live, find.request]);
 
   const inside = win.state.inspector === "inside";
   // Re-read on every change to the windows: an Inspector window of this page opening or closing.

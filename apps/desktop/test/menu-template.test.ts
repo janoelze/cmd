@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { MenuItemConstructorOptions } from "electron";
 import { contextTemplate, menuSlots, menuTemplate } from "../src/main/menu-template.ts";
-import { COMMANDS, DEFAULT_KEYBINDINGS, type CommandSpec } from "../src/shared/commands.ts";
+import { COMMANDS, DEFAULT_KEYBINDINGS, norm, platformDefaults, type CommandSpec } from "../src/shared/commands.ts";
 
 const flat = (items: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] => items.flatMap((i) => [i, ...(Array.isArray(i.submenu) ? flat(i.submenu) : [])]);
 
@@ -28,6 +28,16 @@ describe("the menu bar", () => {
     for (const c of (COMMANDS as readonly CommandSpec[]).filter((c) => c.scope === "window")) {
       expect(items.find((i) => i.id === c.id)?.registerAccelerator, c.id).toBe(false);
     }
+  });
+
+  it("keeps the app's own Reload off every command's shortcut (⌘R refreshes the selected window)", () => {
+    const mac = platformDefaults(true);
+    const items = flat(menuTemplate(() => {}, mac, { mac: true, appName: "cmd" }));
+    const dev = items.find((i) => i.label === "Developer")!.submenu as MenuItemConstructorOptions[];
+    const keys = new Set(Object.values(mac).flat().map(norm));
+    // A role without an accelerator takes Electron's default (reload: ⌘R).
+    for (const i of dev) expect(i.accelerator && !keys.has(norm(i.accelerator)), String(i.role)).toBe(true);
+    expect(mac["view.magicRefresh"]).toEqual(["Cmd+R"]);
   });
 
   it("lists the open workspaces under ⌃1–9 and the closed ones in File → Open Recent", () => {

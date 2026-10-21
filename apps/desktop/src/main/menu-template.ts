@@ -84,8 +84,9 @@ export function menuTemplate(send: Send, bindings: Keybindings, o: MenuOptions):
   const part = (p: Part): MenuItemConstructorOptions[] => {
     if (typeof p !== "string" && "quick" in p) return [quickMenu(o, send, bindings, (bySlot.get(p.quick) ?? []).flatMap((c) => items(c, send, bindings)))];
     if (typeof p !== "string") return "recent" in p ? [recentMenu(o)] : "submenu" in p ? [{ label: p.submenu, submenu: (bySlot.get(p.slot) ?? []).flatMap((c) => items(c, send, bindings)) }] : [p];
-    // The app's own DevTools: ⌥⌘I is a browser window's (Show Inspector).
-    if (p === "@developer") return [{ label: "Developer", submenu: [{ role: "reload" }, { role: "toggleDevTools", accelerator: "Alt+Shift+Cmd+I" }] }];
+    // The app's own DevTools: ⌥⌘I is a browser window's (Show Inspector). Reloading the app
+    // reloads every window, so it isn't on ⌘R (the role's default), which refreshes the selected one.
+    if (p === "@developer") return [{ label: "Developer", submenu: [{ role: "reload", accelerator: "Alt+Shift+Cmd+R" }, { role: "toggleDevTools", accelerator: "Alt+Shift+Cmd+I" }] }];
     return (bySlot.get(p) ?? []).flatMap((c) => items(c, send, bindings, o.lists));
   };
   return layout(o.mac, o.appName).map((m) => {
