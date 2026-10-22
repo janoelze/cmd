@@ -100,6 +100,62 @@ export const Reading = () => (
   </Box>
 );
 
+const POINT: [string, string, string][] = [
+  ["Element", "Click; hover shows a name and outline first", "element, path, box"],
+  ["Text", "Select text, then annotate", "the quoted text"],
+  ["Multi-select", "⌘-click elements one by one, or drag a box over several", "one note, every element's box; green marker"],
+  ["Draw", "Freehand strokes on the page, a note linked to a stroke (drawingIndex)", "the strokes; a screenshot of the region with them on top if the optional modern-screenshot is installed"],
+  ["Layout mode", "L: a palette of 65+ component types (hero, card, table, chart, modal…) to drop on the page, or existing sections to drag elsewhere", 'kind: "placement" (type, size, position) or kind: "rearrange" (selector, old rect, new rect)'],
+];
+
+/** Tables in a document: a column of short labels beside prose keeps its words whole, text starts
+    top left, a narrow table is as wide as its content, and GFM's alignment (here right) still applies. */
+export const Tables = () => (
+  <Box w={640} h={560}>
+    <View>
+      <Document>
+        <h3>Ways to point</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Mode</th>
+              <th>How</th>
+              <th>Kept</th>
+            </tr>
+          </thead>
+          <tbody>
+            {POINT.map(([mode, how, kept]) => (
+              <tr key={mode}>
+                <td>{mode}</td>
+                <td>{how}</td>
+                <td>{kept}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th align="right">Found</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>package.json</td>
+              <td align="right">14</td>
+            </tr>
+            <tr>
+              <td>Makefile</td>
+              <td align="right">3</td>
+            </tr>
+          </tbody>
+        </table>
+      </Document>
+    </View>
+  </Box>
+);
+
 /** A picture larger than its view (it scrolls, the grab cursor shows), and one still loading. */
 export const Pictures = () => (
   <div style={{ display: "flex", gap: "var(--space-4)" }}>

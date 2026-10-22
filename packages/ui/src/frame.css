@@ -236,8 +236,13 @@ button.ui-dial-value:not(:disabled):hover { background: var(--bg-hover); }
 .ui-doc code { font: 0.88em var(--font-code, var(--font-mono)); padding: 0.15em 0.35em; border-radius: var(--radius-sm); background: var(--bg-selected); }
 .ui-doc pre { padding: var(--space-3); overflow-x: auto; border: 1px solid var(--separator); border-radius: var(--radius); background: var(--bg); }
 .ui-doc pre code { padding: 0; background: none; font-size: calc(var(--font-code-size, var(--text-base)) * 0.9); line-height: 1.5; }
-.ui-doc table { border-collapse: collapse; display: block; overflow-x: auto; }
-.ui-doc th, .ui-doc td { padding: var(--space-1-5) var(--space-3); border: 1px solid var(--separator); }
+/* A table as wide as its content, up to the column, then it scrolls sideways. Cells wrap
+   between words, never inside one: the document's overflow-wrap: anywhere would let a column
+   of short labels shrink to a letter. Text starts top left (GFM's :-: and -: still align). */
+.ui-doc table { border-collapse: collapse; display: block; width: max-content; max-width: 100%; overflow-x: auto; }
+.ui-doc th, .ui-doc td { padding: var(--space-1-5) var(--space-3); border: 1px solid var(--separator); line-height: 1.5; text-align: start; vertical-align: top; overflow-wrap: break-word; }
+.ui-doc :is(th, td)[align="center"] { text-align: center; }
+.ui-doc :is(th, td)[align="right"] { text-align: end; }
 .ui-doc th { font-weight: 600; background: var(--bg); }
 .ui-doc tr:nth-child(2n) td { background: var(--group-bg); }
 
