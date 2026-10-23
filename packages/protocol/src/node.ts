@@ -10,6 +10,7 @@ import { defaultSocketPath } from "./instance.ts";
 
 export * from "./log.ts";
 export * from "./instance.ts";
+export * from "./session.ts";
 
 /**
  * Hash of the core + protocol source. The core reports the hash it started with;

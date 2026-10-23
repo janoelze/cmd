@@ -8,7 +8,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Core } from "../src/kernel/core.ts";
 import { HOST_METHODS, HOST_PROTOCOL, MIN_CORE, PtyHost } from "../src/terminals/host.ts";
-import { HostMismatch, MIN_HOST, RemoteBackend, hostCompatible, outputMode } from "../src/terminals/remote.ts";
+import { HostMismatch, MIN_HOST, RemoteBackend, hostCompatible, hostOutlivedLogin, outputMode } from "../src/terminals/remote.ts";
 import { fakeFactory, type FakePty } from "./fake-pty.ts";
 import { rmTemp } from "./tmp.ts";
 import { until as untilWhat } from "../../../test/system.ts";
@@ -228,6 +228,23 @@ describe("PTY host", () => {
     await new Promise<void>((r) => gone.listen(sock, r));
     await expect(RemoteBackend.connect(sock)).rejects.toBeInstanceOf(HostMismatch);
     gone.close();
+  });
+
+  it("won't use a host that outlived a logout, unless this core did too", () => {
+    const login = Date.now() - 3600_000;
+    const procs = [
+      { pid: 412, startedAt: login, command: "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" },
+      { pid: 77, startedAt: login + 60_000, command: "cmd" },
+      { pid: 66, startedAt: login - 86_400_000, command: "cmd" },
+    ];
+    const old = { startedAt: login - 86_400_000 };
+    expect(hostOutlivedLogin(old, procs, 77)).toBe(true);
+    expect(hostOutlivedLogin({ startedAt: login + 1000 }, procs, 77)).toBe(false);
+    // a core from the earlier login would start a host no better
+    expect(hostOutlivedLogin(old, procs, 66)).toBe(false);
+    // no loginwindow (no GUI login, ps not allowed): leave it
+    expect(hostOutlivedLogin(old, [], 77)).toBe(false);
+    expect(new HostMismatch({ protocol: HOST_PROTOCOL, instance: "x", pid: 9, startedAt: 0, root: dir, terms: [] }, true).message).toMatch(/before this login/);
   });
 
   it("stops a host whose code folder went away once it can't start a shell", async () => {

@@ -7,7 +7,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { lineSplitter } from "@cmd/protocol";
-import { ipcPath, logDir, logger, recordCrash } from "@cmd/protocol/node";
+import { fromEarlierLogin, ipcPath, logDir, loginOf, logger, recordCrash, userProcs, type Proc } from "@cmd/protocol/node";
 import { HOST_METHODS, HOST_PROTOCOL, type HostHello } from "./host.ts";
 import type { Snapshot, Term, TermBackend, TermSpawn } from "./types.ts";
 
@@ -328,14 +328,27 @@ export function hostCodeGone(root: string | undefined): boolean {
   return !!root && !fs.existsSync(path.join(root, "packages/core/src/terminals/host-main.ts"));
 }
 
-/** A host this core can't use: another protocol, or its code is gone. */
+/**
+ * Whether a host is from an earlier login than this one (it outlived a logout,
+ * see session.ts in @cmd/protocol): its shells can't look up system services,
+ * DNS among them. Not when this core is too: a host it started would be no better.
+ */
+export function hostOutlivedLogin(hello: Pick<HostHello, "startedAt">, procs: Proc[], selfPid = process.pid): boolean {
+  const login = loginOf(procs);
+  const self = procs.find((p) => p.pid === selfPid);
+  return fromEarlierLogin(hello.startedAt, login) && !(self && fromEarlierLogin(self.startedAt, login));
+}
+
+/** A host this core can't use: another protocol, its code is gone, or it is from an earlier login. */
 export class HostMismatch extends Error {
   readonly hello: HostHello;
-  constructor(hello: HostHello) {
+  constructor(hello: HostHello, outlivedLogin = false) {
     super(
-      !hostCompatible(hello)
-        ? `the PTY host (pid ${hello.pid}) speaks protocol ${hello.protocol} (serves cores from ${hello.minCore ?? hello.protocol}), this core ${HOST_PROTOCOL} (uses hosts from ${MIN_HOST})`
-        : `the PTY host (pid ${hello.pid}) runs from ${hello.root}, which is gone`,
+      outlivedLogin
+        ? `the PTY host (pid ${hello.pid}) started before this login, so its shells can't reach system services (DNS)`
+        : !hostCompatible(hello)
+          ? `the PTY host (pid ${hello.pid}) speaks protocol ${hello.protocol} (serves cores from ${hello.minCore ?? hello.protocol}), this core ${HOST_PROTOCOL} (uses hosts from ${MIN_HOST})`
+          : `the PTY host (pid ${hello.pid}) runs from ${hello.root}, which is gone`,
     );
     this.hello = hello;
   }
@@ -354,12 +367,15 @@ export interface HostOptions {
 
 /**
  * The PTY host of this instance: connect, or start one and connect. A host of
- * another protocol, or run from a folder that is gone, is stopped first (its
- * terminals die; restore.ts resurrects them).
+ * another protocol, run from a folder that is gone or from an earlier login,
+ * is stopped first (its terminals die; restore.ts resurrects them).
  */
 export async function connectHost(o: HostOptions): Promise<RemoteBackend> {
   try {
-    return attached(await RemoteBackend.connect(o.socketPath), false);
+    const b = await RemoteBackend.connect(o.socketPath);
+    if (!hostOutlivedLogin(b.hello, await userProcs())) return attached(b, false);
+    b.dispose();
+    throw new HostMismatch(b.hello, true);
   } catch (err) {
     if (err instanceof HostMismatch) {
       log.warn(`${err.message}: replacing it`);

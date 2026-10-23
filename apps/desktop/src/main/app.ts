@@ -14,7 +14,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { isCurrentCore, KIT_FILES, PROTOCOL, SETTINGS_TEMPLATE, SYSTEM_SOUNDS, kitVersion, mediaOrigin, widgetCsp } from "@cmd/protocol";
-import { cmdHome, connect, CORE_REFUSED_EXIT, coreLocked, coreRefusal, coreSocketPath, enterInstance, foreignHome, foreignHomeText, hasDevMarker, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId } from "@cmd/protocol/node";
+import { cmdHome, connect, CORE_REFUSED_EXIT, coreLocked, coreRefusal, coreSocketPath, enterInstance, foreignHome, foreignHomeText, hasDevMarker, initLog, instanceName, isOwnCore, installCrashHandlers, ipcPath, logDir, logger, sourceBuildId, staleSession } from "@cmd/protocol/node";
 import type { ContextItem, MenuState } from "../shared/commands.ts";
 import { contextTemplate } from "./menu-template.ts";
 import { TOPBAR_HEIGHT, trafficLights } from "../shared/chrome.ts";
@@ -174,21 +174,21 @@ function ownCore(hello: { pid: number; stateDir?: string }): boolean {
 }
 
 /**
- * A core outlives the app on purpose, so after pulling or editing core code (or
- * an update) an old core may still be serving. Restart it: its terminals keep
- * running in the PTY host, and the new core takes them over. Also one with the
- * same code run from another folder: a worktree's core, merged and then removed,
- * would otherwise keep serving from a checkout that is gone.
+ * A core outlives the app on purpose, so after an update or a code change an old
+ * core may still be serving: restart it (its terminals keep running in the PTY
+ * host). Also one run from another folder (a merged and removed worktree's), or
+ * from an earlier login: it can't reach system services such as DNS (session.ts).
  */
 async function checkCoreBuild(): Promise<void> {
   const conn = await connect(socketPath);
   try {
     const hello = conn.hello ?? (await conn.client.call("core.hello", {}));
     if (!ownCore(hello)) return;
-    const current = sourceBuildId(repoRoot);
-    const root = coreRoot();
-    if (isCurrentCore(hello, { build: current, root })) return;
-    if (hello.protocol !== PROTOCOL) log.info(`core ${hello.pid} speaks protocol ${hello.protocol ?? "(none)"}, this app ${PROTOCOL}: restarting it`);
+    const [current, root] = [sourceBuildId(repoRoot), coreRoot()];
+    const outlived = await staleSession({ pid: hello.pid });
+    if (isCurrentCore(hello, { build: current, root }) && !outlived) return;
+    if (outlived) log.info(`core ${hello.pid} started before this login, so it can't reach system services (DNS): restarting it`);
+    else if (hello.protocol !== PROTOCOL) log.info(`core ${hello.pid} speaks protocol ${hello.protocol ?? "(none)"}, this app ${PROTOCOL}: restarting it`);
     else if (hello.build !== current) log.info(`core ${hello.pid} runs build ${hello.build}, this app ships ${current}: restarting it`);
     else log.info(`core ${hello.pid} runs from ${hello.root}, this app from ${root}: restarting it`);
     conn.close(); // the core closes only once its clients are gone
