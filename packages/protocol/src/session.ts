@@ -21,25 +21,30 @@ export function parseEtime(s: string): number | null {
 
 export interface Proc {
   pid: number;
+  /** Effective uid. */
+  uid: number;
   /** Epoch ms. */
   startedAt: number;
   command: string;
 }
 
-/** This user's processes from `ps -x -o pid=,etime=,comm=` output, taken at `now`. */
+/** Processes from `ps -ax -o pid=,uid=,etime=,comm=` output, taken at `now`. */
 export function parsePs(out: string, now: number): Proc[] {
   const procs: Proc[] = [];
   for (const line of out.split("\n")) {
-    const [, pid, etime = "", command = ""] = /^\s*(\d+)\s+(\S+)\s+(.+)$/.exec(line) ?? [];
+    const [, pid, uid, etime = "", command = ""] = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line) ?? [];
     const elapsed = parseEtime(etime);
-    if (pid && elapsed !== null) procs.push({ pid: Number(pid), startedAt: now - elapsed, command: command.trim() });
+    if (pid && elapsed !== null) procs.push({ pid: Number(pid), uid: Number(uid), startedAt: now - elapsed, command: command.trim() });
   }
   return procs;
 }
 
-/** When the current login session started: this user's loginwindow's start. */
-export function loginOf(procs: Proc[]): number | null {
-  const lw = procs.filter((p) => /(^|\/)loginwindow$/.test(p.command));
+/**
+ * When the current login session started: the start of `uid`'s loginwindow
+ * (its effective uid; its real uid is root's, so `ps -x` doesn't list it).
+ */
+export function loginOf(procs: Proc[], uid = process.getuid?.() ?? -1): number | null {
+  const lw = procs.filter((p) => p.uid === uid && /(^|\/)loginwindow$/.test(p.command));
   return lw.length ? Math.max(...lw.map((p) => p.startedAt)) : null;
 }
 
@@ -48,12 +53,12 @@ export function fromEarlierLogin(startedAt: number, login: number | null): boole
   return login !== null && startedAt < login - SLACK_MS;
 }
 
-/** This user's processes; empty where `ps` can't run (not macOS, a sandbox). */
-export function userProcs(): Promise<Proc[]> {
+/** Every process; empty where `ps` can't run (not macOS, a sandbox). */
+export function allProcs(): Promise<Proc[]> {
   if (process.platform !== "darwin") return Promise.resolve([]);
   return new Promise((resolve) => {
     try {
-      execFile("/bin/ps", ["-x", "-o", "pid=,etime=,comm="], { timeout: 5000, maxBuffer: 8 * 1024 * 1024 }, (err, out) => resolve(err ? [] : parsePs(out, Date.now())));
+      execFile("/bin/ps", ["-ax", "-o", "pid=,uid=,etime=,comm="], { timeout: 5000, maxBuffer: 8 * 1024 * 1024 }, (err, out) => resolve(err ? [] : parsePs(out, Date.now())));
     } catch {
       resolve([]); // a sandbox refuses the spawn itself (EPERM)
     }
@@ -66,7 +71,7 @@ export function userProcs(): Promise<Proc[]> {
  * login, not macOS) or no `ps`.
  */
 export async function staleSession(p: { pid: number } | { startedAt: number }): Promise<boolean> {
-  const procs = await userProcs();
+  const procs = await allProcs();
   const startedAt = "startedAt" in p ? p.startedAt : procs.find((q) => q.pid === p.pid)?.startedAt;
   return startedAt !== undefined && fromEarlierLogin(startedAt, loginOf(procs));
 }

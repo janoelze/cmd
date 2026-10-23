@@ -233,9 +233,9 @@ describe("PTY host", () => {
   it("won't use a host that outlived a logout, unless this core did too", () => {
     const login = Date.now() - 3600_000;
     const procs = [
-      { pid: 412, startedAt: login, command: "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" },
-      { pid: 77, startedAt: login + 60_000, command: "cmd" },
-      { pid: 66, startedAt: login - 86_400_000, command: "cmd" },
+      { pid: 412, uid: process.getuid!(), startedAt: login, command: "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" },
+      { pid: 77, uid: 501, startedAt: login + 60_000, command: "cmd" },
+      { pid: 66, uid: 501, startedAt: login - 86_400_000, command: "cmd" },
     ];
     const old = { startedAt: login - 86_400_000 };
     expect(hostOutlivedLogin(old, procs, 77)).toBe(true);

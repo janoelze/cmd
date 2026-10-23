@@ -17,11 +17,14 @@ describe("login session", () => {
   });
 
   it("finds the login from this user's loginwindow", () => {
-    const procs = parsePs([`  412 5-08:00:00 ${LW}`, `  995 8-12:00:00 /Applications/cmd.app/Contents/MacOS/cmd`, " 4200    00:10 -zsh", "garbage"].join("\n"), NOW);
-    expect(procs.map((p) => p.pid)).toEqual([412, 995, 4200]);
-    expect(procs[2]!.command).toBe("-zsh");
-    expect(loginOf(procs)).toBe(NOW - (5 * 24 + 8) * H);
-    expect(loginOf(procs.slice(1))).toBeNull();
+    // another user's login (fast user switching) isn't ours
+    const out = [`  410   501 5-08:00:00 ${LW}`, `  390   502 6-00:00:00 ${LW}`, `  995   501 8-12:00:00 /Applications/cmd.app/Contents/MacOS/cmd`, " 4200   501    00:10 -zsh", "garbage"];
+    const procs = parsePs(out.join("\n"), NOW);
+    expect(procs.map((p) => p.pid)).toEqual([410, 390, 995, 4200]);
+    expect(procs[3]).toMatchObject({ uid: 501, command: "-zsh" });
+    expect(loginOf(procs, 501)).toBe(NOW - (5 * 24 + 8) * H);
+    expect(loginOf(procs, 502)).toBe(NOW - 6 * 24 * H);
+    expect(loginOf(procs.slice(2), 501)).toBeNull();
   });
 
   it("calls what started before the login earlier, and nothing without one", () => {

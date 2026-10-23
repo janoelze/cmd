@@ -7,7 +7,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { lineSplitter } from "@cmd/protocol";
-import { fromEarlierLogin, ipcPath, logDir, loginOf, logger, recordCrash, userProcs, type Proc } from "@cmd/protocol/node";
+import { fromEarlierLogin, ipcPath, logDir, loginOf, logger, recordCrash, allProcs, type Proc } from "@cmd/protocol/node";
 import { HOST_METHODS, HOST_PROTOCOL, type HostHello } from "./host.ts";
 import type { Snapshot, Term, TermBackend, TermSpawn } from "./types.ts";
 
@@ -373,7 +373,7 @@ export interface HostOptions {
 export async function connectHost(o: HostOptions): Promise<RemoteBackend> {
   try {
     const b = await RemoteBackend.connect(o.socketPath);
-    if (!hostOutlivedLogin(b.hello, await userProcs())) return attached(b, false);
+    if (!hostOutlivedLogin(b.hello, await allProcs())) return attached(b, false);
     b.dispose();
     throw new HostMismatch(b.hello, true);
   } catch (err) {
