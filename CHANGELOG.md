@@ -2,6 +2,13 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.32.6 — 2026-10-24
+
+### Fixed
+
+- Terminals reach the internet again after you log out and back in.
+- Tables in Markdown wrap between words instead of squeezing a column down to single letters.
+
 ## 0.32.5 — 2026-10-21
 
 ### Fixed
