@@ -33,7 +33,13 @@ Requires macOS on Apple silicon. Install or update with:
 curl -fsSL https://raw.githubusercontent.com/janoelze/cmd/master/scripts/install.sh | sh
 ```
 
-Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. cmd updates itself in the background and installs the update when you quit; your terminals keep running. Settings → Updates switches to notify-only or off.
+With [Homebrew](https://brew.sh):
+
+```sh
+brew tap janoelze/cmd https://github.com/janoelze/cmd && brew install --cask janoelze/cmd/cmd
+```
+
+Or download the `.dmg` from the [latest release](https://github.com/janoelze/cmd/releases/latest) and move cmd to Applications. cmd updates itself in the background and installs the update when you quit; your terminals keep running. Settings → Updates switches to notify-only or off. A Homebrew install updates itself the same way; `brew upgrade --cask --greedy cmd` updates it from Homebrew, and `brew uninstall --zap --cask cmd` removes it with its settings and data.
 
 **Agent state.** cmd recognises a running agent by its process alone. To also see what it's doing (working, waiting for input, done, what it changed), cmd puts its hook into Claude Code (every config folder it finds, profiles included), Codex and Gemini CLI by itself, keeping a copy of each file it changes; Settings → AI & Agents → Hooks shows where, and turns that off. Codex runs a new hook only after you approve it once with `/hooks`.
 
