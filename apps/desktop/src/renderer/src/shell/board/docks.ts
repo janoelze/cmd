@@ -96,3 +96,26 @@ export function dockWidths(d: Docks, total: number): Record<Side, number> {
   }
   return w;
 }
+
+/** ⌥⌘+ / ⌥⌘− change a sidebar's width by this many px. */
+export const DOCK_STEP = 40;
+/** Widths ⌃⌘R cycles a sidebar through. */
+export const DOCK_PRESETS = [DOCK_WIDTH.min, DOCK_WIDTH.default, DOCK_WIDTH.max] as const;
+
+/**
+ * `side` set to the width `next` picks from the one it shows now, within what
+ * dragging its edge allows (min, max, and MIN_BOARD left beside the other side).
+ */
+export function resizeDock(d: Docks, side: Side, total: number, next: (px: number) => number): Docks {
+  const shown = dockWidths(d, total);
+  const other = shown[side === "left" ? "right" : "left"];
+  const max = Math.max(DOCK_WIDTH.min, Math.min(DOCK_WIDTH.max, total - MIN_BOARD - other));
+  const width = Math.round(Math.max(DOCK_WIDTH.min, Math.min(max, next(shown[side] || DOCK_WIDTH.default))));
+  return { ...d, [side]: { ...d[side], width } };
+}
+
+/** One DOCK_STEP wider (dir 1) or narrower (-1). */
+export const stepDock = (px: number, dir: 1 | -1) => px + dir * DOCK_STEP;
+
+/** The next preset wider than `px`, wrapping to the narrowest. */
+export const nextDockPreset = (px: number) => DOCK_PRESETS.find((p) => p > px + 1) ?? DOCK_PRESETS[0];

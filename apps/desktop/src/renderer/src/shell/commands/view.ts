@@ -4,7 +4,7 @@
 import { setUi } from "../../lib/store.ts";
 import { cmd } from "../../lib/bridge.ts";
 import { togglePreview } from "../../windows/preview.ts";
-import { dock, undock } from "../board/docks.ts";
+import { dock, nextDockPreset, resizeDock, stepDock, undock } from "../board/docks.ts";
 import type { ViewMode } from "../board/layouts.ts";
 import { anySideShown, toggleSide, toggleSidebars } from "../board/sidebars.ts";
 import { DEFAULT_FRACTION, MIN_WIDTH, nextPreset, stepFraction } from "../board/strip.ts";
@@ -15,10 +15,14 @@ import { registerCommands, type Command, type CommandContext } from "./registry.
 
 const mode = (m: ViewMode): Command => ({ run: () => setMode(m), checked: (c) => c.board.mode === m });
 
-/** ⌥⌘+ / ⌥⌘−, ⌃⌘R: the selected window's strip width (the floor roughly MIN_WIDTH, so ⌥⌘+ always shows). */
-const width = (next: (fraction: number) => number): Command => ({
+/**
+ * ⌥⌘+ / ⌥⌘−, ⌃⌘R: the selected window's strip width (the floor roughly MIN_WIDTH, so ⌥⌘+
+ * always shows), or its sidebar's width when it is docked (the board stays as it is).
+ */
+const width = (next: (fraction: number) => number, dock: (px: number) => number): Command => ({
   when: (c) => !!c.selected,
   run: (c) => {
+    if (c.side) return setDocks((d) => resizeDock(d, c.side!, window.innerWidth, dock));
     if (c.board.mode !== "strip") setMode("strip");
     setStripWidth(c.selected!, next(c.board.stripWidths[c.selected!] ?? DEFAULT_FRACTION));
   },
@@ -43,9 +47,9 @@ registerCommands({
   "view.toggleFocus": { run: (c) => setMode(c.board.mode === "focus" ? c.board.layoutMode : "focus") },
   "view.canvasFit": { run: () => (setMode("canvas"), requestCanvas("fit")) },
   "view.canvasZoomWindow": { run: () => (setMode("canvas"), requestCanvas("window")) },
-  "view.cycleWidth": width(nextPreset),
-  "view.widen": width((f) => stepFraction(f, 1, MIN_WIDTH / window.innerWidth)),
-  "view.narrow": width((f) => stepFraction(f, -1, MIN_WIDTH / window.innerWidth)),
+  "view.cycleWidth": width(nextPreset, nextDockPreset),
+  "view.widen": width((f) => stepFraction(f, 1, MIN_WIDTH / window.innerWidth), (px) => stepDock(px, 1)),
+  "view.narrow": width((f) => stepFraction(f, -1, MIN_WIDTH / window.innerWidth), (px) => stepDock(px, -1)),
   "view.magicRefresh": { when: (c) => !!c.actions?.refresh, run: (c) => c.actions?.refresh?.() },
   "view.toggleEdit": { run: (c) => (c.actions?.toggleEdit ? c.actions.toggleEdit() : c.window && togglePreview(c.window)) },
   "view.sidebar": { run: () => toggleSide("left"), checked: (c) => shown(c, "left") },

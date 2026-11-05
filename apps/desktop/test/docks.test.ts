@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dock, dockedIds, dockWidths, DOCK_WIDTH, EMPTY_DOCKS, liveDocks, MIN_BOARD, readDocks, shownIds, sideOf, undock } from "../src/renderer/src/shell/board/docks.ts";
+import { dock, dockedIds, dockWidths, DOCK_STEP, DOCK_WIDTH, EMPTY_DOCKS, liveDocks, MIN_BOARD, nextDockPreset, readDocks, resizeDock, shownIds, sideOf, stepDock, undock } from "../src/renderer/src/shell/board/docks.ts";
 
 describe("sidebars", () => {
   it("reads stored values, filling in what's missing", () => {
@@ -52,5 +52,20 @@ describe("sidebars", () => {
     expect(narrow).toEqual({ left: DOCK_WIDTH.default, right: DOCK_WIDTH.min + 10 });
     expect(dockWidths(d, 500)).toEqual({ left: DOCK_WIDTH.min, right: DOCK_WIDTH.min });
     expect(dockWidths({ ...d, right: { ...d.right, hidden: true } }, 2000).right).toBe(0);
+  });
+
+  it("steps a sidebar's width from the one it shows, within what dragging allows (⌥⌘+ / ⌥⌘−, ⌃⌘R)", () => {
+    const d = dock(dock(EMPTY_DOCKS, "files", "left"), "notes", "right");
+    const wider = resizeDock(d, "right", 1440, (px) => stepDock(px, 1));
+    expect(wider.right.width).toBe(DOCK_WIDTH.default + DOCK_STEP);
+    expect(wider.left).toEqual(d.left);
+    // Never past max or min.
+    expect(resizeDock({ ...d, right: { ...d.right, width: DOCK_WIDTH.max } }, "right", 1440, (px) => stepDock(px, 1)).right.width).toBe(DOCK_WIDTH.max);
+    expect(resizeDock({ ...d, left: { ...d.left, width: DOCK_WIDTH.min } }, "left", 1440, (px) => stepDock(px, -1)).left.width).toBe(DOCK_WIDTH.min);
+    // The board keeps MIN_BOARD beside the other side.
+    expect(resizeDock(d, "right", 900, () => 10_000).right.width).toBe(900 - MIN_BOARD - DOCK_WIDTH.default);
+    // Presets cycle and wrap.
+    expect(nextDockPreset(DOCK_WIDTH.default)).toBe(DOCK_WIDTH.max);
+    expect(nextDockPreset(DOCK_WIDTH.max)).toBe(DOCK_WIDTH.min);
   });
 });
