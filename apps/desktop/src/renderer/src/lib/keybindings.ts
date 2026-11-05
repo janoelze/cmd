@@ -49,13 +49,33 @@ export function isAppShortcut(e: KeyboardEvent): boolean {
 
 const ACCELERATOR_KEYS: Record<string, string> = { Comma: ",", Period: ".", Equal: "=", Minus: "-", BracketLeft: "[", BracketRight: "]", Slash: "/", Backslash: "\\", Semicolon: ";", Quote: "'", Backquote: "`", ArrowLeft: "Left", ArrowRight: "Right", ArrowUp: "Up", ArrowDown: "Down", Tab: "Tab", Enter: "Enter", NumpadEnter: "Enter", Escape: "Escape", Space: "Space", Backspace: "Backspace", Delete: "Delete", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown" };
 
+/** What each key types on the keyboard layout in use, without modifiers (Chromium's layout map; null until read or where missing). */
+type LayoutMap = ReadonlyMap<string, string>;
+let layout: LayoutMap | null = null;
+type KeyboardApi = { getLayoutMap?: () => Promise<LayoutMap>; addEventListener?: (t: string, fn: () => void) => void };
+const keyboard = typeof navigator !== "undefined" ? (navigator as Navigator & { keyboard?: KeyboardApi }).keyboard : undefined;
+const readLayout = () => void keyboard?.getLayoutMap?.().then((m) => (layout = new Map(m)), () => {});
+if (keyboard?.getLayoutMap) {
+  readLayout();
+  // The user can switch layouts at any time; the app being focused again is when it is likely.
+  keyboard.addEventListener?.("layoutchange", readLayout);
+  window.addEventListener("focus", readLayout);
+}
+
+/** A character a layout types as an accelerator key ("k" → "K", "+" → "Plus"). */
+const charKey = (ch: string) => (ch === "+" ? "Plus" : ch.length === 1 ? ch.toUpperCase() : null);
+
 /**
- * A key event as a shortcut for keybindings.json ("Shift+Cmd+K"), layout-independent;
- * null for a lone modifier or a key it can't name. Modifiers in the defaults' order.
+ * A key event as a shortcut for keybindings.json ("Shift+Cmd+K"); null for a lone
+ * modifier or a key it can't name. Modifiers in the defaults' order. On macOS a
+ * character key is named by what the layout types, as the menu bar matches it (on a
+ * German layout ⌥⌘+ is "Alt+Cmd+Plus", not the US key in that place, "Alt+Cmd+]");
+ * elsewhere, and before the layout is known, by the key's US position.
  */
-export function acceleratorOf(e: KeyboardEvent, mac = MAC_KEYMAP): string | null {
+export function acceleratorOf(e: KeyboardEvent, mac = MAC_KEYMAP, typed: LayoutMap | null = layout): string | null {
   const c = e.code;
-  const key = /^Key[A-Z]$/.test(c) ? c.slice(3) : /^Digit\d$/.test(c) ? c.slice(5) : /^F\d{1,2}$/.test(c) ? c : ACCELERATOR_KEYS[c];
+  const ch = mac ? typed?.get(c) : undefined;
+  const key = (ch && charKey(ch)) || (/^Key[A-Z]$/.test(c) ? c.slice(3) : /^Digit\d$/.test(c) ? c.slice(5) : /^F\d{1,2}$/.test(c) ? c : ACCELERATOR_KEYS[c]);
   if (!key || (e.metaKey && !mac)) return null;
   const mods = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Cmd"].filter((m): m is string => !!m);
   return [...mods, key].join("+");
