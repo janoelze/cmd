@@ -2,6 +2,13 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.32.7 — 2026-11-05
+
+### Fixed
+
+- ⌥⌘+ makes a text window wider again with the cursor in it on German and other non-US keyboard layouts.
+- ⌥⌘+ and ⌥⌘− resize a sidebar when its window is selected, instead of doing nothing.
+
 ## 0.32.6 — 2026-10-24
 
 ### Fixed
