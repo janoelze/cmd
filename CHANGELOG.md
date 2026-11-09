@@ -2,6 +2,17 @@
 
 What changed in each cmd release, newest first. cmd shows the releases since your last update in What's New. Written at release time by the changelog skill (`.claude/skills/changelog/SKILL.md`).
 
+## 0.32.8 — 2026-11-09
+
+### New
+
+- **Flat bars.** Choose Flat in Settings → Appearance → Bars and the top bar and footer sit on the background, slimmer, giving the board more room.
+
+### Improved
+
+- Sidebars glide along with the board's windows when the space around them changes.
+- The core light in the footer takes the text colour while all is well, so it only stands out when something needs you.
+
 ## 0.32.7 — 2026-11-05
 
 ### Fixed
