@@ -58,6 +58,40 @@ export function Dock(p: Props) {
     });
     return () => void departed(id, tile.getBoundingClientRect());
   }, [id]);
+  // Resized from inside the app (flat bars, the padding, a width step): glide from where
+  // it was, as the board's windows do in the same frame (WindowsView). Resizing the app
+  // window or dragging the inner edge follows at once, as on the board. Rects are layout
+  // positions in the app, so a slide in or out (a transform) doesn't count as a move.
+  useLayoutEffect(() => {
+    const aside = ref.current!;
+    const tile = aside.querySelector<HTMLElement>(":scope > .tile")!;
+    const placed = (el: HTMLElement) => {
+      let x = 0;
+      let y = 0;
+      for (let e: HTMLElement | null = el; e && !e.classList.contains("app"); e = e.offsetParent as HTMLElement | null) (x += e.offsetLeft), (y += e.offsetTop);
+      return { x, y, w: el.offsetWidth, h: el.offsetHeight };
+    };
+    let was = placed(tile);
+    let win = { w: window.innerWidth, h: window.innerHeight };
+    const ro = new ResizeObserver(() => {
+      // Gliding, the window is placed at the sidebar's corner (styles.css, [data-morphing]):
+      // where it was stays the rect it glides to, which it takes back at rest.
+      if (tile.hasAttribute("data-morphing")) return;
+      const now = placed(tile);
+      const resized = window.innerWidth !== win.w || window.innerHeight !== win.h;
+      const from = was;
+      was = now;
+      win = { w: window.innerWidth, h: window.innerHeight };
+      if (resized || aside.closest(".sidebar-resizing") || (from.w === now.w && from.h === now.h)) return;
+      const a = placed(aside);
+      motion.current ??= new TileMotion({ release: true });
+      const rect = { x: now.x - a.x, y: now.y - a.y, w: now.w, h: now.h };
+      const start = { x: from.x - a.x, y: from.y - a.y, w: from.w, h: from.h };
+      motion.current.update(new Map([[id, tile]]), new Map([[id, { rect, hidden: false, from: start }]]), { instant: false, swap: false });
+    });
+    ro.observe(tile);
+    return () => ro.disconnect();
+  }, [id]);
   useLayoutEffect(() => () => motion.current?.dispose(), []);
   const menu = (e: React.MouseEvent) => {
     e.preventDefault();

@@ -492,6 +492,40 @@ await scenario("chrome", async () => {
   );
   check(offsets.every(([dx, dy, fw, fh]) => Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01 && fw === 0 && fh === 0),
     `status bar icons are exactly centred on whole pixels (${offsets.length} buttons)`);
+  // Flat bars (ui.bars): no background or separator, live. The controls keep their distance to the
+  // window's edges (and the traffic lights beside them); only the space facing the stage goes.
+  {
+    const call = (method, params) => win.evaluate(([m, p]) => window.cmd.call(m, p), [method, params]);
+    const where = () => win.evaluate(() => {
+      const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const look = [".topbar", ".statusbar"].map((s) => { const c = getComputedStyle(document.querySelector(s)); return `${c.backgroundColor} ${c.boxShadow}`; });
+      return { nav: [r(".dock-left .tile").top, innerHeight - r(".dock-left .tile").bottom], gap: r(".dock-left .tile").top - r(".topbar .workspace-trigger").bottom, top: r(".topbar").height, foot: r(".statusbar").height, switcher: r(".topbar .workspace-trigger").top, button: innerHeight - r(".statusbar .ui-icon-button").bottom, look };
+    });
+    const bars = await where();
+    await call("settings.set", { key: "ui.bars", value: "flat" });
+    await win.waitForSelector(".app.flat-bars");
+    // The sidebars and the board glide to their new size together: measured at rest.
+    await until(() => win.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(!document.querySelector("[data-morphing]")))))), (rest) => rest);
+    const flat = await where();
+    await shot(win, "flat-bars.png");
+    // The controls stay clickable where the stage reaches under the bars.
+    const hit = await win.evaluate(() => [".topbar .workspace-trigger", ".statusbar .ui-icon-button"].map((s) => { const el = document.querySelector(s), r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.left + r.width / 2, r.bottom - 1)) && el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + 1)); }));
+    check(hit.every(Boolean), `flat bars' controls stay on top of the stage (${hit})`);
+    check(flat.look.every((c) => c === "rgba(0, 0, 0, 0) none") && !bars.look[0].startsWith("rgba(0, 0, 0, 0)"),
+      `flat bars have no background or separator (${flat.look.join(", ")}; bars were ${bars.look[0]})`);
+    check(flat.top < bars.top && flat.foot < bars.foot && flat.switcher === bars.switcher && flat.button === bars.button && flat.nav[0] === flat.top + flat.switcher && flat.nav[1] === flat.foot + flat.button,
+      `and windows start as far past them as their controls are from the edge (${bars.top}→${flat.top}, ${bars.foot}→${flat.foot}; ${bars.gap}→${flat.gap} px to the sidebar, which spans ${flat.nav[0]} to ${flat.nav[1]} from the edges; switcher at ${bars.switcher}→${flat.switcher}, buttons ${bars.button}→${flat.button} from the bottom)`);
+    // On the canvas, windows pan under the bars: there they keep their fill, at the same size.
+    await menu("view.canvas");
+    await win.waitForSelector(".app.flat-bars.filled-bars");
+    const canvas = await where();
+    check(canvas.look.join() === bars.look.join() && canvas.top === flat.top && canvas.foot === flat.foot, `on the canvas, flat bars keep their fill at the same size (${canvas.look[0]}, ${canvas.top} / ${canvas.foot})`);
+    await menu("view.focus");
+    await win.waitForSelector(".app.flat-bars:not(.filled-bars)");
+    await call("settings.set", { key: "ui.bars", value: "bars" });
+    await win.waitForSelector(".app:not(.flat-bars)");
+    check((await win.locator(".statusbar").boundingBox()).height === 34, "and the bars come back");
+  }
 });
 
 await scenario("keymap", async () => {

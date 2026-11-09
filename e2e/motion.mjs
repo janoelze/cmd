@@ -221,8 +221,9 @@ await win.evaluate(() => {
           if (!el || el.closest("[data-morphing], .ghost-tile, .dock.leaving, .tip-layer")) continue;
           // Containers whose content the motion system keeps in place (the board and its
           // track, whose windows are carried on screen), and the top bar's columns, which
-          // resize around the workspace's name while their content stays put.
-          if (el.matches(".main, .windows-scroller, .windows-track, .topbar-center, .topbar-trail, .topbar-lead")) continue;
+          // resize around the workspace's name while their content stays put. The stage and the
+          // footer's box change size with ui.bars (flat bars); their content stays or glides.
+          if (el.matches(".main, .windows-scroller, .windows-track, .topbar-center, .topbar-trail, .topbar-lead, .stage, .statusbar")) continue;
           if (el.closest(".dock")?.getAnimations().length) continue;
           // A list row laid out somewhere new and drawn where it was, gliding there (useFlip):
           // the API reports its layout's move, but what's seen is the row's frames, probed above.
@@ -516,6 +517,12 @@ await scenario("hide right sidebar", () => menu("view.rightSidebar"));
 await scenario("show right sidebar", () => menu("view.rightSidebar"));
 await scenario("hide both sidebars", () => menu("view.sidebars"));
 await scenario("show both sidebars", () => menu("view.sidebars"));
+// Flat bars (ui.bars) make the stage taller: sidebars and the board glide together.
+await scenario("flat bars: on", () => call("settings.set", { key: "ui.bars", value: "flat" }));
+// The canvas fills the bars, at the same size: switching there moves nothing it shouldn't.
+await scenario("flat bars: grid → canvas", () => menu("view.canvas"), { settle: 900 });
+await scenario("flat bars: canvas → grid", () => menu("view.grid"), { settle: 900 });
+await scenario("flat bars: off", () => call("settings.set", { key: "ui.bars", value: "bars" }));
 // Toggled again halfway, and again: each turn starts from where things are (one change of direction each).
 await scenario("sidebars twice quickly", async () => (await menu("view.sidebars"), await sleep(120), await menu("view.sidebars")), { reversals: 1 });
 await scenario("sidebars four times quickly", async () => {

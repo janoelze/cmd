@@ -35,6 +35,7 @@ export const SETTINGS_PAGES: Page[] = [
     sections: [
       { title: "Theme", items: ["theme.appearance", "theme.dark", "theme.light", "theme.dockIcon"] },
       { title: "Fonts", items: ["font.code", "font.codeSize", "font.text", "font.textSize"] },
+      { title: "Bars", items: ["ui.bars"] },
       { title: "Sidebar", items: ["ui.sidebarRecent"] },
     ],
   },

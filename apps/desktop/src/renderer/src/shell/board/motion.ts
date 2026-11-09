@@ -215,6 +215,8 @@ export class TileMotion {
     const t = this.now();
     const moving = [...this.tiles.values()].some((tile) => !this.isResting(tile, t));
     if (moving) this.raf = requestAnimationFrame(this.frame);
+    // Placed at once (reduced motion, instant): no frame comes to hand it back to the layout.
+    else if (this.opts.release) for (const tile of [...this.tiles.values()]) this.thaw(tile), this.release(tile);
   }
 
   private isResting(tile: Tile, t: number): boolean {

@@ -178,6 +178,32 @@ kbd {
 /* A divider between groups of bar buttons. */
 .bar-sep { flex: none; width: 1px; height: 14px; margin: 0 var(--space-1-5); background: var(--separator); }
 
+/* ── flat bars (ui.bars) ────────────────────────────── */
+
+/* The bars sit on the backdrop: no background or separator of their own. Their controls
+   keep their distance to the window's edge (so the traffic lights stay centred beside them);
+   on the side facing the stage they keep --bar-pad-in, less than the full bars' padding.
+   The trims: the room around the tallest control, the workspace switcher (26px) up top and
+   the icon buttons (22px) in the footer. The stage reaches under each bar so windows and
+   sidebars start a trim past it; the bars stay above the stage (below menus and sheets),
+   so their controls keep working. On the canvas, where windows pan under the bars, they
+   keep their fill and separators (filled-bars, App.tsx), at the same size: nothing moves. */
+.app.flat-bars {
+  --topbar-trim: calc((var(--topbar-h) - 26px) / 2);
+  --statusbar-trim: calc((var(--statusbar-h) - 22px) / 2);
+  --bar-pad-in: 4px;
+  grid-template-rows: calc(var(--topbar-h) - var(--topbar-trim) + var(--bar-pad-in)) minmax(0, 1fr) auto;
+}
+.app.flat-bars :is(.topbar, .statusbar) { position: relative; z-index: 30; }
+.app.flat-bars:not(.filled-bars) :is(.topbar, .statusbar) { background: none; box-shadow: none; }
+.app.flat-bars .topbar { padding-top: var(--topbar-trim); padding-bottom: var(--bar-pad-in); }
+.app.flat-bars .statusbar { min-height: calc(var(--statusbar-h) - var(--statusbar-trim) + var(--bar-pad-in)); padding-top: var(--bar-pad-in); padding-bottom: var(--statusbar-trim); }
+.app.flat-bars .statusbar-centre { top: var(--bar-pad-in); bottom: var(--statusbar-trim); }
+.app.flat-bars .stage {
+  margin-top: calc(-1 * max(0px, var(--pad-y) - var(--topbar-trim)));
+  margin-bottom: calc(-1 * max(0px, var(--pad-y) - var(--statusbar-trim)));
+}
+
 /* Controls (buttons, segmented, fields…) are @cmd/ui's: packages/ui. */
 
 /* ── sidebar ────────────────────────────────────────── */
@@ -245,6 +271,8 @@ kbd {
 .core-status-button:hover, .core-status-button.open { background: var(--bg-hover); color: var(--text); }
 .core-status-button { gap: 0; }
 .core-status-button .ui-dot { margin-right: var(--space-2); }
+/* Healthy, the light is in the footer's text colour: only a core that's busy or needs you stands out. */
+.core-status-button .ui-dot[data-state="success"] { --tone: currentColor; }
 .core-status-usage .slot-v { --gap: 15px; }
 /* A step's count ticks in place: digits of one width, so the label doesn't shift as it counts. */
 .core-status-text { font-variant-numeric: tabular-nums; }

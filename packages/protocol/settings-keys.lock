@@ -112,6 +112,7 @@ theme.dockIcon
 theme.light
 ui.afterClose
 ui.attentionOutline
+ui.bars
 ui.defaultView
 ui.dimBrowsers
 ui.focusColor

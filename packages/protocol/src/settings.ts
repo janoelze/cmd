@@ -86,6 +86,7 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: "The Dock icon in the theme's colours.",
   },
+  "ui.bars": { title: "Top bar and footer", labels: { bars: "Bars", flat: "Flat" }, type: "enum", default: "bars", options: ["bars", "flat"], description: "Flat drops their background and makes them slimmer." },
 
   "terminal.renderer": {
     title: "Renderer", labels: { dom: "DOM", webgl: "WebGL" },
